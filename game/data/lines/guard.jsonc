@@ -1,0 +1,37 @@
+// Guard: tough close-range infantry that holds chokepoints (game design 2.2 and 2.4).
+{
+  "$schema": "../../../schemas/line.schema.json",
+  "id": "guard",
+
+  // The chassis for epoch T unlocks at primary tier T and secondary tier T - 1 (design 2.2).
+  "primary": "protection",
+  "secondary": "firepower",
+  "built_at": "barracks",
+
+  // Values at tier 1 (design 2.4). Speed is in tiles per second, spacing and sight in tiles.
+  "base": {
+    "hp": 130,
+    "dps": 8,
+    "speed": "2.6",
+    "sight": 8,
+    "supply": 2,
+    "spacing": "1",
+    "cost": { "materials": 70, "energy": 10 },
+    "build_seconds": 18
+  },
+
+  "attack": { "kind": "melee", "interval_seconds": "1" },
+
+  // Damage multipliers against other lines, and the lines this one cannot hit.
+  "counters": { "cavalry_armor": "1.5" },
+  "cannot_hit": ["air"],
+
+  // One chassis per epoch, first playable only (epochs 1 to 4). A chassis may override keys of
+  // "attack": from epoch 4 the Guard shoots, at range 3 with shots flying 20 tiles per second.
+  "chassis": [
+    { "epoch": 1, "id": "hoplite" },
+    { "epoch": 2, "id": "legionary" },
+    { "epoch": 3, "id": "man_at_arms" },
+    { "epoch": 4, "id": "grenadier", "attack": { "kind": "ranged", "range": 3, "projectile_speed": "20" } }
+  ]
+}
