@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.Versioning;
 using Godot;
@@ -18,9 +19,14 @@ public partial class SmokeTest : Node
     {
         var simFramework = typeof(SimInfo).Assembly.GetCustomAttribute<TargetFrameworkAttribute>()?.FrameworkName;
         var gameFramework = typeof(SmokeTest).Assembly.GetCustomAttribute<TargetFrameworkAttribute>()?.FrameworkName;
+        var simOptimized = IsOptimized(typeof(SimInfo).Assembly) ? "true" : "false";
 
         GD.Print($"{Marker} runtime={System.Environment.Version} game=[{gameFramework}] sim=[{simFramework}] " +
-            $"ticks_per_second={SimInfo.TicksPerSecond}");
+            $"sim_optimized={simOptimized} ticks_per_second={SimInfo.TicksPerSecond}");
         GetTree().Quit();
     }
+
+    // An unoptimized build carries a DebuggableAttribute that turns the JIT optimizer off.
+    private static bool IsOptimized(Assembly assembly) =>
+        assembly.GetCustomAttribute<DebuggableAttribute>() is not { IsJITOptimizerDisabled: true };
 }
