@@ -68,5 +68,21 @@ public class TechResolverTests
         Assert.Equal(first.SupplyCap, second.SupplyCap);
         Assert.Equal(first.IncomeMultiplier, second.IncomeMultiplier);
         Assert.Equal(first.Research, second.Research);
+        Assert.Equal(first.Blueprints.Count, second.Blueprints.Count);
+        for (var chassis = 0; chassis < first.Blueprints.Count; chassis++)
+        {
+            var (one, other) = (first.Blueprints[chassis], second.Blueprints[chassis]);
+            Assert.Equal(one.Chassis, other.Chassis);
+            Assert.Equal(one.Unlocked, other.Unlocked);
+            Assert.Equal(one.EffectiveTiers, other.EffectiveTiers);
+            Assert.Equal(one.Accents, other.Accents);
+            Assert.Equal(one.Perks, other.Perks);
+            Assert.Equal(
+                (one.HitPoints, one.DamagePerSecond, one.DamagePerHit, one.SpeedPerTick, one.Range, one.BlastRadius),
+                (other.HitPoints, other.DamagePerSecond, other.DamagePerHit, other.SpeedPerTick, other.Range, other.BlastRadius));
+            Assert.Equal(
+                (one.Sight, one.Supply, one.Materials, one.Energy, one.BuildTicks, one.BatchSize, one.BatchBuildTicks),
+                (other.Sight, other.Supply, other.Materials, other.Energy, other.BuildTicks, other.BatchSize, other.BatchBuildTicks));
+        }
     }
 }

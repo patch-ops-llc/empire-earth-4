@@ -1,0 +1,45 @@
+// Artillery: slow, long range and area damage; it breaks clumps and walls (game design 2.2 and 2.4).
+{
+  "$schema": "../../../schemas/line.schema.json",
+  "id": "artillery",
+
+  // The chassis for epoch T unlocks at primary tier T and secondary tier T - 1 (design 2.2).
+  "primary": "firepower",
+  "secondary": "logistics",
+  "built_at": "works",
+
+  // Values at tier 1 (design 2.4). Speed is in tiles per second, spacing and sight in tiles.
+  "base": {
+    "hp": 70,
+    "dps": 12,
+    "speed": "1.8",
+    "sight": 8,
+    "supply": 3,
+    "spacing": "1",
+    "cost": { "materials": 90, "energy": 50 },
+    "build_seconds": 30
+  },
+
+  // One shell of 48 every 4 seconds, flying 10 tiles per second. Everything within "blast_radius"
+  // of the target takes the full damage, and nothing closer than "min_range" can be fired at.
+  "attack": {
+    "kind": "ranged",
+    "interval_seconds": 4,
+    "range": 9,
+    "min_range": 3,
+    "blast_radius": "1.5",
+    "projectile_speed": 10
+  },
+
+  // Damage multipliers by target, and the lines this one cannot hit. "structures" is every structure.
+  "counters": { "structures": "3", "cavalry_armor": "0.5" },
+  "cannot_hit": ["air"],
+
+  // One chassis per epoch, first playable only (epochs 1 to 4). Range is 9, and 11 from epoch 4.
+  "chassis": [
+    { "epoch": 1, "id": "ballista" },
+    { "epoch": 2, "id": "onager" },
+    { "epoch": 3, "id": "trebuchet" },
+    { "epoch": 4, "id": "field_cannon", "attack": { "range": 11 } }
+  ]
+}

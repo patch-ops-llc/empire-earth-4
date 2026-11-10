@@ -4,8 +4,12 @@ internal static class LineReader
 {
     private const string Roster = "the roster in rules.jsonc";
 
-    private static readonly AttackDef NoAttack = new(AttackKind.Melee, 1, null, null);
+    private static readonly AttackDef NoAttack = new(AttackKind.Melee, 1);
 
+    /// <summary>
+    /// Reads one line file. The chassis get their <see cref="ChassisDef.Index"/> later, from
+    /// <see cref="WithChassisIndexes"/>, once every line is read.
+    /// </summary>
     public static LineDef Read(JsonValue root, string expectedId, IReadOnlyList<TrackDef> tracks, int tierCount, RuleSet rules)
     {
         var file = root.Object();
@@ -92,10 +96,43 @@ internal static class LineReader
             }
         }
 
-        var chassis = ReadChassis(file.Required("chassis"), attackIsValid ? attack : null, tierCount);
+        var chassis = ReadChassis(file.Required("chassis"), attackIsValid ? attack : null, tierCount, index);
 
         file.End();
         return new LineDef(id, index, primary, secondary, builtAt, profile, attack, counters, structureCounter, [.. cannotHit], chassis);
+    }
+
+    /// <summary>
+    /// Gives every chassis its dense index: its place among all chassis sorted by ID. Returns the
+    /// lines with the indexes filled in and the chassis in index order.
+    /// </summary>
+    public static (List<LineDef> Lines, List<ChassisDef> Chassis) WithChassisIndexes(List<LineDef> lines)
+    {
+        var all = new List<ChassisDef>();
+        foreach (var line in lines)
+        {
+            all.AddRange(line.Chassis);
+        }
+
+        all.Sort((left, right) => string.CompareOrdinal(left.Id, right.Id));
+        for (var index = 0; index < all.Count; index++)
+        {
+            all[index] = all[index] with { Index = index };
+        }
+
+        var indexed = new List<LineDef>(lines.Count);
+        foreach (var line in lines)
+        {
+            var chassis = new List<ChassisDef>(line.Chassis.Count);
+            foreach (var entry in line.Chassis)
+            {
+                chassis.Add(all.Find(candidate => candidate.Id == entry.Id)!);
+            }
+
+            indexed.Add(line with { Chassis = chassis });
+        }
+
+        return (indexed, all);
     }
 
     private static LineProfile ReadProfile(JsonValue value)
@@ -120,8 +157,8 @@ internal static class LineReader
 
     /// <summary>
     /// Reads a line's attack, or a chassis's override of it when <paramref name="lineAttack"/> is given.
-    /// An override replaces only the keys it names. If it changes the kind, the line's range and
-    /// projectile speed are not carried over.
+    /// An override replaces only the keys it names. If it changes the kind, the line's range,
+    /// projectile speed, minimum range and blast radius are not carried over.
     /// </summary>
     private static AttackDef ReadAttack(JsonValue value, AttackDef? lineAttack)
     {
@@ -143,6 +180,8 @@ internal static class LineReader
 
         var range = attack.Optional("range")?.Number(DataRules.Zero, DataRules.MaxDistance, aboveMin: true);
         var projectileSpeed = attack.Optional("projectile_speed")?.Number(DataRules.Zero, DataRules.MaxProjectileSpeed, aboveMin: true);
+        var minRange = attack.Optional("min_range")?.Number(DataRules.Zero, DataRules.MaxDistance, aboveMin: true);
+        var blastRadius = attack.Optional("blast_radius")?.Number(DataRules.Zero, DataRules.MaxDistance, aboveMin: true);
         attack.End();
 
         if (lineAttack is not null)
@@ -151,22 +190,28 @@ internal static class LineReader
             {
                 range ??= lineAttack.Range;
                 projectileSpeed ??= lineAttack.ProjectileSpeed;
+                minRange ??= lineAttack.MinRange;
+                blastRadius ??= lineAttack.BlastRadius;
             }
 
             kind ??= lineAttack.Kind;
             intervalTicks ??= lineAttack.IntervalTicks;
         }
 
-        var result = new AttackDef(kind ?? AttackKind.Melee, intervalTicks ?? 1, range, projectileSpeed);
+        var result = new AttackDef(kind ?? AttackKind.Melee, intervalTicks ?? 1, range, projectileSpeed, minRange, blastRadius);
         if (value.ErrorCount == errorsBefore)
         {
             if (result.Kind == AttackKind.Ranged && (range is null || projectileSpeed is null))
             {
                 value.Error("a ranged attack needs \"range\" and \"projectile_speed\"");
             }
-            else if (result.Kind == AttackKind.Melee && (range is not null || projectileSpeed is not null))
+            else if (result.Kind == AttackKind.Melee && (range ?? projectileSpeed ?? minRange ?? blastRadius) is not null)
             {
-                value.Error("a melee attack has no \"range\" and no \"projectile_speed\"");
+                value.Error("a melee attack has no \"range\", \"projectile_speed\", \"min_range\" or \"blast_radius\"");
+            }
+            else if (minRange is { } least && range is { } most && least >= most)
+            {
+                value.Error($"\"min_range\" must be below \"range\", found {least} and {most}");
             }
         }
 
@@ -190,7 +235,7 @@ internal static class LineReader
     }
 
     /// <summary>Reads the chassis list. <paramref name="lineAttack"/> is null when the line's attack was rejected.</summary>
-    private static List<ChassisDef> ReadChassis(JsonValue value, AttackDef? lineAttack, int tierCount)
+    private static List<ChassisDef> ReadChassis(JsonValue value, AttackDef? lineAttack, int tierCount, int line)
     {
         var chassis = new List<ChassisDef>();
         var previousEpoch = 0;
@@ -227,7 +272,7 @@ internal static class LineReader
             var attackValue = entry.Optional("attack");
             var attack = lineAttack is not null && attackValue is { } overrideValue ? ReadAttack(overrideValue, lineAttack) : lineAttack;
             entry.End();
-            chassis.Add(new ChassisDef(id, epoch, attack ?? NoAttack));
+            chassis.Add(new ChassisDef(id, Index: 0, line, epoch, attack ?? NoAttack));
         }
 
         return chassis;

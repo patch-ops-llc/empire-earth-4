@@ -1,3 +1,5 @@
+using Sim.Data;
+
 namespace Sim.Tests.Data;
 
 /// <summary>What the loader rejects in a line file.</summary>
@@ -124,15 +126,78 @@ public class LineTests
 
     [Theory]
     [InlineData("{ \"kind\": \"melee\", \"interval_seconds\": \"1\" }", "{ \"kind\": \"ranged\", \"interval_seconds\": \"1\" }", "$.attack", "a ranged attack needs \"range\" and \"projectile_speed\"")]
-    [InlineData("{ \"kind\": \"melee\", \"interval_seconds\": \"1\" }", "{ \"kind\": \"melee\", \"interval_seconds\": \"1\", \"range\": 2 }", "$.attack", "a melee attack has no \"range\" and no \"projectile_speed\"")]
+    [InlineData("{ \"kind\": \"melee\", \"interval_seconds\": \"1\" }", "{ \"kind\": \"melee\", \"interval_seconds\": \"1\", \"range\": 2 }", "$.attack", "a melee attack has no \"range\", \"projectile_speed\", \"min_range\" or \"blast_radius\"")]
     [InlineData("{ \"kind\": \"melee\", \"interval_seconds\": \"1\" }", "{ \"kind\": \"thrown\", \"interval_seconds\": \"1\" }", "$.attack.kind", "unknown attack kind 'thrown'; use melee or ranged")]
     [InlineData("{ \"kind\": \"melee\", \"interval_seconds\": \"1\" }", "{ \"kind\": \"melee\" }", "$.attack", "missing key \"interval_seconds\"")]
     [InlineData("{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\" }", "{ \"kind\": \"ranged\", \"range\": 3 }", "$.chassis[2].attack", "a ranged attack needs \"range\" and \"projectile_speed\"")]
-    [InlineData("{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\" }", "{ \"range\": 3 }", "$.chassis[2].attack", "a melee attack has no \"range\" and no \"projectile_speed\"")]
-    [InlineData("{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\" }", "{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\", \"min_range\": 1 }", "$.chassis[2].attack.min_range", "unknown key \"min_range\"")]
+    [InlineData("{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\" }", "{ \"range\": 3 }", "$.chassis[2].attack", "a melee attack has no \"range\", \"projectile_speed\", \"min_range\" or \"blast_radius\"")]
+    [InlineData("{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\" }", "{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\", \"splash\": 1 }", "$.chassis[2].attack.splash", "unknown key \"splash\"")]
+    [InlineData("{ \"kind\": \"melee\", \"interval_seconds\": \"1\" }", "{ \"kind\": \"melee\", \"interval_seconds\": \"1\", \"blast_radius\": 1 }", "$.attack", "a melee attack has no \"range\", \"projectile_speed\", \"min_range\" or \"blast_radius\"")]
+    [InlineData("{ \"kind\": \"melee\", \"interval_seconds\": \"1\" }", "{ \"kind\": \"melee\", \"interval_seconds\": \"1\", \"min_range\": 1 }", "$.attack", "a melee attack has no \"range\", \"projectile_speed\", \"min_range\" or \"blast_radius\"")]
+    [InlineData("{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\" }", "{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\", \"min_range\": 3 }", "$.chassis[2].attack", "\"min_range\" must be below \"range\", found 3 and 3")]
+    [InlineData("{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\" }", "{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\", \"min_range\": 0 }", "$.chassis[2].attack.min_range", "must be above 0 and at most 64, found 0")]
+    [InlineData("{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\" }", "{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\", \"blast_radius\": 65 }", "$.chassis[2].attack.blast_radius", "must be above 0 and at most 64, found 65")]
     public void AnAttackMustBeComplete(string oldText, string newText, string location, string message)
     {
         DataAssert.RejectedOnce(SampleData.With(Path, oldText, newText), Path, location, message);
+    }
+
+    [Fact]
+    public void ARangedAttackMayHaveAMinimumRangeAndABlastRadius()
+    {
+        var files = SampleData.With(
+            Path,
+            "{ \"kind\": \"melee\", \"interval_seconds\": \"1\" }",
+            "{ \"kind\": \"ranged\", \"interval_seconds\": 4, \"range\": 9, \"min_range\": 3, \"blast_radius\": \"1.5\", \"projectile_speed\": 10 }");
+        files.Edit(Path, "{ \"epoch\": 2, \"id\": \"legionary\" }", "{ \"epoch\": 2, \"id\": \"legionary\", \"attack\": { \"range\": 11, \"blast_radius\": 2 } }");
+        files.Edit(Path, "{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\" }", "{ \"kind\": \"melee\" }");
+
+        var guard = DataAssert.Valid(files).Lines[0];
+
+        Assert.Equal(new AttackDef(AttackKind.Ranged, 80, Number("9"), Number("10"), Number("3"), Number("1.5")), guard.Attack);
+        Assert.Equal(guard.Attack, guard.Chassis[0].Attack);
+        Assert.Equal(new AttackDef(AttackKind.Ranged, 80, Number("11"), Number("10"), Number("3"), Number("2")), guard.Chassis[1].Attack);
+        Assert.Equal(new AttackDef(AttackKind.Melee, 80), guard.Chassis[2].Attack);
+    }
+
+    [Fact]
+    public void AChassisOverrideMayNotPutTheRangeUnderTheMinimumRangeOfItsLine()
+    {
+        var files = SampleData.With(
+            Path,
+            "{ \"kind\": \"melee\", \"interval_seconds\": \"1\" }",
+            "{ \"kind\": \"ranged\", \"interval_seconds\": 4, \"range\": 9, \"min_range\": 3, \"projectile_speed\": 10 }");
+        files.Edit(Path, "{ \"kind\": \"ranged\", \"range\": 3, \"projectile_speed\": \"20\" }", "{ \"range\": \"2.5\" }");
+
+        DataAssert.RejectedOnce(files, Path, "$.chassis[2].attack", "\"min_range\" must be below \"range\", found 3 and 2.5");
+    }
+
+    [Fact]
+    public void EveryChassisHasADenseIndexInOrderOfItsIdAcrossAllLines()
+    {
+        var files = SampleData.Files().Set(
+            "lines/air.jsonc",
+            SampleData.Guard
+                .Replace("\"id\": \"guard\"", "\"id\": \"air\"", StringComparison.Ordinal)
+                .Replace("\"cannot_hit\": [\"air\"],", "", StringComparison.Ordinal)
+                .Replace("\"id\": \"hoplite\"", "\"id\": \"biplane\"", StringComparison.Ordinal)
+                .Replace("\"id\": \"legionary\"", "\"id\": \"jet\"", StringComparison.Ordinal)
+                .Replace("\"id\": \"grenadier\"", "\"id\": \"fighter\"", StringComparison.Ordinal));
+
+        var data = DataAssert.Valid(files);
+
+        Assert.Equal(["biplane", "fighter", "grenadier", "hoplite", "jet", "legionary"], data.Chassis.Select(chassis => chassis.Id));
+        Assert.Equal([0, 1, 2, 3, 4, 5], data.Chassis.Select(chassis => chassis.Index));
+        Assert.Equal([0, 0, 2, 2, 0, 2], data.Chassis.Select(chassis => chassis.Line));
+        Assert.Equal([1, 4, 4, 1, 2, 2], data.Chassis.Select(chassis => chassis.Epoch));
+
+        // A line still lists its own chassis by epoch, and they are the same entries.
+        var air = data.LineOf(0)!;
+        Assert.Equal(["biplane", "jet", "fighter"], air.Chassis.Select(chassis => chassis.Id));
+        Assert.Equal([0, 4, 1], air.Chassis.Select(chassis => chassis.Index));
+        Assert.All(data.Chassis, chassis => Assert.Same(chassis, data.LineOf(chassis.Line)!.Chassis.Single(own => own.Id == chassis.Id)));
+        Assert.Equal("guard", data.LineOf(2)!.Id);
+        Assert.Null(data.LineOf(1));
     }
 
     [Fact]
@@ -170,5 +235,11 @@ public class LineTests
         Assert.Empty(guard.Counters);
         Assert.Null(guard.StructureCounter);
         Assert.Equal([0], guard.CannotHit);
+    }
+
+    private static DataNumber Number(string text)
+    {
+        Assert.True(DataNumber.TryParse(text, out var number), text);
+        return number;
     }
 }
