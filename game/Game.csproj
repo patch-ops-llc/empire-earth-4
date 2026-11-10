@@ -1,0 +1,17 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+
+  <!--
+    The Godot editor rewrites this file when it opens the project unless the Sdk attribute names the
+    editor's exact version and TargetFramework is set right here. Keep the Sdk version equal to
+    "Godot.NET.Sdk" in global.json and TargetFramework equal to the one in Directory.Build.props.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../src/Sim/Sim.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,2 @@
+# Same line endings on Windows, macOS and Linux, so `dotnet format` agrees everywhere.
+* text=auto eol=lf

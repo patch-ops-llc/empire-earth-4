@@ -1,0 +1,16 @@
+# .NET build output
+bin/
+obj/
+*.user
+TestResults/
+
+# Godot: import cache, C# build output and editor state
+.godot/
+*.csproj.old*
+mono_crash.*
+
+# IDEs and operating systems
+.vs/
+.idea/
+.DS_Store
+Thumbs.db
