@@ -4,11 +4,11 @@ namespace Sim.Tests.Core;
 
 public class EntityAndStoreTests
 {
-    private struct Health : IStateHashable
+    private struct Health : IStateValue
     {
         public int Points;
 
-        public readonly void AddToHash(ref StateHasher hasher) => hasher.Add(Points);
+        public void Walk(IStateWalker walker) => Points = walker.Field(Points);
     }
 
     private static EntityId[] EntitiesOf(ComponentStore<Health> store) =>

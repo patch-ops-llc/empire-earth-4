@@ -49,7 +49,7 @@ The kernel is in `src/Sim/Core/`, in the namespace `Sim.Core`.
 
 - **`World`** holds all state: the tick number, the random generator, the entities and the registered stores.
 - **`EntityId`** is an integer. IDs start at 1, ascend, and are never reused, so a lower ID is always an older entity. `EntityId.None` is 0.
-- **`ComponentStore<T>`** holds one value of a struct type per entity, in arrays kept in ascending ID order. A system walks it by index, oldest entity first. State that does not belong to an entity goes in a class of its own that implements `IStateStore`.
+- **`ComponentStore<T>`** holds one value of a struct type per entity, in arrays kept in ascending ID order. The struct implements `IStateValue`. A system walks the store by index, oldest entity first. State that does not belong to an entity goes in a class of its own that implements `IStateStore`.
 - **`DeterministicRandom`** (`World.Random`) is a SplitMix64 generator. Every draw changes its state, so draw only inside a tick, from code that runs in a fixed order. Never draw from presentation code.
 
 Destroying an entity is settled in two steps. `Entities.Destroy(id)` makes `IsAlive(id)` false at once. The entity keeps its place and its values in every store until the end of the tick, when they are all removed together. So a system may destroy entities while it walks a store, and positions in the store stay valid for the whole tick. Check `IsAlive` where it matters that something was destroyed earlier in the same tick.
@@ -79,13 +79,89 @@ A `Command` is the only way anything outside the simulation changes it. It is im
 
 `World.ComputeHash()` returns a 64-bit hash of the whole state: the tick, the random generator, the entity list, then every store in the ordinal order of its name. Peers compare it to detect a desync. The order in which stores were registered does not change it.
 
-A store feeds its fields to the `StateHasher` in `AddToHash`. The hasher takes whole numbers only, and there is no overload for a floating-point value or a string. Feed every field that can change, in a fixed order, entities in ascending ID order. A field left out is a desync nobody will detect.
+The hash is not computed over bytes. It comes from the walk described next, which hands every field to a `StateHasher` as a whole number.
 
-The hash is fed directly from the stores, with no bytes written in between. Snapshots, which arrive with milestone M6, will need a second walk over the same fields.
+## One walk over the state
+
+Every store has one method, `Walk(IStateWalker walker)`, that hands each of its fields to the walker and takes back the value the walker returns:
+
+```csharp
+public struct Unit : IStateValue
+{
+    public int Owner;
+    public Fixed Speed { get; set; }
+    public Stance Stance { get; set; }
+    public Point Target { get; set; }
+
+    public void Walk(IStateWalker walker)
+    {
+        Owner = walker.Field(Owner);
+        Speed = walker.Field(Speed);
+        Stance = (Stance)walker.Field((int)Stance);
+        Target = new Point(walker.Field(Target.X), walker.Field(Target.Y));
+    }
+}
+```
+
+The same walk serves three purposes, each with its own walker:
+
+| Purpose | What the walker does with a field | What it returns |
+| --- | --- | --- |
+| The state hash, `World.ComputeHash()` | Feeds it to the hash | The value it was given |
+| Writing a snapshot, `Snapshot.Write` | Writes it as bytes | The value it was given |
+| Restoring a snapshot, `Snapshot.Restore` | Ignores it | The value read from the snapshot |
+
+Because there is one walk, a field cannot be in the hash and missing from a snapshot, or the other way round. The rules for a walk:
+
+- **Walk every field that can change during a match**, always in the same order, entities in ascending ID order and never in the order of a hash-based collection. A field left out is in neither the hash nor a snapshot.
+- **Always assign the result back.** `walker.Field(Speed);` on its own hashes and writes correctly and restores nothing.
+- **A walker takes whole numbers and the kernel's number types**: `bool`, `int`, `uint`, `long`, `ulong`, `Int128`, `EntityId`, `Fixed`, `Angle` and `Fraction`. There is no method for a floating-point value or for text. Cast an enum to `int` and back, and walk the parts of a compound value one by one and build it again from the results, as `Stance` and `Target` are above. Fields and properties work alike.
+- **A store whose number of items changes** walks the number first, with `walker.Count`, and makes room for it when `walker.IsRestoring` is true:
+
+```csharp
+public void Walk(IStateWalker walker)
+{
+    var count = walker.Count(_entries.Count, minimumBytesPerItem: sizeof(long));
+    if (walker.IsRestoring)
+    {
+        _entries.Clear();
+        _entries.AddRange(new long[count]);
+    }
+
+    for (var i = 0; i < count; i++)
+    {
+        _entries[i] = walker.Field(_entries[i]);
+    }
+}
+```
+
+  `minimumBytesPerItem` is the least one item can take in a snapshot: four bytes for each `int`, `EntityId` or `Fixed`, eight for each `long`, one for each `bool`. A damaged snapshot then cannot announce more items than it has bytes for. `ComponentStore<T>` does all of this itself.
+- A walk that finds a restored value impossible throws `InvalidDataException`.
+- The last parameter of `Field` and `Count` is the text of the argument, which the compiler fills in. Leave it out. A tool that shows or compares two states uses it to name each field.
+
+`World.Walk(walker)` walks the whole state: the tick, the random generator, the entity list, the number of stores, then every store in name order. Anything else that needs every field, such as a tool that compares two worlds, implements `IStateWalker` and calls it.
+
+## Snapshots
+
+`Snapshot.Write(world, writer)` writes the whole state as bytes: the letters `SNAP`, a layout version, the names of the stores, every field the walk visits, and last the state hash. `Snapshot.Restore(simulation, reader)` reads it back.
+
+- **A snapshot is state and nothing else.** Systems, command handlers and data are not in it. To restore, build the match the same way again and read the snapshot into it. Restoring into a world with other stores is refused, by name.
+- **The command queue is not in it.** Restoring empties the queue and makes the snapshot's tick the next to run; queue again what should run from there. Whatever needs the waiting commands kept, such as a save game, writes them beside the snapshot with `CommandQueue.CopyPendingTo` and `CommandEncoding`.
+- **A snapshot checks itself.** After reading, `Restore` hashes the world and compares the result with the hash at the end of the snapshot. Damage anywhere, and a walk that does not assign its results back, both end in `InvalidDataException`. The world is then half replaced and must not be used.
+- **Restoring leaves nothing behind.** Whatever the world held before is gone, including values in fields a walk forgot.
+- Take a snapshot between ticks.
+
+What neither the hash nor a snapshot can notice is a field that is left out of the walk altogether. The restored run then goes its own way some ticks later, and one test per world catches that, by taking a snapshot in the middle of a run, restoring it and continuing beside the run that was never interrupted:
+
+```csharp
+SnapshotAssert.RestoresAndContinues(() => BuildTheMatch().Simulation, script, snapshotTick: 40, lastTick: 200);
+```
+
+`SnapshotAssert` is in `tests/Sim.Tests/Serialization/`. Every system adds this test for a run in which its own stores change after the snapshot.
 
 ## Bytes
 
-Everything that puts simulation data on bytes uses one format, in `src/Sim/Serialization/` (namespace `Sim.Serialization`): encoded commands now, snapshots, replay files and network messages later.
+Everything that puts simulation data on bytes uses one format, in `src/Sim/Serialization/` (namespace `Sim.Serialization`): encoded commands and snapshots now, replay files and network messages later.
 
 - **`ByteWriter`** appends values to a buffer and **`ByteReader`** reads them back in the same order. The format is a plain sequence of values: no tags, no padding, and no lengths except the counts described here.
 - Whole numbers are little-endian at a fixed width, so the bytes are the same on every machine. Each method names its width (`WriteInt32`, `WriteUInt16`); nothing is chosen by overload.
@@ -110,14 +186,15 @@ Everything that puts simulation data on bytes uses one format, in `src/Sim/Seria
 
 ## Adding a system
 
-1. Put it in its own folder under `src/Sim/` with its own state type: a struct implementing `IStateHashable` for per-entity data, held in a `ComponentStore<T>`, or a class implementing `IStateStore`.
+1. Put it in its own folder under `src/Sim/` with its own state type: a struct implementing `IStateValue` for per-entity data, held in a `ComponentStore<T>`, or a class implementing `IStateStore`. Either way its `Walk` hands every field to the walker.
 2. Register the store with `World.AddStore`, under a unique name, before the first tick.
 3. Add the system with `Simulation.AddSystem`. Its place in that list is part of the rules of the game: moving it changes results.
 4. For a new kind of command, add a line to `CommandType` (alphabetical, with the lowest unused number, never renumbered) and register its handler with `Simulation.SetCommandHandler`.
 5. Test it by building a small world, queueing commands, running ticks and asserting on the state. `tests/Sim.Tests/Core/ToyMatch.cs` is a worked example.
+6. Add the snapshot test for it: one line with `SnapshotAssert.RestoresAndContinues`, described above.
 
 ## What the tests pin
 
-Some tests hold recorded values: the reference output of the random generator, the hash of known input, and the final state hash of a 600-tick toy match (`DeterminismTests`). They fail when the behaviour of the kernel changes in any way: rounding, the sine table, the order of a tick, the hash. If the change is intended, update the recorded value in the same pull request and say so. If it is not, the change has broken determinism with earlier builds.
+Some tests hold recorded values: the reference output of the random generator, the hash of known input, the final state hash of a 600-tick toy match (`DeterminismTests`), and the bytes of an encoded command and of a small snapshot. They fail when the behaviour of the kernel changes in any way: rounding, the sine table, the order of a tick, the hash, the byte format. If the change is intended, update the recorded value in the same pull request and say so. If it is not, the change has broken determinism with earlier builds.
 
 CI runs these tests on Linux for every pull request. The workflow `determinism.yml` runs them on Linux, Windows and macOS, on x86_64 and on Apple silicon, as a Debug and as a Release build: on every push to `main`, every night, and for a pull request that changes the workflow or the build settings. A recorded value that one system computes differently fails there. Golden replays, which arrive later in milestone M6, add whole recorded matches to the same check.

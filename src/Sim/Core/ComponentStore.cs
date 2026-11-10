@@ -12,7 +12,7 @@ namespace Sim.Core;
 /// Destroying an entity is safe while walking: its values stay in place until the end of the tick.
 /// </remarks>
 public sealed class ComponentStore<T> : IStateStore
-    where T : struct, IStateHashable
+    where T : struct, IStateValue
 {
     private EntityId[] _entities = new EntityId[16];
     private T[] _values = new T[16];
@@ -142,13 +142,39 @@ public sealed class ComponentStore<T> : IStateStore
         _count = kept;
     }
 
-    public void AddToHash(ref StateHasher hasher)
+    public void Walk(IStateWalker walker)
     {
-        hasher.Add(_count);
+        ArgumentNullException.ThrowIfNull(walker);
+
+        var restoring = walker.IsRestoring;
+        var oldCount = _count;
+
+        // An item is at least its entity's ID.
+        _count = walker.Count(_count, minimumBytesPerItem: sizeof(int));
+        if (_count > _entities.Length)
+        {
+            var capacity = Math.Max(_count, _entities.Length * 2);
+            Array.Resize(ref _entities, capacity);
+            Array.Resize(ref _values, capacity);
+        }
+
+        if (restoring)
+        {
+            // Nothing of what the store held before may show through what the walk assigns.
+            Array.Clear(_values, 0, Math.Max(oldCount, _count));
+        }
+
+        var previous = EntityId.None;
         for (var i = 0; i < _count; i++)
         {
-            hasher.Add(_entities[i]);
-            _values[i].AddToHash(ref hasher);
+            var entity = _entities[i] = walker.Field(_entities[i]);
+            if (restoring && entity <= previous)
+            {
+                throw new InvalidDataException($"Entity IDs in store '{Name}' must be positive and ascend: {entity} follows {previous}.");
+            }
+
+            previous = entity;
+            _values[i].Walk(walker);
         }
     }
 }

@@ -62,14 +62,14 @@ The game starts in `scenes/main.tscn`: a flat ground of 96 by 96 tiles with a gr
 
 | Path | Contents |
 | --- | --- |
-| `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) and `Serialization/` (the byte format and the encoding of a command). |
+| `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) and `Serialization/` (the byte format, the encoding of a command, and snapshots). |
 | `src/Tools/` | The console tools, as one program: `dotnet run --project src/Tools -- <tool> [arguments]`. Each tool is a folder. So far: `datacheck`. |
 | `tests/Sim.Tests/` | Tests for `Sim` (xUnit v3 on Microsoft.Testing.Platform), in folders that match those of `src/Sim/`. |
 | `tests/Tools.Tests/` | Tests for the tools, for the data in `game/data/` and for the schemas. |
 | `game/` | The Godot project: `project.godot`, `Game.csproj`, `scenes/`, `scripts/`. References `Sim`. |
 | `game/data/` | The content of the game as JSON-with-comments files: tracks, rules, unit lines and maps. |
 | `schemas/` | JSON Schemas for the files in `game/data/`. |
-| `docs/` | [determinism.md](docs/determinism.md): the rules that keep the simulation deterministic, the kernel and the byte format. [data-authoring.md](docs/data-authoring.md): how the data files are written and checked. |
+| `docs/` | [determinism.md](docs/determinism.md): the rules that keep the simulation deterministic, the kernel, the byte format and snapshots. [data-authoring.md](docs/data-authoring.md): how the data files are written and checked. |
 | `.github/workflows/` | `ci.yml` and `determinism.yml`, described above. |
 | `global.json` | Pins the .NET SDK and the Godot version, and selects the test runner. |
 | `Directory.Build.props` | C# settings shared by every project: target framework, nullable, warnings as errors, analyzers, overflow checking. |

@@ -20,6 +20,8 @@ public sealed class DeterministicRandom
     /// <summary>The whole state of the generator.</summary>
     public ulong State { get; private set; }
 
+    internal void Walk(IStateWalker walker) => State = walker.Field(State);
+
     /// <summary>The next 64 random bits.</summary>
     public ulong NextUInt64()
     {

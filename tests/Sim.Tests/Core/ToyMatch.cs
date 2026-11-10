@@ -105,7 +105,7 @@ internal sealed class ToyMatch
         Movers.Add(entity, new Mover { Owner = owner, X = x, Y = y, Heading = heading, Speed = speed });
     }
 
-    public struct Mover : IStateHashable
+    public struct Mover : IStateValue
     {
         public int Owner;
         public Fixed X;
@@ -114,14 +114,14 @@ internal sealed class ToyMatch
         public Fixed Speed;
         public int Age;
 
-        public readonly void AddToHash(ref StateHasher hasher)
+        public void Walk(IStateWalker walker)
         {
-            hasher.Add(Owner);
-            hasher.Add(X);
-            hasher.Add(Y);
-            hasher.Add(Heading);
-            hasher.Add(Speed);
-            hasher.Add(Age);
+            Owner = walker.Field(Owner);
+            X = walker.Field(X);
+            Y = walker.Field(Y);
+            Heading = walker.Field(Heading);
+            Speed = walker.Field(Speed);
+            Age = walker.Field(Age);
         }
     }
 
@@ -140,11 +140,11 @@ internal sealed class ToyMatch
         {
         }
 
-        public void AddToHash(ref StateHasher hasher)
+        public void Walk(IStateWalker walker)
         {
-            foreach (var score in _thousandths)
+            for (var player = 0; player < _thousandths.Length; player++)
             {
-                hasher.Add(score);
+                _thousandths[player] = walker.Field(_thousandths[player]);
             }
         }
     }
