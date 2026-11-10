@@ -9,6 +9,8 @@ internal static class DataRules
     public const string FileExtension = ".jsonc";
     public const string TracksFile = "tracks.jsonc";
     public const string RulesFile = "rules.jsonc";
+    public const string ResearchFile = "research.jsonc";
+    public const string AccentsFile = "accents.jsonc";
     public const string LinesFolder = "lines/";
     public const string MapsFolder = "maps/";
 
@@ -17,6 +19,17 @@ internal static class DataRules
 
     /// <summary>The counter target that means every structure and not a line.</summary>
     public const string StructuresTarget = "structures";
+
+    /// <summary>
+    /// The tracks the rules name. The formulas of design 2.3 and section 4 say which track scales
+    /// what, so <c>tracks.jsonc</c> must define each of these IDs. Their order there is free.
+    /// </summary>
+    public const string FirepowerTrack = "firepower";
+    public const string ProtectionTrack = "protection";
+    public const string MobilityTrack = "mobility";
+    public const string ManufacturingTrack = "manufacturing";
+    public const string LogisticsTrack = "logistics";
+    public const string ExtractionTrack = "extraction";
 
     public const int MaxIdLength = 40;
     public const int MaxTracks = 16;
@@ -27,6 +40,7 @@ internal static class DataRules
     public const int MaxSeconds = 3_600;
 
     public static readonly DataNumber Zero = DataNumber.FromInteger(0);
+    public static readonly DataNumber One = DataNumber.FromInteger(1);
     public static readonly DataNumber MaxMultiplier = DataNumber.FromInteger(100);
     public static readonly DataNumber MaxHitPoints = DataNumber.FromInteger(1_000_000);
     public static readonly DataNumber MaxDamagePerSecond = DataNumber.FromInteger(100_000);
@@ -54,6 +68,12 @@ internal static class DataRules
 
     /// <summary>A multiplier such as "1.25": above zero and at most <see cref="MaxMultiplier"/>.</summary>
     public static DataNumber Multiplier(this JsonValue value) => value.Number(Zero, MaxMultiplier, aboveMin: true);
+
+    /// <summary>A multiplier that raises a value, such as "1.15": at least 1 and at most <see cref="MaxMultiplier"/>.</summary>
+    public static DataNumber RaisingMultiplier(this JsonValue value) => value.Number(One, MaxMultiplier);
+
+    /// <summary>A share of a whole or a multiplier that lowers a value, such as "0.25": above zero and at most 1.</summary>
+    public static DataNumber Share(this JsonValue value) => value.Number(Zero, One, aboveMin: true);
 
     /// <summary>
     /// A time written in seconds, returned in ticks. It must be above zero and a whole number of ticks.

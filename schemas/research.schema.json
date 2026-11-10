@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "research.jsonc",
+  "description": "What one research costs and how long it takes, at frontier price (game design 1.3). The multipliers for other price bands are in rules.jsonc.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tiers"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "tiers": {
+      "description": "One entry for each tier from 2 to the last tier, in order.",
+      "type": "array",
+      "maxItems": 19,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tier", "cost", "seconds"],
+        "properties": {
+          "tier": { "description": "The tier the research reaches.", "type": "integer", "minimum": 2, "maximum": 20 },
+          "cost": {
+            "description": "Paid when the research starts, before the price band's multiplier.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["materials", "energy"],
+            "properties": {
+              "materials": { "$ref": "#/definitions/price" },
+              "energy": { "$ref": "#/definitions/price" }
+            }
+          },
+          "seconds": { "description": "Research time in seconds. It must be a whole number of ticks.", "$ref": "#/definitions/number" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "number": {
+      "description": "A whole number, or text in plain decimal notation such as \"2.6\". A bare number with a fraction is not accepted, so that every value is read exactly.",
+      "anyOf": [
+        { "type": "integer" },
+        { "type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$" }
+      ]
+    },
+    "price": { "type": "integer", "minimum": 0, "maximum": 1000000 }
+  }
+}
