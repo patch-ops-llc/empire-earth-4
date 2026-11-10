@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-and-test:
+    name: Build, test and Godot smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the .NET SDK pinned in global.json
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build with warnings as errors
+        run: dotnet build --no-restore -warnaserror
+
+      - name: Check formatting
+        run: dotnet format --no-restore --verify-no-changes
+
+      - name: Test
+        run: dotnet test --no-build
+
+      - name: Install the Godot .NET build pinned in global.json
+        uses: chickensoft-games/setup-godot@ac93246ea68518a384c1c280a496e5989341f2f6 # v2.4.3
+        with:
+          version: global.json
+          use-dotnet: true
+          include-templates: false
+
+      - name: Import the project and build it from the Godot editor
+        run: godot --headless --path game --import --build-solutions
+
+      # The editor rewrites Game.csproj when its Sdk version or target framework drifts from the
+      # pinned ones, and creates .uid files for scripts that were committed without one.
+      - name: Check that Godot left the working tree unchanged
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
+
+      # Godot exits with 0 even when the C# assembly or a script fails to load, so the marker
+      # printed by game/scripts/SmokeTest.cs is what proves the scene ran.
+      - name: Run the headless smoke test
+        run: |
+          godot --headless --path game res://scenes/smoke_test.tscn --quit-after 600 2>&1 | tee "$RUNNER_TEMP/smoke.log"
+          grep -q '^SMOKE_TEST_OK' "$RUNNER_TEMP/smoke.log"

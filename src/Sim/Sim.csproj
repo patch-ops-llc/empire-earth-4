@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The deterministic simulation. It must never reference Godot or any other package. -->
+
+</Project>
