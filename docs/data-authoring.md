@@ -1,0 +1,150 @@
+# Data authoring guide
+
+Every number, table and roster entry of the game lives in data files under `game/data/`. This guide says how the files are written, what each one holds and how to check them.
+
+## Check your edit
+
+```sh
+dotnet run --project src/Tools -- datacheck game/data
+```
+
+`datacheck` loads the folder through the same loader the game uses, so data it accepts is data the game can run. It prints every problem it finds in one run, one per line, as the file, the place in the file and what is wrong:
+
+```
+game/data/lines/guard.jsonc: $.base.hp: must be above 0 and at most 1000000, found 0
+game/data/maps/ridge.jsonc: $.deposits: needs 4 contested deposits, found 3
+datacheck: 2 errors in game/data.
+```
+
+It exits with 0 when the data is valid, 1 when it found errors and 2 when it could not run, for example because the folder does not exist. CI runs it on every pull request.
+
+## Files
+
+| File | Holds | Schema |
+| --- | --- | --- |
+| `tracks.jsonc` | The tracks in their fixed order, the epoch names and the tier names. | `schemas/tracks.schema.json` |
+| `rules.jsonc` | The constants of the rule set, the roster of line and structure IDs, and the rules every map must satisfy. | `schemas/rules.schema.json` |
+| `lines/<id>.jsonc` | One line of units: its tracks, tier-1 values, attack, counters and chassis. | `schemas/line.schema.json` |
+| `maps/<id>.jsonc` | One map: terrain, starting positions, deposits and markers. | `schemas/map.schema.json` |
+
+The loader reads exactly these. Any other file in the folder is an error, so a misnamed file is noticed and not skipped. Files and folders whose names start with a dot are ignored.
+
+More kinds of file arrive with the milestones that need them. Adding a kind means adding its reader in `src/Sim/Data/`, its schema in `schemas/`, a row in the table above and tests.
+
+## Conventions
+
+- **JSON with comments.** `//` and `/* */` comments are allowed anywhere. Trailing commas and repeated keys are errors.
+- **IDs** are lowercase letters, digits and underscores, start with a letter and have at most 40 characters: `cavalry_armor`. A line's or map's `id` must equal its file name.
+- **Unknown keys are errors.** A misspelled key is reported and never ignored.
+- **Whole numbers are bare; fractions are text.** Write `130` and `"2.6"`. A bare `2.6` is an error. The loader reads each number from its text into an integer and a count of decimal places, so no value ever passes through a floating-point type and every machine reads the same value. Text numbers are plain decimal notation: an optional minus sign, digits, and optionally a point and up to 9 more digits, with at most 18 digits in total and no exponent. Where a fraction is allowed a whole number may be written either way: `1` and `"1"` are the same.
+- **Times are in seconds**, as in the game design, and must be a whole number of ticks. There are 20 ticks per second, so `"1.5"` and `"0.05"` are fine and `"0.33"` is an error. The loader converts them to ticks.
+- **Distances are in tiles** and speeds in tiles per second.
+- **`$schema`** as the first key of a file points an editor at the file's schema. VS Code then offers autocomplete and underlines mistakes as you type. It is not data: the loader accepts it and leaves it out of the content hash.
+
+## tracks.jsonc
+
+Game design 1.1 and 1.2.
+
+| Key | Meaning |
+| --- | --- |
+| `epochs` | The name of each epoch, epoch 1 first. Its length is the number of tiers every track has. |
+| `tracks` | The tracks. **Their order in the file is the fixed track order** the rules use, for example as the last tie-break when a unit picks its accents. |
+| `tracks[].id` | The track's ID. |
+| `tracks[].name`, `short` | Its display name and abbreviation. |
+| `tracks[].group` | `better`, `more` or `richer`. |
+| `tracks[].tiers` | The name of each tier, tier 1 first: one per epoch. |
+
+## rules.jsonc
+
+The values the design says to tune first. Each block carries a comment naming its design section.
+
+| Key | Meaning | Design |
+| --- | --- | --- |
+| `roster.lines`, `roster.structures` | Every line and structure ID the design names. Files may refer to these before the line or structure has a file of its own. `structures` is reserved as a counter target and cannot be a line ID. | 2.2, 2.5 |
+| `epoch.tracks_needed`, `epoch.reach` | The epoch is the highest tier that this many tracks have reached; no track may be more than `reach` tiers above it. | 1.4 |
+| `research_price.catch_up`, `frontier`, `ahead` | Multipliers on a research's `cost` and `time` at or below the epoch, one above and two above. | 1.3 |
+| `effective_tier_window` | A chassis uses track tiers within this many tiers of its own epoch. | 2.3 |
+| `per_tier.damage`, `hp`, `speed`, `income` | What one tier of Firepower, Protection, Mobility and Extraction multiplies. | 2.3, 4.2 |
+| `per_step.quality_cost`, `manufacturing_cost`, `manufacturing_time` | What one step of offset multiplies in a unit's price and build time. | 2.3 |
+| `accent_slots` | Most accents one unit carries. | 2.3 |
+| `supply_cap.base`, `per_logistics_tier` | The supply cap is the base plus this much per Logistics tier. | 4.1 |
+| `wall_crossing_cost` | Tiles of walking that crossing one enemy wall tile costs in the second path search. | 2.5 |
+| `match.start_epoch`, `epoch_cap` | The tier all tracks start at and the tier none may pass. | 5.2 |
+| `start.workers`, `materials`, `energy` | What every player starts with, besides a Capitol. | 5.2 |
+| `map` | The map rules below. | 5.3, 5.4 |
+
+`map.start_territory` repeats the Capitol's footprint and territory radius, because structures have no data files yet. When the Capitol gets one, the two must agree.
+
+## lines/&lt;id&gt;.jsonc
+
+Game design 2.2 and 2.4.
+
+| Key | Meaning |
+| --- | --- |
+| `id` | The line's ID. It must be in `roster.lines`. |
+| `primary`, `secondary` | Track IDs. The chassis of epoch T unlocks at primary tier T and secondary tier T - 1. |
+| `built_at` | The structure that builds the line, from `roster.structures`. |
+| `base` | Values at tier 1: `hp`, `dps`, `speed`, `sight`, `supply`, `spacing`, `cost.materials`, `cost.energy`, `build_seconds`. |
+| `attack` | `kind` is `melee` or `ranged`; `interval_seconds` is the time between attacks. A ranged attack also needs `range` and `projectile_speed`; a melee attack has neither. |
+| `counters` | Optional. Damage multipliers by target: a line ID, or `structures` for every structure. |
+| `cannot_hit` | Optional. Lines this line cannot attack. A line cannot be here and in `counters`. |
+| `chassis` | The line's model for each epoch, listed by rising epoch, at most one per epoch. Gaps are allowed. Chassis IDs are unique across all lines. |
+| `chassis[].attack` | Optional. Keys of `attack` that this chassis replaces. If it changes `kind`, the line's `range` and `projectile_speed` are not carried over. Each chassis states its own override; nothing is inherited from the chassis before it. |
+
+## maps/&lt;id&gt;.jsonc
+
+Game design 5.3. Tiles are `(x, y)` with `(0, 0)` at the first character of the first terrain row; x grows to the right and y downward. A position names the lowest tile of a footprint, its top-left corner.
+
+| Key | Meaning |
+| --- | --- |
+| `id` | The map's ID. |
+| `width`, `height` | Size in tiles, 16 to 256. |
+| `symmetry` | `mirror_x`: the right half reflects the left half. `mirror_y`: the bottom half reflects the top half. |
+| `starts` | Two entries: where each player's starting Capitol stands. |
+| `deposits` | Each has a `kind` (`main`, `natural` or `contested`) and a position. |
+| `markers` | Authored chokepoints and open fields. Each has a `kind` (`chokepoint` or `open_field`), a position, `size_x` and `size_y`, and `across`. |
+| `terrain` | One text row per y and one character per x: `.` open ground, `F` forest, `#` cliff. |
+
+A marker is a rectangle covering the passage. `across` is the axis the passage's width runs along: with `"across": "y"` the width is `size_y`, and units pass through along x. Nothing in the game finds chokepoints by itself; the AI and the balance battles use these markers.
+
+## What datacheck checks
+
+Besides the shape of each file:
+
+| Check | Rule |
+| --- | --- |
+| References | A line's `id`, `primary`, `secondary`, `built_at`, `counters` and `cannot_hit` must name a track in `tracks.jsonc` or an ID in the roster. |
+| Tiers | Counts of tracks and tiers in `rules.jsonc` must fit `tracks.jsonc`; `epoch_cap` is not below `start_epoch`; every track names one tier per epoch. |
+| Chassis | An epoch outside the tiers could never unlock and is an error. Epochs rise and do not repeat. IDs are unique. |
+| Times | Attack intervals and build times are whole numbers of ticks. |
+| Stat bounds | Hit points, damage, speed, sight, supply, spacing, prices, ranges and multipliers must be positive where zero makes no sense and inside wide sanity limits, listed in `src/Sim/Data/DataRules.cs`. The limits catch slips such as a missing decimal point; they are not balance rules. |
+| Map symmetry | Terrain, starts, deposits and markers must all mirror under the map's `symmetry`. |
+| Map footprints | Starting Capitols, deposits and markers stand on open ground inside the map. Deposits overlap neither each other nor a Capitol. |
+| Start distance | The Capitols' centers are at least two territory radii apart, so the two starting territories do not overlap. |
+| Deposits | Each start has `main_per_player` main deposits wholly inside its territory. Natural and contested deposits have no tile inside a starting territory. Each start has `natural_per_player` natural deposits nearest to it, and the map has `contested` contested ones. A tile is inside a territory when its center is within the radius of the Capitol's center. |
+| Markers | At least one chokepoint and one open field. A chokepoint is `chokepoint_width.min` to `max` tiles wide and spans the whole passage: the tiles just past both ends of its width are impassable or off the map. An open field is at least `open_field_min_width` wide. |
+
+Two things it does not check yet. A marker's passage must run along x or y, so a diagonal chokepoint cannot be marked. And it does not test that a chokepoint or open field lies between the bases; that stays with the map author.
+
+## Content hash
+
+The loader computes one hash over all the data. It goes into the lobby handshake and the replay header, so peers whose data differs cannot start a match. `datacheck` prints it.
+
+Two data folders have the same hash exactly when they mean the same. Comments, spacing, line endings, the order of keys in an object and the `$schema` key do not count. Every value, the order of every list and every file path do.
+
+The hash is the SHA-256, written as 64 lowercase hex digits, of a canonical text encoded as UTF-8:
+
+1. The line `content-hash-v1`, ended by a line feed.
+2. For each file, in ordinal order of its path: the path with `/` separators, a line feed, the file's canonical JSON and a line feed.
+
+Canonical JSON has no spaces or line breaks. Object keys are in ordinal order (by UTF-16 code unit) and the top-level `$schema` key is left out. Strings escape only `"` and `\` with a backslash and characters below U+0020 as `\u00xx` in lowercase hex; everything else is written as it is. Whole numbers are written in decimal without a sign unless negative.
+
+A change to this form changes every hash, so it needs a new version line.
+
+## For programmers
+
+- The loader is `Sim.Data.DataLoader.Load(IDataFiles)`. It returns `GameData`, or the list of errors. `IDataFiles` is the only way it reaches files: the tools read from disk (`Tools.DiskDataFiles`), tests read from memory (`Sim.Data.InMemoryDataFiles`) and the game will read from its packed export.
+- Numbers arrive as `DataNumber`, an integer and a count of decimal places. Converting them to the simulation's fixed-point and fraction types belongs to the code that uses them.
+- IDs become dense integers at load. A position in `GameData.Tracks` is a track's index, in file order. A position in `RuleSet.Lines` or `RuleSet.Structures` is a line's or structure's index; those lists are sorted by ID. Lines refer to tracks, structures and other lines by these indexes.
+- The loader follows the determinism rules: no floating-point types and no iteration over hash-based collections.
+- `schemas/` is for editors. The loader does not read it, and is stricter than a schema can be. Tests in `tests/Tools.Tests/SchemaTests.cs` hold the two together: every data file must satisfy its schema, and each schema must reject a list of typical mistakes.
