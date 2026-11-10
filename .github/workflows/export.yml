@@ -25,19 +25,21 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
+# Naming the shell makes a failed command in a pipe fail the step.
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  export:
-    name: Export Windows, macOS and Linux builds
+  version:
+    name: Work out the version that names the builds
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     outputs:
       windows-zip: ${{ steps.version.outputs.windows-zip }}
       macos-zip: ${{ steps.version.outputs.macos-zip }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Work out the version that names the builds
-        id: version
+      - id: version
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
@@ -51,10 +53,17 @@ jobs:
             exit 1
           fi
           {
-            echo "version=$version"
             echo "windows-zip=Game-windows-x86_64-$version.zip"
             echo "macos-zip=Game-macos-universal-$version.zip"
           } >> "$GITHUB_OUTPUT"
+
+  export-windows:
+    name: Export the Windows build, and a Linux build to test
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install the .NET SDK pinned in global.json
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
@@ -73,9 +82,9 @@ jobs:
 
       # Godot can exit with 0 after a failed export, so each export must also leave its file behind
       # and must not log an error.
-      - name: Export the three builds
+      - name: Export the Linux and Windows builds
         run: |
-          mkdir -p "$RUNNER_TEMP/out/linux" "$RUNNER_TEMP/out/windows" "$RUNNER_TEMP/out/macos"
+          mkdir -p "$RUNNER_TEMP/out/linux" "$RUNNER_TEMP/out/windows"
           export_build() {
             echo "::group::Export $1"
             godot --headless --path game --export-release "$1" "$2" 2>&1 | tee "$RUNNER_TEMP/export.log"
@@ -87,7 +96,6 @@ jobs:
           }
           export_build "Linux" "$RUNNER_TEMP/out/linux/Game.x86_64"
           export_build "Windows Desktop" "$RUNNER_TEMP/out/windows/Game.exe"
-          export_build "macOS" "$RUNNER_TEMP/out/macos/Game.zip"
 
       # An exported build refuses a scene path on the command line, so the main scene switches to
       # the smoke test when it is given this argument. The marker also reports whether Sim was
@@ -96,23 +104,16 @@ jobs:
       - name: Run the smoke test in the Linux build
         run: |
           "$RUNNER_TEMP/out/linux/Game.x86_64" --headless --quit-after 600 -- --smoke-test 2>&1 | tee "$RUNNER_TEMP/smoke.log"
-          grep -q '^SMOKE_TEST_OK' "$RUNNER_TEMP/smoke.log"
           grep -q '^SMOKE_TEST_OK.* sim_optimized=true ' "$RUNNER_TEMP/smoke.log"
 
-      - name: Package the Windows and macOS builds with the tester notes
+      - name: Package the Windows build with the tester notes
         env:
-          WINDOWS_ZIP: ${{ steps.version.outputs.windows-zip }}
-          MACOS_ZIP: ${{ steps.version.outputs.macos-zip }}
+          WINDOWS_ZIP: ${{ needs.version.outputs.windows-zip }}
         run: |
           mkdir "$RUNNER_TEMP/dist"
-          cp docs/testers.md "$RUNNER_TEMP/out/HOW-TO-RUN.txt"
+          cp docs/testers.md "$RUNNER_TEMP/out/windows/HOW-TO-RUN.txt"
           cd "$RUNNER_TEMP/out/windows"
           zip -q -r "$RUNNER_TEMP/dist/$WINDOWS_ZIP" .
-          cd "$RUNNER_TEMP/out"
-          zip -q "$RUNNER_TEMP/dist/$WINDOWS_ZIP" HOW-TO-RUN.txt
-          # Godot wrote the macOS zip itself. Adding one file leaves the signed app inside untouched.
-          zip -q macos/Game.zip HOW-TO-RUN.txt
-          mv macos/Game.zip "$RUNNER_TEMP/dist/$MACOS_ZIP"
           ls -l "$RUNNER_TEMP/dist"
 
       # archive: false uploads the zip as it is, so the download is not a zip inside a zip. The
@@ -120,40 +121,28 @@ jobs:
       - name: Upload the Windows build
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          path: ${{ runner.temp }}/dist/${{ steps.version.outputs.windows-zip }}
+          path: ${{ runner.temp }}/dist/${{ needs.version.outputs.windows-zip }}
           archive: false
           if-no-files-found: error
 
-      - name: Upload the macOS build
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          path: ${{ runner.temp }}/dist/${{ steps.version.outputs.macos-zip }}
-          archive: false
-          if-no-files-found: error
-
-  # The Windows and macOS builds are made on Linux, so nothing above has started them. These two
-  # jobs start each one on its own operating system. They do not stand in for a tester's machine:
-  # a runner has no real graphics card, and a file downloaded here skips the Gatekeeper and
-  # SmartScreen checks that a browser download gets.
+  # The Windows build is made on Linux, so nothing above has started it. This job starts it on
+  # Windows. It does not stand in for a tester's machine: the runner has no graphics card, and a
+  # file downloaded here skips the SmartScreen check that a browser download gets.
   launch-windows:
     name: Launch the Windows build
-    needs: export
+    needs: [version, export-windows]
     runs-on: windows-latest
     timeout-minutes: 15
-    defaults:
-      run:
-        shell: bash
     steps:
       - name: Download the Windows build
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: ${{ needs.export.outputs.windows-zip }}
+          name: ${{ needs.version.outputs.windows-zip }}
           path: download
           skip-decompress: true
 
       - name: Unpack it
         run: |
-          ls -l download
           mkdir game
           unzip -q download/*.zip -d game
           ls -l game
@@ -162,7 +151,6 @@ jobs:
         run: |
           log="$(cygpath -w "$RUNNER_TEMP/smoke.log")"
           ./game/Game.exe --headless --log-file "$log" --quit-after 600 -- --smoke-test
-          cat "$RUNNER_TEMP/smoke.log"
           grep -q '^SMOKE_TEST_OK.* sim_optimized=true ' "$RUNNER_TEMP/smoke.log"
 
       # The game must still be running after twenty seconds with its window open. The screenshot is
@@ -192,65 +180,89 @@ jobs:
           archive: false
           if-no-files-found: warn
 
-  launch-macos:
-    name: Launch the macOS build
-    needs: export
+  # The macOS build is made on macOS so that Apple's codesign signs it. Godot can also export it on
+  # Linux, where its built-in signer does the signing, but macOS 26 refuses to start that build:
+  # the kernel cannot read the entitlements the signer writes for a .NET project and kills the game
+  # as it starts.
+  export-macos:
+    name: Export and launch the macOS build
+    needs: version
     runs-on: macos-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
-      - name: Download the macOS build
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the .NET SDK pinned in global.json
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
-          name: ${{ needs.export.outputs.macos-zip }}
-          path: download
-          skip-decompress: true
+          global-json-file: global.json
 
-      - name: Unpack it
+      - name: Install the Godot .NET build pinned in global.json, with export templates
+        uses: chickensoft-games/setup-godot@ac93246ea68518a384c1c280a496e5989341f2f6 # v2.4.3
+        with:
+          version: global.json
+          use-dotnet: true
+          include-templates: true
+
+      - name: Import the project
+        run: godot --headless --path game --import
+
+      - name: Export the macOS build
         run: |
-          ls -l download
-          mkdir game
-          ditto -x -k download/*.zip game
-          ls -l game
-          codesign --display --verbose=2 game/*.app
+          mkdir -p "$RUNNER_TEMP/out"
+          godot --headless --path game --export-release "macOS" "$RUNNER_TEMP/out/Game.zip" 2>&1 | tee "$RUNNER_TEMP/export.log"
+          if [ ! -s "$RUNNER_TEMP/out/Game.zip" ] || grep -q 'ERROR' "$RUNNER_TEMP/export.log"; then
+            echo "::error::The macOS export failed."
+            exit 1
+          fi
 
-      - name: TEMPORARY diagnostics
-        continue-on-error: true
+      # Godot wrote the zip itself. Adding one file leaves the signed app inside untouched.
+      - name: Package the macOS build with the tester notes
+        env:
+          MACOS_ZIP: ${{ needs.version.outputs.macos-zip }}
         run: |
-          set +e
-          app="$(ls -d game/*.app)"
-          bin="$(ls "$app"/Contents/MacOS/*)"
-          sw_vers
-          echo "== verify"; codesign --verify --deep --strict --verbose=4 "$app"; echo "verify=$?"
-          echo "== entitlements"; codesign -d --entitlements - --xml "$app" > ent.plist; cat ent.plist; echo
-          plutil -p ent.plist
-          echo "== lipo"; lipo -detailed_info "$bin"
-          echo "== per-arch signature"; codesign -dvvv --arch arm64 "$bin"; codesign -dvvv --arch x86_64 "$bin"
-          echo "== run arm64"; "$bin" --headless --quit-after 600 -- --smoke-test; echo "run=$?"
-          sleep 3
-          echo "== log"; log show --last 2m --style compact --predicate 'eventMessage CONTAINS[c] "empire-earth" OR sender == "AppleMobileFileIntegrity" OR process == "amfid"' | tail -40
-          echo "== crash reports"; ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null
-          echo "== run x86_64"; arch -x86_64 "$bin" --headless --quit-after 600 -- --smoke-test; echo "x86 run=$?"
-          echo "== resign keeping runtime and entitlements"
-          cp -R "$app" resigned-a.app
-          codesign --force --deep --sign - --options runtime --entitlements ent.plist resigned-a.app; echo "sign=$?"
-          resigned-a.app/Contents/MacOS/* --headless --quit-after 600 -- --smoke-test; echo "resigned-a run=$?"
-          echo "== resign main executable only"
-          cp -R "$app" resigned-b.app
-          codesign --force --sign - --options runtime --entitlements ent.plist resigned-b.app; echo "sign=$?"
-          resigned-b.app/Contents/MacOS/* --headless --quit-after 600 -- --smoke-test; echo "resigned-b run=$?"
-          echo "== strip signature thin arm64 test"
-          lipo "$bin" -thin arm64 -output thin-arm64; codesign -dvvv thin-arm64; codesign --verify --verbose=4 thin-arm64; echo "thin verify=$?"
-          exit 0
+          mkdir "$RUNNER_TEMP/dist"
+          cp docs/testers.md "$RUNNER_TEMP/out/HOW-TO-RUN.txt"
+          cd "$RUNNER_TEMP/out"
+          zip -q Game.zip HOW-TO-RUN.txt
+          mv Game.zip "$RUNNER_TEMP/dist/$MACOS_ZIP"
+          ls -l "$RUNNER_TEMP/dist"
 
-      - name: Run the smoke test
+      # The tests run the app from the zip, unpacked the way Finder unpacks it. They do not stand in
+      # for a tester's machine: a file made here skips the Gatekeeper check that a browser download
+      # gets, and the Intel half runs under Rosetta, not on an Intel Mac.
+      - name: Unpack the zip
+        env:
+          MACOS_ZIP: ${{ needs.version.outputs.macos-zip }}
         run: |
-          game/*.app/Contents/MacOS/* --headless --log-file "$RUNNER_TEMP/smoke.log" --quit-after 600 -- --smoke-test
-          cat "$RUNNER_TEMP/smoke.log"
-          grep -q '^SMOKE_TEST_OK.* sim_optimized=true ' "$RUNNER_TEMP/smoke.log"
+          mkdir "$RUNNER_TEMP/unpacked"
+          ditto -x -k "$RUNNER_TEMP/dist/$MACOS_ZIP" "$RUNNER_TEMP/unpacked"
+          ls -l "$RUNNER_TEMP/unpacked"
+          codesign --verify --deep --strict --verbose=2 "$RUNNER_TEMP"/unpacked/*.app
+          codesign --display --verbose=2 "$RUNNER_TEMP"/unpacked/*.app
 
+      - name: Run the smoke test on Apple silicon
+        run: |
+          "$RUNNER_TEMP"/unpacked/*.app/Contents/MacOS/* --headless --log-file "$RUNNER_TEMP/smoke-arm64.log" --quit-after 600 -- --smoke-test
+          grep -q '^SMOKE_TEST_OK.* sim_optimized=true ' "$RUNNER_TEMP/smoke-arm64.log"
+
+      - name: Run the smoke test as an Intel program
+        run: |
+          arch -x86_64 "$RUNNER_TEMP"/unpacked/*.app/Contents/MacOS/* --headless --log-file "$RUNNER_TEMP/smoke-x86_64.log" --quit-after 600 -- --smoke-test
+          grep -q '^SMOKE_TEST_OK.* sim_optimized=true ' "$RUNNER_TEMP/smoke-x86_64.log"
+
+      - name: Upload the macOS build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: ${{ runner.temp }}/dist/${{ needs.version.outputs.macos-zip }}
+          archive: false
+          if-no-files-found: error
+
+      # The game must still be running after twenty seconds with its window open. The screenshot is
+      # there for a person to look at.
       - name: Open the game in a window and take a screenshot
         run: |
-          game/*.app/Contents/MacOS/* --log-file "$RUNNER_TEMP/window.log" &
+          "$RUNNER_TEMP"/unpacked/*.app/Contents/MacOS/* --log-file "$RUNNER_TEMP/window.log" &
           game=$!
           sleep 20
           screencapture -x "$RUNNER_TEMP/launch-macos.png" || true
