@@ -1,0 +1,65 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://b5g15idbwudsy" path="res://scripts/Main.cs" id="1_main"]
+[ext_resource type="Script" uid="uid://pnrbeqcvok4b" path="res://scripts/RtsCamera.cs" id="2_camera"]
+[ext_resource type="Script" uid="uid://bsx30mppduxrr" path="res://scripts/DebugOverlay.cs" id="3_overlay"]
+[ext_resource type="Shader" uid="uid://ccbexiacjf5k2" path="res://scenes/ground_grid.gdshader" id="4_grid"]
+
+[sub_resource type="Environment" id="Environment_sky"]
+background_mode = 1
+background_color = Color(0.07, 0.08, 0.1, 1)
+ambient_light_source = 2
+ambient_light_color = Color(1, 1, 1, 1)
+ambient_light_energy = 0.6
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ground"]
+shader = ExtResource("4_grid")
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_readout"]
+content_margin_left = 10.0
+content_margin_top = 6.0
+content_margin_right = 10.0
+content_margin_bottom = 6.0
+bg_color = Color(0, 0, 0, 0.6)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_sky")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.81915206, 0.46984634, -0.32898995, 0, 0.57357645, 0.81915206, 0.57357645, -0.6710101, 0.46984634, 0, 0, 0)
+
+[node name="Ground" type="MeshInstance3D" parent="."]
+material_override = SubResource("ShaderMaterial_ground")
+
+[node name="CameraRig" type="Node3D" parent="."]
+script = ExtResource("2_camera")
+
+[node name="Camera" type="Camera3D" parent="CameraRig"]
+current = true
+fov = 30.0
+near = 0.5
+far = 400.0
+
+[node name="DebugOverlay" type="CanvasLayer" parent="." node_paths=PackedStringArray("Camera")]
+layer = 100
+script = ExtResource("3_overlay")
+Camera = NodePath("../CameraRig")
+
+[node name="Panel" type="PanelContainer" parent="DebugOverlay"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 48.0
+offset_bottom = 40.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_readout")
+
+[node name="Readout" type="Label" parent="DebugOverlay/Panel"]
+unique_name_in_owner = true
+layout_mode = 2
