@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "maps/<id>.jsonc",
+  "description": "One map (game design 5.3). Tiles are (x, y) from (0, 0) at the first character of the first terrain row; a position names the lowest tile of a footprint.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "width", "height", "symmetry", "starts", "deposits", "markers", "terrain"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": {
+      "description": "The map's ID. It must equal the file name.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$"
+    },
+    "width": { "type": "integer", "minimum": 16, "maximum": 256 },
+    "height": { "type": "integer", "minimum": 16, "maximum": 256 },
+    "symmetry": {
+      "description": "mirror_x: the right half reflects the left half. mirror_y: the bottom half reflects the top half.",
+      "enum": ["mirror_x", "mirror_y"]
+    },
+    "starts": {
+      "description": "The starting Capitol of each player.",
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["x", "y"],
+        "properties": {
+          "x": { "$ref": "#/definitions/coordinate" },
+          "y": { "$ref": "#/definitions/coordinate" }
+        }
+      }
+    },
+    "deposits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "x", "y"],
+        "properties": {
+          "kind": {
+            "description": "main: inside a starting territory. natural: a player's first expansion. contested: between the players.",
+            "enum": ["main", "natural", "contested"]
+          },
+          "x": { "$ref": "#/definitions/coordinate" },
+          "y": { "$ref": "#/definitions/coordinate" }
+        }
+      }
+    },
+    "markers": {
+      "description": "Authored chokepoints and open fields. Each covers the tiles of the passage.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "x", "y", "size_x", "size_y", "across"],
+        "properties": {
+          "kind": { "enum": ["chokepoint", "open_field"] },
+          "x": { "$ref": "#/definitions/coordinate" },
+          "y": { "$ref": "#/definitions/coordinate" },
+          "size_x": { "type": "integer", "minimum": 1, "maximum": 256 },
+          "size_y": { "type": "integer", "minimum": 1, "maximum": 256 },
+          "across": {
+            "description": "The axis the passage's width runs along. The width is size_x for x and size_y for y.",
+            "enum": ["x", "y"]
+          }
+        }
+      }
+    },
+    "terrain": {
+      "description": "One row per y and one character per x: \".\" open ground, \"F\" forest, \"#\" cliff.",
+      "type": "array",
+      "minItems": 16,
+      "maxItems": 256,
+      "items": { "type": "string", "pattern": "^[.F#]{16,256}$" }
+    }
+  },
+  "definitions": {
+    "coordinate": { "type": "integer", "minimum": 0, "maximum": 255 }
+  }
+}

@@ -1,0 +1,212 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "rules.jsonc",
+  "description": "The constants of the rule set. Whole numbers are bare; a number with a fraction is text, such as \"1.25\".",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "roster",
+    "epoch",
+    "research_price",
+    "effective_tier_window",
+    "per_tier",
+    "per_step",
+    "accent_slots",
+    "supply_cap",
+    "wall_crossing_cost",
+    "match",
+    "start",
+    "map"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "roster": {
+      "description": "Every line and structure the design names. Other files may refer to these IDs before the line or structure has a file of its own.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lines", "structures"],
+      "properties": {
+        "lines": { "$ref": "#/definitions/idList" },
+        "structures": { "$ref": "#/definitions/idList" }
+      }
+    },
+    "epoch": {
+      "description": "Design 1.4. The epoch is the highest tier that tracks_needed tracks have reached; no track may be more than reach tiers above it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tracks_needed", "reach"],
+      "properties": {
+        "tracks_needed": { "type": "integer", "minimum": 1, "maximum": 16 },
+        "reach": { "type": "integer", "minimum": 0, "maximum": 20 }
+      }
+    },
+    "research_price": {
+      "description": "Design 1.3. Multipliers on the research table by how far the tier is from the player's epoch.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catch_up", "frontier", "ahead"],
+      "properties": {
+        "catch_up": { "description": "At or below the epoch.", "$ref": "#/definitions/priceMultiplier" },
+        "frontier": { "description": "One tier above the epoch.", "$ref": "#/definitions/priceMultiplier" },
+        "ahead": { "description": "Two tiers above the epoch.", "$ref": "#/definitions/priceMultiplier" }
+      }
+    },
+    "effective_tier_window": {
+      "description": "Design 2.3. A chassis uses track tiers within this many tiers of its own epoch.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 20
+    },
+    "per_tier": {
+      "description": "Design 2.3 and 4.2. What one tier of a track multiplies.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["damage", "hp", "speed", "income"],
+      "properties": {
+        "damage": { "$ref": "#/definitions/multiplier" },
+        "hp": { "$ref": "#/definitions/multiplier" },
+        "speed": { "$ref": "#/definitions/multiplier" },
+        "income": { "$ref": "#/definitions/multiplier" }
+      }
+    },
+    "per_step": {
+      "description": "Design 2.3. What one step of offset multiplies in a unit's price and build time.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quality_cost", "manufacturing_cost", "manufacturing_time"],
+      "properties": {
+        "quality_cost": { "$ref": "#/definitions/multiplier" },
+        "manufacturing_cost": { "$ref": "#/definitions/multiplier" },
+        "manufacturing_time": { "$ref": "#/definitions/multiplier" }
+      }
+    },
+    "accent_slots": {
+      "description": "Design 2.3. Most accents one unit carries.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 16
+    },
+    "supply_cap": {
+      "description": "Design 4.1. The supply cap is base plus per_logistics_tier for each Logistics tier.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base", "per_logistics_tier"],
+      "properties": {
+        "base": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "per_logistics_tier": { "type": "integer", "minimum": 0, "maximum": 1000 }
+      }
+    },
+    "wall_crossing_cost": {
+      "description": "Design 2.5. In the second path search, crossing one enemy wall tile costs this many tiles of walking.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "match": {
+      "description": "Design 5.2. All tracks start at start_epoch and none may pass epoch_cap.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_epoch", "epoch_cap"],
+      "properties": {
+        "start_epoch": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "epoch_cap": { "type": "integer", "minimum": 1, "maximum": 20 }
+      }
+    },
+    "start": {
+      "description": "Design 5.2. What every player starts with, besides a Capitol.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workers", "materials", "energy"],
+      "properties": {
+        "workers": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "materials": { "$ref": "#/definitions/price" },
+        "energy": { "$ref": "#/definitions/price" }
+      }
+    },
+    "map": {
+      "description": "Design 5.3 and 5.4. What every map must satisfy; datacheck enforces it on maps/*.jsonc.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_territory", "deposit_size", "deposits", "chokepoint_width", "open_field_min_width"],
+      "properties": {
+        "start_territory": {
+          "description": "The starting Capitol: the side of its square footprint and its territory radius, in tiles.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["footprint", "radius"],
+          "properties": {
+            "footprint": { "type": "integer", "minimum": 1, "maximum": 16 },
+            "radius": { "type": "integer", "minimum": 1, "maximum": 256 }
+          }
+        },
+        "deposit_size": {
+          "description": "The side of a deposit's square footprint, in tiles.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "deposits": {
+          "description": "How many deposits of each kind a map has.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["main_per_player", "natural_per_player", "contested"],
+          "properties": {
+            "main_per_player": { "type": "integer", "minimum": 0, "maximum": 16 },
+            "natural_per_player": { "type": "integer", "minimum": 0, "maximum": 16 },
+            "contested": { "type": "integer", "minimum": 0, "maximum": 16 }
+          }
+        },
+        "chokepoint_width": {
+          "description": "The widths, in tiles, a chokepoint marker may have.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min", "max"],
+          "properties": {
+            "min": { "type": "integer", "minimum": 1, "maximum": 256 },
+            "max": { "type": "integer", "minimum": 1, "maximum": 256 }
+          }
+        },
+        "open_field_min_width": {
+          "description": "The least width, in tiles, of an open-field marker. It must be above the widest chokepoint.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        }
+      }
+    }
+  },
+  "definitions": {
+    "id": {
+      "description": "Lowercase letters, digits and underscores, starting with a letter.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$"
+    },
+    "idList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/definitions/id" }
+    },
+    "number": {
+      "description": "A whole number, or text in plain decimal notation such as \"1.25\". A bare number with a fraction is not accepted, so that every value is read exactly.",
+      "anyOf": [
+        { "type": "integer" },
+        { "type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$" }
+      ]
+    },
+    "multiplier": {
+      "description": "A multiplier above 0, such as \"1.25\".",
+      "$ref": "#/definitions/number"
+    },
+    "price": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+    "priceMultiplier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cost", "time"],
+      "properties": {
+        "cost": { "$ref": "#/definitions/multiplier" },
+        "time": { "$ref": "#/definitions/multiplier" }
+      }
+    }
+  }
+}
