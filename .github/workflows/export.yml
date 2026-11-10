@@ -213,6 +213,35 @@ jobs:
           ls -l game
           codesign --display --verbose=2 game/*.app
 
+      - name: TEMPORARY diagnostics
+        continue-on-error: true
+        run: |
+          set +e
+          app="$(ls -d game/*.app)"
+          bin="$(ls "$app"/Contents/MacOS/*)"
+          sw_vers
+          echo "== verify"; codesign --verify --deep --strict --verbose=4 "$app"; echo "verify=$?"
+          echo "== entitlements"; codesign -d --entitlements - --xml "$app" > ent.plist; cat ent.plist; echo
+          plutil -p ent.plist
+          echo "== lipo"; lipo -detailed_info "$bin"
+          echo "== per-arch signature"; codesign -dvvv --arch arm64 "$bin"; codesign -dvvv --arch x86_64 "$bin"
+          echo "== run arm64"; "$bin" --headless --quit-after 600 -- --smoke-test; echo "run=$?"
+          sleep 3
+          echo "== log"; log show --last 2m --style compact --predicate 'eventMessage CONTAINS[c] "empire-earth" OR sender == "AppleMobileFileIntegrity" OR process == "amfid"' | tail -40
+          echo "== crash reports"; ls -la ~/Library/Logs/DiagnosticReports/ 2>/dev/null
+          echo "== run x86_64"; arch -x86_64 "$bin" --headless --quit-after 600 -- --smoke-test; echo "x86 run=$?"
+          echo "== resign keeping runtime and entitlements"
+          cp -R "$app" resigned-a.app
+          codesign --force --deep --sign - --options runtime --entitlements ent.plist resigned-a.app; echo "sign=$?"
+          resigned-a.app/Contents/MacOS/* --headless --quit-after 600 -- --smoke-test; echo "resigned-a run=$?"
+          echo "== resign main executable only"
+          cp -R "$app" resigned-b.app
+          codesign --force --sign - --options runtime --entitlements ent.plist resigned-b.app; echo "sign=$?"
+          resigned-b.app/Contents/MacOS/* --headless --quit-after 600 -- --smoke-test; echo "resigned-b run=$?"
+          echo "== strip signature thin arm64 test"
+          lipo "$bin" -thin arm64 -output thin-arm64; codesign -dvvv thin-arm64; codesign --verify --verbose=4 thin-arm64; echo "thin verify=$?"
+          exit 0
+
       - name: Run the smoke test
         run: |
           game/*.app/Contents/MacOS/* --headless --log-file "$RUNNER_TEMP/smoke.log" --quit-after 600 -- --smoke-test
