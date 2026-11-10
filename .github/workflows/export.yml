@@ -280,8 +280,6 @@ jobs:
             sleep 1
           done
           if kill -0 "$game" 2>/dev/null; then
-            sample "$game" 2 -file "$RUNNER_TEMP/sample.txt" || true
-            head -n 120 "$RUNNER_TEMP/sample.txt" || true
             screencapture -x "$RUNNER_TEMP/launch-macos.png" || true
             kill -9 "$game"
             echo "::error::The game did not draw 300 frames in three minutes."
