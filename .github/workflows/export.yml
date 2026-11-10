@@ -153,13 +153,27 @@ jobs:
           ./game/Game.exe --headless --log-file "$log" --quit-after 600 -- --smoke-test
           grep -q '^SMOKE_TEST_OK.* sim_optimized=true ' "$RUNNER_TEMP/smoke.log"
 
-      # The game must still be running after twenty seconds with its window open. The screenshot is
-      # there for a person to look at.
-      - name: Open the game in a window and take a screenshot
+      # Without --headless the game opens its window and draws. It must draw 300 frames and then
+      # close by itself.
+      - name: Run the game in a window
         shell: pwsh
         run: |
           $log = Join-Path $env:RUNNER_TEMP 'window.log'
-          $game = Start-Process -FilePath game\Game.exe -ArgumentList '--log-file', $log -PassThru
+          $game = Start-Process -FilePath game\Game.exe -ArgumentList '--log-file', $log, '--quit-after', '300' -PassThru
+          $null = $game.Handle
+          if (-not $game.WaitForExit(180000)) {
+            Stop-Process -Id $game.Id -Force
+            throw 'The game did not draw 300 frames in three minutes.'
+          }
+          Get-Content $log
+          if ($game.ExitCode -ne 0) { throw "The game exited with code $($game.ExitCode)." }
+          if (-not (Select-String -Path $log -Pattern 'Forward Mobile' -Quiet)) { throw 'The log does not name the renderer.' }
+
+      # For a person to look at. Nothing is checked here.
+      - name: Take a screenshot of the game
+        shell: pwsh
+        run: |
+          $game = Start-Process -FilePath game\Game.exe -PassThru
           Start-Sleep -Seconds 20
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
@@ -167,10 +181,7 @@ jobs:
           $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
           $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
           $bitmap.Save((Join-Path $env:RUNNER_TEMP 'launch-windows.png'))
-          $stillRunning = -not $game.HasExited
-          if ($stillRunning) { Stop-Process -Id $game.Id -Force }
-          Get-Content $log
-          if (-not $stillRunning) { throw 'The game stopped on its own within twenty seconds.' }
+          if (-not $game.HasExited) { Stop-Process -Id $game.Id -Force }
 
       - name: Upload the screenshot
         if: always()
@@ -258,21 +269,36 @@ jobs:
           archive: false
           if-no-files-found: error
 
-      # The game must still be running after twenty seconds with its window open. The screenshot is
-      # there for a person to look at.
-      - name: Open the game in a window and take a screenshot
+      # Without --headless the game opens its window and draws. It must draw 300 frames and then
+      # close by itself.
+      - name: Run the game in a window
         run: |
-          "$RUNNER_TEMP"/unpacked/*.app/Contents/MacOS/* --log-file "$RUNNER_TEMP/window.log" &
+          "$RUNNER_TEMP"/unpacked/*.app/Contents/MacOS/* --log-file "$RUNNER_TEMP/window.log" --quit-after 300 &
           game=$!
-          sleep 20
-          screencapture -x "$RUNNER_TEMP/launch-macos.png" || true
-          if kill -0 "$game" 2>/dev/null; then still_running=true; else still_running=false; fi
-          kill "$game" 2>/dev/null || true
-          cat "$RUNNER_TEMP/window.log"
-          if [ "$still_running" != "true" ]; then
-            echo "::error::The game stopped on its own within twenty seconds."
+          for _ in $(seq 1 180); do
+            kill -0 "$game" 2>/dev/null || break
+            sleep 1
+          done
+          if kill -0 "$game" 2>/dev/null; then
+            sample "$game" 2 -file "$RUNNER_TEMP/sample.txt" || true
+            head -n 120 "$RUNNER_TEMP/sample.txt" || true
+            screencapture -x "$RUNNER_TEMP/launch-macos.png" || true
+            kill -9 "$game"
+            echo "::error::The game did not draw 300 frames in three minutes."
             exit 1
           fi
+          wait "$game"
+          cat "$RUNNER_TEMP/window.log"
+          grep -q 'Forward Mobile' "$RUNNER_TEMP/window.log"
+
+      # For a person to look at. Nothing is checked here.
+      - name: Take a screenshot of the game
+        run: |
+          "$RUNNER_TEMP"/unpacked/*.app/Contents/MacOS/* &
+          game=$!
+          sleep 15
+          screencapture -x "$RUNNER_TEMP/launch-macos.png" || true
+          kill "$game" 2>/dev/null || true
 
       - name: Upload the screenshot
         if: always()
