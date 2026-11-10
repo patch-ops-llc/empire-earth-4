@@ -16,10 +16,10 @@ They apply to everything in `src/Sim/`. Code outside it (the Godot project, the 
 | 4 | Visit entities in ascending ID order. Never iterate over a hash-based collection (`Dictionary`, `HashSet`). Every sort is a total order with the entity ID as the last tie-break. | Review. `ComponentStore<T>` is always in ID order. |
 | 5 | No string hashing. Content IDs become dense integers when data is loaded, assigned in sorted order. `GetHashCode()` of a string, a tuple or an `Int128`, and `HashCode.Combine`, give different values in every process, so no result may depend on them. | Review. |
 | 6 | All state that changes during a match lives in the `World`. No static fields that change. | Review. |
-| 7 | Whole-number overflow is an error, not a wrap. | Partly. See below. |
+| 7 | Whole-number overflow is an error, not a wrap. | The compiler, in Debug builds. `Fixed` and `Fraction` check themselves in every build. See below. |
 | 8 | Numbers in data files are whole numbers or decimal strings, read with whole-number arithmetic. | `Fraction.Parse` reads a decimal string exactly. |
 
-Rule 7 is half in place. `Fixed` and `Fraction` check every operation in every build configuration and throw `OverflowException`. The rest of the code is not checked yet: that needs `<CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>` for debug and test builds in `Directory.Build.props`, which has not been added. Until it is, write `checked(...)` around arithmetic that could overflow. Code that wraps on purpose (the random generator, the state hash) says `unchecked`, so it keeps working when the switch is turned on.
+Rule 7 has two parts. `Fixed` and `Fraction` check every operation in every build configuration and throw `OverflowException`. All other arithmetic, in every project, is checked by `<CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>` in `Directory.Build.props`, which applies to every build configuration except `Release` and `ExportRelease`. So the tests and a game started from the Godot editor throw on overflow, and an exported release build, which is optimized for speed, wraps. An overflow is therefore a bug for the tests to find; a release build is not protected from it, though every machine running that build wraps alike. Code that wraps on purpose (the random generator, the state hash) says `unchecked`, and behaves the same in every build.
 
 ## Numbers
 
@@ -83,6 +83,31 @@ A store feeds its fields to the `StateHasher` in `AddToHash`. The hasher takes w
 
 The hash is fed directly from the stores, with no bytes written in between. Snapshots, which arrive with milestone M6, will need a second walk over the same fields.
 
+## Bytes
+
+Everything that puts simulation data on bytes uses one format, in `src/Sim/Serialization/` (namespace `Sim.Serialization`): encoded commands now, snapshots, replay files and network messages later.
+
+- **`ByteWriter`** appends values to a buffer and **`ByteReader`** reads them back in the same order. The format is a plain sequence of values: no tags, no padding, and no lengths except the counts described here.
+- Whole numbers are little-endian at a fixed width, so the bytes are the same on every machine. Each method names its width (`WriteInt32`, `WriteUInt16`); nothing is chosen by overload.
+
+| Value | Bytes |
+| --- | --- |
+| `byte`, `bool` | 1. A `bool` is 1 or 0. |
+| `ushort` | 2 |
+| `int`, `uint`, `EntityId`, `Fixed` (its raw value) | 4 |
+| `long`, `ulong` | 8 |
+| `Int128` | 16: the low 64 bits, then the high 64 bits |
+| `Angle` | 2: its units, from 0 to 4,095 |
+| `Fraction` | 32: numerator, then denominator |
+| A count | 4. Never negative. |
+| Text | A count of bytes, then the text as UTF-8 |
+
+- **Every value has exactly one encoding.** The reader rejects every other form: a `bool` byte of 2, an angle of 4,096 or more, a fraction that is not in lowest terms, text that is not valid UTF-8. Bytes that were read without an error therefore write back as the same bytes, and two values are equal exactly when their bytes are.
+- **Nothing about the input is trusted.** Bytes come from other machines and from files. Whatever is wrong with them, the reader throws `InvalidDataException` and nothing else. `ReadCount` takes the smallest size one item can have and rejects a count that could not fit in the bytes that are left, so a caller may allocate for the count it gets.
+- After the last value of a message or a file, call `ExpectEnd()`: bytes left over are an error too.
+
+**`CommandEncoding`** is the one encoding of a `Command`: 26 bytes plus 4 for each entity, laid out in the comment on the class. It keeps every value a command can hold and judges none of them. An unknown type or an entity that does not exist reads back as written, and the simulation drops such a command when it runs, as it does for one that never left the machine. A command does not carry its tick; whatever holds commands says which tick they are for. `CommandEncoding.Version` goes up whenever the layout changes, including when `Command` gains a field. Do not write a second encoding of a command anywhere.
+
 ## Adding a system
 
 1. Put it in its own folder under `src/Sim/` with its own state type: a struct implementing `IStateHashable` for per-entity data, held in a `ComponentStore<T>`, or a class implementing `IStateStore`.
@@ -95,4 +120,4 @@ The hash is fed directly from the stores, with no bytes written in between. Snap
 
 Some tests hold recorded values: the reference output of the random generator, the hash of known input, and the final state hash of a 600-tick toy match (`DeterminismTests`). They fail when the behaviour of the kernel changes in any way: rounding, the sine table, the order of a tick, the hash. If the change is intended, update the recorded value in the same pull request and say so. If it is not, the change has broken determinism with earlier builds.
 
-These tests run on one operating system. Comparing hashes across Linux, Windows and macOS starts with the golden replays of milestone M6.
+CI runs these tests on Linux for every pull request. The workflow `determinism.yml` runs them on Linux, Windows and macOS, on x86_64 and on Apple silicon, as a Debug and as a Release build: on every push to `main`, every night, and for a pull request that changes the workflow or the build settings. A recorded value that one system computes differently fails there. Golden replays, which arrive later in milestone M6, add whole recorded matches to the same check.
