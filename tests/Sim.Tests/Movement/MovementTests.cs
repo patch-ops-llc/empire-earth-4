@@ -151,33 +151,6 @@ public class MovementTests
         Assert.Equal(0, match.Simulation.DroppedCommandCount);
     }
 
-    /// <summary>There is no route finding yet: an obstacle in the way ends the order.</summary>
-    [Fact]
-    public void AUnitStopsBeforeGroundItCannotStandOn()
-    {
-        var match = TestMatches.Create(TestMaps.FromRows(
-            "........",
-            "....#...",
-            "....F...",
-            "........"));
-        var blockedByCliff = match.SpawnUnit(0, Point("1.5", "1.5"), QuarterTile);
-        var blockedByForest = match.SpawnUnit(0, Point("1.5", "2.5"), QuarterTile);
-        var free = match.SpawnUnit(0, Point("1.5", "3.5"), QuarterTile);
-
-        match.OrderMove(0, Point("6.5", "1.5"), blockedByCliff);
-        match.OrderMove(0, Point("6.5", "2.5"), blockedByForest);
-        match.OrderMove(0, Point("6.5", "3.5"), free);
-        match.Simulation.Run(40);
-
-        // The last step that stayed on open ground, a quarter of a tile short of the obstacle.
-        Assert.Equal(Point("3.75", "1.5"), match.PositionOf(blockedByCliff));
-        Assert.Equal(Point("3.75", "2.5"), match.PositionOf(blockedByForest));
-        Assert.Equal(Point("6.5", "3.5"), match.PositionOf(free));
-        Assert.All(
-            (EntityId[])[blockedByCliff, blockedByForest, free],
-            unit => Assert.Equal(MoveState.Idle, match.Movers.Get(unit).State));
-    }
-
     [Fact]
     public void AUnitNeverLeavesOpenGround()
     {
@@ -286,6 +259,55 @@ public class MovementTests
                 Assert.Equal(mirrorX ? Angle.HalfTurn - facing : -facing, match.Movers.Get(right).Facing);
             }
         }
+    }
+
+    /// <summary>
+    /// Everything a mover and a body hold is state: two worlds that differ in any one of their
+    /// fields have different hashes, so a desync in any of them is noticed.
+    /// </summary>
+    [Fact]
+    public void EveryFieldOfAMoverAndABodyIsInTheHash()
+    {
+        static ulong HashWith(Action<Match, EntityId> change)
+        {
+            var match = TestMatches.Create(TestMaps.Open(8, 8));
+            var unit = match.SpawnUnit(0, Point("2.5", "2.5"), QuarterTile);
+            change(match, unit);
+            return match.World.ComputeHash();
+        }
+
+        Action<Match, EntityId>[] changes =
+        [
+            (_, _) => { },
+            (match, unit) => match.Bodies.Get(unit).Owner = 1,
+            (match, unit) => match.Bodies.Get(unit).Position = Point("2.5", "2.75"),
+            (match, unit) => match.Bodies.Get(unit).Position = Point("2.75", "2.5"),
+            (match, unit) => match.Movers.Get(unit).Speed = Fixed.Half,
+            (match, unit) => match.Movers.Get(unit).Facing = Angle.FromUnits(1),
+            (match, unit) => match.Movers.Get(unit).State = MoveState.Moving,
+            (match, unit) => match.Movers.Get(unit).State = MoveState.Planning,
+            (match, unit) => match.Movers.Get(unit).State = MoveState.Following,
+            (match, unit) => match.Movers.Get(unit).Destination = Point("1", "0"),
+            (match, unit) => match.Movers.Get(unit).Destination = Point("0", "1"),
+            (match, unit) => match.Movers.Get(unit).RouteStart = 1,
+            (match, unit) => match.Movers.Get(unit).RouteGoal = 1,
+            (match, unit) => match.Movers.Get(unit).RouteNode = 1,
+        ];
+
+        var hashes = changes.Select(HashWith).ToArray();
+
+        Assert.Equal(hashes.Length, hashes.Distinct().Count());
+        Assert.Equal(hashes[0], HashWith((_, _) => { }));
+    }
+
+    /// <summary>The numbers of the move states are fed to the hash and written to snapshots, so they never change.</summary>
+    [Fact]
+    public void TheNumbersOfTheMoveStatesAreFixed()
+    {
+        Assert.Equal(0, (int)MoveState.Idle);
+        Assert.Equal(1, (int)MoveState.Moving);
+        Assert.Equal(2, (int)MoveState.Planning);
+        Assert.Equal(3, (int)MoveState.Following);
     }
 
     [Fact]
