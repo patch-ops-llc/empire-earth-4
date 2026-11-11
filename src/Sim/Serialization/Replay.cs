@@ -267,7 +267,7 @@ public sealed class Replay
         description.Write(writer);
     }
 
-    /// <summary>Queues every command that runs within the replay's ticks.</summary>
+    /// <summary>Queues every command of the replay. Those for ticks at or after the end wait in the queue and never run.</summary>
     private Simulation Prepare(Match match)
     {
         ArgumentNullException.ThrowIfNull(match);
@@ -277,13 +277,9 @@ public sealed class Replay
             throw new ArgumentException($"A replay runs in a match that has not run a tick, and this one has run {simulation.World.Tick}.", nameof(match));
         }
 
-        var ticks = TickCount;
         foreach (var (tick, command) in _commands)
         {
-            if (tick < ticks)
-            {
-                simulation.Commands.Enqueue(tick, command);
-            }
+            simulation.Commands.Enqueue(tick, command);
         }
 
         return simulation;

@@ -118,29 +118,10 @@ public class ReplayToolTests
             }
 
             var match = replay.Description.CreateMatch(GoldenData);
-            var players = match.Players.Count;
+            seen.UnionWith(KindsOfCommands(replay, match));
             foreach (var (tick, command) in replay.Commands)
             {
                 match.Simulation.Commands.Enqueue(tick, command);
-                seen.Add(command.Type == CommandType.Move ? "a move" : "a command of a kind without a handler");
-                if (command.Player >= players)
-                {
-                    seen.Add("a command from nobody in the match");
-                }
-
-                if (command.Type == CommandType.Move && command.Player < players)
-                {
-                    seen.Add(command.Entities.Length == 1 ? "an order for one unit" : "an order for a group");
-                    if (!match.Grid.Contains(new Sim.Numerics.FixedVector2(command.TargetX, command.TargetY)))
-                    {
-                        seen.Add("a target off the map");
-                    }
-
-                    if (command.Entities.ToArray().Any(entity => !match.Bodies.TryGet(entity, out var body) || body.Owner != command.Player))
-                    {
-                        seen.Add("an order for units that are not the player's");
-                    }
-                }
             }
 
             var waited = new int[match.Movers.Count];
@@ -170,13 +151,7 @@ public class ReplayToolTests
             "3 players",
             "a player without a start",
             "starts swapped",
-            "a move",
-            "a command of a kind without a handler",
-            "a command from nobody in the match",
-            "an order for one unit",
-            "an order for a group",
-            "a target off the map",
-            "an order for units that are not the player's",
+            .. EveryKindOfCommand,
             "a unit standing",
             "a unit walking straight",
             "a unit walking a route",
@@ -184,6 +159,28 @@ public class ReplayToolTests
             "a unit waiting more than a tick for a route",
         ];
         Assert.Equal(expected.Order(StringComparer.Ordinal), seen.Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// The generator behind <c>replay record</c> gives every kind of command it is meant to, so
+    /// that a match recorded with it reaches the rules: here in one long match on each map. The
+    /// rarest kinds come about once in 2,000 ticks, so a shorter match can miss one.
+    /// </summary>
+    [Theory]
+    [InlineData("ridge")]
+    [InlineData("switchback")]
+    public void TheScriptedOrdersHaveEveryKindOfCommand(string map)
+    {
+        using var folder = new TemporaryFolder();
+        var path = Path.Combine(folder.Path, "long.replay");
+
+        var (exitCode, _, errors) = Run("record", path, "--map", map, "--data", Repository.GoldenDataFolder, "--ticks", "12000", "--orders", "33");
+
+        Assert.Equal((ExitCodes.Ok, ""), (exitCode, errors));
+        var replay = Sim.Serialization.Replay.Read(new ByteReader(File.ReadAllBytes(path)));
+        var seen = KindsOfCommands(replay, replay.Description.CreateMatch(GoldenData));
+        Assert.Equal(EveryKindOfCommand.Order(StringComparer.Ordinal), seen.Order(StringComparer.Ordinal));
+        Assert.True(replay.Run(GoldenData).Reproduced);
     }
 
     /// <summary>One changed hash in one file fails the run and names the tick. The other files are still reported.</summary>
@@ -275,7 +272,8 @@ public class ReplayToolTests
     {
         using var copy = new TemporaryFolder();
         var source = Path.Combine(Repository.GoldenReplaysFolder, GoldenNames[2]);
-        foreach (var name in (string[])["b.replay", "a/z.replay", "a/b/c.replay", "B.replay", "notes.txt"])
+        // No two names differ only in case: Windows and macOS would take them for one file.
+        foreach (var name in (string[])["b.replay", "a/z.replay", "a/b/c.replay", "Y.replay", "notes.txt"])
         {
             var target = Path.Combine(copy.Path, name);
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
@@ -285,7 +283,7 @@ public class ReplayToolTests
         var (exitCode, output, _) = Run("verify", copy.Path, "--data", Repository.GoldenDataFolder);
 
         Assert.Equal(ExitCodes.Ok, exitCode);
-        Assert.Equal(["B.replay", "a/b/c.replay", "a/z.replay", "b.replay"], Lines(output)[..^1].Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1]));
+        Assert.Equal(["Y.replay", "a/b/c.replay", "a/z.replay", "b.replay"], Lines(output)[..^1].Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1]));
         Assert.Equal("replay: 4 replays reproduced.", Lines(output)[^1]);
     }
 
@@ -503,6 +501,77 @@ public class ReplayToolTests
         Assert.Equal(ExitCodes.Ok, exitCode);
         Assert.Matches("(?m)^ *replay +Run recorded matches again", output);
         Assert.Equal("game/data", ReplayTool.DefaultFolder);
+    }
+
+    private static readonly string[] EveryKindOfCommand =
+    [
+        "a move",
+        "a command of a kind without a handler",
+        "a command from nobody in the match",
+        "an order for one unit",
+        "an order for a group",
+        "an order for each unit of every player in one tick",
+        "a target off the map",
+        "a target as far off the map as a number goes",
+        "an order for units that are not the player's",
+        "an order for an entity that never existed",
+    ];
+
+    /// <summary>What the commands of a replay are, in the words of <see cref="EveryKindOfCommand"/>.</summary>
+    private static HashSet<string> KindsOfCommands(Sim.Serialization.Replay replay, Sim.Setup.Match match)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var players = match.Players.Count;
+        var unitsWithAnOrderOfTheirOwn = new HashSet<EntityId>();
+        var tickOfThose = -1;
+        foreach (var (tick, command) in replay.Commands)
+        {
+            seen.Add(command.Type == CommandType.Move ? "a move" : "a command of a kind without a handler");
+            if (command.Player >= players)
+            {
+                seen.Add("a command from nobody in the match");
+            }
+
+            if (command.Type != CommandType.Move || command.Player >= players)
+            {
+                continue;
+            }
+
+            seen.Add(command.Entities.Length == 1 ? "an order for one unit" : "an order for a group");
+            if (!match.Grid.Contains(new Sim.Numerics.FixedVector2(command.TargetX, command.TargetY)))
+            {
+                seen.Add(command.TargetX == Sim.Numerics.Fixed.MaxValue ? "a target as far off the map as a number goes" : "a target off the map");
+            }
+
+            foreach (var entity in command.Entities)
+            {
+                if (!match.Bodies.TryGet(entity, out var body))
+                {
+                    seen.Add("an order for an entity that never existed");
+                }
+                else if (body.Owner != command.Player)
+                {
+                    seen.Add("an order for units that are not the player's");
+                }
+            }
+
+            if (command.Entities.Length == 1)
+            {
+                if (tick != tickOfThose)
+                {
+                    unitsWithAnOrderOfTheirOwn.Clear();
+                    tickOfThose = tick;
+                }
+
+                unitsWithAnOrderOfTheirOwn.Add(command.Entities[0]);
+                if (unitsWithAnOrderOfTheirOwn.Count == match.Bodies.Count)
+                {
+                    seen.Add("an order for each unit of every player in one tick");
+                }
+            }
+        }
+
+        return seen;
     }
 
     private static Sim.Serialization.Replay ReadGolden(string name) =>

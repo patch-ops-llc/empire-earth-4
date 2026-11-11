@@ -75,6 +75,7 @@ jobs:
         run: dotnet restore
 
       - name: Build with warnings as errors
+        id: build
         run: dotnet build --no-restore --configuration ${{ matrix.configuration }} -warnaserror
 
       # Every test project in the solution, so a new one is picked up without a change here.
@@ -83,8 +84,11 @@ jobs:
 
       # The recorded matches of tests/golden/replays, run again on the frozen data beside them.
       # The step fails when a state hash is not the recorded one. Its report, one line for each
-      # replay with the final state hash, goes to the last job, which compares the systems.
+      # replay with the final state hash, goes to the last job, which compares the systems. It
+      # runs when a test has failed too, so that one failing test does not hide whether the
+      # systems agree.
       - name: Run the golden replays
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash
         run: |
           dotnet run --no-build --configuration ${{ matrix.configuration }} --project src/Tools -- \
