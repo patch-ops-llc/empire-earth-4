@@ -73,6 +73,13 @@ public partial class RtsCamera : Node3D
         ApplyTransform();
     }
 
+    /// <summary>Moves the view so that a ground point, in tiles, is at its center.</summary>
+    public void CenterOn(Vector2 point)
+    {
+        _focus = point.Clamp(Bounds.Position, Bounds.End);
+        ApplyTransform();
+    }
+
     public override void _Ready()
     {
         _camera = GetNode<Camera3D>("Camera");

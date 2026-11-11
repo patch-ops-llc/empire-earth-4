@@ -1,6 +1,7 @@
 using System.Globalization;
 using Godot;
 using Sim;
+using Sim.Setup;
 
 namespace Game;
 
@@ -16,8 +17,9 @@ public partial class DebugOverlay : CanvasLayer
     private double _sinceRefresh;
     private double _worstFrame;
     private int _frames;
-    private double _sincePlaceholderTick;
-    private long _placeholderTick;
+
+    /// <summary>The match whose tick is shown. Until it is set the readout has no tick.</summary>
+    public Match? Match { get; set; }
 
     /// <summary>Camera whose focus point and distance are shown. Optional.</summary>
     [Export]
@@ -40,8 +42,6 @@ public partial class DebugOverlay : CanvasLayer
 
     public override void _Process(double delta)
     {
-        AdvancePlaceholderTick(delta);
-
         _frames++;
         _sinceRefresh += delta;
         _worstFrame = Math.Max(_worstFrame, delta);
@@ -56,26 +56,12 @@ public partial class DebugOverlay : CanvasLayer
         _worstFrame = 0.0;
     }
 
-    // No simulation runs yet. Until the world view drives real ticks, this counts at the
-    // simulation's rate so the readout has its final shape.
-    private void AdvancePlaceholderTick(double delta)
-    {
-        const double tickSeconds = 1.0 / SimInfo.TicksPerSecond;
-
-        _sincePlaceholderTick += delta;
-        while (_sincePlaceholderTick >= tickSeconds)
-        {
-            _sincePlaceholderTick -= tickSeconds;
-            _placeholderTick++;
-        }
-    }
-
     private void Refresh(double averageFrame, double worstFrame)
     {
         var framesPerSecond = averageFrame > 0.0 ? 1.0 / averageFrame : 0.0;
         var text = string.Create(CultureInfo.InvariantCulture,
             $"Frame {averageFrame * 1000.0:F1} ms avg, {worstFrame * 1000.0:F1} ms worst ({framesPerSecond:F0} fps)\n" +
-            $"Tick {_placeholderTick} (placeholder, {SimInfo.TicksPerSecond} per second)");
+            $"Tick {Match?.World.Tick.ToString(CultureInfo.InvariantCulture) ?? "-"} ({SimInfo.TicksPerSecond} per second)");
 
         if (Camera is not null)
         {

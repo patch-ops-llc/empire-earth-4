@@ -60,9 +60,19 @@ jobs:
           git status --porcelain
           test -z "$(git status --porcelain)"
 
-      # Godot exits with 0 even when the C# assembly or a script fails to load, so the marker
-      # printed by game/scripts/SmokeTest.cs is what proves the scene ran.
+      # The game starts in its main scene, builds a match and prints one line about it. Godot exits
+      # with 0 even when the C# assembly or a script fails to load, so that line is what proves the
+      # game ran. Its content hash must be the one datacheck computes: the game reads the data
+      # files through Godot and the tool reads them from disk.
       - name: Run the headless smoke test
+        shell: bash
         run: |
-          godot --headless --path game res://scenes/smoke_test.tscn --quit-after 600 2>&1 | tee "$RUNNER_TEMP/smoke.log"
-          grep -q '^SMOKE_TEST_OK' "$RUNNER_TEMP/smoke.log"
+          godot --headless --path game --quit-after 600 -- --smoke-test 2>&1 | tee "$RUNNER_TEMP/smoke.log"
+          line="$(grep '^SMOKE_TEST_OK' "$RUNNER_TEMP/smoke.log")"
+          game_hash="$(sed -n 's/.* content_hash=\([^ ]*\).*/\1/p' <<< "$line")"
+          data_hash="$(dotnet run --no-build --project src/Tools -- datacheck game/data | sed -n 's/^ *content hash: //p')"
+          echo "The game read the data as $game_hash and datacheck as $data_hash."
+          if [ -z "$game_hash" ] || [ "$game_hash" != "$data_hash" ]; then
+            echo "::error::The game and datacheck do not agree on the content hash of game/data."
+            exit 1
+          fi
