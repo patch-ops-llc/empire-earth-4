@@ -60,9 +60,9 @@ jobs:
           git status --porcelain
           test -z "$(git status --porcelain)"
 
-      # The game starts in its main scene, builds a match and prints one line about it. Godot exits
-      # with 0 even when the C# assembly or a script fails to load, so that line is what proves the
-      # game ran. Its content hash must be the one datacheck computes: the game reads the data
+      # The game starts in its main scene, builds a match, plays a fixed script of move orders in
+      # it and prints one line about it. Godot exits with 0 even when the C# assembly or a script
+      # fails to load, so that line is what proves the game ran. Its content hash must be the one datacheck computes: the game reads the data
       # files through Godot and the tool reads them from disk.
       - name: Run the headless smoke test
         shell: bash
