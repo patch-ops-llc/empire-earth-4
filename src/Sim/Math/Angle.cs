@@ -55,6 +55,55 @@ public readonly struct Angle : IEquatable<Angle>
     /// <summary>The cosine, rounded to the nearest 1/65,536.</summary>
     public Fixed Cos() => (this + QuarterTurn).Sin();
 
+    /// <summary>
+    /// The arctangent of y over x: the angle whose direction (<see cref="Cos"/>, <see cref="Sin"/>)
+    /// is nearest to the direction of (x, y). The direction (0, 0) gives <see cref="Zero"/>.
+    /// </summary>
+    /// <remarks>
+    /// It reads the committed sine table and nothing else. Two neighboring angles share the
+    /// directions between them at the sum of their two table vectors, which points halfway between
+    /// them; a direction exactly on that line goes to the angle further from the x axis. The result
+    /// is therefore the true arctangent rounded to the nearest unit, except within about a
+    /// hundredth of a unit of a halfway point, where the rounding of the table decides. Mirrored
+    /// input gives a mirrored angle: negating y negates the angle, and negating x reflects it in a
+    /// quarter turn.
+    /// </remarks>
+    public static Angle Atan2(Fixed y, Fixed x)
+    {
+        var width = Math.Abs((long)x.Raw);
+        var height = Math.Abs((long)y.Raw);
+        if (width == 0 && height == 0)
+        {
+            return Zero;
+        }
+
+        // The angle in the first quarter turn, from the two lengths: the number of halfway lines the
+        // direction has reached. Each product is below 2^49.
+        var low = 0;
+        var high = UnitsPerQuarterTurn;
+        while (low < high)
+        {
+            var middle = (low + high) / 2;
+            long halfwayX = QuarterWaveSine[UnitsPerQuarterTurn - middle] + QuarterWaveSine[UnitsPerQuarterTurn - middle - 1];
+            long halfwayY = QuarterWaveSine[middle] + QuarterWaveSine[middle + 1];
+            if ((halfwayX * height) - (halfwayY * width) >= 0)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle;
+            }
+        }
+
+        if (x.Raw < 0)
+        {
+            return FromUnits(y.Raw < 0 ? (UnitsPerTurn / 2) + low : (UnitsPerTurn / 2) - low);
+        }
+
+        return FromUnits(y.Raw < 0 ? -low : low);
+    }
+
     public bool Equals(Angle other) => Units == other.Units;
 
     public override bool Equals(object? obj) => obj is Angle other && Equals(other);
