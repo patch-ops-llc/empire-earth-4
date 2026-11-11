@@ -1,8 +1,10 @@
 using Sim.Core;
 using Sim.Data;
+using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
+using Sim.Research;
 
 namespace Sim.Setup;
 
@@ -45,15 +47,20 @@ public static class MatchSetup
         // the state hash.
         var bodies = world.AddStore(new ComponentStore<Body>(Body.StoreName));
         var movers = world.AddStore(new ComponentStore<Mover>(Mover.StoreName));
+        var researchState = world.AddStore(new ResearchState(players.Count, data.Tracks.Count, data.TierCount, data.Rules.Match.StartEpoch));
+        var stockpiles = world.AddStore(new Stockpiles(players.Count));
 
         // Worked out from the state and not state itself. Match.RefreshDerivedState renews it.
+        var research = new MatchResearch(data, world, researchState, stockpiles, data.Rules.Match.EpochCap);
         var routes = new RouteCache(grid);
         var spatialIndex = new SpatialIndex(grid, world.Entities, bodies);
 
         var simulation = new Simulation(world);
 
         // Command handlers, in alphabetical order of their types. The order here changes nothing.
+        simulation.SetCommandHandler(CommandType.CancelResearch, new CancelResearchHandler(research));
         simulation.SetCommandHandler(CommandType.Move, new MoveCommandHandler(grid, bodies, movers, players.Count));
+        simulation.SetCommandHandler(CommandType.StartResearch, new StartResearchHandler(research));
 
         // Systems. Their order is a rule of the game: a pull request that adds one says where it
         // goes and why.
@@ -61,9 +68,12 @@ public static class MatchSetup
         // Routes are found before anyone moves, so that a unit ordered in this tick can take its
         // first step in this tick. The spatial index is rebuilt right after movement, so that every
         // system after it sees where things stand now. A system that moves bodies goes before it.
+        // Research goes last: after everything that can destroy the holder of a research slot, so
+        // that a research cannot finish in the tick in which its building falls.
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
+        simulation.AddSystem(new ResearchSystem(research));
 
         var match = new Match
         {
@@ -75,14 +85,20 @@ public static class MatchSetup
             Grid = grid,
             Bodies = bodies,
             Movers = movers,
+            Research = research,
             Routes = routes,
             SpatialIndex = spatialIndex,
+            Stockpiles = stockpiles,
         };
 
         for (var player = 0; player < players.Count; player++)
         {
             if (players[player].HasStart)
             {
+                // Design 5.2: what every player starts with. The research slot stands in for the
+                // starting Capitol's until the setup places one.
+                stockpiles.Add(player, data.Rules.Start.Materials, data.Rules.Start.Energy);
+                research.OpenPlayerSlot(player);
                 PlaceStartingWorkers(match, player, map.Starts[players[player].Start]);
             }
         }
