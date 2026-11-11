@@ -39,6 +39,7 @@ public class UdpMatchTests
         // still on its way when the host ends the match never runs. So the commands are counted
         // as they run, not hoped for at the end.
         var lastCommandTick = new int[2];
+        var given = new List<int>[] { [], [] };
         var commands = 0;
         match.Until(
             () =>
@@ -48,7 +49,8 @@ public class UdpMatchTests
                     if (client.Session.Phase == SessionPhase.Running && client.Tick >= lastCommandTick[client.Seat] + 4)
                     {
                         lastCommandTick[client.Seat] = client.Tick;
-                        Assert.True(commands % 3 == 2 ? client.Cull() : client.Spawn(commands));
+                        Assert.True(commands % 3 == 2 ? client.Cull(commands) : client.Spawn(commands));
+                        given[client.Seat].Add(commands);
                         commands++;
                     }
                 }
@@ -71,8 +73,16 @@ public class UdpMatchTests
             Assert.Equal(replay.World.ComputeHash(), ToyGame.Replay(client.Bundles, finalTick).World.ComputeHash());
         }
 
-        Assert.True(RanOf(replay, 0) >= CommandsEach, $"Only {RanOf(replay, 0)} commands of player 0 ran.");
-        Assert.True(RanOf(replay, 1) >= CommandsEach, $"Only {RanOf(replay, 1)} commands of player 1 ran.");
+        // Equal hashes do not show a command that went missing or came twice on its way to the
+        // host: every client would run the same wrong match. So each player's commands are
+        // checked against what it gave: they ran once each and in that order. Only its last ones
+        // may be missing, those still on their way when the host ended the match.
+        for (var player = 0; player < 2; player++)
+        {
+            var ran = replay.Log.Where(executed => executed.Player == player).Select(executed => executed.ContentId).ToArray();
+            Assert.True(ran.Length >= CommandsEach, $"Only {ran.Length} commands of player {player} ran.");
+            Assert.Equal(given[player].Take(ran.Length), ran);
+        }
 
         if (badNetwork)
         {
