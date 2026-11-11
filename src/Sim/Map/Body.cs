@@ -8,7 +8,7 @@ namespace Sim.Map;
 /// stands on the map has one, whether or not it can move, and a command handler reads the owner
 /// from here.
 /// </summary>
-public struct Body : IStateHashable
+public struct Body : IStateValue
 {
     /// <summary>The name of the store that holds every body.</summary>
     public const string StoreName = "bodies";
@@ -19,10 +19,9 @@ public struct Body : IStateHashable
     /// <summary>The center, in tiles.</summary>
     public FixedVector2 Position { get; set; }
 
-    public readonly void AddToHash(ref StateHasher hasher)
+    public void Walk(IStateWalker walker)
     {
-        hasher.Add(Owner);
-        hasher.Add(Position.X);
-        hasher.Add(Position.Y);
+        Owner = walker.Field(Owner);
+        Position = new FixedVector2(walker.Field(Position.X), walker.Field(Position.Y));
     }
 }

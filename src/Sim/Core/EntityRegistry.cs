@@ -119,14 +119,54 @@ public sealed class EntityRegistry
         _destroyedCount = 0;
     }
 
-    internal void AddToHash(ref StateHasher hasher)
+    internal void Walk(IStateWalker walker)
     {
-        hasher.Add(_nextId);
-        hasher.Add(_count);
+        _nextId = walker.Field(_nextId);
+
+        // An entity is at least its ID and its destroyed flag.
+        _count = walker.Count(_count, minimumBytesPerItem: sizeof(int) + sizeof(bool));
+        if (_count > _ids.Length)
+        {
+            var capacity = Math.Max(_count, _ids.Length * 2);
+            Array.Resize(ref _ids, capacity);
+            Array.Resize(ref _destroyed, capacity);
+        }
+
         for (var i = 0; i < _count; i++)
         {
-            hasher.Add(_ids[i]);
-            hasher.Add(_destroyed[i]);
+            _ids[i] = walker.Field(_ids[i]);
+            _destroyed[i] = walker.Field(_destroyed[i]);
+        }
+
+        if (walker.IsRestoring)
+        {
+            FinishRestoring();
+        }
+    }
+
+    /// <summary>Checks what a restore read, and recounts the destroyed entities, which the state does not store.</summary>
+    private void FinishRestoring()
+    {
+        var previous = 0;
+        _destroyedCount = 0;
+        for (var i = 0; i < _count; i++)
+        {
+            var id = _ids[i].Value;
+            if (id <= previous)
+            {
+                throw new InvalidDataException($"Entity IDs must be positive and ascend: {id} follows {previous}.");
+            }
+
+            previous = id;
+            if (_destroyed[i])
+            {
+                _destroyedCount++;
+            }
+        }
+
+        if (_nextId <= previous)
+        {
+            throw new InvalidDataException($"The next entity ID is {_nextId}, which is not above the newest entity, {previous}.");
         }
     }
 

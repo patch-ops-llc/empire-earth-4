@@ -7,6 +7,7 @@ namespace Sim.Core;
 public sealed class World
 {
     private readonly List<IStateStore> _stores = [];
+    private readonly HashWalker _hashWalker = new();
 
     public World(ulong seed) => Random = new DeterministicRandom(seed);
 
@@ -78,17 +79,44 @@ public sealed class World
     /// </summary>
     public ulong ComputeHash()
     {
-        var hasher = default(StateHasher);
-        hasher.Add(Tick);
-        hasher.Add(Random.State);
-        Entities.AddToHash(ref hasher);
-        hasher.Add(_stores.Count);
-        foreach (var store in _stores)
+        _hashWalker.Reset();
+        Walk(_hashWalker);
+        return _hashWalker.Finish();
+    }
+
+    /// <summary>
+    /// Hands the whole state to a walker, field by field: tick, random generator, entities, the
+    /// number of stores, then each store in name order. The state hash, a snapshot and a restore
+    /// are all this one walk with a different walker, so they cover exactly the same fields.
+    /// </summary>
+    /// <remarks>
+    /// A walker that restores replaces the state. If it throws part of the way, because the bytes
+    /// it reads are damaged or belong to a different set of stores, the world is left half replaced
+    /// and must not be used.
+    /// </remarks>
+    public void Walk(IStateWalker walker)
+    {
+        ArgumentNullException.ThrowIfNull(walker);
+
+        Tick = walker.Field(Tick);
+        if (Tick < 0)
         {
-            store.AddToHash(ref hasher);
+            throw new InvalidDataException($"The tick number is {Tick}.");
         }
 
-        return hasher.Finish();
+        Random.Walk(walker);
+        Entities.Walk(walker);
+
+        var storeCount = walker.Count(_stores.Count);
+        if (storeCount != _stores.Count)
+        {
+            throw new InvalidDataException($"The state has {storeCount} stores and this world has {_stores.Count}.");
+        }
+
+        foreach (var store in _stores)
+        {
+            store.Walk(walker);
+        }
     }
 
     internal void AdvanceTick() => Tick = checked(Tick + 1);
