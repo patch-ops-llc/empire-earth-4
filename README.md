@@ -20,9 +20,10 @@ dotnet build -warnaserror
 dotnet test
 dotnet format --verify-no-changes
 dotnet run --project src/Tools -- datacheck game/data
+dotnet run --project src/Tools -- replay verify tests/golden/replays --data tests/golden/data
 ```
 
-The last command loads the game data through the loader the game uses and lists every problem it finds. [docs/data-authoring.md](docs/data-authoring.md) describes it and the data files.
+The `datacheck` command loads the game data through the loader the game uses and lists every problem it finds. [docs/data-authoring.md](docs/data-authoring.md) describes it and the data files. The last command runs the recorded matches of `tests/golden/` again and fails unless every state hash is the recorded one. [docs/determinism.md](docs/determinism.md) describes them.
 
 Debug builds, which the tests and the Godot editor use, treat whole-number overflow as an error. Release builds and the exported game do not. `Directory.Build.props` sets this for every project, and [docs/determinism.md](docs/determinism.md) says why.
 
@@ -76,8 +77,8 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 
 | Workflow | Runs on | What it does |
 | --- | --- | --- |
-| `ci.yml` | Every pull request, on Linux | Build with warnings as errors, format check, tests, `datacheck`, Godot import and build, a check that Godot changed or created no file in the working tree, and the smoke test. |
-| `determinism.yml` | Every push to `main`, every night, and pull requests that change the workflow, `Directory.Build.props`, `global.json`, `src/Net.Udp/` or `tests/Net.Udp.Tests/` | The tests on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build. The tests hold recorded values, so this is where a result that differs between systems shows up. The transport's tests use real sockets, which also differ between systems. |
+| `ci.yml` | Every pull request, on Linux | Build with warnings as errors, format check, tests, `datacheck`, the golden replays, Godot import and build, a check that Godot changed or created no file in the working tree, and the smoke test. |
+| `determinism.yml` | Every push to `main`, every night, and pull requests that change the workflow, `Directory.Build.props`, `global.json`, `src/Net.Udp/` or `tests/Net.Udp.Tests/` | The tests on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build. The tests hold recorded values, so this is where a result that differs between systems shows up. The transport's tests use real sockets, which also differ between systems. Each of the eight jobs then runs the golden replays, and a last job fails unless all eight report the same final hashes. |
 | `export.yml` | Every tag that starts with `v`, a manual run, and pull requests that change the workflow, `game/export_presets.cfg` or `Directory.Build.props` | Exports the Windows build on Linux and the macOS build on macOS, and uploads both. Runs the smoke test in a Linux export, in the Windows build on Windows and in the macOS build as an Apple silicon and as an Intel program. Opens the Windows and the macOS build in a window for 300 frames. Fails unless every build reports the content hash that `datacheck` prints and the same state hash as the others. |
 
 ## Layout
@@ -87,17 +88,18 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 | `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) and `Serialization/` (the byte format, the encoding of a command, and snapshots). |
 | `src/Net/` | The lockstep network session. A plain .NET library that references only `Sim`: `Protocol/` (the messages and their bytes), `Session/` (the host, the client, and the two in one process for single-player) and `Transport/` (the connection interface, and the loopback used by single-player and tests). |
 | `src/Net.Udp/` | The real network under the session: a connection over UDP, a listener for the host and a connector for a client. A plain .NET library that references `Net` and the LiteNetLib package. Sockets, the package and the thread that keeps connections alive live here and nowhere else. |
-| `src/Tools/` | The console tools, as one program: `dotnet run --project src/Tools -- <tool> [arguments]`. Each tool is a folder. So far: `datacheck`. |
+| `src/Tools/` | The console tools, as one program: `dotnet run --project src/Tools -- <tool> [arguments]`. Each tool is a folder. So far: `datacheck` checks a data folder, `balance-report` prints what the tech rules make of tier mixes, and `replay` runs recorded matches again and checks their state hashes. |
 | `tests/Sim.Tests/` | Tests for `Sim` (xUnit v3 on Microsoft.Testing.Platform), in folders that match those of `src/Sim/`. |
 | `tests/Net.Tests/` | Tests for `Net`: whole matches between a host and several clients in one process, over a loopback with latency and jitter that the test controls. |
 | `tests/Net.Udp.Tests/` | Tests for `Net.Udp` over real sockets on the local address, on ports the system picks: what a connection promises, the orderly close, and whole matches between a host and clients, through a relay that delays, reorders and loses datagrams. |
+| `tests/golden/` | The golden replays: `replays/` holds recorded matches that every build must reproduce on every system, and `data/` holds the frozen data they run on, which changes to `game/data/` do not touch. [determinism.md](docs/determinism.md) says how to update them. |
 | `tests/Tools.Tests/` | Tests for the tools, for the data in `game/data/` and for the schemas. |
 | `game/` | The Godot project: `project.godot`, `Game.csproj`, `scenes/`, `scripts/`, `ui/`. References `Sim` and `Net`. |
 | `game/export_presets.cfg` | The export presets: Windows x86_64, macOS universal, and Linux x86_64, which the export workflow uses for its first smoke test. Each packs the data files with the game. |
 | `game/data/` | The content of the game as JSON-with-comments files: tracks, rules, unit lines and maps. |
 | `game/ui/` | What the player does to the match, as scripts: the selection, the box and the rings that show it, and move orders with their mark on the ground. Orders leave through the session of `Net`. |
 | `schemas/` | JSON Schemas for the files in `game/data/`. |
-| `docs/` | [determinism.md](docs/determinism.md): the rules that keep the simulation deterministic, the kernel, the byte format and snapshots. [data-authoring.md](docs/data-authoring.md): how the data files are written and checked. [testers.md](docs/testers.md): how a tester gets a build and starts it. |
+| `docs/` | [determinism.md](docs/determinism.md): the rules that keep the simulation deterministic, the kernel, the byte format, snapshots, replays and the golden replays. [data-authoring.md](docs/data-authoring.md): how the data files are written and checked. [testers.md](docs/testers.md): how a tester gets a build and starts it. |
 | `.github/workflows/` | `ci.yml`, `determinism.yml` and `export.yml`, described above. |
 | `global.json` | Pins the .NET SDK and the Godot version, and selects the test runner. |
 | `Directory.Build.props` | C# settings shared by every project: target framework, nullable, warnings as errors, analyzers, overflow checking, and optimization for exports. |

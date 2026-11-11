@@ -1,0 +1,36 @@
+// Line infantry: the cheap ranged core, the body of a mass army (game design 2.2 and 2.4).
+{
+  "$schema": "../../../../schemas/line.schema.json",
+  "id": "line_infantry",
+
+  // The chassis for epoch T unlocks at primary tier T and secondary tier T - 1 (design 2.2).
+  "primary": "manufacturing",
+  "secondary": "firepower",
+  "built_at": "barracks",
+
+  // Values at tier 1 (design 2.4). Speed is in tiles per second, spacing and sight in tiles.
+  "base": {
+    "hp": 60,
+    "dps": 6,
+    "speed": "3",
+    "sight": 8,
+    "supply": 2,
+    "spacing": "1",
+    "cost": { "materials": 40, "energy": 0 },
+    "build_seconds": 12
+  },
+
+  // Shots fly 20 tiles per second.
+  "attack": { "kind": "ranged", "interval_seconds": "1", "range": 5, "projectile_speed": 20 },
+
+  // Damage multipliers against other lines. Line infantry can hit every line, Air included.
+  "counters": { "guard": "1.25" },
+
+  // One chassis per epoch, first playable only (epochs 1 to 4). Range is 5, and 6 from epoch 4.
+  "chassis": [
+    { "epoch": 1, "id": "peltast" },
+    { "epoch": 2, "id": "auxiliary" },
+    { "epoch": 3, "id": "crossbowman" },
+    { "epoch": 4, "id": "musketeer", "attack": { "range": 6 } }
+  ]
+}

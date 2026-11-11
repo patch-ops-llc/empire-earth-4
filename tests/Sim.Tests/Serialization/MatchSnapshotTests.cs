@@ -88,12 +88,12 @@ public class MatchSnapshotTests
     }
 
     /// <summary>
-    /// What is worked out from the state is not in a snapshot. The spatial index of a match that a
-    /// snapshot was restored into still answers for the old world until
+    /// What is worked out from the state is not in a snapshot. The spatial index of a match whose
+    /// simulation alone was restored still answers for the old world until
     /// <see cref="Match.RefreshDerivedState"/> has run, and for the restored one afterwards.
     /// </summary>
     [Fact]
-    public void ARestoredMatchAnswersForTheRestoredWorldOnceItsDerivedStateIsRefreshed()
+    public void ARestoredSimulationLeavesTheDerivedStateOfItsMatchUntilItIsRefreshed()
     {
         var source = Run(BuildMaze(), MazeScript(), 175);
         var writer = new ByteWriter();
@@ -110,6 +110,50 @@ public class MatchSnapshotTests
         target.RefreshDerivedState();
         Assert.Equal(expected, NearTheMiddle(target));
         Assert.Equal(22, target.SpatialIndex.Count);
+    }
+
+    /// <summary>Restoring a match, and not only its simulation, refreshes what the match works out from its state.</summary>
+    [Fact]
+    public void ARestoredMatchAnswersForTheRestoredWorld()
+    {
+        var source = Run(BuildMaze(), MazeScript(), 175);
+        var writer = new ByteWriter();
+        Snapshot.Write(source.World, writer);
+        var expected = NearTheMiddle(source);
+
+        var target = Run(BuildMaze(), MazeScript(), MazeLastTick);
+        Assert.NotEqual(expected, NearTheMiddle(target));
+        var reader = new ByteReader(writer.ToArray());
+        Snapshot.Restore(target, reader);
+
+        Assert.True(reader.IsAtEnd);
+        Assert.Equal(expected, NearTheMiddle(target));
+        Assert.Equal(source.World.ComputeHash(), target.World.ComputeHash());
+    }
+
+    /// <summary>
+    /// Nothing reads the way a unit faces yet, so no run goes wrong when a restore leaves it as it
+    /// was. The value must still come back.
+    /// </summary>
+    [Fact]
+    public void ARestoredMatchHasTheFacingOfEveryUnit()
+    {
+        var source = Run(BuildMaze(), MazeScript(), 175);
+        var writer = new ByteWriter();
+        Snapshot.Write(source.World, writer);
+
+        var target = Run(BuildMaze(), MazeScript(), MazeLastTick);
+        Snapshot.Restore(target, new ByteReader(writer.ToArray()));
+
+        var differed = 0;
+        var fresh = BuildMaze();
+        for (var i = 0; i < source.Movers.Count; i++)
+        {
+            Assert.Equal(source.Movers.ValueAt(i).Facing, target.Movers.ValueAt(i).Facing);
+            differed += source.Movers.ValueAt(i).Facing != fresh.Movers.ValueAt(i).Facing ? 1 : 0;
+        }
+
+        Assert.True(differed >= 16, $"Only {differed} units had turned when the snapshot was taken.");
     }
 
     private static List<EntityId> NearTheMiddle(Match match)

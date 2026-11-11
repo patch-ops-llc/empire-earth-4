@@ -1,6 +1,7 @@
 using Sim.Core;
 using Sim.Numerics;
 using Sim.Serialization;
+using Sim.Setup;
 using Sim.Tests.Core;
 using Xunit.Sdk;
 
@@ -403,8 +404,8 @@ public class SnapshotTests
     }
 
     /// <summary>
-    /// A field left out of the walk is in neither the hash nor the snapshot, so nothing notices
-    /// until the restored run goes its own way. That is what the round-trip test is for.
+    /// A field left out of the walk is in neither the hash nor the snapshot. The round-trip test
+    /// sees that the restored value is not the one the snapshot was taken from.
     /// </summary>
     [Fact]
     public void AFieldLeftOutOfTheWalkIsCaughtByTheRoundTripTest()
@@ -421,7 +422,51 @@ public class SnapshotTests
 
         var exception = Assert.ThrowsAny<XunitException>(() => SnapshotAssert.RestoresAndContinues(Build, snapshotTick: 10, lastTick: 20));
 
-        Assert.Contains("missing from a store's Walk", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("missing from Forgetful.Walk", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The same for a field that no rule reads, so that the run after the restore never goes
+    /// wrong: the way a unit faces, before anything turns to shoot.
+    /// </summary>
+    [Fact]
+    public void AFieldLeftOutOfTheWalkThatNothingReadsIsCaughtByTheRoundTripTest()
+    {
+        static Simulation Build()
+        {
+            var world = new World(1);
+            var store = world.AddStore(new ComponentStore<Unread>("unread"));
+            store.Add(world.Entities.Create(), default);
+            var simulation = new Simulation(world);
+            simulation.AddSystem(new UnreadSystem(store));
+            return simulation;
+        }
+
+        var exception = Assert.ThrowsAny<XunitException>(() => SnapshotAssert.RestoresAndContinues(Build, snapshotTick: 10, lastTick: 20));
+
+        Assert.Contains("missing from Unread.Walk", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// State that a system keeps for itself is in no store, so no snapshot has it. The round-trip
+    /// test sees the restored run go its own way.
+    /// </summary>
+    [Fact]
+    public void StateKeptOutsideTheStoresIsCaughtByTheRoundTripTest()
+    {
+        static Simulation Build()
+        {
+            var world = new World(1);
+            var store = world.AddStore(new ComponentStore<Health>("health"));
+            store.Add(world.Entities.Create(), default);
+            var simulation = new Simulation(world);
+            simulation.AddSystem(new SecretiveSystem(store));
+            return simulation;
+        }
+
+        var exception = Assert.ThrowsAny<XunitException>(() => SnapshotAssert.RestoresAndContinues(Build, snapshotTick: 10, lastTick: 20));
+
+        Assert.Contains("state lives outside the stores", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -444,7 +489,8 @@ public class SnapshotTests
     {
         Assert.Throws<ArgumentNullException>(() => Snapshot.Write(null!, new ByteWriter()));
         Assert.Throws<ArgumentNullException>(() => Snapshot.Write(new World(1), null!));
-        Assert.Throws<ArgumentNullException>(() => Snapshot.Restore(null!, new ByteReader(ReadOnlyMemory<byte>.Empty)));
+        Assert.Throws<ArgumentNullException>(() => Snapshot.Restore((Simulation)null!, new ByteReader(ReadOnlyMemory<byte>.Empty)));
+        Assert.Throws<ArgumentNullException>(() => Snapshot.Restore((Match)null!, new ByteReader(ReadOnlyMemory<byte>.Empty)));
         Assert.Throws<ArgumentNullException>(() => Snapshot.Restore(new Simulation(new World(1)), null!));
         Assert.Throws<ArgumentNullException>(() => new World(1).Walk(null!));
     }
@@ -529,6 +575,35 @@ public class SnapshotTests
             ref var value = ref store.ValueAt(0);
             value.Step++;
             value.Total += value.Step;
+        }
+    }
+
+    private struct Unread : IStateValue
+    {
+        public int Counted;
+        public int Facing;
+
+        public void Walk(IStateWalker walker) => Counted = walker.Field(Counted);
+    }
+
+    private sealed class UnreadSystem(ComponentStore<Unread> store) : ISystem
+    {
+        public void Run(World world)
+        {
+            ref var value = ref store.ValueAt(0);
+            value.Counted++;
+            value.Facing = world.Tick * 3;
+        }
+    }
+
+    private sealed class SecretiveSystem(ComponentStore<Health> store) : ISystem
+    {
+        private int _step;
+
+        public void Run(World world)
+        {
+            _step++;
+            store.ValueAt(0).Points += _step;
         }
     }
 

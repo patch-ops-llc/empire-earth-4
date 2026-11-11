@@ -9,13 +9,22 @@ internal static class Repository
 
     public static string SchemasFolder => Path.Combine(Root, "schemas");
 
+    /// <summary>The frozen data the golden replays were recorded with.</summary>
+    public static string GoldenDataFolder => Path.Combine(Root, "tests", "golden", "data");
+
+    /// <summary>The recorded replays that every build must reproduce.</summary>
+    public static string GoldenReplaysFolder => Path.Combine(Root, "tests", "golden", "replays");
+
     /// <summary>A copy of <c>game/data</c> in a new temporary folder, for tests that break it.</summary>
-    public static TemporaryFolder CopyOfData()
+    public static TemporaryFolder CopyOfData() => CopyOf(DataFolder);
+
+    /// <summary>A copy of a folder and everything in it, in a new temporary folder.</summary>
+    public static TemporaryFolder CopyOf(string folder)
     {
         var copy = new TemporaryFolder();
-        foreach (var source in Directory.EnumerateFiles(DataFolder, "*", SearchOption.AllDirectories))
+        foreach (var source in Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories))
         {
-            var target = Path.Combine(copy.Path, Path.GetRelativePath(DataFolder, source));
+            var target = Path.Combine(copy.Path, Path.GetRelativePath(folder, source));
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             File.Copy(source, target);
         }

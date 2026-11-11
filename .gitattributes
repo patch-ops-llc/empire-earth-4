@@ -1,2 +1,5 @@
 # Same line endings on Windows, macOS and Linux, so `dotnet format` agrees everywhere.
 * text=auto eol=lf
+
+# Recorded matches are bytes. Git must not touch their line endings.
+*.replay binary

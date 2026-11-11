@@ -1,0 +1,37 @@
+// Cavalry/Armor: fast shock units that raid workers and artillery (game design 2.2 and 2.4).
+{
+  "$schema": "../../../../schemas/line.schema.json",
+  "id": "cavalry_armor",
+
+  // The chassis for epoch T unlocks at primary tier T and secondary tier T - 1 (design 2.2).
+  "primary": "mobility",
+  "secondary": "protection",
+  "built_at": "works",
+
+  // Values at tier 1 (design 2.4). Speed is in tiles per second, spacing and sight in tiles.
+  "base": {
+    "hp": 160,
+    "dps": 10,
+    "speed": "4.5",
+    "sight": 10,
+    "supply": 3,
+    "spacing": "1.5",
+    "cost": { "materials": 90, "energy": 30 },
+    "build_seconds": 24
+  },
+
+  // One hit of 15 every 1.5 seconds, so the first strike of a raid matters.
+  "attack": { "kind": "melee", "interval_seconds": "1.5" },
+
+  // Damage multipliers against other lines, and the lines this one cannot hit.
+  "counters": { "line_infantry": "1.25", "artillery": "1.5" },
+  "cannot_hit": ["air"],
+
+  // One chassis per epoch, first playable only (epochs 1 to 4). The line is melee through epoch 4.
+  "chassis": [
+    { "epoch": 1, "id": "hippeus" },
+    { "epoch": 2, "id": "eques" },
+    { "epoch": 3, "id": "knight" },
+    { "epoch": 4, "id": "cuirassier" }
+  ]
+}

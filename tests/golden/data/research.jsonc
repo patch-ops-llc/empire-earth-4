@@ -1,0 +1,20 @@
+// What one research costs and how long it takes (game design 1.3).
+//
+// One research raises one track by one tier, and the price is the same for every track. These are
+// frontier prices, for a tier one above the player's epoch. "research_price" in rules.jsonc holds
+// the multipliers for a tier at or below the epoch and for one further ahead.
+{
+  "$schema": "../../../schemas/research.schema.json",
+
+  // One entry for each tier from 2 up, in order. A track starts at tier 1, so tier 1 has no price.
+  "tiers": [
+    { "tier": 2, "cost": { "materials": 100, "energy": 100 }, "seconds": 45 },
+    { "tier": 3, "cost": { "materials": 150, "energy": 200 }, "seconds": 60 },
+    { "tier": 4, "cost": { "materials": 225, "energy": 350 }, "seconds": 75 },
+    { "tier": 5, "cost": { "materials": 350, "energy": 550 }, "seconds": 90 },
+    { "tier": 6, "cost": { "materials": 500, "energy": 850 }, "seconds": 105 },
+    { "tier": 7, "cost": { "materials": 750, "energy": 1300 }, "seconds": 120 },
+    { "tier": 8, "cost": { "materials": 1100, "energy": 1900 }, "seconds": 135 },
+    { "tier": 9, "cost": { "materials": 1600, "energy": 2800 }, "seconds": 150 }
+  ]
+}

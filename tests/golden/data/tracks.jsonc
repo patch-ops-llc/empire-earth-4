@@ -1,0 +1,113 @@
+// The six tracks and their nine tiers (game design 1.1 and 1.2).
+//
+// The order of "tracks" is the fixed track order: it is the order of every tier list in the design
+// (FP, PR, MO, MF, LG, EX) and the last tie-break when a unit picks its accents (design 2.3).
+// "epochs" names the epochs; its length is the number of tiers every track has.
+{
+  "$schema": "../../../schemas/tracks.schema.json",
+  "epochs": ["Greeks", "Romans", "Medieval", "Industrial", "WW1", "WW2", "Modern", "AI", "Interstellar"],
+  "tracks": [
+    {
+      "id": "firepower",
+      "name": "Firepower",
+      "short": "FP",
+      "group": "better",
+      "tiers": [
+        "Bronze arms",
+        "Torsion engines",
+        "Steel and counterweight",
+        "Rifled guns",
+        "Machine guns, high explosive",
+        "Rocketry",
+        "Guided missiles, nuclear warheads",
+        "Autonomous targeting, railguns",
+        "Directed energy, orbital strike"
+      ]
+    },
+    {
+      "id": "protection",
+      "name": "Protection",
+      "short": "PR",
+      "group": "better",
+      "tiers": [
+        "Shield wall",
+        "Fortified camps",
+        "Plate and keeps",
+        "Bastion forts",
+        "Trenches and concrete",
+        "Radar and flak",
+        "Composite armor, missile defense",
+        "Active protection, laser defense",
+        "Energy shields"
+      ]
+    },
+    {
+      "id": "mobility",
+      "name": "Mobility",
+      "short": "MO",
+      "group": "better",
+      "tiers": [
+        "Horsemanship",
+        "Cavalry wings",
+        "Stirrup and warhorse",
+        "Steam traction",
+        "Internal combustion",
+        "Tracked armor, aviation",
+        "Jet turbines",
+        "Autonomous platforms",
+        "Gravitic drives"
+      ]
+    },
+    {
+      "id": "manufacturing",
+      "name": "Manufacturing",
+      "short": "MF",
+      "group": "more",
+      "tiers": [
+        "Workshops",
+        "Standard kit",
+        "Guilds",
+        "Factories",
+        "Assembly line",
+        "Mass production",
+        "Robotics",
+        "Lights-out factories",
+        "Nanofabrication"
+      ]
+    },
+    {
+      "id": "logistics",
+      "name": "Logistics",
+      "short": "LG",
+      "group": "more",
+      "tiers": [
+        "Pack trains",
+        "Roads and granaries",
+        "Supply trains",
+        "Depots and telegraph",
+        "Motor transport",
+        "Fuel pipelines",
+        "Containers and airlift",
+        "Predictive supply",
+        "Orbital lift"
+      ]
+    },
+    {
+      "id": "extraction",
+      "name": "Extraction",
+      "short": "EX",
+      "group": "richer",
+      "tiers": [
+        "Quarry and plough",
+        "Aqueducts and mines",
+        "Water mills",
+        "Coal and steam pumps",
+        "Oil and electrification",
+        "Synthetic fuel",
+        "Nuclear power",
+        "Fusion",
+        "Antimatter"
+      ]
+    }
+  ]
+}
