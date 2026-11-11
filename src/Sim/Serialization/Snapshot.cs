@@ -1,4 +1,5 @@
 using Sim.Core;
+using Sim.Setup;
 
 namespace Sim.Serialization;
 
@@ -57,10 +58,25 @@ public static class Snapshot
     }
 
     /// <summary>
+    /// Replaces the state of a match with the snapshot the reader is at, as the other overload
+    /// does for its simulation, and then brings what the match works out from its state in line
+    /// with it (<see cref="Match.RefreshDerivedState"/>). Everything that restores a match goes
+    /// through here.
+    /// </summary>
+    /// <exception cref="InvalidDataException">As for the other overload. The match must then not be used.</exception>
+    public static void Restore(Match match, ByteReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(match);
+        Restore(match.Simulation, reader);
+        match.RefreshDerivedState();
+    }
+
+    /// <summary>
     /// Replaces the state of the simulation's world with the snapshot the reader is at, and leaves
     /// the reader after it. The simulation must have been set up as the one the snapshot came from
     /// was: the same stores, systems and handlers. Commands waiting in its queue are discarded, and
-    /// the next tick to run is the snapshot's; queue again what should run from there.
+    /// the next tick to run is the snapshot's; queue again what should run from there. For a
+    /// <see cref="Match"/>, call the overload that takes one.
     /// </summary>
     /// <exception cref="InvalidDataException">
     /// The bytes are not a snapshot, are damaged, or belong to a world with different stores; or the
