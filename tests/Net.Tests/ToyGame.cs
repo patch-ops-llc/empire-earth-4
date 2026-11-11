@@ -11,8 +11,9 @@ namespace Net.Tests;
 /// </summary>
 internal sealed class ToyGame
 {
-    public const CommandType Spawn = (CommandType)1;
-    public const CommandType Cull = (CommandType)2;
+    // Numbers far from the ones the real game gives out, which start at 1.
+    public const CommandType Spawn = (CommandType)65001;
+    public const CommandType Cull = (CommandType)65002;
     public const ulong DefaultSeed = 20261110;
 
     public ToyGame(ulong seed = DefaultSeed)
