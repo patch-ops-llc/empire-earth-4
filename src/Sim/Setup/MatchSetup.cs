@@ -1,8 +1,8 @@
 using Sim.Core;
 using Sim.Data;
+using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
-using Sim.Numerics;
 
 namespace Sim.Setup;
 
@@ -14,13 +14,6 @@ public static class MatchSetup
 {
     /// <summary>The most players a match can have.</summary>
     public const int MaxPlayers = 8;
-
-    /// <summary>
-    /// The speed of a starting worker, as the distance per tick. The design gives workers no speed
-    /// yet, so this stands in until it does and the data carries it: 3 tiles per second, the speed
-    /// of Line infantry.
-    /// </summary>
-    public static Fixed StartingWorkerSpeed { get; } = Mover.SpeedPerTick(3);
 
     /// <summary>
     /// Builds the world and the tick loop for a match, ready for its first tick. The same arguments
@@ -38,22 +31,35 @@ public static class MatchSetup
         CheckPlayers(map, players);
 
         var world = new World(seed);
-        var grid = new MapGrid(map);
+        var grid = new MapGrid(map, map.Deposits.Count == 0 ? 0 : data.Rules.Map.DepositSize);
 
         // Stores, in alphabetical order of their names. The world sorts them by name, so the order
         // here changes nothing. A name is never changed once it has merged: it places the store in
         // the state hash.
         var bodies = world.AddStore(new ComponentStore<Body>(Body.StoreName));
         var movers = world.AddStore(new ComponentStore<Mover>(Mover.StoreName));
+        var stockpiles = world.AddStore(new Stockpiles(players.Count));
+        var territories = world.AddStore(new ComponentStore<Territory>(Territory.StoreName));
+        var workers = world.AddStore(new ComponentStore<Worker>(Worker.StoreName));
+        var workSites = world.AddStore(new ComponentStore<WorkSite>(WorkSite.StoreName));
 
         // Worked out from the state and not state itself. Match.RefreshDerivedState renews it.
         var routes = new RouteCache(grid);
         var spatialIndex = new SpatialIndex(grid, world.Entities, bodies);
 
+        // What follows from each player's tiers. Every track stays at its starting tier until
+        // research in a match arrives and takes the place of this.
+        var tech = new StartingTech(data);
+        var supply = new SupplyAccount(data, tech, world.Entities, bodies, workers);
+
         var simulation = new Simulation(world);
 
         // Command handlers, in alphabetical order of their types. The order here changes nothing.
-        simulation.SetCommandHandler(CommandType.Move, new MoveCommandHandler(grid, bodies, movers, players.Count));
+        // A worker walks to its work by the move order, and a move order takes it off its work.
+        var move = new MoveCommandHandler(grid, bodies, movers, players.Count);
+        var work = new WorkAssignments(data.Resources, grid, bodies, workers, workSites, move);
+        simulation.SetCommandHandler(CommandType.Gather, new GatherCommandHandler(bodies, workSites, work, players.Count));
+        simulation.SetCommandHandler(CommandType.Move, new LeaveWorkHandler(move, bodies, work));
 
         // Systems. Their order is a rule of the game: a pull request that adds one says where it
         // goes and why.
@@ -64,6 +70,10 @@ public static class MatchSetup
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
+
+        // Income comes after movement, so that a worker that reaches its place in this tick has
+        // arrived in this tick. It moves nobody.
+        simulation.AddSystem(new IncomeSystem(data, grid, bodies, movers, workers, workSites, territories, stockpiles, work, tech));
 
         var match = new Match
         {
@@ -77,15 +87,25 @@ public static class MatchSetup
             Movers = movers,
             Routes = routes,
             SpatialIndex = spatialIndex,
+            Stockpiles = stockpiles,
+            Supply = supply,
+            Territories = territories,
+            Work = work,
+            Workers = workers,
+            WorkSites = workSites,
         };
 
         for (var player = 0; player < players.Count; player++)
         {
             if (players[player].HasStart)
             {
+                // Design 5.2: what every player starts with.
+                stockpiles.Add(player, data.Rules.Start.Materials, data.Rules.Start.Energy);
                 PlaceStartingWorkers(match, player, map.Starts[players[player].Start]);
             }
         }
+
+        EconomySetup.PlaceStart(match);
 
         match.RefreshDerivedState();
         return match;
@@ -181,7 +201,7 @@ public static class MatchSetup
                 return 0;
             }
 
-            match.SpawnUnit(player, MapGrid.TileCenter(tileX, tileY), StartingWorkerSpeed);
+            match.SpawnWorker(player, MapGrid.TileCenter(tileX, tileY));
             return 1;
         }
     }

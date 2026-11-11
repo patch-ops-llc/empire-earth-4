@@ -1,0 +1,32 @@
+// What the economy runs on (game design 4.1): what a worker earns at a deposit or a Generator, how
+// many workers one of them takes, and the worker itself.
+//
+// Income is a fixed rate. A worker standing at its place is paid a sixtieth of the rate per minute
+// once a second, times the Extraction multiplier in rules.jsonc ("per_tier.income").
+{
+  "$schema": "../../schemas/resources.schema.json",
+
+  // Materials come from workers at deposits. A deposit pays the whole rate until it has delivered
+  // "full_rate_amount" Materials, Extraction bonus included, and "depleted_rate" of it after that.
+  "materials": {
+    "per_worker_per_minute": 45,
+    "workers_per_deposit": 8,
+    "full_rate_amount": 8000,
+    "depleted_rate": "0.5"
+  },
+
+  // Energy comes from workers at Generators.
+  "energy": { "per_worker_per_minute": 30, "workers_per_generator": 4 },
+
+  // The one worker type. It is not a chassis: no tier changes its speed, sight, supply or price.
+  // "hp" is at Protection 1. Distances are in tiles and speed in tiles per second.
+  "worker": {
+    "hp": 50,
+    "speed": 3,
+    "sight": 6,
+    "supply": 1,
+    "spacing": 1,
+    "cost": { "materials": 50, "energy": 0 },
+    "build_seconds": 12
+  }
+}

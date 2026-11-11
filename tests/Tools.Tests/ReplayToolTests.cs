@@ -1,5 +1,6 @@
 using Sim.Core;
 using Sim.Data;
+using Sim.Economy;
 using Sim.Movement;
 using Sim.Serialization;
 using Tools.Replay;
@@ -14,7 +15,7 @@ namespace Tools.Tests;
 public class ReplayToolTests
 {
     private static readonly string[] GoldenNames =
-        ["ridge-skirmish.replay", "switchback-crossing.replay", "switchback-three-players.replay"];
+        ["ridge-skirmish.replay", "switchback-crossing.replay", "switchback-three-players.replay", "switchback-workers.replay"];
 
     private static GameData GoldenData { get; } = Load(Repository.GoldenDataFolder);
 
@@ -33,7 +34,7 @@ public class ReplayToolTests
             Assert.Matches($"^ok      {GoldenNames[i]}  map=[a-z]+ players=[23] ticks=[0-9]+ commands=[0-9]+ hashes=[0-9]+ final=[0-9a-f]{{16}}$", lines[i]);
         }
 
-        Assert.Equal("replay: 3 replays reproduced.", lines[^1]);
+        Assert.Equal("replay: 4 replays reproduced.", lines[^1]);
     }
 
     /// <summary>
@@ -87,8 +88,8 @@ public class ReplayToolTests
 
         Assert.Equal(ExitCodes.Failed, exitCode);
         Assert.All(Lines(output), line => Assert.Matches("^FAILED  [a-z-]+\\.replay  The match was made with other data: its content hash is [0-9a-f]{64} and this data has [0-9a-f]{64}\\.$", line));
-        Assert.Equal(3, Lines(output).Length);
-        Assert.Contains("replay: 3 of 3 replays did not reproduce.", errors, StringComparison.Ordinal);
+        Assert.Equal(4, Lines(output).Length);
+        Assert.Contains("replay: 4 of 4 replays did not reproduce.", errors, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -125,9 +126,12 @@ public class ReplayToolTests
             }
 
             var waited = new int[match.Movers.Count];
+            var workers = new Worker[match.Workers.Count];
+            long[] materials = [.. Enumerable.Range(0, match.Players.Count).Select(match.Stockpiles.Materials)];
             for (var tick = 0; tick < replay.TickCount; tick++)
             {
                 match.Simulation.Tick();
+                seen.UnionWith(WhatTheWorkersDid(match, workers, materials));
                 for (var i = 0; i < match.Movers.Count; i++)
                 {
                     var state = match.Movers.ValueAt(i).State;
@@ -157,6 +161,13 @@ public class ReplayToolTests
             "a unit walking a route",
             "a unit waiting for a route",
             "a unit waiting more than a tick for a route",
+            "a worker walking to its place",
+            "a worker at work",
+            "a worker waiting for a place",
+            "a worker given a place it waited for",
+            "a worker taken off its work by another order",
+            "a payment",
+            "a payment skipped at a deposit outside its owner's territory",
         ];
         Assert.Equal(expected.Order(StringComparer.Ordinal), seen.Order(StringComparer.Ordinal));
     }
@@ -199,14 +210,15 @@ public class ReplayToolTests
 
         Assert.Equal(ExitCodes.Failed, exitCode);
         var lines = Lines(output);
-        Assert.Equal(3, lines.Length);
+        Assert.Equal(4, lines.Length);
         Assert.StartsWith("ok      ridge-skirmish.replay", lines[0], StringComparison.Ordinal);
         Assert.Matches(
             $"^FAILED  switchback-crossing.replay  map=switchback players=2 ticks=140 commands=[0-9]+ hashes=8 final={recorded.Hash:x16}  "
             + $"The state differs from the recording after 140 ticks: recorded {recorded.Hash ^ 1:x16}, computed {recorded.Hash:x16}\\.$",
             lines[1]);
         Assert.StartsWith("ok      switchback-three-players.replay", lines[2], StringComparison.Ordinal);
-        Assert.Equal("replay: 1 of 3 replays did not reproduce.", errors.Trim());
+        Assert.StartsWith("ok      switchback-workers.replay", lines[3], StringComparison.Ordinal);
+        Assert.Equal("replay: 1 of 4 replays did not reproduce.", errors.Trim());
     }
 
     /// <summary>A changed command changes the match: the first hash after it differs.</summary>
@@ -489,7 +501,7 @@ public class ReplayToolTests
 
         Assert.Equal(ExitCodes.Failed, exitCode);
         Assert.Equal("replay: text.replay: The data is not a replay: it does not start with RPLY.", errors.Trim());
-        Assert.Equal(3, Lines(output).Length);
+        Assert.Equal(4, Lines(output).Length);
         Assert.Equal("This is not a replay.", File.ReadAllText(path));
     }
 
@@ -515,6 +527,11 @@ public class ReplayToolTests
         "a target as far off the map as a number goes",
         "an order for units that are not the player's",
         "an order for an entity that never existed",
+        "a gather order",
+        "a gather order for a deposit the player holds",
+        "a gather order for a deposit the player does not hold",
+        "gather orders from every player for one deposit in one tick",
+        "a gather order at something that is no work site",
     ];
 
     /// <summary>What the commands of a replay are, in the words of <see cref="EveryKindOfCommand"/>.</summary>
@@ -526,19 +543,44 @@ public class ReplayToolTests
         var tickOfThose = -1;
         foreach (var (tick, command) in replay.Commands)
         {
-            seen.Add(command.Type == CommandType.Move ? "a move" : "a command of a kind without a handler");
+            seen.Add(command.Type switch
+            {
+                CommandType.Move => "a move",
+                CommandType.Gather => "a gather order",
+                _ => "a command of a kind without a handler",
+            });
             if (command.Player >= players)
             {
                 seen.Add("a command from nobody in the match");
             }
 
-            if (command.Type != CommandType.Move || command.Player >= players)
+            if (command.Type is not (CommandType.Move or CommandType.Gather) || command.Player >= players)
             {
                 continue;
             }
 
+            if (command.Type == CommandType.Gather)
+            {
+                if (!match.WorkSites.TryGet(command.TargetEntity, out var site))
+                {
+                    seen.Add("a gather order at something that is no work site");
+                    continue;
+                }
+
+                // The territories of a scripted match are those of the start and do not change.
+                seen.Add(Territory.Holds(match.Territories, match.World.Entities, command.Player, site.X, site.Y, site.Size)
+                    ? "a gather order for a deposit the player holds"
+                    : "a gather order for a deposit the player does not hold");
+                var others = replay.Commands.Count(other =>
+                    other.Tick == tick && other.Command.Type == CommandType.Gather && other.Command.TargetEntity == command.TargetEntity && other.Command.Player != command.Player);
+                if (others == players - 1)
+                {
+                    seen.Add("gather orders from every player for one deposit in one tick");
+                }
+            }
+
             seen.Add(command.Entities.Length == 1 ? "an order for one unit" : "an order for a group");
-            if (!match.Grid.Contains(new Sim.Numerics.FixedVector2(command.TargetX, command.TargetY)))
+            if (command.Type == CommandType.Move && !match.Grid.Contains(new Sim.Numerics.FixedVector2(command.TargetX, command.TargetY)))
             {
                 seen.Add(command.TargetX == Sim.Numerics.Fixed.MaxValue ? "a target as far off the map as a number goes" : "a target off the map");
             }
@@ -555,7 +597,7 @@ public class ReplayToolTests
                 }
             }
 
-            if (command.Entities.Length == 1)
+            if (command.Type == CommandType.Move && command.Entities.Length == 1)
             {
                 if (tick != tickOfThose)
                 {
@@ -569,6 +611,61 @@ public class ReplayToolTests
                     seen.Add("an order for each unit of every player in one tick");
                 }
             }
+        }
+
+        return seen;
+    }
+
+    /// <summary>
+    /// What the tick that has just run did to the workers, in the words of the list of
+    /// <see cref="TheGoldenReplaysReachTheRulesTheyGuard"/>. The two arrays hold what the workers
+    /// and the stockpiles of Materials were before it, and are brought up to date.
+    /// </summary>
+    private static HashSet<string> WhatTheWorkersDid(Sim.Setup.Match match, Worker[] before, long[] materialsBefore)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < before.Length; i++)
+        {
+            var worker = match.Workers.ValueAt(i);
+            var owner = match.Bodies.Get(match.Workers.EntityAt(i)).Owner;
+            switch (worker.State)
+            {
+                case WorkerState.Walking:
+                    seen.Add(before[i].State == WorkerState.Waiting ? "a worker given a place it waited for" : "a worker walking to its place");
+                    break;
+                case WorkerState.Working:
+                    seen.Add("a worker at work");
+                    var site = match.WorkSites.Get(worker.Site);
+                    if (before[i].Timer == Sim.SimInfo.TicksPerSecond - 1
+                        && worker.Timer == 0
+                        && !Territory.Holds(match.Territories, match.World.Entities, owner, site.X, site.Y, site.Size))
+                    {
+                        seen.Add("a payment skipped at a deposit outside its owner's territory");
+                    }
+
+                    break;
+                case WorkerState.Waiting:
+                    seen.Add("a worker waiting for a place");
+                    break;
+                case WorkerState.Idle when before[i].State == WorkerState.Working:
+                    seen.Add("a worker taken off its work by another order");
+                    break;
+                default:
+                    break;
+            }
+
+            before[i] = worker;
+        }
+
+        for (var player = 0; player < materialsBefore.Length; player++)
+        {
+            var materials = match.Stockpiles.Materials(player);
+            if (materials > materialsBefore[player])
+            {
+                seen.Add("a payment");
+            }
+
+            materialsBefore[player] = materials;
         }
 
         return seen;

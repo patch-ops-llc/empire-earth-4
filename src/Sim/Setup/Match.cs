@@ -1,5 +1,6 @@
 using Sim.Core;
 using Sim.Data;
+using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
@@ -45,6 +46,24 @@ public sealed class Match
 
     /// <summary>Which entities are near a place. Not state: see <see cref="Map.SpatialIndex"/>.</summary>
     public required SpatialIndex SpatialIndex { get; init; }
+
+    /// <summary>Every player's Materials and Energy.</summary>
+    public required Stockpiles Stockpiles { get; init; }
+
+    /// <summary>Each player's supply cap and used supply. Not state: see <see cref="SupplyAccount"/>.</summary>
+    public required SupplyAccount Supply { get; init; }
+
+    /// <summary>The ground each Capitol and Outpost holds for its owner.</summary>
+    public required ComponentStore<Territory> Territories { get; init; }
+
+    /// <summary>Assigns workers to work sites. Not state: see <see cref="WorkAssignments"/>.</summary>
+    public required WorkAssignments Work { get; init; }
+
+    /// <summary>What each worker is assigned to, with its place and its count of ticks.</summary>
+    public required ComponentStore<Worker> Workers { get; init; }
+
+    /// <summary>The deposits and Generators.</summary>
+    public required ComponentStore<WorkSite> WorkSites { get; init; }
 
     /// <summary>
     /// Brings everything that is worked out from the state, and is not state itself, in line with
