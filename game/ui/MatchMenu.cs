@@ -208,7 +208,8 @@ public partial class MatchMenu : CanvasLayer
         run.Client.Started += () =>
         {
             var description = run.Description!;
-            GD.Print($"Match on '{description.MapId}' with seed {description.Seed}. This is player {run.Client.Player + 1} of {description.Players.Count}. Data sha256:{description.ContentHash}.");
+            var seat = run.Client.Player;
+            GD.Print($"Match on '{description.MapId}' with seed {description.Seed}. This is player {seat + 1} of {description.Players.Count}, at start {description.Players[seat].Start}. Data sha256:{description.ContentHash}.");
         };
     }
 
@@ -437,7 +438,9 @@ public partial class MatchMenu : CanvasLayer
         var hudStack = Column(6);
         _hudText = new Label { HorizontalAlignment = HorizontalAlignment.Right };
         hudStack.AddChild(_hudText);
-        var leave = new Button { Text = "Leave the match", SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd, FocusMode = Control.FocusModeEnum.None };
+        var leave = PushButton("Leave the match");
+        leave.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
+        leave.FocusMode = Control.FocusModeEnum.None;
         leave.Pressed += () => BackToStart(null);
         hudStack.AddChild(leave);
         hud.AddChild(hudStack);
@@ -457,34 +460,34 @@ public partial class MatchMenu : CanvasLayer
         _noticeLabel.AddThemeColorOverride("font_color", new Color(1f, 0.72f, 0.45f));
         page.AddChild(_noticeLabel);
 
-        var alone = new Button { Text = "Play alone" };
+        var alone = PushButton("Play alone");
         alone.Pressed += PlayAlone;
         page.AddChild(alone);
         page.AddChild(new HSeparator());
 
         page.AddChild(Text("Host a match for another player to join. The port is the number they need beside this machine's address."));
-        var hostRow = new HBoxContainer();
+        var hostRow = Row();
         hostRow.AddChild(new Label { Text = "Port" });
-        _hostPort = new LineEdit { Text = s_lastPort, CustomMinimumSize = new Vector2(100f, 0f), MaxLength = 5 };
+        _hostPort = Field(s_lastPort);
+        _hostPort.CustomMinimumSize = new Vector2(100f, 0f);
+        _hostPort.MaxLength = 5;
         _hostPort.TextSubmitted += _ => OnHostPressed();
         hostRow.AddChild(_hostPort);
-        var host = new Button { Text = "Host a match", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        var host = PushButton("Host a match");
+        host.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         host.Pressed += OnHostPressed;
         hostRow.AddChild(host);
         page.AddChild(hostRow);
         page.AddChild(new HSeparator());
 
         page.AddChild(Text("Join a match another player hosts. Type the address their game shows."));
-        var joinRow = new HBoxContainer();
-        _joinAddress = new LineEdit
-        {
-            Text = s_lastAddress,
-            PlaceholderText = $"192.168.1.20 or 192.168.1.20:{GameInfo.DefaultPort}",
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-        };
+        var joinRow = Row();
+        _joinAddress = Field(s_lastAddress);
+        _joinAddress.PlaceholderText = $"192.168.1.20 or 192.168.1.20:{GameInfo.DefaultPort}";
+        _joinAddress.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         _joinAddress.TextSubmitted += _ => OnJoinPressed();
         joinRow.AddChild(_joinAddress);
-        var join = new Button { Text = "Join" };
+        var join = PushButton("Join");
         join.Pressed += OnJoinPressed;
         joinRow.AddChild(join);
         page.AddChild(joinRow);
@@ -499,11 +502,14 @@ public partial class MatchMenu : CanvasLayer
         _waitingStatus = Text(string.Empty);
         page.AddChild(_waitingStatus);
 
-        var row = new HBoxContainer();
-        _startButton = new Button { Text = "Start the match", Disabled = true, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        var row = Row();
+        _startButton = PushButton("Start the match");
+        _startButton.Disabled = true;
+        _startButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         _startButton.Pressed += StartMatch;
         row.AddChild(_startButton);
-        var cancel = new Button { Text = "Cancel", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        var cancel = PushButton("Cancel");
+        cancel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         cancel.Pressed += () => BackToStart(null);
         row.AddChild(cancel);
         page.AddChild(row);
@@ -516,10 +522,41 @@ public partial class MatchMenu : CanvasLayer
         page.AddChild(Title("The match is over"));
         _endedText = Text(string.Empty);
         page.AddChild(_endedText);
-        var back = new Button { Text = "Back to the menu" };
+        var back = PushButton("Back to the menu");
         back.Pressed += () => BackToStart(null);
         page.AddChild(back);
         return page;
+    }
+
+    private static Button PushButton(string text)
+    {
+        var button = new Button { Text = text };
+        button.AddThemeStyleboxOverride("normal", BoxStyle(new Color(0.2f, 0.26f, 0.36f)));
+        button.AddThemeStyleboxOverride("hover", BoxStyle(new Color(0.27f, 0.35f, 0.48f)));
+        button.AddThemeStyleboxOverride("pressed", BoxStyle(new Color(0.15f, 0.2f, 0.28f)));
+        button.AddThemeStyleboxOverride("disabled", BoxStyle(new Color(0.16f, 0.17f, 0.2f)));
+        button.AddThemeStyleboxOverride("focus", new StyleBoxEmpty());
+        return button;
+    }
+
+    private static LineEdit Field(string text)
+    {
+        var field = new LineEdit { Text = text };
+        field.AddThemeStyleboxOverride("normal", BoxStyle(new Color(0.03f, 0.035f, 0.05f)));
+        field.AddThemeStyleboxOverride("focus", BoxStyle(new Color(0.03f, 0.035f, 0.05f), new Color(0.45f, 0.6f, 0.85f)));
+        return field;
+    }
+
+    private static StyleBoxFlat BoxStyle(Color color, Color? border = null)
+    {
+        var style = new StyleBoxFlat { BgColor = color, BorderColor = border ?? color.Lightened(0.15f) };
+        style.SetBorderWidthAll(1);
+        style.SetCornerRadiusAll(4);
+        style.ContentMarginLeft = 12f;
+        style.ContentMarginRight = 12f;
+        style.ContentMarginTop = 7f;
+        style.ContentMarginBottom = 7f;
+        return style;
     }
 
     private static VBoxContainer Column(int separation)
@@ -527,6 +564,13 @@ public partial class MatchMenu : CanvasLayer
         var column = new VBoxContainer();
         column.AddThemeConstantOverride("separation", separation);
         return column;
+    }
+
+    private static HBoxContainer Row()
+    {
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 10);
+        return row;
     }
 
     private static Label Title(string text)
