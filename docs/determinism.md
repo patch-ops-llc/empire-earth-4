@@ -76,6 +76,9 @@ Nothing reads a clock. The caller decides when a tick runs; there are `SimInfo.T
 | 1 | `RoutePlanningSystem` | Finds the routes that movers are waiting for, oldest mover first, until the searches of this tick have expanded `ExpansionsPerTick` (4,096) tiles. The rest wait for the next tick. | Before anyone moves, so that a unit ordered in this tick takes its first step in this tick. |
 | 2 | `MovementSystem` | Moves every mover one step. | |
 | 3 | `SpatialIndexSystem` | Rebuilds the spatial index from the positions as they are now. | Right after movement, so that every system after it sees where things stand. A system that moves bodies goes before it. |
+| 4 | `ShotSystem` | Flies every shot one step toward its target, lands the ones that arrive, and drops the ones whose target is gone. | After movement, so that a shot heads for where its target stands now. Before the attacks, so that a shot fired in one tick first flies in the next: its time in the air is its distance divided by its speed, rounded up to whole ticks. |
+| 5 | `AttackSystem` | Each unit of a chassis, oldest first: counts down its wait, picks or gives up a target as its order says, attacks if the target is in reach and the unit has not moved in this tick, and otherwise stops in reach or walks after the target. | After movement and the spatial index, because a unit attacks only in a tick in which it does not move, and it finds targets where they stand now. It changes no position, so the index stays right for whatever follows. The walks it orders begin in the next tick. |
+| 6 | `DeathSystem` | Destroys every entity whose hit points are at zero. | After every attack of the tick, melee hits and landing shots alike, so that every attack due in a tick is made before any death of that tick takes effect: two units that kill each other in one tick both die, and the lower ID gets no first strike. A system that deals damage goes before it. |
 
 The order is a rule of the game: moving a system changes results, on every machine alike, and so changes every recorded hash. A pull request that adds a system adds a row here, says where the system goes and why, and updates the golden replays.
 
@@ -176,11 +179,11 @@ SnapshotAssert.RestoresAndContinues(BuildTheMatch, script, snapshotTick: 40, las
 - Every value in every `ComponentStore<T>` of the restored world equals, field for field, the value in the world the snapshot was taken from. This catches a missing field that no rule reads yet, such as the way a unit faces before anything turns to shoot. Nothing else would: the hash leaves the field out too.
 - For a match, the spatial index of the restored match lists the same entities as that of the match the snapshot was taken from, for every square of the map. This catches a restore that does not refresh derived data.
 
-Every system adds this test for a run in which its own stores change before and after the snapshot, with the snapshot taken in each state its values can be in. `MatchSnapshotTests` in the same folder does so for movement: units standing, waiting for a route, walking a route, walking straight and arrived.
+Every system adds this test for a run in which its own stores change before and after the snapshot, with the snapshot taken in each state its values can be in. `MatchSnapshotTests` in the same folder does so for movement: units standing, waiting for a route, walking a route, walking straight and arrived. `BattleTests` in `tests/Sim.Tests/Combat/` does so for combat: before the first order, on the way, with shots in the air, with units waiting between attacks, after deaths and after the battle. It also pins the state hash the battle ends with, which the tests of `determinism.yml` then check on every system; until a match can produce units, no golden replay can hold a fight.
 
 ## Derived data
 
-Some of what a match holds is worked out from the state and is not state: the spatial index and the route cache. Such data is not walked, so it is in neither the state hash nor a snapshot. That is safe only under one rule:
+Some of what a match holds is worked out from the state and is not state: the spatial index, the route cache and the combat rules (`CombatRules`: counters, reach, and each player's attack profiles, made from the data and the player's tech). Such data is not walked, so it is in neither the state hash nor a snapshot. That is safe only under one rule:
 
 **Derived data is a function of the state and of the match's fixed data, and of nothing else.** The same state gives the same answers, in the same order, whatever happened before.
 
