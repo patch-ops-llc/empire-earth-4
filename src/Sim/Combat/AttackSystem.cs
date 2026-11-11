@@ -240,7 +240,7 @@ public sealed class AttackSystem : ISystem
         var reaches = _targeting.Reaches(profile, position, target.Position, targetLine);
 
         // A unit does not step back from a target inside its minimum range. It stands and waits.
-        if (reaches || FixedVector2.DistanceSquaredRaw(position, target.Position) < profile.MinRangeSquared)
+        if (reaches || Targeting.IsTooClose(profile, position, target.Position))
         {
             unit.Engaged = true;
             unit.AimedAt = target.Position;

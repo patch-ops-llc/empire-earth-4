@@ -96,6 +96,16 @@ public sealed class Targeting
     }
 
     /// <summary>
+    /// True when a target is inside the minimum range of the attack. The unit cannot fire at it, and
+    /// it does not step back to make room (design 2.4): it stands where it is.
+    /// </summary>
+    public static bool IsTooClose(AttackProfile profile, FixedVector2 from, FixedVector2 target)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        return FixedVector2.DistanceSquaredRaw(from, target) < profile.MinRangeSquared;
+    }
+
+    /// <summary>
     /// Where an idle unit would stand to fight a target it cannot reach from where it is: the
     /// target's place, or the point nearest to it that is no further from the unit's post than its
     /// acquisition range. False when the target is out of reach from there too, when the unit

@@ -149,7 +149,8 @@ public sealed class OrderCommandHandler : ICommandHandler
                 continue;
             }
 
-            if (_targeting.Reaches(profile, body.Position, target.Position, targetLine))
+            if (_targeting.Reaches(profile, body.Position, target.Position, targetLine)
+                || Targeting.IsTooClose(profile, body.Position, target.Position))
             {
                 _movers.ValueAt(mover).Stop();
             }
