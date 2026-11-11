@@ -26,6 +26,8 @@ namespace Net;
 ///    9  HashReport      int32 tick, uint64 hash
 ///   10  PeerLeft        int32 player, byte reason
 ///   11  SessionEnd      byte reason, int32 final tick, int32 desync tick
+///   12  MatchNotice     the match, as MatchDescription writes it
+///   13  LeaveNotice     byte reason
 /// </code>
 /// <para>
 /// A reason is the number of a <see cref="SessionEndReason"/>. Every message has exactly one
@@ -61,6 +63,8 @@ public static class MessageCodec
         HashReport = 9,
         PeerLeft = 10,
         SessionEnd = 11,
+        MatchNotice = 12,
+        LeaveNotice = 13,
     }
 
     /// <summary>Appends one message to the writer.</summary>
@@ -138,6 +142,16 @@ public static class MessageCodec
                 writer.WriteByte(ReasonByte(end.Reason));
                 writer.WriteInt32(end.FinalTick);
                 writer.WriteInt32(end.DesyncTick);
+                break;
+
+            case MatchNotice notice:
+                writer.WriteByte((byte)Kind.MatchNotice);
+                notice.Description.Write(writer);
+                break;
+
+            case LeaveNotice leave:
+                writer.WriteByte((byte)Kind.LeaveNotice);
+                writer.WriteByte(ReasonByte(leave.Reason));
                 break;
 
             default:
@@ -231,6 +245,14 @@ public static class MessageCodec
 
             case Kind.SessionEnd:
                 message = new SessionEnd(ReadReason(reader), reader.ReadInt32(), reader.ReadInt32());
+                break;
+
+            case Kind.MatchNotice:
+                message = new MatchNotice(MatchDescription.Read(reader));
+                break;
+
+            case Kind.LeaveNotice:
+                message = new LeaveNotice(ReadReason(reader));
                 break;
 
             default:

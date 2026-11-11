@@ -29,4 +29,10 @@ public enum SessionEndReason
 
     /// <summary>The peer left on purpose.</summary>
     Left = 7,
+
+    /// <summary>
+    /// The peer cannot build the match the host described: it runs another build of the game, has
+    /// other data, or lacks the map.
+    /// </summary>
+    SetupMismatch = 8,
 }

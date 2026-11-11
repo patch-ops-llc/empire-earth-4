@@ -135,9 +135,9 @@ public class UdpMatchTests
     }
 
     /// <summary>
-    /// The session has no message for leaving: a client that leaves closes its connection, and
-    /// the host reports it as lost, as it does over the loopback. The transport does know the
-    /// difference, and says so in the reason the host's end closed with.
+    /// A client that leaves says so and then closes its connection. The close is orderly, so the
+    /// host has the notice before it sees the connection end, and reports a player who left and
+    /// not one who was lost.
     /// </summary>
     [Fact]
     public void AClientThatLeavesIsGoneAtOnceAndTheMatchGoesOn()
@@ -151,13 +151,12 @@ public class UdpMatchTests
         leaver.Session.Leave();
 
         match.Until(() => match.HostDepartures.Count > 0, "the host sees the client go");
-        Assert.Equal([(seat, SessionEndReason.ConnectionLost)], match.HostDepartures);
-        Assert.Equal(UdpCloseReason.ClosedByRemote, match.HostConnections[seat].CloseReason);
+        Assert.Equal([(seat, SessionEndReason.Left)], match.HostDepartures);
         Assert.Equal(SessionEndReason.Left, leaver.Session.EndInfo!.Reason);
         foreach (var client in match.Clients.Take(2))
         {
             match.Until(() => client.Departures.Count > 0, "the others hear of it");
-            Assert.Equal([(seat, SessionEndReason.ConnectionLost)], client.Departures);
+            Assert.Equal([(seat, SessionEndReason.Left)], client.Departures);
         }
 
         var finalTick = match.Finish();

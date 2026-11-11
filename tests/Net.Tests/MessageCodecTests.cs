@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Sim.Core;
 using Sim.Numerics;
 using Sim.Serialization;
+using Sim.Setup;
 
 namespace Net.Tests;
 
@@ -21,7 +22,7 @@ public class MessageCodecTests
     public static TheoryData<string> Kinds() =>
     [
         "JoinRequest", "JoinAccept", "ReadyNotice", "Ping", "Pong", "MatchStart", "CommandRequest",
-        "TickBundle", "empty TickBundle", "HashReport", "PeerLeft", "SessionEnd",
+        "TickBundle", "empty TickBundle", "HashReport", "PeerLeft", "SessionEnd", "MatchNotice", "LeaveNotice",
     ];
 
     [Theory]
@@ -35,9 +36,9 @@ public class MessageCodecTests
 
         Assert.Equal(message.GetType(), read.GetType());
         Assert.Equal(bytes, MessageCodec.Encode(read));
-        if (message is not (CommandRequest or TickBundle))
+        if (message is not (CommandRequest or TickBundle or MatchNotice))
         {
-            // Commands compare by their bytes, the other messages by their values.
+            // Commands and match descriptions compare by their bytes, the other messages by their values.
             Assert.Equal(message, read);
         }
     }
@@ -83,10 +84,31 @@ public class MessageCodecTests
         Assert.Equal("0A 02000000 04", Hex(new PeerLeft(2, SessionEndReason.FellBehind), 1, 4, 1));
         Assert.Equal("0B 02 2C010000 28010000", Hex(new SessionEnd(SessionEndReason.Desync, 300, 296), 1, 1, 4, 4));
         Assert.Equal("0B 01 FFFFFFFF FFFFFFFF", Hex(new SessionEnd(SessionEndReason.HostEnded, -1, -1), 1, 1, 4, 4));
+        Assert.Equal("0D 07", Hex(new LeaveNotice(SessionEndReason.Left), 1, 1));
+        Assert.Equal("0D 08", Hex(new LeaveNotice(SessionEndReason.SetupMismatch), 1, 1));
 
         // Around commands, which are laid out by the simulation's one encoding of them.
         Assert.Equal([7, .. Bytes(Full)], MessageCodec.Encode(new CommandRequest(Full)));
         Assert.Equal([8, 5, 0, 0, 0, 2, 0, 0, 0, .. Bytes(Plain), .. Bytes(Full)], MessageCodec.Encode(new TickBundle(5, [Plain, Full])));
+
+        // Around the match, which is laid out by the simulation's one encoding of it.
+        var description = new ByteWriter();
+        TestData.Description().Write(description);
+        Assert.Equal([12, .. description.ToArray()], MessageCodec.Encode(new MatchNotice(TestData.Description())));
+    }
+
+    [Fact]
+    public void AMatchNoticeCarriesTheDescriptionUnchanged()
+    {
+        var description = new MatchDescription("dev-1234567", new string('a', 64), "ridge", ulong.MaxValue, [new PlayerSetup(1), PlayerSetup.WithoutStart, new PlayerSetup(0)]);
+
+        var read = Assert.IsType<MatchNotice>(MessageCodec.Read(MessageCodec.Encode(new MatchNotice(description)))).Description;
+
+        Assert.Equal("dev-1234567", read.GameVersion);
+        Assert.Equal(new string('a', 64), read.ContentHash);
+        Assert.Equal("ridge", read.MapId);
+        Assert.Equal(ulong.MaxValue, read.Seed);
+        Assert.Equal([new PlayerSetup(1), PlayerSetup.WithoutStart, new PlayerSetup(0)], read.Players);
     }
 
     [Fact]
@@ -107,7 +129,7 @@ public class MessageCodecTests
             [
                 (SessionEndReason.None, 0), (SessionEndReason.HostEnded, 1), (SessionEndReason.Desync, 2),
                 (SessionEndReason.ConnectionLost, 3), (SessionEndReason.FellBehind, 4), (SessionEndReason.ProtocolError, 5),
-                (SessionEndReason.VersionMismatch, 6), (SessionEndReason.Left, 7),
+                (SessionEndReason.VersionMismatch, 6), (SessionEndReason.Left, 7), (SessionEndReason.SetupMismatch, 8),
             ],
             Enum.GetValues<SessionEndReason>().Select(reason => (reason, (int)reason)));
     }
@@ -129,7 +151,7 @@ public class MessageCodecTests
 
     [Theory]
     [InlineData(0)]
-    [InlineData(12)]
+    [InlineData(14)]
     [InlineData(255)]
     public void AKindThatDoesNotExistIsRejected(byte kind)
     {
@@ -141,13 +163,13 @@ public class MessageCodecTests
     public void AReasonThatDoesNotExistIsRejectedBothWays()
     {
         var left = MessageCodec.Encode(new PeerLeft(1, SessionEndReason.Left));
-        left[^1] = 8;
+        left[^1] = 9;
         var end = MessageCodec.Encode(new SessionEnd(SessionEndReason.Left, -1, -1));
         end[1] = 200;
 
         Assert.Throws<InvalidDataException>(() => MessageCodec.Read(left));
         Assert.Throws<InvalidDataException>(() => MessageCodec.Read(end));
-        Assert.Throws<ArgumentException>(() => MessageCodec.Encode(new PeerLeft(1, (SessionEndReason)8)));
+        Assert.Throws<ArgumentException>(() => MessageCodec.Encode(new PeerLeft(1, (SessionEndReason)9)));
         Assert.Throws<ArgumentException>(() => MessageCodec.Encode(new SessionEnd((SessionEndReason)(-1), -1, -1)));
     }
 
@@ -228,7 +250,7 @@ public class MessageCodecTests
 
                 if (bytes.Length > 0)
                 {
-                    bytes[0] = (byte)(1 + random.NextInt(11));
+                    bytes[0] = (byte)(1 + random.NextInt(13));
                 }
             }
             else
@@ -277,6 +299,8 @@ public class MessageCodecTests
         "HashReport" => new HashReport(40, ulong.MaxValue),
         "PeerLeft" => new PeerLeft(2, SessionEndReason.ConnectionLost),
         "SessionEnd" => new SessionEnd(SessionEndReason.Desync, 500, 480),
+        "MatchNotice" => new MatchNotice(TestData.Description()),
+        "LeaveNotice" => new LeaveNotice(SessionEndReason.SetupMismatch),
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 
