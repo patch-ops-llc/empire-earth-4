@@ -65,7 +65,7 @@
           "epoch": { "type": "integer", "minimum": 1, "maximum": 20 },
           "id": { "$ref": "#/definitions/id" },
           "attack": {
-            "description": "Keys of the line's attack that this chassis replaces. If it changes the kind, the line's range and projectile speed are not carried over.",
+            "description": "Keys of the line's attack that this chassis replaces. If it changes the kind, the line's range, projectile speed, minimum range and blast radius are not carried over.",
             "$ref": "#/definitions/attack"
           }
         }
@@ -90,9 +90,11 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "kind": { "description": "A melee attack has no range and no projectile speed; a ranged attack needs both.", "enum": ["melee", "ranged"] },
+        "kind": { "description": "A ranged attack needs a range and a projectile speed, and may have a minimum range and a blast radius. A melee attack has none of the four.", "enum": ["melee", "ranged"] },
         "interval_seconds": { "description": "Seconds between attacks. It must be a whole number of ticks.", "$ref": "#/definitions/number" },
         "range": { "description": "Range in tiles.", "$ref": "#/definitions/number" },
+        "min_range": { "description": "Targets closer than this many tiles cannot be fired at. It must be below the range.", "$ref": "#/definitions/number" },
+        "blast_radius": { "description": "Every enemy within this many tiles of the target takes the full damage of a hit.", "$ref": "#/definitions/number" },
         "projectile_speed": { "description": "How fast a shot flies, in tiles per second.", "$ref": "#/definitions/number" }
       }
     }

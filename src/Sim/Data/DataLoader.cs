@@ -70,6 +70,10 @@ public static class DataLoader
 
             ReportMissing(paths, linePaths, mapPaths, errors);
             var data = Read(roots, linePaths, mapPaths, errors);
+            if (data is not null && errors.Count == 0)
+            {
+                Tech.FormulaCheck.Check(data, errors);
+            }
 
             var sorted = errors.ToList().OrderBy(error => error.File, StringComparer.Ordinal).ToList();
             return sorted.Count == 0 && data is not null
@@ -215,6 +219,7 @@ public static class DataLoader
         }
 
         var lines = new List<LineDef>();
+        var chassis = new List<ChassisDef>();
         if (tracksAreValid && rules is not null)
         {
             var chassisFiles = new SortedDictionary<string, string>(StringComparer.Ordinal);
@@ -243,6 +248,10 @@ public static class DataLoader
             }
 
             lines.Sort((left, right) => left.Index.CompareTo(right.Index));
+            if (errors.Count == 0)
+            {
+                (lines, chassis) = LineReader.WithChassisIndexes(lines);
+            }
         }
 
         var maps = new List<MapDef>();
@@ -260,7 +269,7 @@ public static class DataLoader
         }
 
         return tracksAreValid && roles is not null && rules is not null
-            ? new GameData(epochNames, tracks, roles, rules, research, accents, lines, maps, ContentHash: "")
+            ? new GameData(epochNames, tracks, roles, rules, research, accents, lines, chassis, maps, ContentHash: "")
             : null;
     }
 }

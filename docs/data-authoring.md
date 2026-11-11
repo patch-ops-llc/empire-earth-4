@@ -18,6 +18,28 @@ datacheck: 2 errors in game/data.
 
 It exits with 0 when the data is valid, 1 when it found errors and 2 when it could not run, for example because the folder does not exist. CI runs it on every pull request.
 
+## See what an edit does
+
+```sh
+dotnet run --project src/Tools -- balance-report swarm=1,1,2,4,4,2 elite=4,4,2,1,1,2
+```
+
+`balance-report` prints what the rules make of one or more tier mixes, computed by the same code the game runs. A mix is one tier per track in the order of `tracks.jsonc`, with an optional name before `=`. Without a mix it reports the start of a match. The output is three CSV tables with an empty line between them:
+
+| Table | One row per | Shows |
+| --- | --- | --- |
+| `mixes` | mix | The tiers, the epoch, the supply cap and the income multiplier. |
+| `research` | mix and track | The next tier: whether it may be researched, its price band, price and time. |
+| `chassis` | mix and chassis | Whether it is unlocked, its offsets and accents, and every stat and price, with perks applied. |
+
+| Option | Meaning |
+| --- | --- |
+| `--table mixes`, `research` or `chassis` | Print only that table, for example to redirect it into a file for a spreadsheet. |
+| `--epoch-cap <tier>` | Use this epoch cap in place of `match.epoch_cap`. |
+| `--data <folder>` | Read another data folder. The default is `game/data`. |
+
+Hit points, damage and distances are shown to three decimal places and times in seconds. The game keeps hit points and damage in thousandths, distances in 1/65,536 of a tile and times in ticks.
+
 ## Files
 
 | File | Holds | Schema |
@@ -131,11 +153,13 @@ Game design 2.2 and 2.4.
 | `primary`, `secondary` | Track IDs. The chassis of epoch T unlocks at primary tier T and secondary tier T - 1. |
 | `built_at` | The structure that builds the line, from `roster.structures`. |
 | `base` | Values at tier 1: `hp`, `dps`, `speed`, `sight`, `supply`, `spacing`, `cost.materials`, `cost.energy`, `build_seconds`. |
-| `attack` | `kind` is `melee` or `ranged`; `interval_seconds` is the time between attacks. A ranged attack also needs `range` and `projectile_speed`; a melee attack has neither. |
+| `attack` | `kind` is `melee` or `ranged`; `interval_seconds` is the time between attacks. A ranged attack also needs `range` and `projectile_speed`. |
+| `attack.min_range` | Optional, ranged only. Targets closer than this cannot be fired at. It must be below `range`. |
+| `attack.blast_radius` | Optional, ranged only. Every enemy within this distance of the target takes the full damage of a hit. |
 | `counters` | Optional. Damage multipliers by target: a line ID, or `structures` for every structure. |
 | `cannot_hit` | Optional. Lines this line cannot attack. A line cannot be here and in `counters`. |
 | `chassis` | The line's model for each epoch, listed by rising epoch, at most one per epoch. Gaps are allowed. Chassis IDs are unique across all lines. |
-| `chassis[].attack` | Optional. Keys of `attack` that this chassis replaces. If it changes `kind`, the line's `range` and `projectile_speed` are not carried over. Each chassis states its own override; nothing is inherited from the chassis before it. |
+| `chassis[].attack` | Optional. Keys of `attack` that this chassis replaces. If it changes `kind`, the line's `range`, `projectile_speed`, `min_range` and `blast_radius` are not carried over. Each chassis states its own override; nothing is inherited from the chassis before it. |
 
 ## maps/&lt;id&gt;.jsonc
 
@@ -166,6 +190,7 @@ Besides the shape of each file:
 | Accents | Every accent belongs to a track in `tracks.jsonc`. No kind of perk appears twice. |
 | Chassis | An epoch outside the tiers could never unlock and is an error. Epochs rise and do not repeat. IDs are unique. |
 | Times | Attack intervals, build times, research times and perk delays are whole numbers of ticks. |
+| Formulas | Every stat and price of every chassis can be computed exactly at every tier mix. The game multiplies exact fractions, and a multiplier with many decimal places raised to a high power no longer fits. `1.15` is fine at any tier; `1.123456789` is not. The error names the chassis. |
 | Stat bounds | Hit points, damage, speed, sight, supply, spacing, prices, ranges and multipliers must be positive where zero makes no sense and inside wide sanity limits, listed in `src/Sim/Data/DataRules.cs`. The limits catch slips such as a missing decimal point; they are not balance rules. |
 | Map symmetry | Terrain, starts, deposits and markers must all mirror under the map's `symmetry`. |
 | Map footprints | Starting Capitols, deposits and markers stand on open ground inside the map. Deposits overlap neither each other nor a Capitol. |
@@ -194,9 +219,11 @@ A change to this form changes every hash, so it needs a new version line.
 
 - The loader is `Sim.Data.DataLoader.Load(IDataFiles)`. It returns `GameData`, or the list of errors. `IDataFiles` is the only way it reaches files: the tools read from disk (`Tools.DiskDataFiles`), tests read from memory (`Sim.Data.InMemoryDataFiles`) and the game will read from its packed export.
 - Numbers arrive as `DataNumber`, an integer and a count of decimal places. Converting them to the simulation's fixed-point and fraction types belongs to the code that uses them.
-- The rules that use the data are in `Sim.Tech`. `TechResolver.Resolve(data, tiers)` is a pure function from a player's track tiers to their epoch, supply cap, income multiplier and the price of each track's next tier. `TechRules` has each rule by itself.
+- The rules that use the data are in `Sim.Tech`. `TechResolver.Resolve(data, tiers)` is a pure function from a player's track tiers to a `PlayerTech`: their epoch, supply cap, income multiplier, the price of each track's next tier and a `ChassisBlueprint` for every chassis. `TechRules` has the rules that need no chassis, each by itself.
+- A `ChassisBlueprint` has the chassis's stats, price, accents and perks, each value rounded once. It is computed for locked chassis too; `Unlocked` says whether the player may build it. `Perks` holds only the perks that apply to the chassis, as typed records with the numbers from `accents.jsonc`.
+- `TechResolver.Preview(data, tiers, track)` resolves the tiers with one track raised and lists the chassis that would unlock and every accent that would appear, disappear or change level.
 - `DataNumber.ToFraction()` gives a data number as an exact `Fraction`. Multiply everything exactly and round once, at the end.
 - `GameData.TrackRoles` holds the index of each track the rules name, so code never searches for a track by ID.
-- IDs become dense integers at load. A position in `GameData.Tracks` is a track's index, in file order. A position in `RuleSet.Lines` or `RuleSet.Structures` is a line's or structure's index; those lists are sorted by ID. Lines refer to tracks, structures and other lines by these indexes.
+- IDs become dense integers at load. A position in `GameData.Tracks` is a track's index, in file order. A position in `RuleSet.Lines` or `RuleSet.Structures` is a line's or structure's index; those lists are sorted by ID. Lines refer to tracks, structures and other lines by these indexes. A position in `GameData.Chassis` is a chassis's index; that list is sorted by ID over all lines, and `PlayerTech.Blueprints` uses the same positions.
 - The loader follows the determinism rules: no floating-point types and no iteration over hash-based collections.
 - `schemas/` is for editors. The loader does not read it, and is stricter than a schema can be. Tests in `tests/Tools.Tests/SchemaTests.cs` hold the two together: every data file must satisfy its schema, and each schema must reject a list of typical mistakes.

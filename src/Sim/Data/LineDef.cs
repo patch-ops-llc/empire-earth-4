@@ -36,11 +36,25 @@ public enum AttackKind
     Ranged,
 }
 
-/// <summary>How a line or chassis attacks. A melee attack has no range and no projectile speed.</summary>
-public sealed record AttackDef(AttackKind Kind, int IntervalTicks, DataNumber? Range, DataNumber? ProjectileSpeed);
+/// <summary>
+/// How a line or chassis attacks. A melee attack has only a kind and an interval. A ranged attack
+/// has a range and a projectile speed, and may have a minimum range, inside which it cannot fire, and
+/// a blast radius, which makes every hit an area hit centered on the target.
+/// </summary>
+public sealed record AttackDef(
+    AttackKind Kind,
+    int IntervalTicks,
+    DataNumber? Range = null,
+    DataNumber? ProjectileSpeed = null,
+    DataNumber? MinRange = null,
+    DataNumber? BlastRadius = null);
 
 /// <summary>A damage multiplier against one line.</summary>
 public sealed record LineCounter(int Line, DataNumber Multiplier);
 
-/// <summary>One line's model for one epoch. <see cref="Attack"/> already has the chassis's overrides applied.</summary>
-public sealed record ChassisDef(string Id, int Epoch, AttackDef Attack);
+/// <summary>
+/// One line's model for one epoch. <see cref="Index"/> is its place in <see cref="GameData.Chassis"/>,
+/// which is sorted by ID over all lines. <see cref="Line"/> is the roster index of its line, as in
+/// <see cref="LineDef.Index"/>. <see cref="Attack"/> already has the chassis's overrides applied.
+/// </summary>
+public sealed record ChassisDef(string Id, int Index, int Line, int Epoch, AttackDef Attack);
