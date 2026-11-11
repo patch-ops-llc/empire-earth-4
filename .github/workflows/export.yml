@@ -62,6 +62,10 @@ jobs:
     needs: version
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      data-content-hash: ${{ steps.data.outputs.content-hash }}
+      content-hash: ${{ steps.smoke.outputs.content-hash }}
+      state-hash: ${{ steps.smoke.outputs.state-hash }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -97,14 +101,28 @@ jobs:
           export_build "Linux" "$RUNNER_TEMP/out/linux/Game.x86_64"
           export_build "Windows Desktop" "$RUNNER_TEMP/out/windows/Game.exe"
 
-      # An exported build refuses a scene path on the command line, so the main scene switches to
-      # the smoke test when it is given this argument. The marker also reports whether Sim was
-      # compiled with optimization, which only the ExportRelease block in Directory.Build.props
-      # provides.
+      # The hash of game/data as the datacheck tool computes it from the files on disk. Every
+      # build below must report the same one for the data it carries.
+      - name: Compute the content hash of the game data
+        id: data
+        run: |
+          hash="$(dotnet run --project src/Tools -- datacheck game/data | sed -n 's/^ *content hash: //p')"
+          echo "datacheck: content hash $hash"
+          test -n "$hash"
+          echo "content-hash=$hash" >> "$GITHUB_OUTPUT"
+
+      # An exported build refuses a scene path on the command line, so the game runs its smoke test
+      # when it is given this argument: it builds a fixed match, prints one line about it and
+      # quits. The line reports whether Sim was compiled with optimization, which only the
+      # ExportRelease block in Directory.Build.props provides, and two hashes, of the data the
+      # build carries and of the match's state. The last job compares them across the builds.
       - name: Run the smoke test in the Linux build
+        id: smoke
         run: |
           "$RUNNER_TEMP/out/linux/Game.x86_64" --headless --quit-after 600 -- --smoke-test 2>&1 | tee "$RUNNER_TEMP/smoke.log"
-          grep -q '^SMOKE_TEST_OK.* sim_optimized=true ' "$RUNNER_TEMP/smoke.log"
+          line="$(grep '^SMOKE_TEST_OK.* sim_optimized=true ' "$RUNNER_TEMP/smoke.log")"
+          echo "content-hash=$(sed -n 's/.* content_hash=\([^ ]*\).*/\1/p' <<< "$line")" >> "$GITHUB_OUTPUT"
+          echo "state-hash=$(sed -n 's/.* state_hash=\([^ ]*\).*/\1/p' <<< "$line")" >> "$GITHUB_OUTPUT"
 
       - name: Package the Windows build with the tester notes
         env:
@@ -133,6 +151,9 @@ jobs:
     needs: [version, export-windows]
     runs-on: windows-latest
     timeout-minutes: 15
+    outputs:
+      content-hash: ${{ steps.smoke.outputs.content-hash }}
+      state-hash: ${{ steps.smoke.outputs.state-hash }}
     steps:
       - name: Download the Windows build
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -148,10 +169,14 @@ jobs:
           ls -l game
 
       - name: Run the smoke test
+        id: smoke
         run: |
           log="$(cygpath -w "$RUNNER_TEMP/smoke.log")"
           ./game/Game.exe --headless --log-file "$log" --quit-after 600 -- --smoke-test
-          grep -q '^SMOKE_TEST_OK.* sim_optimized=true ' "$RUNNER_TEMP/smoke.log"
+          line="$(tr -d '\r' < "$RUNNER_TEMP/smoke.log" | grep '^SMOKE_TEST_OK.* sim_optimized=true ')"
+          echo "$line"
+          echo "content-hash=$(sed -n 's/.* content_hash=\([^ ]*\).*/\1/p' <<< "$line")" >> "$GITHUB_OUTPUT"
+          echo "state-hash=$(sed -n 's/.* state_hash=\([^ ]*\).*/\1/p' <<< "$line")" >> "$GITHUB_OUTPUT"
 
       # Without --headless the game opens its window and draws. It must draw 300 frames and then
       # close by itself.
@@ -200,6 +225,11 @@ jobs:
     needs: version
     runs-on: macos-latest
     timeout-minutes: 30
+    outputs:
+      arm64-content-hash: ${{ steps.smoke-arm64.outputs.content-hash }}
+      arm64-state-hash: ${{ steps.smoke-arm64.outputs.state-hash }}
+      x86_64-content-hash: ${{ steps.smoke-x86_64.outputs.content-hash }}
+      x86_64-state-hash: ${{ steps.smoke-x86_64.outputs.state-hash }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -253,14 +283,20 @@ jobs:
           codesign --display --verbose=2 "$RUNNER_TEMP"/unpacked/*.app
 
       - name: Run the smoke test on Apple silicon
+        id: smoke-arm64
         run: |
           "$RUNNER_TEMP"/unpacked/*.app/Contents/MacOS/* --headless --log-file "$RUNNER_TEMP/smoke-arm64.log" --quit-after 600 -- --smoke-test
-          grep -q '^SMOKE_TEST_OK.* sim_optimized=true ' "$RUNNER_TEMP/smoke-arm64.log"
+          line="$(grep '^SMOKE_TEST_OK.* sim_optimized=true ' "$RUNNER_TEMP/smoke-arm64.log")"
+          echo "content-hash=$(sed -n 's/.* content_hash=\([^ ]*\).*/\1/p' <<< "$line")" >> "$GITHUB_OUTPUT"
+          echo "state-hash=$(sed -n 's/.* state_hash=\([^ ]*\).*/\1/p' <<< "$line")" >> "$GITHUB_OUTPUT"
 
       - name: Run the smoke test as an Intel program
+        id: smoke-x86_64
         run: |
           arch -x86_64 "$RUNNER_TEMP"/unpacked/*.app/Contents/MacOS/* --headless --log-file "$RUNNER_TEMP/smoke-x86_64.log" --quit-after 600 -- --smoke-test
-          grep -q '^SMOKE_TEST_OK.* sim_optimized=true ' "$RUNNER_TEMP/smoke-x86_64.log"
+          line="$(grep '^SMOKE_TEST_OK.* sim_optimized=true ' "$RUNNER_TEMP/smoke-x86_64.log")"
+          echo "content-hash=$(sed -n 's/.* content_hash=\([^ ]*\).*/\1/p' <<< "$line")" >> "$GITHUB_OUTPUT"
+          echo "state-hash=$(sed -n 's/.* state_hash=\([^ ]*\).*/\1/p' <<< "$line")" >> "$GITHUB_OUTPUT"
 
       - name: Upload the macOS build
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -305,3 +341,41 @@ jobs:
           path: ${{ runner.temp }}/launch-macos.png
           archive: false
           if-no-files-found: warn
+
+  # Every build must have read the data that datacheck read, and the same match must have the same
+  # state on every system and processor. A difference in the state hash is a determinism failure.
+  compare-smoke-tests:
+    name: Compare the hashes of the smoke tests
+    needs: [export-windows, launch-windows, export-macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          DATA_CONTENT_HASH: ${{ needs.export-windows.outputs.data-content-hash }}
+          LINUX_CONTENT_HASH: ${{ needs.export-windows.outputs.content-hash }}
+          LINUX_STATE_HASH: ${{ needs.export-windows.outputs.state-hash }}
+          WINDOWS_CONTENT_HASH: ${{ needs.launch-windows.outputs.content-hash }}
+          WINDOWS_STATE_HASH: ${{ needs.launch-windows.outputs.state-hash }}
+          MACOS_ARM64_CONTENT_HASH: ${{ needs.export-macos.outputs.arm64-content-hash }}
+          MACOS_ARM64_STATE_HASH: ${{ needs.export-macos.outputs.arm64-state-hash }}
+          MACOS_X86_64_CONTENT_HASH: ${{ needs.export-macos.outputs.x86_64-content-hash }}
+          MACOS_X86_64_STATE_HASH: ${{ needs.export-macos.outputs.x86_64-state-hash }}
+        run: |
+          failed=0
+          compare() {
+            echo "$1: content_hash=$2 state_hash=$3"
+            if [ -z "$2" ] || [ "$2" != "$DATA_CONTENT_HASH" ]; then
+              echo "::error::$1: the build's content hash is not the one datacheck computed, $DATA_CONTENT_HASH."
+              failed=1
+            fi
+            if [ -z "$3" ] || [ "$3" != "$LINUX_STATE_HASH" ]; then
+              echo "::error::$1: the state hash differs from the Linux build's, $LINUX_STATE_HASH."
+              failed=1
+            fi
+          }
+          echo "datacheck: content hash $DATA_CONTENT_HASH"
+          compare "Linux" "$LINUX_CONTENT_HASH" "$LINUX_STATE_HASH"
+          compare "Windows" "$WINDOWS_CONTENT_HASH" "$WINDOWS_STATE_HASH"
+          compare "macOS on Apple silicon" "$MACOS_ARM64_CONTENT_HASH" "$MACOS_ARM64_STATE_HASH"
+          compare "macOS as an Intel program" "$MACOS_X86_64_CONTENT_HASH" "$MACOS_X86_64_STATE_HASH"
+          exit "$failed"

@@ -30,10 +30,16 @@ The smoke test needs the Godot 4.7.2 .NET build on the `PATH` as `godot`:
 
 ```sh
 godot --headless --path game --import --build-solutions
-godot --headless --path game res://scenes/smoke_test.tscn --quit-after 600
+godot --headless --path game --quit-after 600 -- --smoke-test
 ```
 
-The second command must print a line that starts with `SMOKE_TEST_OK`. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, prints one line that starts with `SMOKE_TEST_OK` and quits. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+
+The line carries two hashes. `content_hash` is the hash of the data files as the game read them, and it must equal the one `datacheck` prints. `state_hash` is the hash of the match's state, and it must be the same on every system. `ci.yml` checks the first. `export.yml` checks both for every build it makes, and an exported build takes the same argument:
+
+```sh
+./Game.x86_64 --headless --quit-after 600 -- --smoke-test
+```
 
 ## Run the game
 
@@ -43,7 +49,9 @@ After the import command above has run once:
 godot --path game
 ```
 
-The game starts in `scenes/main.tscn`: a flat ground of 96 by 96 tiles with a grid, a strategy camera and a debug overlay. No simulation runs behind it yet.
+The game starts in `scenes/main.tscn`. It loads `game/data/` through the simulation's loader, builds one match for two players on the map `ridge` and draws it: the ground with a grid, a tree on every forest tile, a block of rock on every cliff tile and one shape for every unit, in its owner's color. The person at the machine is player 0, in blue. The seed of the match and the side of the map that player starts on are drawn for each run. The game only reads the match and never changes it.
+
+The match stands at tick 0. It will advance once the game runs it through the lockstep session, which is also how orders will reach it.
 
 | Control | Keys and mouse |
 | --- | --- |
