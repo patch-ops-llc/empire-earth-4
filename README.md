@@ -24,7 +24,7 @@ dotnet run --project src/Tools -- datacheck game/data
 
 The last command loads the game data through the loader the game uses and lists every problem it finds. [docs/data-authoring.md](docs/data-authoring.md) describes it and the data files.
 
-Debug builds, which the tests and the Godot editor use, treat whole-number overflow as an error. Release builds do not. `Directory.Build.props` sets this for every project, and [docs/determinism.md](docs/determinism.md) says why.
+Debug builds, which the tests and the Godot editor use, treat whole-number overflow as an error. Release builds and the exported game do not. `Directory.Build.props` sets this for every project, and [docs/determinism.md](docs/determinism.md) says why.
 
 The smoke test needs the Godot 4.7.2 .NET build on the `PATH` as `godot`:
 
@@ -51,28 +51,36 @@ The game starts in `scenes/main.tscn`: a flat ground of 96 by 96 tiles with a gr
 | Zoom | Mouse wheel, `=` and `-`, or a trackpad pinch or two-finger scroll |
 | Show or hide the overlay | F3 |
 
+## Test builds
+
+The Export workflow (`export.yml`) makes the builds that testers get: a zip for Windows x86_64 and a zip for macOS, Intel and Apple silicon in one app. Start it from the Actions tab, or push a tag that starts with `v`, which also names the builds. The zips are artifacts of the workflow run and never a GitHub release. They are not signed. [docs/testers.md](docs/testers.md) tells a tester how to get one and start it, and a copy travels in each zip as `HOW-TO-RUN.txt`.
+
+Godot builds every project as `ExportRelease` for an export. `Directory.Build.props` gives that configuration the optimization of a Release build, and the workflow fails if the exported simulation is not optimized.
+
 ## Continuous integration
 
 | Workflow | Runs on | What it does |
 | --- | --- | --- |
 | `ci.yml` | Every pull request, on Linux | Build with warnings as errors, format check, tests, `datacheck`, Godot import and build, a check that Godot changed or created no file in the working tree, and the smoke test. |
 | `determinism.yml` | Every push to `main`, every night, and pull requests that change the workflow, `Directory.Build.props` or `global.json` | The tests on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build. The tests hold recorded values, so this is where a result that differs between systems shows up. |
+| `export.yml` | Every tag that starts with `v`, a manual run, and pull requests that change the workflow, `game/export_presets.cfg` or `Directory.Build.props` | Exports the Windows build on Linux and the macOS build on macOS, and uploads both. Runs the smoke test in a Linux export, in the Windows build on Windows and in the macOS build as an Apple silicon and as an Intel program. Opens the Windows and the macOS build in a window for 300 frames. |
 
 ## Layout
 
 | Path | Contents |
 | --- | --- |
-| `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) and `Serialization/` (the byte format and the encoding of a command). |
+| `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) and `Serialization/` (the byte format, the encoding of a command, and snapshots). |
 | `src/Tools/` | The console tools, as one program: `dotnet run --project src/Tools -- <tool> [arguments]`. Each tool is a folder. So far: `datacheck`. |
 | `tests/Sim.Tests/` | Tests for `Sim` (xUnit v3 on Microsoft.Testing.Platform), in folders that match those of `src/Sim/`. |
 | `tests/Tools.Tests/` | Tests for the tools, for the data in `game/data/` and for the schemas. |
 | `game/` | The Godot project: `project.godot`, `Game.csproj`, `scenes/`, `scripts/`. References `Sim`. |
+| `game/export_presets.cfg` | The export presets: Windows x86_64, macOS universal, and Linux x86_64, which the export workflow uses for its first smoke test. Each packs the data files with the game. |
 | `game/data/` | The content of the game as JSON-with-comments files: tracks, rules, unit lines and maps. |
 | `schemas/` | JSON Schemas for the files in `game/data/`. |
-| `docs/` | [determinism.md](docs/determinism.md): the rules that keep the simulation deterministic, the kernel and the byte format. [data-authoring.md](docs/data-authoring.md): how the data files are written and checked. |
-| `.github/workflows/` | `ci.yml` and `determinism.yml`, described above. |
+| `docs/` | [determinism.md](docs/determinism.md): the rules that keep the simulation deterministic, the kernel, the byte format and snapshots. [data-authoring.md](docs/data-authoring.md): how the data files are written and checked. [testers.md](docs/testers.md): how a tester gets a build and starts it. |
+| `.github/workflows/` | `ci.yml`, `determinism.yml` and `export.yml`, described above. |
 | `global.json` | Pins the .NET SDK and the Godot version, and selects the test runner. |
-| `Directory.Build.props` | C# settings shared by every project: target framework, nullable, warnings as errors, analyzers, overflow checking. |
+| `Directory.Build.props` | C# settings shared by every project: target framework, nullable, warnings as errors, analyzers, overflow checking, and optimization for exports. |
 | `empire-earth-4.sln` | All projects. The Godot editor finds it through `dotnet/project/solution_directory` in `project.godot`. |
 
 A path that is not in this table does not exist yet. Whoever creates one adds its row in the same pull request.
@@ -85,6 +93,8 @@ Every project targets `net10.0`. This was checked against Godot 4.7.2 on 10 Nov 
 
 - The editor builds the project (`--build-solutions`) and the smoke scene runs on the .NET 10 runtime.
 - Release exports complete for Windows x86_64, macOS universal and Linux x86_64, each carrying the .NET 10 runtime.
-- The Linux export runs headless and passes the smoke test. That check produced the Windows and macOS exports on Linux and did not start them.
+- The Linux export runs headless and passes the smoke test.
+
+Since then every run of `export.yml` starts the exports on GitHub's machines: the Windows build on Windows, the macOS build on Apple silicon and, through Rosetta, as an Intel program. The macOS build is exported on macOS, because macOS 26 refuses to start one exported on Linux. None of this stands in for a tester's own machine.
 
 The target framework is set in two files that must agree: `Directory.Build.props` and `game/Game.csproj`. The Godot editor requires the property in `Game.csproj` itself. If it is missing there, the editor adds `net8.0` to the file when it opens the project.

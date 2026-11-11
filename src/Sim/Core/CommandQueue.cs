@@ -46,6 +46,28 @@ public sealed class CommandQueue
     }
 
     /// <summary>
+    /// Adds every command that is waiting to the end of <paramref name="destination"/>, each with
+    /// its tick, in the order they will run. The queue keeps them. This is how the commands that
+    /// go beside a snapshot are collected: the queue is not part of the world state.
+    /// </summary>
+    public void CopyPendingTo(List<(int Tick, Command Command)> destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        destination.AddRange(_pending);
+    }
+
+    /// <summary>
+    /// Empties the queue and makes <paramref name="nextTick"/> the next tick to run. Restoring a
+    /// snapshot does this: what was waiting belonged to the state that was replaced.
+    /// </summary>
+    internal void Restart(int nextTick)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(nextTick);
+        _pending.Clear();
+        NextTick = nextTick;
+    }
+
+    /// <summary>
     /// Moves the commands scheduled for a tick to the end of <paramref name="destination"/>, in
     /// the order they were added, and closes that tick to new commands. Ticks are taken in order.
     /// </summary>

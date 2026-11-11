@@ -2,8 +2,8 @@ name: Determinism
 
 # Every machine in a match must compute exactly the same state, so the tests that pin recorded
 # values (the random generator's output, the state hash of known input, the final hash of the toy
-# match, the bytes of an encoded command) run on every operating system and processor a player
-# can have. They need no Godot: only the .NET SDK.
+# match, the bytes of an encoded command and of a snapshot) run on every operating system and
+# processor a player can have. They need no Godot: only the .NET SDK.
 on:
   push:
     branches:

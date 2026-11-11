@@ -18,4 +18,10 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
+  <!-- Godot exports build the solution as ExportRelease, a name the plain .NET projects do not
+       know, so without this they would ship unoptimized. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'ExportRelease'">
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
 </Project>

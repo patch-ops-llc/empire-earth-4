@@ -100,4 +100,23 @@ public class CommandQueueTests
         Assert.Equal(CommandType.None, default(Command).Type);
         Assert.Equal(EntityId.None, new Command((CommandType)1, 0).TargetEntity);
     }
+
+    [Fact]
+    public void TheWaitingCommandsCanBeListedWithTheirTicksInTheOrderTheyWillRun()
+    {
+        var queue = new CommandQueue();
+        queue.Enqueue(2, Numbered(20));
+        queue.Enqueue(0, Numbered(1));
+        queue.Enqueue(2, Numbered(21));
+        queue.Enqueue(1, Numbered(10));
+        Assert.Equal([1], Take(queue, 0));
+
+        var pending = new List<(int Tick, Command Command)> { (99, Numbered(99)) };
+        queue.CopyPendingTo(pending);
+
+        Assert.Equal([(99, 99), (1, 10), (2, 20), (2, 21)], pending.Select(entry => (entry.Tick, entry.Command.ContentId)));
+        Assert.Equal(3, queue.Count);
+        Assert.Equal([10], Take(queue, 1));
+        Assert.Throws<ArgumentNullException>(() => queue.CopyPendingTo(null!));
+    }
 }
