@@ -8,9 +8,11 @@ on:
       - "v*"
   workflow_dispatch:
   # A manual run only works once this file is on the default branch, so a pull request that
-  # changes the export setup runs it too.
+  # changes the export setup runs it too. So does one that changes the smoke test, whose state
+  # hash the last job compares across the builds.
   pull_request:
     paths:
+      - game/scripts/SmokeTest.cs
       - .github/workflows/export.yml
       - game/export_presets.cfg
 
@@ -112,10 +114,11 @@ jobs:
           echo "content-hash=$hash" >> "$GITHUB_OUTPUT"
 
       # An exported build refuses a scene path on the command line, so the game runs its smoke test
-      # when it is given this argument: it builds a fixed match, prints one line about it and
-      # quits. The line reports whether Sim was compiled with optimization, which only the
-      # ExportRelease block in Directory.Build.props provides, and two hashes, of the data the
-      # build carries and of the match's state. The last job compares them across the builds.
+      # when it is given this argument: it builds a fixed match, plays a fixed script of move
+      # orders in it through the session, prints one line about it and quits. The line reports
+      # whether Sim was compiled with optimization, which only the ExportRelease block in
+      # Directory.Build.props provides, and two hashes, of the data the build carries and of the
+      # match's state after the script. The last job compares them across the builds.
       - name: Run the smoke test in the Linux build
         id: smoke
         run: |
@@ -342,8 +345,9 @@ jobs:
           archive: false
           if-no-files-found: warn
 
-  # Every build must have read the data that datacheck read, and the same match must have the same
-  # state on every system and processor. A difference in the state hash is a determinism failure.
+  # Every build must have read the data that datacheck read, and the same match given the same
+  # orders must end in the same state on every system and processor. A difference in the state
+  # hash is a determinism failure.
   compare-smoke-tests:
     name: Compare the hashes of the smoke tests
     needs: [export-windows, launch-windows, export-macos]

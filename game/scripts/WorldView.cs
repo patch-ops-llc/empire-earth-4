@@ -117,6 +117,22 @@ public partial class WorldView : Node3D
         _gone.Clear();
     }
 
+    /// <summary>
+    /// Where an entity is drawn in this frame, which is where the player sees it. False for an
+    /// entity that is not drawn.
+    /// </summary>
+    public bool TryGetDrawnPosition(EntityId entity, out Vector3 position)
+    {
+        if (_units.TryGetValue(entity, out var unit))
+        {
+            position = unit.Node.Position;
+            return true;
+        }
+
+        position = default;
+        return false;
+    }
+
     public override void _Process(double delta)
     {
         var fraction = Mathf.Clamp(TickFraction, 0f, 1f);

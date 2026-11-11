@@ -11,12 +11,16 @@ public static class PlaceholderMeshes
     public const float TreeHeight = 1.3f;
     public const float RockHeight = 0.8f;
 
-    private const float UnitHeight = 0.75f;
+    /// <summary>How tall the unit shape is.</summary>
+    public const float UnitHeight = 0.75f;
+
+    /// <summary>The distance from the unit shape's center to its nose, its farthest point.</summary>
+    public const float UnitRadius = 0.42f;
 
     // The unit's outline seen from above, clockwise, with its nose toward -Z.
     private static readonly Vector2[] UnitOutline =
     [
-        new(0f, -0.42f),
+        new(0f, -UnitRadius),
         new(0.26f, -0.08f),
         new(0.26f, 0.28f),
         new(-0.26f, 0.28f),
@@ -65,6 +69,19 @@ public static class PlaceholderMeshes
         static Vector3 Top(int corner) => new(UnitOutline[corner].X, UnitHeight, UnitOutline[corner].Y);
         static Vector3 Bottom(int corner) => new(UnitOutline[corner].X, 0f, UnitOutline[corner].Y);
     }
+
+    /// <summary>
+    /// A thin ring of one color that lies on the ground and takes no light, for marks the interface
+    /// puts under and around things.
+    /// </summary>
+    public static TorusMesh Ring(float radius, Color color) => new()
+    {
+        InnerRadius = radius - 0.04f,
+        OuterRadius = radius + 0.04f,
+        Rings = 32,
+        RingSegments = 6,
+        Material = new StandardMaterial3D { AlbedoColor = color, ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded },
+    };
 
     /// <summary>A cone for a forest tile. Its center is at half of <see cref="TreeHeight"/>.</summary>
     public static CylinderMesh Tree() => new()

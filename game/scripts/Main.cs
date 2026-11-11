@@ -1,4 +1,5 @@
 using Godot;
+using Net;
 using Sim.Data;
 using Sim.Setup;
 using Entropy = System.Security.Cryptography.RandomNumberGenerator;
@@ -7,11 +8,14 @@ namespace Game;
 
 /// <summary>
 /// Root of <c>scenes/main.tscn</c>, the scene the game starts in. It loads the game data, builds one
-/// match on the map <see cref="MapId"/> and hands it to the world view, the camera and the overlay.
+/// match on the map <see cref="MapId"/>, starts a session for it and hands both to the world view,
+/// the camera, the unit control and the overlay.
 /// </summary>
 /// <remarks>
 /// Code under <c>game/</c> reads the match and never changes it. Only commands change the
-/// simulation, and only the session runs its ticks.
+/// simulation, and only the session runs its ticks: once a frame, here, it is given the time the
+/// frame took. The session is the one a network match uses, with the host and this player in one
+/// process.
 /// </remarks>
 public partial class Main : Node3D
 {
@@ -29,20 +33,23 @@ public partial class Main : Node3D
 
     private const int PlayerCount = 2;
 
-    // The smoke test lets the view draw this many frames before it reports.
-    private const int SmokeTestFrames = 3;
+    // The smoke test runs this many ticks in a frame, so that the view follows the match as it
+    // does in play, and lets the view draw this many frames at the end before it reports.
+    private const int SmokeTestTicksPerFrame = 20;
+    private const int SmokeTestLastFrames = 3;
 
     private Match? _match;
+    private LocalSession? _session;
+    private SmokeTest? _smokeTest;
     private WorldView _world = null!;
-    private bool _smokeTest;
-    private int _frames;
+    private int _lastFrames;
 
     public override void _Ready()
     {
-        _smokeTest = OS.GetCmdlineUserArgs().Contains(SmokeTestArgument);
+        var smokeTest = OS.GetCmdlineUserArgs().Contains(SmokeTestArgument);
         _world = GetNode<WorldView>("World");
 
-        _match = CreateMatch(_smokeTest, out var localStart);
+        _match = CreateMatch(smokeTest, out var localStart);
         if (_match is null)
         {
             // Without its data there is no game to show, and the smoke test fails for lack of its marker.
@@ -66,18 +73,65 @@ public partial class Main : Node3D
         camera.CenterOn(new Vector2(start.X + (footprint / 2f), start.Y + (footprint / 2f)));
 
         _world.Attach(_match);
-        GetNode<DebugOverlay>("DebugOverlay").Match = _match;
+
+        // The view reads the match again after every tick, before anything else hears of the tick.
+        _session = new LocalSession(_match.Simulation, PlayerCount, LocalPlayer);
+        _session.Client.TickCompleted += _ => _world.AfterTick();
+        _session.Client.Stopped += end => GD.PrintErr($"The session stopped: {end.Reason}.");
+
+        var overlay = GetNode<DebugOverlay>("DebugOverlay");
+        overlay.Match = _match;
+
+        if (smokeTest)
+        {
+            _smokeTest = new SmokeTest(_match, _session);
+        }
+        else
+        {
+            // The smoke test plays its own script, so it takes no input.
+            var units = GetNode<UnitControl>("UnitControl");
+            units.Attach(_match, _session.Client, _world);
+            overlay.Selection = units.Selection;
+        }
     }
 
     public override void _Process(double delta)
     {
-        if (!_smokeTest || _match is null || ++_frames < SmokeTestFrames)
+        if (_session is null)
         {
             return;
         }
 
-        _smokeTest = false;
-        GetTree().Quit(SmokeTest.Report(_match, _world.UnitCount) ? 0 : 1);
+        if (_smokeTest is not null)
+        {
+            RunSmokeTest(_smokeTest);
+            return;
+        }
+
+        _session.Advance(TimeSpan.FromSeconds(delta));
+
+        // The world view draws after this, in the same frame, this far between the last two ticks.
+        var client = _session.Client;
+        _world.TickFraction = client.TickInterval > TimeSpan.Zero ? (float)(client.TimeIntoTick / client.TickInterval) : 1f;
+    }
+
+    private void RunSmokeTest(SmokeTest smokeTest)
+    {
+        _world.TickFraction = 1f;
+        if (!smokeTest.Run(SmokeTestTicksPerFrame))
+        {
+            Quit(1);
+        }
+        else if (smokeTest.IsDone && ++_lastFrames >= SmokeTestLastFrames)
+        {
+            Quit(smokeTest.Report(_world.UnitCount) ? 0 : 1);
+        }
+    }
+
+    private void Quit(int exitCode)
+    {
+        _session = null;
+        GetTree().Quit(exitCode);
     }
 
     // The seed and the start each player gets are chosen here, outside the simulation, which rolls

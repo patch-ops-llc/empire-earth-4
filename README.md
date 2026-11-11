@@ -33,9 +33,9 @@ godot --headless --path game --import --build-solutions
 godot --headless --path game --quit-after 600 -- --smoke-test
 ```
 
-The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, prints one line that starts with `SMOKE_TEST_OK` and quits. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, gives it a fixed script of four move orders through the session, runs it for 600 ticks, prints one line that starts with `SMOKE_TEST_OK` and quits. It takes about a second. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
 
-The line carries two hashes. `content_hash` is the hash of the data files as the game read them, and it must equal the one `datacheck` prints. `state_hash` is the hash of the match's state, and it must be the same on every system. `ci.yml` checks the first. `export.yml` checks both for every build it makes, and an exported build takes the same argument:
+The line carries two hashes. `content_hash` is the hash of the data files as the game read them, and it must equal the one `datacheck` prints. `state_hash` is the hash of the match's state after the script, and it must be the same on every system. `ci.yml` checks the first. `export.yml` checks both for every build it makes, and an exported build takes the same argument:
 
 ```sh
 ./Game.x86_64 --headless --quit-after 600 -- --smoke-test
@@ -49,14 +49,21 @@ After the import command above has run once:
 godot --path game
 ```
 
-The game starts in `scenes/main.tscn`. It loads `game/data/` through the simulation's loader, builds one match for two players on the map `ridge` and draws it: the ground with a grid, a tree on every forest tile, a block of rock on every cliff tile and one shape for every unit, in its owner's color. The person at the machine is player 0, in blue. The seed of the match and the side of the map that player starts on are drawn for each run. The game only reads the match and never changes it.
+The game starts in `scenes/main.tscn`. It loads `game/data/` through the simulation's loader, builds one match for two players on the map `ridge` and draws it: the ground with a grid, a tree on every forest tile, a block of rock on every cliff tile and one shape for every unit, in its owner's color. The person at the machine is player 0, in blue. The seed of the match and the side of the map that player starts on are drawn for each run.
 
-The match stands at tick 0. It will advance once the game runs it through the lockstep session, which is also how orders will reach it.
+The match runs through the lockstep session of `src/Net/`, with the host and the player in one process: every frame the game hands the session the time that passed, and the session runs the ticks, 20 a second. The game only reads the match and never changes it. A move order leaves as a command through the session and runs a tick later. Player 1 has nobody to give it orders, so its workers stand still.
+
+Selection works without physics. A click or a box is turned into an area of the ground, the simulation's spatial index names the units there, and each is tested again where it appears on screen. Started with Godot's `--verbose`, the game prints every selection and every order.
 
 | Control | Keys and mouse |
 | --- | --- |
 | Pan | W A S D or the arrow keys, or move the pointer to a window edge |
 | Zoom | Mouse wheel, `=` and `-`, or a trackpad pinch or two-finger scroll |
+| Select a unit of your own | Left click on it |
+| Select several | Drag a box round them with the left button |
+| Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is in |
+| Clear the selection | Left click on the ground |
+| Send the selected units somewhere | Right click on the ground |
 | Show or hide the overlay | F3 |
 
 ## Continuous integration
@@ -78,6 +85,7 @@ The match stands at tick 0. It will advance once the game runs it through the lo
 | `tests/Tools.Tests/` | Tests for the tools, for the data in `game/data/` and for the schemas. |
 | `game/` | The Godot project: `project.godot`, `Game.csproj`, `scenes/`, `scripts/`. References `Sim`. |
 | `game/data/` | The content of the game as JSON-with-comments files: tracks, rules, unit lines and maps. |
+| `game/ui/` | What the player does to the match, as scripts: the selection, the box and the rings that show it, and move orders with their mark on the ground. Orders leave through the session of `Net`, which `Game.csproj` references for that. |
 | `schemas/` | JSON Schemas for the files in `game/data/`. |
 | `docs/` | [determinism.md](docs/determinism.md): the rules that keep the simulation deterministic, the kernel and the byte format. [data-authoring.md](docs/data-authoring.md): how the data files are written and checked. |
 | `.github/workflows/` | `ci.yml` and `determinism.yml`, described above. |

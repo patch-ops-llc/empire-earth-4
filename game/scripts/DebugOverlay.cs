@@ -6,8 +6,8 @@ using Sim.Setup;
 namespace Game;
 
 /// <summary>
-/// Corner readout of frame time, the simulation tick and the camera. The debug_toggle_overlay
-/// action shows and hides it.
+/// Corner readout of frame time, the simulation tick, the camera and the number of selected units.
+/// The debug_toggle_overlay action shows and hides it.
 /// </summary>
 public partial class DebugOverlay : CanvasLayer
 {
@@ -20,6 +20,9 @@ public partial class DebugOverlay : CanvasLayer
 
     /// <summary>The match whose tick is shown. Until it is set the readout has no tick.</summary>
     public Match? Match { get; set; }
+
+    /// <summary>The player's selection, whose size is shown. Optional.</summary>
+    public Selection? Selection { get; set; }
 
     /// <summary>Camera whose focus point and distance are shown. Optional.</summary>
     [Export]
@@ -67,6 +70,11 @@ public partial class DebugOverlay : CanvasLayer
         {
             text += string.Create(CultureInfo.InvariantCulture,
                 $"\nCamera at tile {Camera.Focus.X:F1}, {Camera.Focus.Y:F1}, distance {Camera.Distance:F1}");
+        }
+
+        if (Selection is not null)
+        {
+            text += string.Create(CultureInfo.InvariantCulture, $"\nSelected {Selection.Count}");
         }
 
         _label.Text = text;
