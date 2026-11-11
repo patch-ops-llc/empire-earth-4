@@ -13,12 +13,16 @@ on:
     - cron: "23 3 * * *"
   workflow_dispatch:
   # A change to this file or to the build settings every project shares is checked before it
-  # merges. Other pull requests are covered by ci.yml on Linux and by the run on main.
+  # merges. So is a change to the network transport: sockets behave differently from one system
+  # to the next, and its tests run on real ones. Other pull requests are covered by ci.yml on
+  # Linux and by the run on main.
   pull_request:
     paths:
       - .github/workflows/determinism.yml
       - Directory.Build.props
       - global.json
+      - src/Net.Udp/**
+      - tests/Net.Udp.Tests/**
 
 permissions:
   contents: read
