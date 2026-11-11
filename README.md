@@ -90,10 +90,10 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 | `tests/Sim.Tests/` | Tests for `Sim` (xUnit v3 on Microsoft.Testing.Platform), in folders that match those of `src/Sim/`. |
 | `tests/Net.Tests/` | Tests for `Net`: whole matches between a host and several clients in one process, over a loopback with latency and jitter that the test controls. |
 | `tests/Tools.Tests/` | Tests for the tools, for the data in `game/data/` and for the schemas. |
-| `game/` | The Godot project: `project.godot`, `Game.csproj`, `scenes/`, `scripts/`. References `Sim`. |
+| `game/` | The Godot project: `project.godot`, `Game.csproj`, `scenes/`, `scripts/`, `ui/`. References `Sim` and `Net`. |
 | `game/export_presets.cfg` | The export presets: Windows x86_64, macOS universal, and Linux x86_64, which the export workflow uses for its first smoke test. Each packs the data files with the game. |
 | `game/data/` | The content of the game as JSON-with-comments files: tracks, rules, unit lines and maps. |
-| `game/ui/` | What the player does to the match, as scripts: the selection, the box and the rings that show it, and move orders with their mark on the ground. Orders leave through the session of `Net`, which `Game.csproj` references for that. |
+| `game/ui/` | What the player does to the match, as scripts: the selection, the box and the rings that show it, and move orders with their mark on the ground. Orders leave through the session of `Net`. |
 | `schemas/` | JSON Schemas for the files in `game/data/`. |
 | `docs/` | [determinism.md](docs/determinism.md): the rules that keep the simulation deterministic, the kernel, the byte format and snapshots. [data-authoring.md](docs/data-authoring.md): how the data files are written and checked. [testers.md](docs/testers.md): how a tester gets a build and starts it. |
 | `.github/workflows/` | `ci.yml`, `determinism.yml` and `export.yml`, described above. |
