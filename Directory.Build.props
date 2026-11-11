@@ -1,5 +1,12 @@
 <Project>
 
+  <!-- Whole-number overflow throws instead of wrapping (docs/determinism.md, rule 7) in every
+       build that is not optimized for speed: Debug, which the tests and the Godot editor use, and
+       ExportDebug. Code that wraps on purpose says unchecked. -->
+  <PropertyGroup Condition="'$(Configuration)' != 'Release' and '$(Configuration)' != 'ExportRelease'">
+    <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
+  </PropertyGroup>
+
   <PropertyGroup>
     <!-- game/Game.csproj repeats TargetFramework because the Godot editor requires it there. Change both. -->
     <TargetFramework>net10.0</TargetFramework>
