@@ -23,7 +23,7 @@ dotnet run --project src/Tools -- datacheck game/data
 dotnet run --project src/Tools -- replay verify tests/golden/replays --data tests/golden/data
 ```
 
-The last command loads the game data through the loader the game uses and lists every problem it finds. [docs/data-authoring.md](docs/data-authoring.md) describes it and the data files.
+The `datacheck` command loads the game data through the loader the game uses and lists every problem it finds. [docs/data-authoring.md](docs/data-authoring.md) describes it and the data files. The last command runs the recorded matches of `tests/golden/` again and fails unless every state hash is the recorded one. [docs/determinism.md](docs/determinism.md) describes them.
 
 Debug builds, which the tests and the Godot editor use, treat whole-number overflow as an error. Release builds and the exported game do not. `Directory.Build.props` sets this for every project, and [docs/determinism.md](docs/determinism.md) says why.
 
