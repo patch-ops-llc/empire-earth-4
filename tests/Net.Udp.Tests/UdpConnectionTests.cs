@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 
 namespace Net.Udp.Tests;
 
@@ -191,9 +192,127 @@ public class UdpConnectionTests
     }
 
     /// <summary>
-    /// Risk R25, third part. The library receives on a thread of its own, and none of it may show
-    /// until the caller polls: the session must not see a connection change in the middle of its
-    /// update.
+    /// Both ends send their first message at the same moment. LiteNetLib 2.1.5 on its own threads
+    /// got this wrong about once in forty connections: the caller's thread and the library's
+    /// receive thread each made the peer's reliable channel, one of the two was thrown away, and
+    /// the first message was either never sent or handed over twice. It showed as one failure on
+    /// Windows. The transport now runs the library under a lock, where it cannot happen; this
+    /// test is there for whoever changes that. The pause between the two sends is varied so that
+    /// the second one falls where the first one's arrival is being handled.
+    /// </summary>
+    [Fact]
+    public void TheFirstMessagesOfBothEndsSentAtTheSameMomentArriveOnceEach()
+    {
+        const int Links = 64;
+        using var listener = new UdpListener(IPAddress.Loopback, options: new UdpOptions { MaxConnections = Links });
+        var connectors = new List<UdpConnector>();
+        var ends = new List<(UdpConnection Client, UdpConnection Host)>();
+        void Poll()
+        {
+            listener.Poll();
+            connectors.ForEach(connector => connector.Poll());
+        }
+
+        try
+        {
+            for (var index = 0; index < Links; index++)
+            {
+                var connector = new UdpConnector(IPAddress.Loopback);
+                connectors.Add(connector);
+                var client = connector.Connect(new IPEndPoint(IPAddress.Loopback, listener.Port));
+                UdpConnection? host = null;
+                Wait.Until(() => host is not null || listener.TryAccept(out host), Poll, "the listener has the connection");
+                Wait.Until(() => client.State == UdpConnectionState.Connected, Poll, "the connector hears the answer");
+                ends.Add((client, host!));
+
+                // From no pause to 375 microseconds, in steps of 25.
+                var pause = Stopwatch.Frequency * (index % 16) / 40_000;
+                client.Send([1, (byte)index]);
+                var sentAt = Stopwatch.GetTimestamp();
+                while (Stopwatch.GetTimestamp() - sentAt < pause)
+                {
+                }
+
+                host!.Send([2, (byte)index]);
+            }
+
+            var atHost = ends.Select(_ => new List<byte[]>()).ToArray();
+            var atClient = ends.Select(_ => new List<byte[]>()).ToArray();
+            void Collect()
+            {
+                Poll();
+                for (var index = 0; index < Links; index++)
+                {
+                    while (ends[index].Host.TryReceive(out var message))
+                    {
+                        atHost[index].Add(message.ToArray());
+                    }
+
+                    while (ends[index].Client.TryReceive(out var message))
+                    {
+                        atClient[index].Add(message.ToArray());
+                    }
+                }
+            }
+
+            Wait.Until(
+                () => atHost.All(messages => messages.Count > 0) && atClient.All(messages => messages.Count > 0),
+                Collect,
+                "every first message has arrived");
+
+            // Long enough for a message that was not acknowledged to be sent again.
+            Wait.For(TimeSpan.FromMilliseconds(400), Collect);
+
+            for (var index = 0; index < Links; index++)
+            {
+                Assert.Equal([[1, (byte)index]], atHost[index]);
+                Assert.Equal([[2, (byte)index]], atClient[index]);
+            }
+        }
+        finally
+        {
+            ends.ForEach(pair => pair.Client.Close());
+            var clock = Stopwatch.StartNew();
+            while ((listener.ConnectionCount > 0 || connectors.Exists(connector => connector.ConnectionCount > 0)) && clock.Elapsed < TimeSpan.FromSeconds(5))
+            {
+                Poll();
+                Thread.Sleep(1);
+            }
+
+            connectors.ForEach(connector => connector.Dispose());
+        }
+    }
+
+    /// <summary>
+    /// A game that hangs on a long frame does not poll. Its connection must still be there when
+    /// it comes back: the transport answers the other end's keep-alives on a thread of its own.
+    /// What arrived in the meantime is handed over at the next poll and not before.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AnEndThatDoesNotPollForLongerThanTheTimeoutKeepsItsConnection(bool hostHangs)
+    {
+        var options = new UdpOptions { DisconnectTimeout = TimeSpan.FromMilliseconds(800) };
+        using var link = new UdpLink(options: options);
+        var (hung, awake) = hostHangs ? (link.HostEnd, link.ClientEnd) : (link.ClientEnd, link.HostEnd);
+
+        awake.SendMessage(new Ping(1));
+        Wait.For(TimeSpan.FromMilliseconds(2500), hostHangs ? link.Connector.Poll : link.Listener.Poll);
+
+        Assert.Equal(UdpConnectionState.Connected, awake.State);
+        Assert.Equal(UdpConnectionState.Connected, hung.State);
+        Assert.False(hung.TryReceive(out _), "A message was handed over without a poll.");
+
+        Assert.Equal(new Ping(1), link.ReceiveMessage(hung));
+        hung.SendMessage(new Pong(1));
+        Assert.Equal(new Pong(1), link.ReceiveMessage(awake));
+    }
+
+    /// <summary>
+    /// Risk R25, third part. The transport reads the socket on a thread of its own, and none of
+    /// it may show until the caller polls: the session must not see a connection change in the
+    /// middle of its update.
     /// </summary>
     [Fact]
     public void NothingArrivesAndNothingChangesUntilThePoll()

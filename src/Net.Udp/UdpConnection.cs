@@ -28,7 +28,7 @@ namespace Net.Udp;
 public sealed class UdpConnection : IConnection
 {
     private readonly UdpEndpoint _endpoint;
-    private readonly Queue<byte[]> _inbox = new();
+    private readonly Queue<ReadOnlyMemory<byte>> _inbox = new();
 
     /// <summary>What was sent before the host answered. Null once it has.</summary>
     private Queue<byte[]>? _unsent;
@@ -178,7 +178,7 @@ public sealed class UdpConnection : IConnection
     }
 
     /// <summary>A message arrived.</summary>
-    internal void OnData(byte[] message)
+    internal void OnData(ReadOnlyMemory<byte> message)
     {
         if (!_closedHere && !_remoteDone)
         {

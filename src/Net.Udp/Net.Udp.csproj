@@ -2,8 +2,9 @@
 
   <!--
     The real network under the session: IConnection over LiteNetLib's reliable UDP, with a
-    listener for the host and a connector for a client. Sockets, the package and its threads live
-    here, so that Net itself stays free of all three. It must never reference Godot.
+    listener for the host and a connector for a client. Sockets, the package and the thread that
+    keeps connections alive live here, so that Net itself stays free of all three. It must never
+    reference Godot.
   -->
 
   <ItemGroup>

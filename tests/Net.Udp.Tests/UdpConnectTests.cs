@@ -11,8 +11,8 @@ public class UdpConnectTests
     private static readonly IPEndPoint Nowhere = new(IPAddress.Loopback, 9);
 
     /// <summary>
-    /// Risk R25, third part, for the listener: the library answers a client on its own thread
-    /// only once the listener's poll has taken the request.
+    /// Risk R25, third part, for the listener: a client's request is read off the socket on the
+    /// transport's own thread, and answered only once the listener's poll has taken it.
     /// </summary>
     [Fact]
     public void AConnectionIsTakenOnlyInThePoll()
