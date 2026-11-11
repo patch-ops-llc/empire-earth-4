@@ -73,82 +73,51 @@ public class MatchFilesTests
         Assert.False(recording.IsComplete);
     }
 
+    /// <summary>
+    /// What the game leaves on a desync: each peer's replay with a hash for every tick, and a
+    /// snapshot of the state it stopped in. Together they say when the peers parted and how.
+    /// </summary>
     [Fact]
-    public void ADesyncSnapshotBringsTheStateBack()
+    public void WithAHashEveryTickTheReplaysOfTwoPeersShowTheTickTheyParted()
     {
-        var match = new RealMatch(options: new HostOptions());
+        var match = new RealMatch(options: new HostOptions(), replayHashInterval: 1);
         match.Start();
         Assert.True(match.Clients[0].Move(40, 30));
-        match.Run(seconds: 4);
-        var client = match.Clients[1];
-        var writer = new ByteWriter();
-
-        DesyncSnapshot.Write(writer, client.Seat, 60, match.Description, client.Match.World);
-        var file = DesyncSnapshot.Read(writer.ToArray());
-        var restored = file.Restore(TestData.Data);
-
-        Assert.Equal(1, file.Player);
-        Assert.Equal(60, file.DesyncTick);
-        Assert.Equal(match.Description.Seed, file.Description.Seed);
-        Assert.Equal(client.Tick, restored.World.Tick);
-        Assert.Equal(client.Hash, restored.World.ComputeHash());
-
-        // The restored match goes on as the live one does.
-        Assert.True(match.Clients[0].Move(70, 70));
-        var tick = client.Tick;
-        match.Run(seconds: 1);
-        foreach (var (commandTick, command) in client.Scheduled.Where(entry => entry.Tick >= tick))
-        {
-            restored.Simulation.Commands.Enqueue(commandTick, command);
-        }
-
-        restored.Simulation.Run(client.Tick - tick);
-        Assert.Equal(client.Hash, restored.World.ComputeHash());
-    }
-
-    [Fact]
-    public void TwoPeersThatPartedLeaveSnapshotsThatDiffer()
-    {
-        var match = new RealMatch(options: new HostOptions());
-        match.Start();
-        match.Run(seconds: 1);
+        match.Run(seconds: 1.7);
+        var partedAfter = match.Clients[1].Tick;
         RealMatch.Corrupt(match.Clients[1]);
         match.Until(() => match.Clients.All(client => client.Player.Session.Phase == SessionPhase.Stopped), "the desync is found");
 
-        var files = match.Clients.Select(client =>
+        var replays = match.Clients.Select(client => client.ReadReplay()).ToArray();
+        var finalTick = match.Host.EndInfo!.FinalTick;
+        Assert.All(replays, replay =>
+        {
+            Assert.Equal(1, replay.HashInterval);
+            Assert.Equal(finalTick, replay.End!.Value.Tick);
+            Assert.Equal(Enumerable.Range(0, finalTick + 1), replay.Hashes.Select(hash => hash.Tick));
+        });
+
+        // The session compares hashes once a second, so it names a later tick than the replays do.
+        var firstDifference = replays[0].Hashes.Zip(replays[1].Hashes).First(pair => pair.First.Hash != pair.Second.Hash).First.Tick;
+        Assert.Equal(partedAfter + 1, firstDifference);
+        Assert.True(match.Host.EndInfo.DesyncTick > firstDifference);
+
+        // The peer that stayed right reproduces from its replay. The other does not, from that tick.
+        Assert.True(replays[0].Run(TestData.Data).Reproduced);
+        Assert.Equal(firstDifference, replays[1].Run(TestData.Data).Mismatch!.Value.Tick);
+
+        // Each peer's snapshot goes back into a match built from the description in its replay.
+        var worlds = match.Clients.Zip(replays).Select(pair =>
         {
             var writer = new ByteWriter();
-            DesyncSnapshot.Write(writer, client.Seat, client.Player.Session.EndInfo!.DesyncTick, match.Description, client.Match.World);
-            return DesyncSnapshot.Read(writer.ToArray());
+            Snapshot.Write(pair.First.Match.World, writer);
+            var restored = pair.Second.Description.CreateMatch(TestData.Data);
+            Snapshot.Restore(restored, new ByteReader(writer.ToArray()));
+            Assert.Equal(pair.First.Hash, restored.World.ComputeHash());
+            return restored.World;
         }).ToArray();
-
-        Assert.Equal(files[0].DesyncTick, files[1].DesyncTick);
-        var worlds = files.Select(file => file.Restore(TestData.Data).World).ToArray();
         Assert.Equal(worlds[0].Tick, worlds[1].Tick);
         Assert.Equal(worlds[0].Entities.Count + 1, worlds[1].Entities.Count);
-    }
-
-    [Fact]
-    public void DataThatIsNotADesyncSnapshotIsRejected()
-    {
-        var match = new RealMatch(options: new HostOptions());
-        match.Start();
-        var writer = new ByteWriter();
-        DesyncSnapshot.Write(writer, 0, -1, match.Description, match.Clients[0].Match.World);
-        var good = writer.ToArray();
-
-        Assert.Throws<InvalidDataException>(() => DesyncSnapshot.Read(Array.Empty<byte>()));
-        Assert.Throws<InvalidDataException>(() => DesyncSnapshot.Read("RPLY and then some more bytes"u8.ToArray()));
-        Assert.Throws<InvalidDataException>(() => DesyncSnapshot.Read(good.AsMemory(0, 20)));
-
-        var otherVersion = (byte[])good.Clone();
-        otherVersion[4] = 2;
-        Assert.Throws<InvalidDataException>(() => DesyncSnapshot.Read(otherVersion));
-
-        // The state is checked when it is restored: cut short, or with bytes left over.
-        Assert.Throws<InvalidDataException>(() => DesyncSnapshot.Read(good.AsMemory(0, good.Length - 3)).Restore(TestData.Data));
-        Assert.Throws<InvalidDataException>(() => DesyncSnapshot.Read((byte[])[.. good, 0]).Restore(TestData.Data));
-        Assert.Throws<InvalidDataException>(() => DesyncSnapshot.Read(good).Restore(TestData.ChangedData()));
     }
 
     private sealed class FailingStream : MemoryStream

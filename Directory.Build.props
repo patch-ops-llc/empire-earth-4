@@ -18,6 +18,17 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
+  <!-- The text that names a build of the game, which two players must share to play one match
+       (game/scripts/GameInfo.cs reads it back). The export workflow sets the GAME_VERSION
+       environment variable, to the tag or to "dev-" and the commit. A build made any other way
+       is "dev". The commit is not appended, so that the text is exactly what was set. -->
+  <PropertyGroup>
+    <GameVersion Condition="'$(GAME_VERSION)' != ''">$(GAME_VERSION)</GameVersion>
+    <GameVersion Condition="'$(GameVersion)' == ''">dev</GameVersion>
+    <InformationalVersion>$(GameVersion)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
   <!-- Godot exports build the solution as ExportRelease, a name the plain .NET projects do not
        know, so without this they would ship unoptimized. -->
   <PropertyGroup Condition="'$(Configuration)' == 'ExportRelease'">

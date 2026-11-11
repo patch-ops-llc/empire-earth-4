@@ -1,3 +1,4 @@
+using Sim;
 using Sim.Core;
 using Sim.Serialization;
 using Sim.Setup;
@@ -17,6 +18,11 @@ namespace Net;
 /// the match up to there.
 /// </para>
 /// <para>
+/// With a hash interval of 1 the replay holds the state hash of every tick. Two peers whose match
+/// stopped on a desync then have, in their replays, the exact tick at which they parted, which
+/// the session itself only knows to the second.
+/// </para>
+/// <para>
 /// A stream that fails does not stop the match: recording ends, and <see cref="Failure"/> says
 /// why.
 /// </para>
@@ -27,7 +33,6 @@ public sealed class MatchRecording
     private readonly ReplayRecorder _recorder;
     private readonly Stream _output;
     private readonly World _world;
-    private readonly int _flushInterval;
 
     /// <param name="session">The session that runs the match.</param>
     /// <param name="description">The match, as every peer was given it.</param>
@@ -48,7 +53,6 @@ public sealed class MatchRecording
 
         _output = output;
         _world = match.World;
-        _flushInterval = hashInterval;
         _recorder = new ReplayRecorder(_writer, description, match.World, hashInterval);
         Flush();
 
@@ -64,7 +68,7 @@ public sealed class MatchRecording
             if (IsRecording)
             {
                 _recorder.AfterTick();
-                if (_world.Tick % _flushInterval == 0)
+                if (_world.Tick % SimInfo.TicksPerSecond == 0)
                 {
                     Flush();
                 }

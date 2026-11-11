@@ -22,7 +22,8 @@ internal sealed class RealMatch
         MatchDescription? description = null,
         Func<int, GameData>? dataOf = null,
         Func<int, string>? versionOf = null,
-        ulong networkSeed = 1)
+        ulong networkSeed = 1,
+        int replayHashInterval = ReplayRecorder.DefaultHashInterval)
     {
         Description = description ?? TestData.Description(players: Math.Max(clients, 2));
         Network = new LoopbackNetwork(networkSeed);
@@ -37,7 +38,7 @@ internal sealed class RealMatch
         {
             var link = Network.Connect(conditions);
             Host.Attach(seat, link.HostEnd);
-            Clients.Add(new RealClient(seat, link.ClientEnd, dataOf?.Invoke(seat) ?? TestData.Data, versionOf?.Invoke(seat) ?? Description.GameVersion));
+            Clients.Add(new RealClient(seat, link.ClientEnd, dataOf?.Invoke(seat) ?? TestData.Data, versionOf?.Invoke(seat) ?? Description.GameVersion, replayHashInterval));
         }
     }
 
@@ -109,11 +110,11 @@ internal sealed class RealMatch
 
 internal sealed class RealClient
 {
-    public RealClient(int seat, IConnection connection, GameData data, string gameVersion)
+    public RealClient(int seat, IConnection connection, GameData data, string gameVersion, int replayHashInterval)
     {
         Seat = seat;
         Player = new MatchClient(connection, data, gameVersion, readyWhenBuilt: true);
-        Player.MatchBuilt += () => Recording = new MatchRecording(Player.Session, Player.Description!, Player.Match!, ReplayFile);
+        Player.MatchBuilt += () => Recording = new MatchRecording(Player.Session, Player.Description!, Player.Match!, ReplayFile, replayHashInterval);
         Player.Session.PlayerLeft += (player, reason) => Departures.Add((player, reason));
         Player.Session.CommandsScheduled += (tick, commands) => Scheduled.AddRange(commands.Select(command => (tick, command)));
     }
