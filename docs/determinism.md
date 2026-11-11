@@ -67,6 +67,29 @@ Do not add a value to a store, or remove one directly, while walking that store,
 
 Nothing reads a clock. The caller decides when a tick runs; there are `SimInfo.TicksPerSecond` (20) per second of game time. Single-player, network play, replays and tests all go through `Simulation.Tick()`.
 
+## The systems of a match
+
+`MatchSetup.Create` builds a match and adds its systems. After the commands of a tick, they run in this order:
+
+| # | System | What it does | Why it is here |
+| --- | --- | --- | --- |
+| 1 | `RoutePlanningSystem` | Finds the routes that movers are waiting for, oldest mover first, until the searches of this tick have expanded `ExpansionsPerTick` (4,096) tiles. The rest wait for the next tick. | Before anyone moves, so that a unit ordered in this tick takes its first step in this tick. |
+| 2 | `MovementSystem` | Moves every mover one step. | |
+| 3 | `SpatialIndexSystem` | Rebuilds the spatial index from the positions as they are now. | Right after movement, so that every system after it sees where things stand. A system that moves bodies goes before it. |
+
+The order is a rule of the game: moving a system changes results, on every machine alike, and so changes every recorded hash. A pull request that adds a system adds a row here, says where the system goes and why, and updates the golden replays.
+
+## Derived data
+
+Some of what a match holds is worked out from the state and is not state: the spatial index and the route cache. Such data is not walked, so it is in neither the state hash nor a snapshot. That is safe only under one rule:
+
+**Derived data is a function of the state and of the match's fixed data, and of nothing else.** The same state gives the same answers, in the same order, whatever happened before.
+
+- No history. An answer may not depend on what was asked earlier, on how long the match has run, or on whether the data was kept up to date step by step or rebuilt from nothing. The route cache may drop a route at any moment because the route found again is the same route, and the route budget charges a route its search cost whether or not the cache still had it.
+- Nothing in the state may depend on how much derived data there is: on what a cache holds, how full it is or how many searches have run.
+- `Match.RefreshDerivedState()` rebuilds whatever must agree with the world before the next tick. Everything that changes the world from outside a tick calls it: `Snapshot.Restore(match, reader)` does, and a test that places units does.
+- New derived data is added to `RefreshDerivedState`, and to the comparison in `SnapshotAssert` that checks a restored match answers as the match it was taken from.
+
 ## Commands
 
 A `Command` is the only way anything outside the simulation changes it. It is immutable data: a type, the player, a list of entities, and a target position, a target entity or a content ID.
@@ -143,26 +166,32 @@ public void Walk(IStateWalker walker)
 
 ## Snapshots
 
-`Snapshot.Write(world, writer)` writes the whole state as bytes: the letters `SNAP`, a layout version, the names of the stores, every field the walk visits, and last the state hash. `Snapshot.Restore(simulation, reader)` reads it back.
+`Snapshot.Write(world, writer)` writes the whole state as bytes: the letters `SNAP`, a layout version, the names of the stores, every field the walk visits, and last the state hash. `Snapshot.Restore(match, reader)` reads it back into a match, and `Snapshot.Restore(simulation, reader)` into a simulation that is not part of one.
 
 - **A snapshot is state and nothing else.** Systems, command handlers and data are not in it. To restore, build the match the same way again and read the snapshot into it. Restoring into a world with other stores is refused, by name.
 - **The command queue is not in it.** Restoring empties the queue and makes the snapshot's tick the next to run; queue again what should run from there. Whatever needs the waiting commands kept, such as a save game, writes them beside the snapshot with `CommandQueue.CopyPendingTo` and `CommandEncoding`.
 - **A snapshot checks itself.** After reading, `Restore` hashes the world and compares the result with the hash at the end of the snapshot. Damage anywhere, and a walk that does not assign its results back, both end in `InvalidDataException`. The world is then half replaced and must not be used.
 - **Restoring leaves nothing behind.** Whatever the world held before is gone, including values in fields a walk forgot.
-- **What is worked out from the state is not in a snapshot.** The spatial index and the route cache are such data: the same state always gives the same answers, so they are neither hashed nor written. After restoring into a match, call `Match.RefreshDerivedState()`, which rebuilds what must agree with the world before the next tick.
+- **What is worked out from the state is not in a snapshot.** The spatial index and the route cache are such data (see "Derived data"). Restore a match with `Snapshot.Restore(match, reader)`, which restores its simulation and then calls `Match.RefreshDerivedState()`. Everything that restores a match goes through that one method; restoring only the simulation of a match leaves its spatial index answering for the old world.
 - Take a snapshot between ticks.
 
-What neither the hash nor a snapshot can notice is a field that is left out of the walk altogether. The restored run then goes its own way some ticks later, and one test per world catches that, by taking a snapshot in the middle of a run, restoring it and continuing beside the run that was never interrupted:
+What neither the hash nor a snapshot can notice is a field that is left out of the walk altogether. One test per world catches that, by taking a snapshot in the middle of a run, restoring it and continuing beside the run that was never interrupted:
 
 ```csharp
 SnapshotAssert.RestoresAndContinues(BuildTheMatch, script, snapshotTick: 40, lastTick: 200);
 ```
 
-`SnapshotAssert` is in `tests/Sim.Tests/Serialization/`. It takes a function that builds the match, or one that builds a `Simulation` for a world that is not a match. Every system adds this test for a run in which its own stores change after the snapshot, with the snapshot taken in each state its values can be in. `MatchSnapshotTests` in the same folder does so for movement: units standing, waiting for a route, walking a route, walking straight and arrived.
+`SnapshotAssert` is in `tests/Sim.Tests/Serialization/`. It takes a function that builds the match, or one that builds a `Simulation` for a world that is not a match. It checks three things:
+
+- The run continued from the restored world has the state hash of the uninterrupted run after every tick. This catches a missing field that the rules read, and state kept outside the stores.
+- Every value in every `ComponentStore<T>` of the restored world equals, field for field, the value in the world the snapshot was taken from. This catches a missing field that no rule reads yet, such as the way a unit faces before anything turns to shoot. Nothing else would: the hash leaves the field out too.
+- For a match, the spatial index of the restored match lists the same entities as that of the match the snapshot was taken from, for every square of the map. This catches a restore that does not refresh derived data.
+
+Every system adds this test for a run in which its own stores change before and after the snapshot, with the snapshot taken in each state its values can be in. `MatchSnapshotTests` in the same folder does so for movement: units standing, waiting for a route, walking a route, walking straight and arrived.
 
 ## Bytes
 
-Everything that puts simulation data on bytes uses one format, in `src/Sim/Serialization/` (namespace `Sim.Serialization`): encoded commands and snapshots now, replay files and network messages later.
+Everything that puts simulation data on bytes uses one format, in `src/Sim/Serialization/` (namespace `Sim.Serialization`): encoded commands, snapshots, the description of a match, replay files and the messages of network play.
 
 - **`ByteWriter`** appends values to a buffer and **`ByteReader`** reads them back in the same order. The format is a plain sequence of values: no tags, no padding, and no lengths except the counts described here.
 - Whole numbers are little-endian at a fixed width, so the bytes are the same on every machine. Each method names its width (`WriteInt32`, `WriteUInt16`); nothing is chosen by overload.
@@ -185,42 +214,106 @@ Everything that puts simulation data on bytes uses one format, in `src/Sim/Seria
 
 **`CommandEncoding`** is the one encoding of a `Command`: 26 bytes plus 4 for each entity, laid out in the comment on the class. It keeps every value a command can hold and judges none of them. An unknown type or an entity that does not exist reads back as written, and the simulation drops such a command when it runs, as it does for one that never left the machine. A command does not carry its tick; whatever holds commands says which tick they are for. `CommandEncoding.Version` goes up whenever the layout changes, including when `Command` gains a field. Do not write a second encoding of a command anywhere.
 
-## Bytes
+## The description of a match
 
-Everything that puts simulation data on bytes uses one format, in `src/Sim/Serialization/` (namespace `Sim.Serialization`): encoded commands now, snapshots, replay files and network messages later.
+`MatchDescription` holds what every machine needs to build the same match: the game version, the content hash of the data, the map ID, the seed, and the players with their starts. It has one encoding, written with `ByteWriter`: a replay file begins with it, and the host of a network match sends the same bytes to every client.
 
-- **`ByteWriter`** appends values to a buffer and **`ByteReader`** reads them back in the same order. The format is a plain sequence of values: no tags, no padding, and no lengths except the counts described here.
-- Whole numbers are little-endian at a fixed width, so the bytes are the same on every machine. Each method names its width (`WriteInt32`, `WriteUInt16`); nothing is chosen by overload.
+```text
+2 bytes    the layout version, MatchDescription.Version
+text       the game version
+32 bytes   the content hash of the data
+text       the ID of the map
+8 bytes    the seed
+a count    the number of players, 1 to 8
+4 bytes    for each player, the index of its start in the map's list, or -1 for none
+```
 
-| Value | Bytes |
-| --- | --- |
-| `byte`, `bool` | 1. A `bool` is 1 or 0. |
-| `ushort` | 2 |
-| `int`, `uint`, `EntityId`, `Fixed` (its raw value) | 4 |
-| `long`, `ulong` | 8 |
-| `Int128` | 16: the low 64 bits, then the high 64 bits |
-| `Angle` | 2: its units, from 0 to 4,095 |
-| `Fraction` | 32: numerator, then denominator |
-| A count | 4. Never negative. |
-| Text | A count of bytes, then the text as UTF-8 |
+- `description.FindProblem(data)` says in a sentence why the match cannot be built from the data a machine has (other data, no such map, a start the map does not have), or returns null. `description.CreateMatch(data)` builds the match with `MatchSetup.Create`, or throws `InvalidDataException` with that sentence.
+- The content hash decides whether a match can be built. The game version is text that the description only carries. Network peers refuse each other when theirs differ. A replay is run by whatever build reads it, because showing that a later build still computes the same match is what a recorded replay is for.
+- A player's number is its position in the list. Do not write a second encoding of these values anywhere.
 
-- **Every value has exactly one encoding.** The reader rejects every other form: a `bool` byte of 2, an angle of 4,096 or more, a fraction that is not in lowest terms, text that is not valid UTF-8. Bytes that were read without an error therefore write back as the same bytes, and two values are equal exactly when their bytes are.
-- **Nothing about the input is trusted.** Bytes come from other machines and from files. Whatever is wrong with them, the reader throws `InvalidDataException` and nothing else. `ReadCount` takes the smallest size one item can have and rejects a count that could not fit in the bytes that are left, so a caller may allocate for the count it gets.
-- After the last value of a message or a file, call `ExpectEnd()`: bytes left over are an error too.
+## Replays
 
-**`CommandEncoding`** is the one encoding of a `Command`: 26 bytes plus 4 for each entity, laid out in the comment on the class. It keeps every value a command can hold and judges none of them. An unknown type or an entity that does not exist reads back as written, and the simulation drops such a command when it runs, as it does for one that never left the machine. A command does not carry its tick; whatever holds commands says which tick they are for. `CommandEncoding.Version` goes up whenever the layout changes, including when `Command` gains a field. Do not write a second encoding of a command anywhere.
+A replay is a recorded match: its description, the commands of every tick, and state hashes taken on the way. Running it again builds the match from the description, feeds it the commands and compares the state with every recorded hash, so a replay verifies itself. It holds no state; it is small, and a build that computes anything differently fails it at the first hash after the difference.
+
+```text
+4 bytes   the letters RPLY
+2 bytes   the layout version, Replay.Version
+2 bytes   CommandEncoding.Version
+2 bytes   the hash interval: a state hash is recorded every so many ticks, at least 1
+...       the match, as MatchDescription writes it
+then records, to the end of the file. Each starts with one byte that says which it is:
+  1  commands   4 bytes: the tick they run in. A count, at least 1, then each command as
+                CommandEncoding writes it, in the order they run.
+  2  hash       4 bytes: a number of ticks. 8 bytes: the state hash when that many had run.
+  3  end        4 bytes: the number of ticks the match ran. 8 bytes: its final state hash.
+                Nothing follows it.
+```
+
+- The hash records are those of tick 0, which is the match as it was built, and of every multiple of the hash interval the match reached, in order and none left out. The recorder's interval is `SimInfo.TicksPerSecond` unless it is told another: one hash for each second of game time.
+- Commands records come in ascending order of their ticks. Commands and hashes are not sorted against each other, because a network session learns the commands of a tick some ticks before the tick runs and records them then.
+- The end record comes less than one hash interval after the last hash. A file without one is the replay of a recording that stopped, because the game was closed or failed; it runs to its last hash, and on for as long as it has commands, but less than one interval more. These two rules bound the ticks a replay asks for by the size of its file, so a damaged file cannot ask for a run without end.
+- Commands for ticks at or after the end were scheduled and never ran. They stay in the file and are not run.
+
+**`ReplayRecorder`** writes a replay while the match runs. Create it when the match is built and before its first tick; it writes the header and the hash of tick 0. Then call `RecordCommands(tick, commands)` when the commands of a tick are known, in tick order and before that tick runs; `AfterTick()` after every tick; and `Finish()` when the match ends. It reads the world and changes nothing. It only ever appends to its `ByteWriter`, so the bytes written so far can be moved to a file at any moment (write out `WrittenSpan`, then `Clear()`), and a file that stops anywhere is still a replay of what came before.
+
+**`Replay.Read(reader)`** reads a replay and rejects, with `InvalidDataException`, anything that breaks the rules above. `Replay.Read(reader, keepWhatIsWhole: true)` instead keeps every record before the first one that is damaged or cut short and sets `DamagedAt`, for the file of a game that failed while writing. **`replay.Run(data)`** builds the match and runs it; the `ReplayResult` has the ticks run, the final hash, the number of hashes compared, and the first `ReplayMismatch` (the tick, the recorded hash and the computed one) or null. It stops at the first mismatch. **`replay.RecordAgain(match, description, writer)`** runs the commands in a match built from other rules or other data and writes the replay of that run.
+
+The `replay` tool does this from the command line, with no Godot:
+
+```sh
+dotnet run --project src/Tools -- replay verify <file or folder>... [--data <folder>]
+dotnet run --project src/Tools -- replay update <file or folder>... [--data <folder>]
+dotnet run --project src/Tools -- replay record <file> --map <id> [--data <folder>] [--starts 0,1] [--seed <n>] [--ticks <n>] [--orders <n>]
+```
+
+`verify` prints one line for each replay (`ok`, `PARTIAL` for a file that is cut short or has no end record, or `FAILED` with the tick and both hashes) and exits with 1 unless every replay is whole and reproduced. A folder is searched for files that end in `.replay`. The lines name no folder and are the same on every system. `update` and `record` are for golden replays, below. Replays are tooling for developers: the game has no screen for them.
+
+## Golden replays
+
+`tests/golden/replays/` holds recorded matches that every build must reproduce, and `tests/golden/data/` holds the data they were recorded with. `ci.yml` verifies them for every pull request:
+
+```sh
+dotnet run --project src/Tools -- replay verify tests/golden/replays --data tests/golden/data
+```
+
+`determinism.yml` does the same on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build, and a last job fails unless all eight reports are the same. So the final hash of every golden replay must match the value stored in the file and must be the same on every system.
+
+- **The data is frozen.** `tests/golden/data/` is a copy of `game/data/` from when the replays were last updated, plus the map `switchback`, which was made for these tests: long routes whose searches use up the route budget of a tick. Balance changes in `game/data/` do not touch it, so they do not change the golden replays. The folder must satisfy the loader like any data folder; when the loader comes to need a new file or a new value, add it there in the same pull request, and update the replays if their hashes change.
+- **The matches are scripted.** `replay record` plays a match with orders from a seeded generator (`ScriptedOrders` in `src/Tools/Replay/`): groups and single units sent across the map, every unit ordered separately in one tick, short hops, targets on blocked ground and off the map, and commands the simulation must drop. Nobody needs to play a match to record one. A test in `ReplayToolTests` lists what the golden replays must reach between them, such as a unit that waits more than a tick for its route, and fails when they no longer do.
+- **When a golden replay fails and the change was not meant to change the rules,** the change has broken determinism with earlier builds: fix the change. `verify` names the first tick whose hash differs, within one second of game time of the cause.
+- **When the change was meant to change the rules** (a system added or moved, a rule or a number in the frozen data changed, a field added to the state), update the stored hashes in the same pull request and say so in its description:
+
+  ```sh
+  dotnet run --project src/Tools -- replay update tests/golden/replays --data tests/golden/data
+  ```
+
+  `update` runs the commands of each replay under the rules as they are now and writes the file again with the new hashes and the content hash of the data folder. The commands stay as they were. If they no longer exercise the game (the units they name no longer exist, say), record a new replay instead.
+- **A milestone that adds rules adds a replay that reaches them:** it adds its commands to `ScriptedOrders`, after the kinds that are there, records a replay with `replay record`, and adds what the replay must reach to the list in `ReplayToolTests`. The replays there now were recorded with:
+
+  ```sh
+  replay record tests/golden/replays/ridge-skirmish.replay --data tests/golden/data --map ridge --starts 0,1 --seed 1 --orders 1 --ticks 3600
+  replay record tests/golden/replays/switchback-crossing.replay --data tests/golden/data --map switchback --starts 1,0 --seed 2 --orders 3 --ticks 6000
+  replay record tests/golden/replays/switchback-three-players.replay --data tests/golden/data --map switchback --starts 0,-,1 --seed 3 --orders 5 --ticks 2410
+  ```
+
+  Recording again with the same arguments gives the same file only while `ScriptedOrders` and the rules are unchanged.
 
 ## Adding a system
 
 1. Put it in its own folder under `src/Sim/` with its own state type: a struct implementing `IStateValue` for per-entity data, held in a `ComponentStore<T>`, or a class implementing `IStateStore`. Either way its `Walk` hands every field to the walker.
 2. Register the store with `World.AddStore`, under a unique name, before the first tick.
-3. Add the system with `Simulation.AddSystem`. Its place in that list is part of the rules of the game: moving it changes results.
+3. Add the system with `Simulation.AddSystem`. Its place in that list is part of the rules of the game: moving it changes results. For a system of a match, add a row to the table in "The systems of a match".
 4. For a new kind of command, add a line to `CommandType` (alphabetical, with the lowest unused number, never renumbered) and register its handler with `Simulation.SetCommandHandler`.
 5. Test it by building a small world, queueing commands, running ticks and asserting on the state. `tests/Sim.Tests/Core/ToyMatch.cs` is a worked example.
 6. Add the snapshot test for it: one line with `SnapshotAssert.RestoresAndContinues`, described above.
+7. Data it works out from the state follows the rule in "Derived data".
+8. Update the golden replays, whose hashes it changes, and add a replay that reaches its rules: see "Golden replays".
 
 ## What the tests pin
 
-Some tests hold recorded values: the reference output of the random generator, the hash of known input, the final state hash of a 600-tick toy match (`DeterminismTests`), and the bytes of an encoded command and of a small snapshot. They fail when the behaviour of the kernel changes in any way: rounding, the sine table, the order of a tick, the hash, the byte format. If the change is intended, update the recorded value in the same pull request and say so. If it is not, the change has broken determinism with earlier builds.
+Some tests hold recorded values: the reference output of the random generator, the hash of known input, the final state hash of a 600-tick toy match (`DeterminismTests`), and the bytes of an encoded command, of a small snapshot and of a match description. They fail when the behaviour of the kernel changes in any way: rounding, the sine table, the order of a tick, the hash, the byte format. If the change is intended, update the recorded value in the same pull request and say so. If it is not, the change has broken determinism with earlier builds.
 
-CI runs these tests on Linux for every pull request. The workflow `determinism.yml` runs them on Linux, Windows and macOS, on x86_64 and on Apple silicon, as a Debug and as a Release build: on every push to `main`, every night, and for a pull request that changes the workflow or the build settings. A recorded value that one system computes differently fails there. Golden replays, which arrive later in milestone M6, add whole recorded matches to the same check.
+CI runs these tests on Linux for every pull request. The workflow `determinism.yml` runs them on Linux, Windows and macOS, on x86_64 and on Apple silicon, as a Debug and as a Release build: on every push to `main`, every night, and for a pull request that changes the workflow or the build settings. A recorded value that one system computes differently fails there.
+
+The golden replays add whole recorded matches to both checks. The pinned values above guard the kernel; the golden replays guard the rules of a match built by `MatchSetup`, and they are the values that a deliberate change to those rules updates.

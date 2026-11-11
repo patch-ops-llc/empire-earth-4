@@ -1,0 +1,72 @@
+// The constants of the rule set. These are the values the game design says to tune first.
+// Whole numbers are bare; anything with a fraction is text, such as "1.25", so it is read exactly.
+{
+  "$schema": "../../../schemas/rules.schema.json",
+
+  // Every line (design 2.2) and structure (design 2.5) the design names. Other files may refer to
+  // these IDs before the line or structure has a data file of its own.
+  "roster": {
+    "lines": ["line_infantry", "guard", "cavalry_armor", "artillery", "support", "air"],
+    "structures": [
+      "capitol",
+      "outpost",
+      "generator",
+      "barracks",
+      "works",
+      "airfield",
+      "academy",
+      "wall",
+      "tower",
+      "strategic_defense",
+      "strategic_battery"
+    ]
+  },
+
+  // Design 1.4. The epoch is the highest tier that "tracks_needed" tracks have reached, and no
+  // track may be more than "reach" tiers above it.
+  "epoch": { "tracks_needed": 3, "reach": 2 },
+
+  // Design 1.3. Multipliers on the research table: at or below the epoch, one above, two above.
+  "research_price": {
+    "catch_up": { "cost": "0.5", "time": "0.5" },
+    "frontier": { "cost": "1", "time": "1" },
+    "ahead": { "cost": "1.5", "time": "1" }
+  },
+
+  // Design 2.3. A chassis uses track tiers within this many tiers of its own epoch.
+  "effective_tier_window": 2,
+
+  // Design 2.3 and 4.2. What one tier of Firepower, Protection, Mobility and Extraction multiplies.
+  "per_tier": { "damage": "1.25", "hp": "1.25", "speed": "1.08", "income": "1.12" },
+
+  // Design 2.3. What one step of offset multiplies in a unit's price and build time.
+  "per_step": { "quality_cost": "1.15", "manufacturing_cost": "0.90", "manufacturing_time": "0.80" },
+
+  // Design 2.3. Most accents one unit carries.
+  "accent_slots": 2,
+
+  // Design 4.1. Supply cap is 40 + 15 per Logistics tier.
+  "supply_cap": { "base": 40, "per_logistics_tier": 15 },
+
+  // Design 2.5. In the second path search, crossing one enemy wall tile costs this many tiles of walking.
+  "wall_crossing_cost": 20,
+
+  // Design 5.2, first playable.
+  "match": { "start_epoch": 1, "epoch_cap": 4 },
+
+  // Design 5.2. Every player starts with a Capitol and this.
+  "start": { "workers": 6, "materials": 400, "energy": 100 },
+
+  // What every map must satisfy (design 5.3 and 5.4). datacheck enforces these on maps/*.jsonc.
+  "map": {
+    // The starting Capitol's footprint (4 by 4) and territory radius (design 2.5). They are repeated
+    // here because structures have no data files yet; they must agree with the Capitol once it has one.
+    "start_territory": { "footprint": 4, "radius": 16 },
+    // A deposit covers 2 by 2 tiles.
+    "deposit_size": 2,
+    // Two in each main base, one at each natural expansion, four contested: ten in total.
+    "deposits": { "main_per_player": 2, "natural_per_player": 1, "contested": 4 },
+    "chokepoint_width": { "min": 4, "max": 8 },
+    "open_field_min_width": 20
+  }
+}

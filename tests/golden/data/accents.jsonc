@@ -1,0 +1,74 @@
+// The accent each track gives a unit, and what its two levels do (game design 2.3).
+//
+// A unit gets a track's accent at level I when that track is one tier ahead of the unit's chassis
+// and at level II when it is two ahead. Level II includes level I. Each key under "accents" is a
+// track ID from tracks.jsonc; a track without an entry gives no accent.
+//
+// Each perk is one of the kinds the game knows, with its numbers here. A multiplier is what the
+// value is multiplied by: "1.15" is 15% more and "0.75" is 25% less. A kind may appear only once in
+// this file.
+{
+  "$schema": "../../../schemas/accents.schema.json",
+  "accents": {
+    "firepower": {
+      "name": "Overgunned",
+      "level_1": {
+        // +15% range for a chassis that shoots.
+        "range_bonus": { "multiplier": "1.15" },
+        // +15% attack rate for a melee chassis: 23 attacks in the time of 20.
+        "attack_rate_bonus": { "multiplier": "1.15" }
+      },
+      "level_2": {
+        // Every attack also deals 30% of its damage to enemies within 1 tile of the target.
+        "splash": { "share": "0.3", "radius": 1 },
+        // A chassis whose attack has a blast, such as Artillery, gets +50% blast radius instead.
+        "blast_radius_bonus": { "multiplier": "1.5" }
+      }
+    },
+    "protection": {
+      "name": "Hardened",
+      "level_1": {
+        // Takes 25% less area damage.
+        "area_damage_reduction": { "multiplier": "0.75" }
+      },
+      "level_2": {
+        // Plated: takes 30% less damage from attackers whose effective Firepower is below this
+        // unit's effective Protection.
+        "plating": { "multiplier": "0.7" }
+      }
+    },
+    "mobility": {
+      "name": "Rapid",
+      "level_1": {
+        // +2 sight range.
+        "sight_bonus": { "tiles": 2 }
+      },
+      "level_2": {
+        // Charge: the first attack after moving 4 or more tiles deals +50% damage.
+        "charge": { "distance": 4, "multiplier": "1.5" }
+      }
+    },
+    "manufacturing": {
+      "name": "Standardized",
+      "level_1": {
+        // Batch: each queue slot produces two units in 1.5 times the build time of one.
+        "batch": { "time_multiplier": "1.5" }
+      },
+      "level_2": {
+        // Reserves: 25% of the unit's Materials cost is refunded when it dies.
+        "death_refund": { "share": "0.25" }
+      }
+    },
+    "logistics": {
+      "name": "Supplied",
+      "level_1": {
+        // Regenerates 2% of maximum hit points per second after 5 seconds without taking damage.
+        "regeneration": { "share_per_second": "0.02", "delay_seconds": 5 }
+      },
+      "level_2": {
+        // Light footprint: costs 1 less supply, but never less than 1.
+        "supply_reduction": { "amount": 1, "minimum": 1 }
+      }
+    }
+  }
+}

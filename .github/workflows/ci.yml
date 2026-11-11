@@ -43,6 +43,12 @@ jobs:
       - name: Check the game data
         run: dotnet run --no-build --project src/Tools -- datacheck game/data
 
+      # Runs the recorded matches in tests/golden/replays again, on the frozen data beside them,
+      # and fails when a state hash is not the recorded one: a change has changed what a match
+      # does. docs/determinism.md says what to do when the change was meant to.
+      - name: Run the golden replays
+        run: dotnet run --no-build --project src/Tools -- replay verify tests/golden/replays --data tests/golden/data
+
       - name: Install the Godot .NET build pinned in global.json
         uses: chickensoft-games/setup-godot@ac93246ea68518a384c1c280a496e5989341f2f6 # v2.4.3
         with:
