@@ -83,10 +83,16 @@ public class UdpMatchTests
     public void AClientTheHostDropsLearnsWhy()
     {
         using var match = new UdpMatch(2, Options(maxLagTicks: 75), RelayConditions.Milliseconds(10, jitter: 20, loss: 0.1));
-        match.Start();
-        match.Until(() => match.Clients.All(client => client.Tick >= 5), "the match is running");
         var slow = match.Clients[1];
         var other = match.Clients[0];
+
+        // Only the client that will hang is on the bad network. With one datagram in ten lost,
+        // a message can take over a second to get through, and a bundle that late followed by a
+        // report that late is more than the second and a half of lag this match allows: on a
+        // busy machine the host now and then dropped the other client as well.
+        other.Relay!.Conditions = new RelayConditions();
+        match.Start();
+        match.Until(() => match.Clients.All(client => client.Tick >= 5), "the match is running");
 
         slow.Frozen = true;
         match.Until(() => match.HostDepartures.Count > 0, "the host drops the client that hangs");
