@@ -40,6 +40,19 @@ public sealed class Match
     /// <summary>Speed, facing and move order of everything that can move.</summary>
     public required ComponentStore<Mover> Movers { get; init; }
 
+    /// <summary>The routes found so far. Not state: see <see cref="RouteCache"/>.</summary>
+    public required RouteCache Routes { get; init; }
+
+    /// <summary>Which entities are near a place. Not state: see <see cref="Map.SpatialIndex"/>.</summary>
+    public required SpatialIndex SpatialIndex { get; init; }
+
+    /// <summary>
+    /// Brings everything that is worked out from the state, and is not state itself, in line with
+    /// the world as it is now. Call it after the world has been changed from outside a tick: after
+    /// restoring a snapshot, and after a fixture has placed things.
+    /// </summary>
+    public void RefreshDerivedState() => SpatialIndex.Rebuild();
+
     /// <summary>
     /// Places a unit that can move: an entity with a <see cref="Body"/> and a <see cref="Mover"/>.
     /// Call it before the first tick, or inside a tick from a system or a command handler, so that

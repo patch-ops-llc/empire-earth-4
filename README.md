@@ -30,10 +30,16 @@ The smoke test needs the Godot 4.7.2 .NET build on the `PATH` as `godot`:
 
 ```sh
 godot --headless --path game --import --build-solutions
-godot --headless --path game res://scenes/smoke_test.tscn --quit-after 600
+godot --headless --path game --quit-after 600 -- --smoke-test
 ```
 
-The second command must print a line that starts with `SMOKE_TEST_OK`. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, prints one line that starts with `SMOKE_TEST_OK` and quits. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+
+The line carries two hashes. `content_hash` is the hash of the data files as the game read them, and it must equal the one `datacheck` prints. `state_hash` is the hash of the match's state, and it must be the same on every system. `ci.yml` checks the first. `export.yml` checks both for every build it makes, and an exported build takes the same argument:
+
+```sh
+./Game.x86_64 --headless --quit-after 600 -- --smoke-test
+```
 
 ## Run the game
 
@@ -43,7 +49,9 @@ After the import command above has run once:
 godot --path game
 ```
 
-The game starts in `scenes/main.tscn`: a flat ground of 96 by 96 tiles with a grid, a strategy camera and a debug overlay. No simulation runs behind it yet.
+The game starts in `scenes/main.tscn`. It loads `game/data/` through the simulation's loader, builds one match for two players on the map `ridge` and draws it: the ground with a grid, a tree on every forest tile, a block of rock on every cliff tile and one shape for every unit, in its owner's color. The person at the machine is player 0, in blue. The seed of the match and the side of the map that player starts on are drawn for each run. The game only reads the match and never changes it.
+
+The match stands at tick 0. It will advance once the game runs it through the lockstep session, which is also how orders will reach it.
 
 | Control | Keys and mouse |
 | --- | --- |
@@ -63,15 +71,17 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 | --- | --- | --- |
 | `ci.yml` | Every pull request, on Linux | Build with warnings as errors, format check, tests, `datacheck`, Godot import and build, a check that Godot changed or created no file in the working tree, and the smoke test. |
 | `determinism.yml` | Every push to `main`, every night, and pull requests that change the workflow, `Directory.Build.props` or `global.json` | The tests on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build. The tests hold recorded values, so this is where a result that differs between systems shows up. |
-| `export.yml` | Every tag that starts with `v`, a manual run, and pull requests that change the workflow, `game/export_presets.cfg` or `Directory.Build.props` | Exports the Windows build on Linux and the macOS build on macOS, and uploads both. Runs the smoke test in a Linux export, in the Windows build on Windows and in the macOS build as an Apple silicon and as an Intel program. Opens the Windows and the macOS build in a window for 300 frames. |
+| `export.yml` | Every tag that starts with `v`, a manual run, and pull requests that change the workflow, `game/export_presets.cfg` or `Directory.Build.props` | Exports the Windows build on Linux and the macOS build on macOS, and uploads both. Runs the smoke test in a Linux export, in the Windows build on Windows and in the macOS build as an Apple silicon and as an Intel program. Opens the Windows and the macOS build in a window for 300 frames. Fails unless every build reports the content hash that `datacheck` prints and the same state hash as the others. |
 
 ## Layout
 
 | Path | Contents |
 | --- | --- |
 | `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) and `Serialization/` (the byte format, the encoding of a command, and snapshots). |
+| `src/Net/` | The lockstep network session. A plain .NET library that references only `Sim`: `Protocol/` (the messages and their bytes), `Session/` (the host, the client, and the two in one process for single-player) and `Transport/` (the connection interface, and the loopback used by single-player and tests). |
 | `src/Tools/` | The console tools, as one program: `dotnet run --project src/Tools -- <tool> [arguments]`. Each tool is a folder. So far: `datacheck`. |
 | `tests/Sim.Tests/` | Tests for `Sim` (xUnit v3 on Microsoft.Testing.Platform), in folders that match those of `src/Sim/`. |
+| `tests/Net.Tests/` | Tests for `Net`: whole matches between a host and several clients in one process, over a loopback with latency and jitter that the test controls. |
 | `tests/Tools.Tests/` | Tests for the tools, for the data in `game/data/` and for the schemas. |
 | `game/` | The Godot project: `project.godot`, `Game.csproj`, `scenes/`, `scripts/`. References `Sim`. |
 | `game/export_presets.cfg` | The export presets: Windows x86_64, macOS universal, and Linux x86_64, which the export workflow uses for its first smoke test. Each packs the data files with the game. |

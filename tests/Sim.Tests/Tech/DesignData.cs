@@ -14,6 +14,11 @@ internal static class DesignData
     public const string RulesPath = "rules.jsonc";
     public const string ResearchPath = "research.jsonc";
     public const string AccentsPath = "accents.jsonc";
+    public const string LineInfantryPath = "lines/line_infantry.jsonc";
+    public const string GuardPath = "lines/guard.jsonc";
+    public const string CavalryArmorPath = "lines/cavalry_armor.jsonc";
+    public const string ArtilleryPath = "lines/artillery.jsonc";
+    public const string AirPath = "lines/air.jsonc";
 
     private const int TierCount = 9;
 
@@ -118,14 +123,137 @@ internal static class DesignData
         }
         """;
 
-    /// <summary>A new copy of the files, for a test that edits one.</summary>
+    /// <summary>Line infantry (design 2.4): range 5, and one more at epochs 4, 6 and 8.</summary>
+    public const string LineInfantry = """
+        {
+          "id": "line_infantry",
+          "primary": "manufacturing",
+          "secondary": "firepower",
+          "built_at": "barracks",
+          "base": {
+            "hp": 60, "dps": 6, "speed": "3.0", "sight": 8, "supply": 2, "spacing": "1",
+            "cost": { "materials": 40, "energy": 0 },
+            "build_seconds": 12
+          },
+          "attack": { "kind": "ranged", "interval_seconds": "1", "range": 5, "projectile_speed": 20 },
+          "counters": { "guard": "1.25" },
+          "chassis": [
+            { "epoch": 1, "id": "peltast" },
+            { "epoch": 2, "id": "auxiliary" },
+            { "epoch": 3, "id": "crossbowman" },
+            { "epoch": 4, "id": "musketeer", "attack": { "range": 6 } },
+            { "epoch": 5, "id": "rifleman", "attack": { "range": 6 } },
+            { "epoch": 6, "id": "infantryman", "attack": { "range": 7 } },
+            { "epoch": 7, "id": "assault_rifleman", "attack": { "range": 7 } },
+            { "epoch": 8, "id": "combat_drone", "attack": { "range": 8 } },
+            { "epoch": 9, "id": "synth_trooper", "attack": { "range": 8 } }
+          ]
+        }
+        """;
+
+    /// <summary>Cavalry/Armor (design 2.4): melee, and ranged at 5 from epoch 5.</summary>
+    public const string CavalryArmor = """
+        {
+          "id": "cavalry_armor",
+          "primary": "mobility",
+          "secondary": "protection",
+          "built_at": "works",
+          "base": {
+            "hp": 160, "dps": 10, "speed": "4.5", "sight": 10, "supply": 3, "spacing": "1.5",
+            "cost": { "materials": 90, "energy": 30 },
+            "build_seconds": 24
+          },
+          "attack": { "kind": "melee", "interval_seconds": "1.5" },
+          "counters": { "line_infantry": "1.25", "artillery": "1.5" },
+          "cannot_hit": ["air"],
+          "chassis": [
+            { "epoch": 1, "id": "hippeus" },
+            { "epoch": 2, "id": "eques" },
+            { "epoch": 3, "id": "knight" },
+            { "epoch": 4, "id": "cuirassier" },
+            { "epoch": 5, "id": "landship", "attack": { "kind": "ranged", "range": 5, "projectile_speed": 20 } },
+            { "epoch": 6, "id": "medium_tank", "attack": { "kind": "ranged", "range": 5, "projectile_speed": 20 } },
+            { "epoch": 7, "id": "main_battle_tank", "attack": { "kind": "ranged", "range": 5, "projectile_speed": 20 } },
+            { "epoch": 8, "id": "autonomous_tank", "attack": { "kind": "ranged", "range": 5, "projectile_speed": 20 } },
+            { "epoch": 9, "id": "grav_tank", "attack": { "kind": "ranged", "range": 5, "projectile_speed": 20 } }
+          ]
+        }
+        """;
+
+    /// <summary>Artillery (design 2.4): range 9, 11 from epoch 4 and 13 from epoch 7; minimum range 3; blast radius 1.5.</summary>
+    public const string Artillery = """
+        {
+          "id": "artillery",
+          "primary": "firepower",
+          "secondary": "logistics",
+          "built_at": "works",
+          "base": {
+            "hp": 70, "dps": 12, "speed": "1.8", "sight": 8, "supply": 3, "spacing": "1",
+            "cost": { "materials": 90, "energy": 50 },
+            "build_seconds": 30
+          },
+          "attack": { "kind": "ranged", "interval_seconds": 4, "range": 9, "min_range": 3, "blast_radius": "1.5", "projectile_speed": 10 },
+          "counters": { "structures": "3", "cavalry_armor": "0.5" },
+          "cannot_hit": ["air"],
+          "chassis": [
+            { "epoch": 1, "id": "ballista" },
+            { "epoch": 2, "id": "onager" },
+            { "epoch": 3, "id": "trebuchet" },
+            { "epoch": 4, "id": "field_cannon", "attack": { "range": 11 } },
+            { "epoch": 5, "id": "howitzer", "attack": { "range": 11 } },
+            { "epoch": 6, "id": "rocket_artillery", "attack": { "range": 11 } },
+            { "epoch": 7, "id": "self_propelled_gun", "attack": { "range": 13 } },
+            { "epoch": 8, "id": "railgun", "attack": { "range": 13 } },
+            { "epoch": 9, "id": "particle_lance", "attack": { "range": 13 } }
+          ]
+        }
+        """;
+
+    /// <summary>Air (design 2.4): fast strike units from epoch 5.</summary>
+    public const string Air = """
+        {
+          "id": "air",
+          "primary": "mobility",
+          "secondary": "firepower",
+          "built_at": "airfield",
+          "base": {
+            "hp": 80, "dps": 14, "speed": "8.0", "sight": 12, "supply": 3, "spacing": "1",
+            "cost": { "materials": 100, "energy": 80 },
+            "build_seconds": 30
+          },
+          "attack": { "kind": "ranged", "interval_seconds": "1", "range": 4, "projectile_speed": 20 },
+          "counters": { "artillery": "1.5", "cavalry_armor": "1.25" },
+          "chassis": [
+            { "epoch": 5, "id": "biplane" },
+            { "epoch": 6, "id": "fighter_bomber" },
+            { "epoch": 7, "id": "strike_jet" },
+            { "epoch": 8, "id": "combat_uav" },
+            { "epoch": 9, "id": "aerospace_fighter" }
+          ]
+        }
+        """;
+
+    /// <summary>
+    /// A new copy of the files, for a test that edits one. It has every line of the design that
+    /// attacks; Support has no weapon and waits for the milestone that adds healing.
+    /// </summary>
     public static InMemoryDataFiles Files() => new InMemoryDataFiles()
         .Set(TracksPath, Tracks)
         .Set(RulesPath, Rules)
         .Set(ResearchPath, Research)
         .Set(AccentsPath, SampleData.Accents)
-        .Set("lines/guard.jsonc", Guard)
+        .Set(LineInfantryPath, LineInfantry)
+        .Set(GuardPath, Guard)
+        .Set(CavalryArmorPath, CavalryArmor)
+        .Set(ArtilleryPath, Artillery)
+        .Set(AirPath, Air)
         .Set(SampleData.MapPath, new MapBuilder().ToJson());
+
+    /// <summary>The chassis with this ID.</summary>
+    public static ChassisDef Chassis(string id) => Data.Chassis.Single(chassis => chassis.Id == id);
+
+    /// <summary>The index of the track with this ID.</summary>
+    public static int Track(string id) => Data.Tracks.ToList().FindIndex(track => track.Id == id);
 
     /// <summary>Tiers in the order the design writes a mix: FP, PR, MO, MF, LG, EX.</summary>
     public static int[] Mix(int firepower, int protection, int mobility, int manufacturing, int logistics, int extraction) =>

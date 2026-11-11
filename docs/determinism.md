@@ -149,15 +149,16 @@ public void Walk(IStateWalker walker)
 - **The command queue is not in it.** Restoring empties the queue and makes the snapshot's tick the next to run; queue again what should run from there. Whatever needs the waiting commands kept, such as a save game, writes them beside the snapshot with `CommandQueue.CopyPendingTo` and `CommandEncoding`.
 - **A snapshot checks itself.** After reading, `Restore` hashes the world and compares the result with the hash at the end of the snapshot. Damage anywhere, and a walk that does not assign its results back, both end in `InvalidDataException`. The world is then half replaced and must not be used.
 - **Restoring leaves nothing behind.** Whatever the world held before is gone, including values in fields a walk forgot.
+- **What is worked out from the state is not in a snapshot.** The spatial index and the route cache are such data: the same state always gives the same answers, so they are neither hashed nor written. After restoring into a match, call `Match.RefreshDerivedState()`, which rebuilds what must agree with the world before the next tick.
 - Take a snapshot between ticks.
 
 What neither the hash nor a snapshot can notice is a field that is left out of the walk altogether. The restored run then goes its own way some ticks later, and one test per world catches that, by taking a snapshot in the middle of a run, restoring it and continuing beside the run that was never interrupted:
 
 ```csharp
-SnapshotAssert.RestoresAndContinues(() => BuildTheMatch().Simulation, script, snapshotTick: 40, lastTick: 200);
+SnapshotAssert.RestoresAndContinues(BuildTheMatch, script, snapshotTick: 40, lastTick: 200);
 ```
 
-`SnapshotAssert` is in `tests/Sim.Tests/Serialization/`. Every system adds this test for a run in which its own stores change after the snapshot.
+`SnapshotAssert` is in `tests/Sim.Tests/Serialization/`. It takes a function that builds the match, or one that builds a `Simulation` for a world that is not a match. Every system adds this test for a run in which its own stores change after the snapshot, with the snapshot taken in each state its values can be in. `MatchSnapshotTests` in the same folder does so for movement: units standing, waiting for a route, walking a route, walking straight and arrived.
 
 ## Bytes
 

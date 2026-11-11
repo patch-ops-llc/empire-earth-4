@@ -3,7 +3,8 @@ namespace Sim.Data;
 /// <summary>
 /// Everything loaded from the data files, already checked. A position in one of these lists is that
 /// item's dense integer ID: tracks keep the order of <c>tracks.jsonc</c>, which the design's
-/// tie-breaks rely on, research goes by tier, accents by track, and lines and maps are sorted by ID.
+/// tie-breaks rely on, research goes by tier, accents by track, and lines, chassis and maps are
+/// sorted by ID.
 /// </summary>
 public sealed record GameData(
     IReadOnlyList<string> EpochNames,
@@ -13,6 +14,7 @@ public sealed record GameData(
     IReadOnlyList<ResearchTier> Research,
     IReadOnlyList<AccentDef> Accents,
     IReadOnlyList<LineDef> Lines,
+    IReadOnlyList<ChassisDef> Chassis,
     IReadOnlyList<MapDef> Maps,
     string ContentHash)
 {
@@ -25,6 +27,23 @@ public sealed record GameData(
         ArgumentOutOfRangeException.ThrowIfLessThan(tier, 2);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(tier, TierCount);
         return Research[tier - 2];
+    }
+
+    /// <summary>
+    /// The line with this roster index, as in <see cref="LineDef.Index"/> and <see cref="ChassisDef.Line"/>,
+    /// or null for a line of the roster that has no data file yet.
+    /// </summary>
+    public LineDef? LineOf(int line)
+    {
+        foreach (var candidate in Lines)
+        {
+            if (candidate.Index == line)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>The accent a track gives, or null for a track that gives none.</summary>

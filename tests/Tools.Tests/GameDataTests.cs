@@ -1,4 +1,5 @@
 using Sim.Data;
+using Sim.Tech;
 
 namespace Tools.Tests;
 
@@ -36,6 +37,60 @@ public class GameDataTests
             Assert.NotEmpty(accent.LevelOne.Kinds);
             Assert.NotEmpty(accent.LevelTwo.Kinds);
         });
+    }
+
+    /// <summary>
+    /// Every tier mix a match can reach resolves, and gives sane values for every chassis. This is
+    /// the whole space: each track from the start tier to the epoch cap.
+    /// </summary>
+    [Fact]
+    public void EveryTierMixWithinTheEpochCapResolves()
+    {
+        var data = DataLoader.Load(new DiskDataFiles(Repository.DataFolder)).Data!;
+        var (lowest, highest) = (data.Rules.Match.StartEpoch, data.Rules.Match.EpochCap);
+        var tiers = Enumerable.Repeat(lowest, data.Tracks.Count).ToArray();
+        var mixes = 0;
+        while (true)
+        {
+            var tech = TechResolver.Resolve(data, tiers);
+            mixes++;
+            Assert.InRange(tech.Epoch, lowest, highest);
+            Assert.All(tech.Research, offer => Assert.True(offer.Tier <= highest || !offer.IsAvailable));
+            foreach (var blueprint in tech.Blueprints)
+            {
+                Assert.True(blueprint.HitPoints > 0 && blueprint.DamagePerSecond > 0 && blueprint.SpeedPerTick.Raw > 0, blueprint.Chassis.Id);
+                Assert.True(blueprint.Materials + blueprint.Energy > 0 && blueprint.BuildTicks > 0, blueprint.Chassis.Id);
+                Assert.True(blueprint.Supply >= 1 && blueprint.BatchBuildTicks >= blueprint.BuildTicks, blueprint.Chassis.Id);
+                Assert.True(blueprint.Accents.Count <= data.Rules.AccentSlots, blueprint.Chassis.Id);
+            }
+
+            var track = 0;
+            while (track < tiers.Length && tiers[track] == highest)
+            {
+                tiers[track++] = lowest;
+            }
+
+            if (track == tiers.Length)
+            {
+                break;
+            }
+
+            tiers[track]++;
+        }
+
+        var perTrack = highest - lowest + 1;
+        Assert.Equal((int)Math.Pow(perTrack, data.Tracks.Count), mixes);
+    }
+
+    /// <summary>The first playable has four lines with 16 chassis (design 6); Air and Support come later.</summary>
+    [Fact]
+    public void EveryLineOfTheFirstPlayableHasAChassisForEachEpochUpToTheCap()
+    {
+        var data = DataLoader.Load(new DiskDataFiles(Repository.DataFolder)).Data!;
+
+        Assert.Equal(["artillery", "cavalry_armor", "guard", "line_infantry"], data.Lines.Select(line => line.Id));
+        Assert.All(data.Lines, line => Assert.Equal(Enumerable.Range(1, data.Rules.Match.EpochCap), line.Chassis.Select(chassis => chassis.Epoch)));
+        Assert.Equal(data.Chassis.Select(chassis => chassis.Id).Order(StringComparer.Ordinal), data.Chassis.Select(chassis => chassis.Id));
     }
 
     [Fact]

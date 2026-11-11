@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The lockstep netcode: protocol messages, the host and client session, and the connection
+    interface with its in-process loopback. It references Sim and must never reference Godot.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="../Sim/Sim.csproj" />
+  </ItemGroup>
+
+</Project>

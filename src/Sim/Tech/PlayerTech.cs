@@ -1,11 +1,12 @@
+using Sim.Data;
 using Sim.Numerics;
 
 namespace Sim.Tech;
 
 /// <summary>
-/// Everything that follows from one player's track tiers. <see cref="TechResolver.Resolve(Sim.Data.GameData, IReadOnlyList{int})"/>
+/// Everything that follows from one player's track tiers. <see cref="TechResolver.Resolve(GameData, IReadOnlyList{int})"/>
 /// makes it, and nothing in it changes afterwards. Lists that go by track are in the order of
-/// <see cref="Sim.Data.GameData.Tracks"/>.
+/// <see cref="GameData.Tracks"/>.
 /// </summary>
 public sealed class PlayerTech
 {
@@ -15,7 +16,8 @@ public sealed class PlayerTech
         int epochCap,
         int supplyCap,
         Fraction incomeMultiplier,
-        IReadOnlyList<ResearchOffer> research)
+        IReadOnlyList<ResearchOffer> research,
+        IReadOnlyList<ChassisBlueprint> blueprints)
     {
         Tiers = tiers;
         Epoch = epoch;
@@ -23,6 +25,7 @@ public sealed class PlayerTech
         SupplyCap = supplyCap;
         IncomeMultiplier = incomeMultiplier;
         Research = research;
+        Blueprints = blueprints;
     }
 
     /// <summary>The tiers this was resolved from, one per track.</summary>
@@ -40,4 +43,10 @@ public sealed class PlayerTech
 
     /// <summary>The next tier of each track, one entry per track.</summary>
     public IReadOnlyList<ResearchOffer> Research { get; }
+
+    /// <summary>
+    /// One blueprint for every chassis in the data, unlocked or not, in the order of
+    /// <see cref="GameData.Chassis"/>: the blueprint of a chassis is at its <see cref="ChassisDef.Index"/>.
+    /// </summary>
+    public IReadOnlyList<ChassisBlueprint> Blueprints { get; }
 }

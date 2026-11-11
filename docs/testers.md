@@ -1,6 +1,6 @@
 # Running a test build
 
-This is an early build of a hobby real-time strategy prototype. There is nothing to play yet: the build opens a window with a ground grid and a camera you can move. Its job for now is to show that the game starts on your machine.
+This is an early build of a hobby real-time strategy prototype. There is nothing to play yet. The build opens on a map with forest and cliffs, where your six workers stand in blue and the other player's six in red. Which side of the map you start on is chosen at random each time. You can move the camera, but the workers cannot be given orders yet. Its job for now is to show that the game starts on your machine.
 
 The builds are not signed, because signing costs money and this is a hobby project. Windows and macOS both warn about that the first time you start the game. The steps below get past the warning.
 
@@ -42,11 +42,9 @@ If the button does not appear, open Terminal instead. Type `xattr -dr com.apple.
 | Action | Input |
 | --- | --- |
 | Move the camera | W, A, S, D or the arrow keys, or push the pointer against an edge of the window |
-| Zoom | Mouse wheel, or the = and - keys |
+| Zoom | Mouse wheel, the = and - keys, or a pinch or two-finger scroll on a trackpad |
 | Show or hide the readout in the corner | F3 |
 | Quit | Close the window |
-
-Pinch and two-finger scroll on a trackpad should zoom and move the camera as well. Nobody has tried that yet, so say whether it works.
 
 ## What to know before multiplayer arrives
 

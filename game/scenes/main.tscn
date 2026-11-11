@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://pnrbeqcvok4b" path="res://scripts/RtsCamera.cs" id="2_camera"]
 [ext_resource type="Script" uid="uid://bsx30mppduxrr" path="res://scripts/DebugOverlay.cs" id="3_overlay"]
 [ext_resource type="Shader" uid="uid://ccbexiacjf5k2" path="res://scenes/ground_grid.gdshader" id="4_grid"]
+[ext_resource type="Script" uid="uid://bedmjxxsxtre2" path="res://scripts/WorldView.cs" id="5_world"]
 
 [sub_resource type="Environment" id="Environment_sky"]
 background_mode = 1
@@ -37,6 +38,9 @@ transform = Transform3D(0.81915206, 0.46984634, -0.32898995, 0, 0.57357645, 0.81
 
 [node name="Ground" type="MeshInstance3D" parent="."]
 material_override = SubResource("ShaderMaterial_ground")
+
+[node name="World" type="Node3D" parent="."]
+script = ExtResource("5_world")
 
 [node name="CameraRig" type="Node3D" parent="."]
 script = ExtResource("2_camera")

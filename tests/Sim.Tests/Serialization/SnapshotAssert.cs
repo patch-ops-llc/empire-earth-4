@@ -1,12 +1,13 @@
 using Sim.Core;
 using Sim.Serialization;
+using Sim.Setup;
 
 namespace Sim.Tests.Serialization;
 
 /// <summary>
 /// The test every system adds for its own stores: a snapshot taken in the middle of a run, restored
 /// and continued, must match the run that was never interrupted. One line per world:
-/// <code>SnapshotAssert.RestoresAndContinues(() => BuildTheMatch().Simulation, script, snapshotTick: 40, lastTick: 200);</code>
+/// <code>SnapshotAssert.RestoresAndContinues(BuildTheMatch, script, snapshotTick: 40, lastTick: 200);</code>
 /// </summary>
 /// <remarks>
 /// It fails when a field that matters is missing from a store's <see cref="IStateStore.Walk"/>,
@@ -16,6 +17,36 @@ namespace Sim.Tests.Serialization;
 /// </remarks>
 internal static class SnapshotAssert
 {
+    /// <summary>
+    /// The check for a match. After each restore it calls <see cref="Match.RefreshDerivedState"/>,
+    /// as everything that restores a match must.
+    /// </summary>
+    /// <param name="build">
+    /// Builds the match as it is before its first tick, the same way every time it is called.
+    /// It is called four times.
+    /// </param>
+    /// <param name="script">The commands of the whole run, each with its tick.</param>
+    /// <param name="snapshotTick">The number of ticks run before the snapshot is taken. 0 takes it before the first.</param>
+    /// <param name="lastTick">The number of ticks in the whole run.</param>
+    public static void RestoresAndContinues(
+        Func<Match> build,
+        IReadOnlyList<(int Tick, Command Command)> script,
+        int snapshotTick,
+        int lastTick)
+    {
+        ArgumentNullException.ThrowIfNull(build);
+        RestoresAndContinues(
+            () =>
+            {
+                var match = build();
+                return new Subject(match.Simulation, match.RefreshDerivedState);
+            },
+            script,
+            snapshotTick,
+            lastTick);
+    }
+
+    /// <summary>The check for a simulation that is not a match, such as a test's own small world.</summary>
     /// <param name="build">
     /// Builds the simulation as it is before its first tick, the same way every time it is called.
     /// It is called four times.
@@ -29,10 +60,24 @@ internal static class SnapshotAssert
         int snapshotTick,
         int lastTick)
     {
+        ArgumentNullException.ThrowIfNull(build);
+        RestoresAndContinues(() => new Subject(build(), null), script, snapshotTick, lastTick);
+    }
+
+    /// <summary>The same check for a run without commands.</summary>
+    public static void RestoresAndContinues(Func<Simulation> build, int snapshotTick, int lastTick) =>
+        RestoresAndContinues(build, [], snapshotTick, lastTick);
+
+    private static void RestoresAndContinues(
+        Func<Subject> build,
+        IReadOnlyList<(int Tick, Command Command)> script,
+        int snapshotTick,
+        int lastTick)
+    {
         Assert.InRange(snapshotTick, 0, lastTick);
 
         // The run that is never interrupted, which everything else is compared with.
-        var uninterrupted = build();
+        var uninterrupted = build().Simulation;
         Enqueue(uninterrupted, script, fromTick: 0);
         var hashes = new ulong[lastTick + 1];
         hashes[0] = uninterrupted.World.ComputeHash();
@@ -43,7 +88,7 @@ internal static class SnapshotAssert
         }
 
         // The run the snapshot is taken from. Taking it must not disturb the run.
-        var source = build();
+        var source = build().Simulation;
         Enqueue(source, script, fromTick: 0);
         source.Run(snapshotTick);
         var writer = new ByteWriter();
@@ -56,15 +101,17 @@ internal static class SnapshotAssert
         // so holds other entities and values, none of which may survive the restore.
         RestoreAndContinue(build(), "The run restored into a new simulation");
         var used = build();
-        Enqueue(used, script, fromTick: 0);
-        used.Run(lastTick);
+        Enqueue(used.Simulation, script, fromTick: 0);
+        used.Simulation.Run(lastTick);
         RestoreAndContinue(used, "The run restored into a simulation that had run to the end");
 
-        void RestoreAndContinue(Simulation simulation, string what)
+        void RestoreAndContinue(Subject subject, string what)
         {
+            var simulation = subject.Simulation;
             var reader = new ByteReader(snapshot);
             Snapshot.Restore(simulation, reader);
             reader.ExpectEnd();
+            subject.AfterRestore?.Invoke();
 
             Assert.Equal(snapshotTick, simulation.World.Tick);
             Assert.Equal(snapshotTick, simulation.Commands.NextTick);
@@ -94,10 +141,6 @@ internal static class SnapshotAssert
         }
     }
 
-    /// <summary>The same check for a run without commands.</summary>
-    public static void RestoresAndContinues(Func<Simulation> build, int snapshotTick, int lastTick) =>
-        RestoresAndContinues(build, [], snapshotTick, lastTick);
-
     private static void Enqueue(Simulation simulation, IReadOnlyList<(int Tick, Command Command)> script, int fromTick)
     {
         foreach (var (tick, command) in script)
@@ -108,4 +151,7 @@ internal static class SnapshotAssert
             }
         }
     }
+
+    /// <summary>A simulation under test, and what brings the rest of its match in line after a restore.</summary>
+    private readonly record struct Subject(Simulation Simulation, Action? AfterRestore);
 }

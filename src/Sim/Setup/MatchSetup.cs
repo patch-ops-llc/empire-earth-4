@@ -46,6 +46,10 @@ public static class MatchSetup
         var bodies = world.AddStore(new ComponentStore<Body>(Body.StoreName));
         var movers = world.AddStore(new ComponentStore<Mover>(Mover.StoreName));
 
+        // Worked out from the state and not state itself. Match.RefreshDerivedState renews it.
+        var routes = new RouteCache(grid);
+        var spatialIndex = new SpatialIndex(grid, world.Entities, bodies);
+
         var simulation = new Simulation(world);
 
         // Command handlers, in alphabetical order of their types. The order here changes nothing.
@@ -53,7 +57,13 @@ public static class MatchSetup
 
         // Systems. Their order is a rule of the game: a pull request that adds one says where it
         // goes and why.
-        simulation.AddSystem(new MovementSystem(grid, bodies, movers));
+        //
+        // Routes are found before anyone moves, so that a unit ordered in this tick can take its
+        // first step in this tick. The spatial index is rebuilt right after movement, so that every
+        // system after it sees where things stand now. A system that moves bodies goes before it.
+        simulation.AddSystem(new RoutePlanningSystem(movers, routes));
+        simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
+        simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
 
         var match = new Match
         {
@@ -65,6 +75,8 @@ public static class MatchSetup
             Grid = grid,
             Bodies = bodies,
             Movers = movers,
+            Routes = routes,
+            SpatialIndex = spatialIndex,
         };
 
         for (var player = 0; player < players.Count; player++)
@@ -75,6 +87,7 @@ public static class MatchSetup
             }
         }
 
+        match.RefreshDerivedState();
         return match;
     }
 
