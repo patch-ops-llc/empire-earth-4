@@ -1,0 +1,75 @@
+name: Determinism
+
+# Every machine in a match must compute exactly the same state, so the tests that pin recorded
+# values (the random generator's output, the state hash of known input, the final hash of the toy
+# match, the bytes of an encoded command) run on every operating system and processor a player
+# can have. They need no Godot: only the .NET SDK.
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    # Nightly, at an odd minute to stay clear of the top of the hour.
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+  # A change to this file or to the build settings every project shares is checked before it
+  # merges. Other pull requests are covered by ci.yml on Linux and by the run on main.
+  pull_request:
+    paths:
+      - .github/workflows/determinism.yml
+      - Directory.Build.props
+      - global.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: determinism-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  tests:
+    name: Tests on ${{ matrix.system.name }}, ${{ matrix.configuration }}
+    runs-on: ${{ matrix.system.runner }}
+    timeout-minutes: 15
+    strategy:
+      # One system failing is the finding. The others still have to report.
+      fail-fast: false
+      matrix:
+        system:
+          - name: Linux x64
+            runner: ubuntu-latest
+          - name: Windows x64
+            runner: windows-latest
+          - name: macOS arm64
+            runner: macos-latest
+          - name: macOS x64
+            runner: macos-15-intel
+        # Debug checks whole-number overflow. Release is optimized, as an exported game is.
+        configuration:
+          - Debug
+          - Release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the .NET SDK pinned in global.json
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Show the system and the SDK
+        run: dotnet --info
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build with warnings as errors
+        run: dotnet build --no-restore --configuration ${{ matrix.configuration }} -warnaserror
+
+      # Every test project in the solution, so a new one is picked up without a change here.
+      - name: Test
+        run: dotnet test --no-build --configuration ${{ matrix.configuration }}

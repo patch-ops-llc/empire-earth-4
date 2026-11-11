@@ -6,8 +6,8 @@ namespace Sim.Tests.Core;
 /// <summary>Same input, same hash: the property the lockstep model stands on.</summary>
 public class DeterminismTests
 {
-    private const int Ticks = 600;
-    private const ulong Seed = 20261110;
+    internal const int Ticks = 600;
+    internal const ulong Seed = 20261110;
 
     /// <summary>
     /// The state hash of the toy match after its last tick. It pins the behaviour of the whole
@@ -15,7 +15,7 @@ public class DeterminismTests
     /// a tick and the hash itself. If a change to any of them is intended, update this value in the
     /// same pull request; if not, the change has broken determinism with earlier builds.
     /// </summary>
-    private const ulong ExpectedFinalHash = 0x38B6B6E5A9D9C5B7;
+    internal const ulong ExpectedFinalHash = 0x38B6B6E5A9D9C5B7;
 
     [Fact]
     public void TheSameSeedAndCommandsGiveTheSameHashAfterEveryTick()
