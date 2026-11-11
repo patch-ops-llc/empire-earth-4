@@ -16,6 +16,13 @@ namespace Sim.Combat;
 /// </remarks>
 public sealed class Targeting
 {
+    /// <summary>
+    /// How far inside its reach an idle unit aims to stand when it walks up to a target: a
+    /// sixteenth of a tile. It only keeps the rounding of the walk from leaving the unit a hair
+    /// outside its reach; the unit stops as soon as the target is in reach, before it gets there.
+    /// </summary>
+    public static Fixed StandMargin => Fixed.FromRaw(Fixed.RawOne / 16);
+
     private readonly MapGrid _grid;
     private readonly ComponentStore<Body> _bodies;
     private readonly ComponentStore<Combatant> _combatants;
@@ -106,26 +113,41 @@ public sealed class Targeting
     }
 
     /// <summary>
-    /// Where an idle unit would stand to fight a target it cannot reach from where it is: the
-    /// target's place, or the point nearest to it that is no further from the unit's post than its
-    /// acquisition range. False when the target is out of reach from there too, when the unit
-    /// already stands there, or when it cannot walk straight to that point: such a target cannot
-    /// be brought into range within the limit, and an idle unit leaves it alone.
+    /// Where an idle unit walks to for a target it cannot reach from where it stands (design 2.4:
+    /// it moves only as far as it must, and never further from its post than its acquisition
+    /// range). False when there is no such place: the target cannot be brought into reach within
+    /// that limit, and an idle unit leaves it alone.
     /// </summary>
     /// <remarks>
-    /// Both the unit and the point are inside the circle round the post, or the unit is on its way
-    /// back into it, so the straight walk between them never leaves the circle. A way round blocked
+    /// <para>
+    /// The place is on the straight line to the target, just inside reach of it, by
+    /// <see cref="StandMargin"/>; the unit is stopped on the way there, in the first tick the
+    /// target is in reach. Should that place be further from the post than the limit, the place is
+    /// the point of the limit nearest the target instead, if the target is in reach from there.
+    /// </para>
+    /// <para>
+    /// The unit must be able to walk straight to the place, and a melee unit must have a clear line
+    /// to the target from it. Both ends of the walk are inside the circle round the post, or the
+    /// unit is on its way back into it, so the walk never leaves the circle. A way round blocked
     /// ground could, which is why an idle unit takes none.
+    /// </para>
     /// </remarks>
     public bool TryFindStand(
         AttackProfile profile, FixedVector2 position, FixedVector2 post, FixedVector2 target, int targetLine, out FixedVector2 stand)
     {
         ArgumentNullException.ThrowIfNull(profile);
-        stand = FixedVector2.MoveTowards(post, target, profile.Acquisition);
-        var distance = FixedVector2.DistanceSquaredRaw(stand, target);
-        var limit = profile.Melee ? _rules.ReachSquared(profile.Line, targetLine) : profile.RangeSquared;
-        return distance <= limit
-            && stand != position
+        var reach = profile.Melee ? _rules.Reach(profile.Line, targetLine) : profile.Range;
+        stand = FixedVector2.MoveTowards(target, position, reach - StandMargin);
+        if (FixedVector2.DistanceSquaredRaw(post, stand) > profile.AcquisitionSquared)
+        {
+            stand = FixedVector2.MoveTowards(post, target, profile.Acquisition);
+            if (FixedVector2.DistanceSquaredRaw(stand, target) > FixedVector2.SquareRaw(reach))
+            {
+                return false;
+            }
+        }
+
+        return stand != position
             && _grid.IsCorridorClear(position, stand, Mover.Clearance)
             && (!profile.Melee || _grid.IsSegmentClear(stand, target));
     }
@@ -189,7 +211,8 @@ public sealed class Targeting
 
     /// <summary>
     /// Lands a hit: takes the damage off the target's hit points, with the target's side multiplied
-    /// in and the result rounded once. The target stays until the end of the tick even at zero.
+    /// in and the result rounded once. Hit points stop at zero, and the target stays until the end
+    /// of the tick even there.
     /// </summary>
     public void Hit(EntityId target, Fraction attackerSide, int attackerLine)
     {
@@ -200,6 +223,6 @@ public sealed class Targeting
         }
 
         ref var health = ref _health.ValueAt(index);
-        health.HitPoints = checked(health.HitPoints - _rules.DamageOf(attackerSide, attackerLine, LineOf(target)));
+        health.HitPoints = Math.Max(0, checked(health.HitPoints - _rules.DamageOf(attackerSide, attackerLine, LineOf(target))));
     }
 }

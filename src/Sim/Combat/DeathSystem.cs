@@ -3,7 +3,7 @@ using Sim.Core;
 namespace Sim.Combat;
 
 /// <summary>
-/// Destroys everything whose hit points are zero or less (design 2.4). It runs after every attack
+/// Destroys everything whose hit points are down to zero (design 2.4). It runs after every attack
 /// of the tick has been made, so a unit brought to zero in a tick still makes the attack it has due
 /// in that tick, and two units that kill each other in the same tick both die. The order of the
 /// units' IDs decides nothing.

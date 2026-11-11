@@ -289,11 +289,14 @@ public sealed class AttackSystem : ISystem
         }
 
         // The walk is planned when the unit takes up the target, and again when the target has
-        // moved on: at once if the unit has nowhere left to go, else on its turn to look.
+        // moved on: at once if the unit has nowhere left to go, else on its turn to look. An idle
+        // unit that has come to the end of its walk without the target in reach thinks again too.
         ref var mover = ref _movers.ValueAt(turn.Mover);
+        var arrived = mover.State == MoveState.Idle;
         var replan = retargeted
             || !unit.Engaged
-            || (unit.AimedAt != target.Position && (turn.TurnToLook || mover.State == MoveState.Idle));
+            || (arrived && unit.Order == UnitOrder.Idle)
+            || (unit.AimedAt != target.Position && (turn.TurnToLook || arrived));
         if (!replan)
         {
             return false;

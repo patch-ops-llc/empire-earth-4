@@ -6,13 +6,23 @@ using Sim.Tech;
 namespace Sim.Combat;
 
 /// <summary>
-/// The combat numbers of a match, worked out once from the data and from each player's tech: who
-/// can hit whom, the counter multipliers, melee reach, and what each player's chassis attack with.
-/// Not state: the same data and the same tiers give the same numbers on every machine.
+/// The combat numbers of a match, worked out from the data and from each player's tech: who can hit
+/// whom, the counter multipliers, melee reach, and what each player's chassis attack with. Not
+/// state: the same data and the same tiers give the same numbers on every machine.
 /// </summary>
 /// <remarks>
+/// <para>
 /// A line is named by its roster index, and <see cref="NoLine"/> stands for a target that belongs
 /// to no line: a worker, which no counter names (design 4.1).
+/// </para>
+/// <para>
+/// <b>Where the tech comes from.</b> Combat asks for a player's <see cref="PlayerTech"/> each time
+/// it needs it and keeps nothing but the attack profiles it made from the table it was last
+/// handed, so it can never fight with an old table. Until research runs in a match, the table is
+/// one resolved here from the starting tiers. Research in a match hands over its own lookup
+/// instead, through the second constructor, and then needs to tell combat nothing when a tier
+/// lands or a snapshot is restored.
+/// </para>
 /// </remarks>
 public sealed class CombatRules
 {
@@ -35,14 +45,31 @@ public sealed class CombatRules
     private readonly int _lineCount;
     private readonly bool[] _cannotHit;
     private readonly Fraction[] _multipliers;
-    private readonly long[] _reachSquared;
-    private readonly long[] _reachSquaredOfWorker;
+    private readonly Fixed[] _reach;
+    private readonly Fixed[] _reachOfWorker;
     private readonly Fixed[] _longestReach;
-    private readonly PlayerTech[] _tech;
+    private readonly Func<int, PlayerTech> _techOf;
+    private readonly PlayerTech[]? _ownTech;
+    private readonly PlayerTech?[] _profiled;
     private readonly AttackProfile[][] _profiles;
 
-    /// <summary>Works out the rules for a match in which every player starts with every track at the data's starting epoch.</summary>
+    /// <summary>
+    /// Works out the rules for a match in which every player keeps every track at the data's
+    /// starting epoch, or the tiers a test gives it with <see cref="SetTech"/>.
+    /// </summary>
     public CombatRules(GameData data, int playerCount)
+        : this(data, playerCount, null)
+    {
+    }
+
+    /// <summary>Works out the rules for a match in which a player's tech is looked up elsewhere.</summary>
+    /// <param name="data">The loaded game data.</param>
+    /// <param name="playerCount">The number of players.</param>
+    /// <param name="techOf">
+    /// Gives a player's tech as it is now. It must hand out another object whenever the tech has
+    /// changed, as the resolver does. Null for a table kept here.
+    /// </param>
+    public CombatRules(GameData data, int playerCount, Func<int, PlayerTech>? techOf)
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentOutOfRangeException.ThrowIfNegative(playerCount);
@@ -50,8 +77,8 @@ public sealed class CombatRules
         _lineCount = data.Rules.Lines.Count;
         _cannotHit = new bool[_lineCount * _lineCount];
         _multipliers = new Fraction[_lineCount * _lineCount];
-        _reachSquared = new long[_lineCount * _lineCount];
-        _reachSquaredOfWorker = new long[_lineCount];
+        _reach = new Fixed[_lineCount * _lineCount];
+        _reachOfWorker = new Fixed[_lineCount];
         _longestReach = new Fixed[_lineCount];
         Array.Fill(_multipliers, Fraction.One);
 
@@ -69,24 +96,34 @@ public sealed class CombatRules
 
             var spacing = line.Base.Spacing.ToFraction();
             var reach = Reach(Max(spacing, WorkerSpacing));
-            _reachSquaredOfWorker[line.Index] = FixedVector2.SquareRaw(reach);
+            _reachOfWorker[line.Index] = reach;
             _longestReach[line.Index] = reach;
             foreach (var other in data.Lines)
             {
                 reach = Reach(Max(spacing, other.Base.Spacing.ToFraction()));
-                _reachSquared[(line.Index * _lineCount) + other.Index] = FixedVector2.SquareRaw(reach);
+                _reach[(line.Index * _lineCount) + other.Index] = reach;
                 _longestReach[line.Index] = Fixed.Max(_longestReach[line.Index], reach);
             }
         }
 
+        _profiled = new PlayerTech?[playerCount];
+        _profiles = new AttackProfile[playerCount][];
+        if (techOf is not null)
+        {
+            _techOf = techOf;
+            return;
+        }
+
         var tiers = new int[data.Tracks.Count];
         Array.Fill(tiers, data.Rules.Match.StartEpoch);
-        _tech = new PlayerTech[playerCount];
-        _profiles = new AttackProfile[playerCount][];
+        var own = new PlayerTech[playerCount];
         for (var player = 0; player < playerCount; player++)
         {
-            SetTech(player, TechResolver.Resolve(data, tiers));
+            own[player] = TechResolver.Resolve(data, tiers);
         }
+
+        _ownTech = own;
+        _techOf = player => own[player];
     }
 
     /// <summary>
@@ -105,27 +142,41 @@ public sealed class CombatRules
     public static Fraction WorkerSpacing => Fraction.One;
 
     /// <summary>The tech a player's units fight with.</summary>
-    public PlayerTech TechOf(int player) => _tech[player];
+    public PlayerTech TechOf(int player) => _techOf(player);
 
     /// <summary>
-    /// Gives a player new tech, which every unit of that player fights with from then on. The match
-    /// setup calls it once per player; research in a match calls it when a tier is reached.
+    /// Gives a player other tech in the table kept here, which every unit of that player fights
+    /// with from then on. Not for a match whose tech is looked up elsewhere.
     /// </summary>
     public void SetTech(int player, PlayerTech tech)
     {
         ArgumentNullException.ThrowIfNull(tech);
-        var profiles = new AttackProfile[tech.Blueprints.Count];
-        for (var chassis = 0; chassis < profiles.Length; chassis++)
+        if (_ownTech is null)
         {
-            profiles[chassis] = ProfileFor(tech.Blueprints[chassis]);
+            throw new InvalidOperationException("This match's tech is not kept by its combat rules.");
         }
 
-        _tech[player] = tech;
-        _profiles[player] = profiles;
+        _ownTech[player] = tech;
     }
 
-    /// <summary>What a player's units of a chassis attack with.</summary>
-    public AttackProfile ProfileOf(int player, int chassis) => _profiles[player][chassis];
+    /// <summary>What a player's units of a chassis attack with, under the player's tech as it is now.</summary>
+    public AttackProfile ProfileOf(int player, int chassis)
+    {
+        var tech = _techOf(player);
+        if (!ReferenceEquals(tech, _profiled[player]))
+        {
+            var profiles = new AttackProfile[tech.Blueprints.Count];
+            for (var i = 0; i < profiles.Length; i++)
+            {
+                profiles[i] = ProfileFor(tech.Blueprints[i]);
+            }
+
+            _profiles[player] = profiles;
+            _profiled[player] = tech;
+        }
+
+        return _profiles[player][chassis];
+    }
 
     /// <summary>The roster index of a chassis's line.</summary>
     public int LineOf(int chassis) => _data.Chassis[chassis].Line;
@@ -139,11 +190,14 @@ public sealed class CombatRules
         targetLine == NoLine ? Fraction.One : _multipliers[(attackerLine * _lineCount) + targetLine];
 
     /// <summary>
-    /// The square of the melee reach of a line against a unit of another line: the larger spacing of
-    /// the two plus <see cref="UnitReachMargin"/>, in the unit of <see cref="FixedVector2.DistanceSquaredRaw"/>.
+    /// The melee reach of a line against a unit of another line: the larger spacing of the two plus
+    /// <see cref="UnitReachMargin"/>.
     /// </summary>
-    public long ReachSquared(int attackerLine, int targetLine) =>
-        targetLine == NoLine ? _reachSquaredOfWorker[attackerLine] : _reachSquared[(attackerLine * _lineCount) + targetLine];
+    public Fixed Reach(int attackerLine, int targetLine) =>
+        targetLine == NoLine ? _reachOfWorker[attackerLine] : _reach[(attackerLine * _lineCount) + targetLine];
+
+    /// <summary>The square of <see cref="Reach"/>, in the unit of <see cref="FixedVector2.DistanceSquaredRaw"/>.</summary>
+    public long ReachSquared(int attackerLine, int targetLine) => FixedVector2.SquareRaw(Reach(attackerLine, targetLine));
 
     /// <summary>
     /// The damage a hit does, in thousandths of a hit point: the attacker's side times the target's
@@ -158,7 +212,7 @@ public sealed class CombatRules
     /// </summary>
     public Health WorkerHealth(int player)
     {
-        var protection = _tech[player].Tiers[_data.TrackRoles.Protection];
+        var protection = _techOf(player).Tiers[_data.TrackRoles.Protection];
         var hitPoints = WorkerHitPoints * _data.Rules.PerTier.HitPoints.ToFraction().Pow(protection - 1);
         return Health.Full(hitPoints.RoundHalfUp(1000));
     }
@@ -198,6 +252,7 @@ public sealed class CombatRules
             Firepower = blueprint.EffectiveTiers[_data.TrackRoles.Firepower],
             IntervalTicks = attack.IntervalTicks,
             Rate = melee && blueprint.Perks.AttackRateBonus is { } bonus ? bonus.Multiplier.ToFraction() : Fraction.One,
+            Range = melee ? Fixed.Zero : range,
             RangeSquared = melee ? 0 : FixedVector2.SquareRaw(range),
             MinRangeSquared = !melee && blueprint.MinRange is { } minRange ? FixedVector2.SquareRaw(minRange) : 0,
             ShotSpeed = shotSpeed,
@@ -235,7 +290,10 @@ public sealed class AttackProfile
     /// <summary>What one tick of waiting counts toward <see cref="IntervalTicks"/>: 1, or more with the melee attack-rate bonus.</summary>
     public required Fraction Rate { get; init; }
 
-    /// <summary>The square of the range of a ranged attack, with the range bonus. Melee reach depends on the target: see <see cref="CombatRules.ReachSquared"/>.</summary>
+    /// <summary>The range of a ranged attack, with the range bonus. Zero for a melee attack, whose reach depends on the target: see <see cref="CombatRules.Reach"/>.</summary>
+    public required Fixed Range { get; init; }
+
+    /// <summary>The square of <see cref="Range"/>.</summary>
     public required long RangeSquared { get; init; }
 
     /// <summary>The square of the distance inside which a ranged attack cannot fire. Zero when there is none.</summary>
