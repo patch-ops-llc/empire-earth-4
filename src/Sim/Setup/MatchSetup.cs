@@ -59,10 +59,12 @@ public static class MatchSetup
         // goes and why.
         //
         // Routes are found before anyone moves, so that a unit ordered in this tick can take its
-        // first step in this tick. The spatial index is rebuilt right after movement, so that every
-        // system after it sees where things stand now. A system that moves bodies goes before it.
+        // first step in this tick. Units step apart right after they have walked, from where the
+        // walk left them. The spatial index is rebuilt after both, so that every system after it
+        // sees where things stand now. A system that moves bodies goes before it.
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
+        simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
 
         var match = new Match
