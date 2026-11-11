@@ -2,13 +2,14 @@ namespace Sim.Core;
 
 /// <summary>
 /// One system's part of the world state. Everything that can change during a match lives in a store
-/// registered with the <see cref="World"/>, so that the state hash covers it.
+/// registered with the <see cref="World"/>, so that the state hash and a snapshot cover it.
 /// </summary>
 public interface IStateStore
 {
     /// <summary>
-    /// A name unique among the world's stores. Stores are hashed in the ordinal order of their
-    /// names, so the order in which they were registered does not matter.
+    /// A name unique among the world's stores. Stores are walked in the ordinal order of their
+    /// names, so the order in which they were registered does not matter. A snapshot records the
+    /// names and can only be restored into a world that has the same ones.
     /// </summary>
     string Name { get; }
 
@@ -19,15 +20,23 @@ public interface IStateStore
     void RemoveEntities(ReadOnlySpan<EntityId> destroyed);
 
     /// <summary>
-    /// Feeds every field of the store to the hasher, in an order that depends only on the state:
-    /// by ascending entity ID, never in the order of a hash-based collection.
+    /// Hands every field of the store to the walker and takes back the value it returns, in an
+    /// order that depends only on the state: by ascending entity ID, never in the order of a
+    /// hash-based collection. This one method is the store's part of the state hash, of a snapshot
+    /// and of a restore; see <see cref="IStateWalker"/>.
     /// </summary>
-    void AddToHash(ref StateHasher hasher);
+    void Walk(IStateWalker walker);
 }
 
-/// <summary>A value that is part of the world state and can feed its fields to the state hash.</summary>
-public interface IStateHashable
+/// <summary>
+/// A value that is part of the world state: the per-entity data a <see cref="ComponentStore{T}"/>
+/// holds. It hands its fields to the walker as a store does.
+/// </summary>
+public interface IStateValue
 {
-    /// <summary>Feeds every field to the hasher, always in the same order.</summary>
-    void AddToHash(ref StateHasher hasher);
+    /// <summary>
+    /// Hands every field to the walker, always in the same order, and takes back the value it
+    /// returns: <c>Speed = walker.Field(Speed);</c>.
+    /// </summary>
+    void Walk(IStateWalker walker);
 }

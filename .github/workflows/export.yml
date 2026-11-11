@@ -15,6 +15,7 @@ on:
       - game/scripts/SmokeTest.cs
       - .github/workflows/export.yml
       - game/export_presets.cfg
+      - Directory.Build.props
 
 permissions:
   contents: read
