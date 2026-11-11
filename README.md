@@ -70,7 +70,7 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 | Workflow | Runs on | What it does |
 | --- | --- | --- |
 | `ci.yml` | Every pull request, on Linux | Build with warnings as errors, format check, tests, `datacheck`, Godot import and build, a check that Godot changed or created no file in the working tree, and the smoke test. |
-| `determinism.yml` | Every push to `main`, every night, and pull requests that change the workflow, `Directory.Build.props` or `global.json` | The tests on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build. The tests hold recorded values, so this is where a result that differs between systems shows up. |
+| `determinism.yml` | Every push to `main`, every night, and pull requests that change the workflow, `Directory.Build.props`, `global.json`, `src/Net.Udp/` or `tests/Net.Udp.Tests/` | The tests on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build. The tests hold recorded values, so this is where a result that differs between systems shows up. The transport's tests use real sockets, which also differ between systems. |
 | `export.yml` | Every tag that starts with `v`, a manual run, and pull requests that change the workflow, `game/export_presets.cfg` or `Directory.Build.props` | Exports the Windows build on Linux and the macOS build on macOS, and uploads both. Runs the smoke test in a Linux export, in the Windows build on Windows and in the macOS build as an Apple silicon and as an Intel program. Opens the Windows and the macOS build in a window for 300 frames. Fails unless every build reports the content hash that `datacheck` prints and the same state hash as the others. |
 
 ## Layout
@@ -97,7 +97,7 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 
 A path that is not in this table does not exist yet. Whoever creates one adds its row in the same pull request.
 
-Dependencies point one way: `game` and `Tools` may reference `Ai`, `Net` and `Sim`; `Ai` and `Net` may reference `Sim`; `Sim` references nothing.
+Dependencies point one way: `game` and `Tools` may reference `Ai`, `Net`, `Net.Udp` and `Sim`; `Net.Udp` may reference `Net` and `Sim`, and is the only project that references the LiteNetLib package; `Ai` and `Net` may reference `Sim`; `Sim` references nothing.
 
 ## Target framework
 
