@@ -4,8 +4,9 @@ public class NetAssemblyTests
 {
     /// <summary>
     /// The session runs without the engine, in tests and on a server: it may use the simulation
-    /// and the .NET base libraries and nothing else. The real network transport belongs to the
-    /// game project, behind <see cref="IConnection"/>.
+    /// and the .NET base libraries and nothing else. The real network transport is a library of
+    /// its own, <c>Net.Udp</c>, behind <see cref="IConnection"/>: sockets, the LiteNetLib package
+    /// and the thread that keeps connections alive live there.
     /// </summary>
     [Fact]
     public void NetReferencesOnlyTheSimulationAndTheDotNetBaseLibraries()

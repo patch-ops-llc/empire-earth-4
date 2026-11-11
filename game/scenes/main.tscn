@@ -5,6 +5,7 @@
 [ext_resource type="Script" uid="uid://bsx30mppduxrr" path="res://scripts/DebugOverlay.cs" id="3_overlay"]
 [ext_resource type="Shader" uid="uid://ccbexiacjf5k2" path="res://scenes/ground_grid.gdshader" id="4_grid"]
 [ext_resource type="Script" uid="uid://bedmjxxsxtre2" path="res://scripts/WorldView.cs" id="5_world"]
+[ext_resource type="Script" uid="uid://clgmbkyo1yuuj" path="res://ui/UnitControl.cs" id="6_units"]
 
 [sub_resource type="Environment" id="Environment_sky"]
 background_mode = 1
@@ -50,6 +51,9 @@ current = true
 fov = 30.0
 near = 0.5
 far = 400.0
+
+[node name="UnitControl" type="Node" parent="."]
+script = ExtResource("6_units")
 
 [node name="DebugOverlay" type="CanvasLayer" parent="." node_paths=PackedStringArray("Camera")]
 layer = 100

@@ -1,6 +1,6 @@
 # Running a test build
 
-This is an early build of a hobby real-time strategy prototype. There is nothing to play yet. The build opens on a map with forest and cliffs, where your six workers stand in blue and the other player's six in red. Which side of the map you start on is chosen at random each time. You can move the camera, but the workers cannot be given orders yet. Its job for now is to show that the game starts on your machine.
+This is an early build of a hobby real-time strategy prototype, and the first one you can do something in. You have six workers on a map with forest and a ridge of cliffs, and you can select them and send them round it. There is nothing to build and nobody to fight yet. Its job for now is to show that the game starts on your machine, and that selecting units and moving them works.
 
 The builds are not signed, because signing costs money and this is a hobby project. Windows and macOS both warn about that the first time you start the game. The steps below get past the warning.
 
@@ -43,8 +43,23 @@ If the button does not appear, open Terminal instead. Type `xattr -dr com.apple.
 | --- | --- |
 | Move the camera | W, A, S, D or the arrow keys, or push the pointer against an edge of the window |
 | Zoom | Mouse wheel, the = and - keys, or a pinch or two-finger scroll on a trackpad |
+| Select one of your units | Click it |
+| Select several | Hold the left button and drag a box round them |
+| Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is already in |
+| Clear the selection | Click the ground |
+| Send the selected units somewhere | Right-click the ground. On a trackpad that is a click with two fingers, unless you have set it otherwise |
 | Show or hide the readout in the corner | F3 |
 | Quit | Close the window |
+
+## What you will see
+
+- Your workers are blue and the other player's are red. Which side of the map you start on is chosen at random each time.
+- Selected units have a green ring under them. A right-click leaves a yellow ring that closes on the place they are going to.
+- Units find their own way round the cliffs and the forest. A unit that needs a way round stands still for a moment while it works one out.
+- Nobody can stand on cliffs or among trees. If you send units there, they go to the nearest place they can reach, and the yellow ring jumps to it.
+- Units sent to the same place end up standing inside each other, on one point. They do not make room for each other yet.
+- The other player's workers never move. Nothing controls them yet.
+- There is no Capitol and nothing to build.
 
 ## What to know before multiplayer arrives
 

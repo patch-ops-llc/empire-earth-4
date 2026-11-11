@@ -34,9 +34,9 @@ godot --headless --path game --import --build-solutions
 godot --headless --path game --quit-after 600 -- --smoke-test
 ```
 
-The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, prints one line that starts with `SMOKE_TEST_OK` and quits. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, gives it a fixed script of four move orders through the session, runs it for 600 ticks, prints one line that starts with `SMOKE_TEST_OK` and quits. It takes about a second. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
 
-The line carries two hashes. `content_hash` is the hash of the data files as the game read them, and it must equal the one `datacheck` prints. `state_hash` is the hash of the match's state, and it must be the same on every system. `ci.yml` checks the first. `export.yml` checks both for every build it makes, and an exported build takes the same argument:
+The line carries two hashes. `content_hash` is the hash of the data files as the game read them, and it must equal the one `datacheck` prints. `state_hash` is the hash of the match's state after the script, and it must be the same on every system. `ci.yml` checks the first. `export.yml` checks both for every build it makes, and an exported build takes the same argument:
 
 ```sh
 ./Game.x86_64 --headless --quit-after 600 -- --smoke-test
@@ -50,14 +50,21 @@ After the import command above has run once:
 godot --path game
 ```
 
-The game starts in `scenes/main.tscn`. It loads `game/data/` through the simulation's loader, builds one match for two players on the map `ridge` and draws it: the ground with a grid, a tree on every forest tile, a block of rock on every cliff tile and one shape for every unit, in its owner's color. The person at the machine is player 0, in blue. The seed of the match and the side of the map that player starts on are drawn for each run. The game only reads the match and never changes it.
+The game starts in `scenes/main.tscn`. It loads `game/data/` through the simulation's loader, builds one match for two players on the map `ridge` and draws it: the ground with a grid, a tree on every forest tile, a block of rock on every cliff tile and one shape for every unit, in its owner's color. The person at the machine is player 0, in blue. The seed of the match and the side of the map that player starts on are drawn for each run.
 
-The match stands at tick 0. It will advance once the game runs it through the lockstep session, which is also how orders will reach it.
+The match runs through the lockstep session of `src/Net/`, with the host and the player in one process: every frame the game hands the session the time that passed, and the session runs the ticks, 20 a second. The game only reads the match and never changes it. A move order leaves as a command through the session and runs a tick later. Player 1 has nobody to give it orders, so its workers stand still.
+
+Selection works without physics. A click or a box is turned into an area of the ground, the simulation's spatial index names the units there, and each is tested again where it appears on screen. Started with Godot's `--verbose`, the game prints every selection and every order.
 
 | Control | Keys and mouse |
 | --- | --- |
 | Pan | W A S D or the arrow keys, or move the pointer to a window edge |
 | Zoom | Mouse wheel, `=` and `-`, or a trackpad pinch or two-finger scroll |
+| Select a unit of your own | Left click on it |
+| Select several | Drag a box round them with the left button |
+| Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is in |
+| Clear the selection | Left click on the ground |
+| Send the selected units somewhere | Right click on the ground |
 | Show or hide the overlay | F3 |
 
 ## Test builds
@@ -71,7 +78,7 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 | Workflow | Runs on | What it does |
 | --- | --- | --- |
 | `ci.yml` | Every pull request, on Linux | Build with warnings as errors, format check, tests, `datacheck`, the golden replays, Godot import and build, a check that Godot changed or created no file in the working tree, and the smoke test. |
-| `determinism.yml` | Every push to `main`, every night, and pull requests that change the workflow, `Directory.Build.props` or `global.json` | The tests on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build. The tests hold recorded values, so this is where a result that differs between systems shows up. Each of the eight jobs then runs the golden replays, and a last job fails unless all eight report the same final hashes. |
+| `determinism.yml` | Every push to `main`, every night, and pull requests that change the workflow, `Directory.Build.props`, `global.json`, `src/Net.Udp/` or `tests/Net.Udp.Tests/` | The tests on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build. The tests hold recorded values, so this is where a result that differs between systems shows up. The transport's tests use real sockets, which also differ between systems. Each of the eight jobs then runs the golden replays, and a last job fails unless all eight report the same final hashes. |
 | `export.yml` | Every tag that starts with `v`, a manual run, and pull requests that change the workflow, `game/export_presets.cfg` or `Directory.Build.props` | Exports the Windows build on Linux and the macOS build on macOS, and uploads both. Runs the smoke test in a Linux export, in the Windows build on Windows and in the macOS build as an Apple silicon and as an Intel program. Opens the Windows and the macOS build in a window for 300 frames. Fails unless every build reports the content hash that `datacheck` prints and the same state hash as the others. |
 
 ## Layout
@@ -80,14 +87,17 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 | --- | --- |
 | `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) and `Serialization/` (the byte format, the encoding of a command, and snapshots). |
 | `src/Net/` | The lockstep network session. A plain .NET library that references only `Sim`: `Protocol/` (the messages and their bytes), `Session/` (the host, the client, and the two in one process for single-player) and `Transport/` (the connection interface, and the loopback used by single-player and tests). |
+| `src/Net.Udp/` | The real network under the session: a connection over UDP, a listener for the host and a connector for a client. A plain .NET library that references `Net` and the LiteNetLib package. Sockets, the package and the thread that keeps connections alive live here and nowhere else. |
 | `src/Tools/` | The console tools, as one program: `dotnet run --project src/Tools -- <tool> [arguments]`. Each tool is a folder. So far: `datacheck` checks a data folder, `balance-report` prints what the tech rules make of tier mixes, and `replay` runs recorded matches again and checks their state hashes. |
 | `tests/Sim.Tests/` | Tests for `Sim` (xUnit v3 on Microsoft.Testing.Platform), in folders that match those of `src/Sim/`. |
 | `tests/Net.Tests/` | Tests for `Net`: whole matches between a host and several clients in one process, over a loopback with latency and jitter that the test controls. |
+| `tests/Net.Udp.Tests/` | Tests for `Net.Udp` over real sockets on the local address, on ports the system picks: what a connection promises, the orderly close, and whole matches between a host and clients, through a relay that delays, reorders and loses datagrams. |
 | `tests/golden/` | The golden replays: `replays/` holds recorded matches that every build must reproduce on every system, and `data/` holds the frozen data they run on, which changes to `game/data/` do not touch. [determinism.md](docs/determinism.md) says how to update them. |
 | `tests/Tools.Tests/` | Tests for the tools, for the data in `game/data/` and for the schemas. |
-| `game/` | The Godot project: `project.godot`, `Game.csproj`, `scenes/`, `scripts/`. References `Sim`. |
+| `game/` | The Godot project: `project.godot`, `Game.csproj`, `scenes/`, `scripts/`, `ui/`. References `Sim` and `Net`. |
 | `game/export_presets.cfg` | The export presets: Windows x86_64, macOS universal, and Linux x86_64, which the export workflow uses for its first smoke test. Each packs the data files with the game. |
 | `game/data/` | The content of the game as JSON-with-comments files: tracks, rules, unit lines and maps. |
+| `game/ui/` | What the player does to the match, as scripts: the selection, the box and the rings that show it, and move orders with their mark on the ground. Orders leave through the session of `Net`. |
 | `schemas/` | JSON Schemas for the files in `game/data/`. |
 | `docs/` | [determinism.md](docs/determinism.md): the rules that keep the simulation deterministic, the kernel, the byte format, snapshots, replays and the golden replays. [data-authoring.md](docs/data-authoring.md): how the data files are written and checked. [testers.md](docs/testers.md): how a tester gets a build and starts it. |
 | `.github/workflows/` | `ci.yml`, `determinism.yml` and `export.yml`, described above. |
@@ -97,7 +107,7 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 
 A path that is not in this table does not exist yet. Whoever creates one adds its row in the same pull request.
 
-Dependencies point one way: `game` and `Tools` may reference `Ai`, `Net` and `Sim`; `Ai` and `Net` may reference `Sim`; `Sim` references nothing.
+Dependencies point one way: `game` and `Tools` may reference `Ai`, `Net`, `Net.Udp` and `Sim`; `Net.Udp` may reference `Net` and `Sim`, and is the only project that references the LiteNetLib package; `Ai` and `Net` may reference `Sim`; `Sim` references nothing.
 
 ## Target framework
 
