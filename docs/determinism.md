@@ -79,17 +79,6 @@ Nothing reads a clock. The caller decides when a tick runs; there are `SimInfo.T
 
 The order is a rule of the game: moving a system changes results, on every machine alike, and so changes every recorded hash. A pull request that adds a system adds a row here, says where the system goes and why, and updates the golden replays.
 
-## Derived data
-
-Some of what a match holds is worked out from the state and is not state: the spatial index and the route cache. Such data is not walked, so it is in neither the state hash nor a snapshot. That is safe only under one rule:
-
-**Derived data is a function of the state and of the match's fixed data, and of nothing else.** The same state gives the same answers, in the same order, whatever happened before.
-
-- No history. An answer may not depend on what was asked earlier, on how long the match has run, or on whether the data was kept up to date step by step or rebuilt from nothing. The route cache may drop a route at any moment because the route found again is the same route, and the route budget charges a route its search cost whether or not the cache still had it.
-- Nothing in the state may depend on how much derived data there is: on what a cache holds, how full it is or how many searches have run.
-- `Match.RefreshDerivedState()` rebuilds whatever must agree with the world before the next tick. Everything that changes the world from outside a tick calls it: `Snapshot.Restore(match, reader)` does, and a test that places units does.
-- New derived data is added to `RefreshDerivedState`, and to the comparison in `SnapshotAssert` that checks a restored match answers as the match it was taken from.
-
 ## Commands
 
 A `Command` is the only way anything outside the simulation changes it. It is immutable data: a type, the player, a list of entities, and a target position, a target entity or a content ID.
@@ -172,7 +161,7 @@ public void Walk(IStateWalker walker)
 - **The command queue is not in it.** Restoring empties the queue and makes the snapshot's tick the next to run; queue again what should run from there. Whatever needs the waiting commands kept, such as a save game, writes them beside the snapshot with `CommandQueue.CopyPendingTo` and `CommandEncoding`.
 - **A snapshot checks itself.** After reading, `Restore` hashes the world and compares the result with the hash at the end of the snapshot. Damage anywhere, and a walk that does not assign its results back, both end in `InvalidDataException`. The world is then half replaced and must not be used.
 - **Restoring leaves nothing behind.** Whatever the world held before is gone, including values in fields a walk forgot.
-- **What is worked out from the state is not in a snapshot.** The spatial index and the route cache are such data (see "Derived data"). Restore a match with `Snapshot.Restore(match, reader)`, which restores its simulation and then calls `Match.RefreshDerivedState()`. Everything that restores a match goes through that one method; restoring only the simulation of a match leaves its spatial index answering for the old world.
+- **What is worked out from the state is not in a snapshot.** The spatial index and the route cache are such data: see "Derived data" below. Restore a match with `Snapshot.Restore(match, reader)`, which restores its simulation and then calls `Match.RefreshDerivedState()`. Everything that restores a match goes through that one method; restoring only the simulation of a match leaves its spatial index answering for the old world.
 - Take a snapshot between ticks.
 
 What neither the hash nor a snapshot can notice is a field that is left out of the walk altogether. One test per world catches that, by taking a snapshot in the middle of a run, restoring it and continuing beside the run that was never interrupted:
@@ -188,6 +177,17 @@ SnapshotAssert.RestoresAndContinues(BuildTheMatch, script, snapshotTick: 40, las
 - For a match, the spatial index of the restored match lists the same entities as that of the match the snapshot was taken from, for every square of the map. This catches a restore that does not refresh derived data.
 
 Every system adds this test for a run in which its own stores change before and after the snapshot, with the snapshot taken in each state its values can be in. `MatchSnapshotTests` in the same folder does so for movement: units standing, waiting for a route, walking a route, walking straight and arrived.
+
+## Derived data
+
+Some of what a match holds is worked out from the state and is not state: the spatial index and the route cache. Such data is not walked, so it is in neither the state hash nor a snapshot. That is safe only under one rule:
+
+**Derived data is a function of the state and of the match's fixed data, and of nothing else.** The same state gives the same answers, in the same order, whatever happened before.
+
+- No history. An answer may not depend on what was asked earlier, on how long the match has run, or on whether the data was kept up to date step by step or rebuilt from nothing. The route cache may drop a route at any moment because the route found again is the same route, and the route budget charges a route its search cost whether or not the cache still had it.
+- Nothing in the state may depend on how much derived data there is: on what a cache holds, how full it is or how many searches have run.
+- `Match.RefreshDerivedState()` rebuilds whatever must agree with the world before the next tick. Everything that changes the world from outside a tick calls it: `Snapshot.Restore(match, reader)` does, and a test that places units does.
+- New derived data is added to `RefreshDerivedState`, and to the comparison in `SnapshotAssert` that checks a restored match answers as the match it was taken from.
 
 ## Bytes
 
