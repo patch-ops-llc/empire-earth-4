@@ -17,6 +17,28 @@ public class GameDataTests
     }
 
     [Fact]
+    public void EveryTierAboveTheFirstCanBeResearchedAndCostsSomething()
+    {
+        var data = DataLoader.Load(new DiskDataFiles(Repository.DataFolder)).Data!;
+
+        Assert.Equal(Enumerable.Range(2, data.TierCount - 1), data.Research.Select(research => research.Tier));
+        Assert.All(data.Research, research => Assert.True(research.Materials + research.Energy > 0, $"tier {research.Tier} is free"));
+    }
+
+    [Fact]
+    public void EveryAccentGivesSomethingAtBothLevels()
+    {
+        var data = DataLoader.Load(new DiskDataFiles(Repository.DataFolder)).Data!;
+
+        Assert.NotEmpty(data.Accents);
+        Assert.All(data.Accents, accent =>
+        {
+            Assert.NotEmpty(accent.LevelOne.Kinds);
+            Assert.NotEmpty(accent.LevelTwo.Kinds);
+        });
+    }
+
+    [Fact]
     public void TheHashDoesNotDependOnLineEndingsOnDisk()
     {
         using var copy = Repository.CopyOfData();

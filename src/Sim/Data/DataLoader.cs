@@ -30,7 +30,10 @@ public sealed class DataLoadResult
 /// </summary>
 public static class DataLoader
 {
-    private const string Layout = "tracks.jsonc, rules.jsonc, lines/<id>.jsonc and maps/<id>.jsonc";
+    private const string Layout = "tracks.jsonc, rules.jsonc, research.jsonc, accents.jsonc, lines/<id>.jsonc and maps/<id>.jsonc";
+
+    private static readonly string[] RequiredFiles =
+        [DataRules.TracksFile, DataRules.RulesFile, DataRules.ResearchFile, DataRules.AccentsFile];
 
     private static readonly JsonDocumentOptions JsonOptions = new()
     {
@@ -84,7 +87,7 @@ public static class DataLoader
 
     private static bool Classify(string path, List<string> linePaths, List<string> mapPaths, ErrorList errors)
     {
-        if (path is DataRules.TracksFile or DataRules.RulesFile)
+        if (Array.IndexOf(RequiredFiles, path) >= 0)
         {
             return true;
         }
@@ -143,7 +146,7 @@ public static class DataLoader
 
     private static void ReportMissing(SortedSet<string> paths, List<string> linePaths, List<string> mapPaths, ErrorList errors)
     {
-        foreach (var required in new[] { DataRules.TracksFile, DataRules.RulesFile })
+        foreach (var required in RequiredFiles)
         {
             if (!paths.Contains(required))
             {
@@ -176,12 +179,28 @@ public static class DataLoader
 
         IReadOnlyList<string> epochNames = [];
         IReadOnlyList<TrackDef> tracks = [];
+        TrackRoles? roles = null;
         var tracksAreValid = false;
         if (Root(DataRules.TracksFile) is { } tracksRoot)
         {
             var errorsBefore = errors.Count;
-            (epochNames, tracks) = TracksReader.Read(tracksRoot);
+            (epochNames, tracks, roles) = TracksReader.Read(tracksRoot);
             tracksAreValid = errors.Count == errorsBefore;
+        }
+
+        IReadOnlyList<ResearchTier> research = [];
+        IReadOnlyList<AccentDef> accents = [];
+        if (tracksAreValid)
+        {
+            if (Root(DataRules.ResearchFile) is { } researchRoot)
+            {
+                research = ResearchReader.Read(researchRoot, epochNames.Count);
+            }
+
+            if (Root(DataRules.AccentsFile) is { } accentsRoot)
+            {
+                accents = AccentsReader.Read(accentsRoot, tracks);
+            }
         }
 
         RuleSet? rules = null;
@@ -240,6 +259,8 @@ public static class DataLoader
             maps.Sort((left, right) => string.CompareOrdinal(left.Id, right.Id));
         }
 
-        return tracksAreValid && rules is not null ? new GameData(epochNames, tracks, rules, lines, maps, ContentHash: "") : null;
+        return tracksAreValid && roles is not null && rules is not null
+            ? new GameData(epochNames, tracks, roles, rules, research, accents, lines, maps, ContentHash: "")
+            : null;
     }
 }

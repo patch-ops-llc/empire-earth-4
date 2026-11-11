@@ -1,3 +1,5 @@
+using Sim.Data;
+
 namespace Sim.Tests.Data;
 
 /// <summary>What the loader rejects in <c>tracks.jsonc</c> and <c>rules.jsonc</c>.</summary>
@@ -16,15 +18,15 @@ public class TracksAndRulesTests
     {
         var files = SampleData.With(SampleData.TracksPath, "\"id\": \"logistics\"", "\"id\": \"firepower\"");
 
-        DataAssert.RejectedOnce(files, SampleData.TracksPath, "$.tracks[2].id", "track 'firepower' is defined twice");
+        DataAssert.RejectedOnce(files, SampleData.TracksPath, "$.tracks[4].id", "track 'firepower' is defined twice");
     }
 
     [Fact]
     public void ATrackGroupMustBeKnown()
     {
-        var files = SampleData.With(SampleData.TracksPath, "\"group\": \"more\"", "\"group\": \"bigger\"");
+        var files = SampleData.With(SampleData.TracksPath, "\"short\": \"LG\", \"group\": \"more\"", "\"short\": \"LG\", \"group\": \"bigger\"");
 
-        DataAssert.RejectedOnce(files, SampleData.TracksPath, "$.tracks[2].group", "unknown group 'bigger'");
+        DataAssert.RejectedOnce(files, SampleData.TracksPath, "$.tracks[4].group", "unknown group 'bigger'");
     }
 
     [Fact]
@@ -32,15 +34,40 @@ public class TracksAndRulesTests
     {
         var files = SampleData.With(SampleData.TracksPath, "\"name\": \"Logistics\"", "\"name\": \"\"");
 
-        DataAssert.RejectedOnce(files, SampleData.TracksPath, "$.tracks[2].name", "must not be empty");
+        DataAssert.RejectedOnce(files, SampleData.TracksPath, "$.tracks[4].name", "must not be empty");
+    }
+
+    [Fact]
+    public void EveryTrackTheRulesNameMustBeDefined()
+    {
+        var files = SampleData.With(SampleData.TracksPath, "\"id\": \"mobility\"", "\"id\": \"movement\"");
+        files.Edit(SampleData.TracksPath, "\"id\": \"extraction\"", "\"id\": \"mining\"");
+
+        DataAssert.RejectedOnce(
+            files,
+            SampleData.TracksPath,
+            "$.tracks",
+            "the rules name the tracks firepower, protection, mobility, manufacturing, logistics, extraction, and each needs an entry with that ID; missing: mobility, extraction");
+    }
+
+    [Fact]
+    public void TheRulesFindTheirTracksWhereverTheFileListsThem()
+    {
+        var standard = DataAssert.Valid(SampleData.Files());
+        var files = SampleData.With(SampleData.TracksPath, "\"id\": \"firepower\", \"name\": \"Firepower\"", "\"id\": \"extraction\", \"name\": \"Firepower\"");
+        files.Edit(SampleData.TracksPath, "\"id\": \"extraction\", \"name\": \"Extraction\"", "\"id\": \"firepower\", \"name\": \"Extraction\"");
+        var swapped = DataAssert.Valid(files);
+
+        Assert.Equal(new TrackRoles(0, 1, 2, 3, 4, 5), standard.TrackRoles);
+        Assert.Equal(new TrackRoles(5, 1, 2, 3, 4, 0), swapped.TrackRoles);
     }
 
     [Theory]
-    [InlineData("\"tracks_needed\": 3", "\"tracks_needed\": 4", "$.epoch.tracks_needed", "must be between 1 and 3, found 4")]
-    [InlineData("\"tracks_needed\": 3", "\"tracks_needed\": 0", "$.epoch.tracks_needed", "must be between 1 and 3, found 0")]
+    [InlineData("\"tracks_needed\": 3", "\"tracks_needed\": 7", "$.epoch.tracks_needed", "must be between 1 and 6, found 7")]
+    [InlineData("\"tracks_needed\": 3", "\"tracks_needed\": 0", "$.epoch.tracks_needed", "must be between 1 and 6, found 0")]
     [InlineData("\"reach\": 2", "\"reach\": -1", "$.epoch.reach", "must be between 0 and 4, found -1")]
     [InlineData("\"effective_tier_window\": 2", "\"effective_tier_window\": 5", "$.effective_tier_window", "must be between 0 and 4, found 5")]
-    [InlineData("\"accent_slots\": 2", "\"accent_slots\": 4", "$.accent_slots", "must be between 0 and 3, found 4")]
+    [InlineData("\"accent_slots\": 2", "\"accent_slots\": 7", "$.accent_slots", "must be between 0 and 6, found 7")]
     [InlineData("\"epoch_cap\": 4", "\"epoch_cap\": 5", "$.match.epoch_cap", "must be between 1 and 4, found 5")]
     [InlineData("\"start_epoch\": 1", "\"start_epoch\": 0", "$.match.start_epoch", "must be between 1 and 4, found 0")]
     [InlineData("\"wall_crossing_cost\": 20", "\"wall_crossing_cost\": 0", "$.wall_crossing_cost", "must be between 1 and 1000, found 0")]

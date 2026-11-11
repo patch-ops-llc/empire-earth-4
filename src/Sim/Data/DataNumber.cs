@@ -1,4 +1,5 @@
 using System.Globalization;
+using Sim.Numerics;
 
 namespace Sim.Data;
 
@@ -106,6 +107,9 @@ public readonly record struct DataNumber : IComparable<DataNumber>
         number = new DataNumber(negative ? -unscaled : unscaled, scale);
         return true;
     }
+
+    /// <summary>The same value as an exact fraction, which is what the rules compute with.</summary>
+    public Fraction ToFraction() => Fraction.FromDecimalDigits(Unscaled, Scale);
 
     /// <summary>True when the value times <paramref name="factor"/> is a whole number.</summary>
     public bool IsWholeWhenMultipliedBy(long factor) => (Unscaled * (Int128)factor) % PowerOfTen(Scale) == 0;

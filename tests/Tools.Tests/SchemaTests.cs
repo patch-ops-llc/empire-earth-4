@@ -11,7 +11,7 @@ public class SchemaTests
 {
     private static readonly JsonDocumentOptions Jsonc = new() { CommentHandling = JsonCommentHandling.Skip };
 
-    private static readonly string[] OneFileOfEachKind = ["tracks.jsonc", "rules.jsonc", "lines/x.jsonc", "maps/x.jsonc"];
+    private static readonly string[] OneFileOfEachKind = ["tracks.jsonc", "rules.jsonc", "research.jsonc", "accents.jsonc", "lines/x.jsonc", "maps/x.jsonc"];
 
     public static TheoryData<string> DataFiles() =>
         [.. new DiskDataFiles(Repository.DataFolder).ListFiles()];
@@ -39,6 +39,17 @@ public class SchemaTests
     [InlineData("rules.jsonc", "\"damage\": \"1.25\"", "\"damage\": 1.25", "$.per_tier.damage: matches none of the allowed forms")]
     [InlineData("rules.jsonc", "\"manufacturing_cost\": \"0.90\"", "\"manufacturing_cost\": \"90%\"", "$.per_step.manufacturing_cost: matches none of the allowed forms")]
     [InlineData("rules.jsonc", "\"capitol\",", "\"capitol\", \"capitol\",", "$.roster.structures: has the same item twice")]
+    [InlineData("research.jsonc", "\"seconds\": 45", "\"seconds\": 45.5", "$.tiers[0].seconds: matches none of the allowed forms")]
+    [InlineData("research.jsonc", "\"tier\": 2", "\"tier\": 1", "$.tiers[0].tier: is below 2")]
+    [InlineData("research.jsonc", "\"materials\": 100,", "\"material\": 100,", "$.tiers[0].cost: has an unknown key material")]
+    [InlineData("research.jsonc", "\"energy\": 2800", "\"energy\": -2800", "$.tiers[7].cost.energy: is below 0")]
+    [InlineData("accents.jsonc", "\"firepower\": {", "\"Firepower\": {", "$.accents.Firepower (key): does not match")]
+    [InlineData("accents.jsonc", "\"name\": \"Rapid\",", "", "$.accents.mobility: has no name")]
+    [InlineData("accents.jsonc", "\"splash\": {", "\"spalsh\": {", "$.accents.firepower.level_2: has an unknown key spalsh")]
+    [InlineData("accents.jsonc", "\"multiplier\": \"0.75\"", "\"multiplier\": 0.75", "$.accents.protection.level_1.area_damage_reduction.multiplier: matches none of the allowed forms")]
+    [InlineData("accents.jsonc", "\"tiles\": 2", "\"tiles\": \"2\"", "$.accents.mobility.level_1.sight_bonus.tiles: is not of type integer")]
+    [InlineData("accents.jsonc", "\"amount\": 1, ", "", "$.accents.logistics.level_2.supply_reduction: has no amount")]
+    [InlineData("accents.jsonc", "\"share\": \"0.25\"", "\"share\": \"0.25\", \"of\": \"energy\"", "$.accents.manufacturing.level_2.death_refund: has an unknown key of")]
     [InlineData("lines/guard.jsonc", "\"speed\": \"2.6\"", "\"speed\": 2.6", "$.base.speed: matches none of the allowed forms")]
     [InlineData("lines/guard.jsonc", "\"kind\": \"melee\", ", "", "$.attack: has no kind")]
     [InlineData("lines/guard.jsonc", "\"kind\": \"ranged\"", "\"kind\": \"thrown\"", "$.chassis[3].attack.kind: is not one of the allowed values")]
@@ -87,6 +98,8 @@ public class SchemaTests
         {
             "tracks.jsonc" => "tracks.schema.json",
             "rules.jsonc" => "rules.schema.json",
+            "research.jsonc" => "research.schema.json",
+            "accents.jsonc" => "accents.schema.json",
             _ when file.StartsWith("lines/", StringComparison.Ordinal) => "line.schema.json",
             _ when file.StartsWith("maps/", StringComparison.Ordinal) => "map.schema.json",
             _ => throw new InvalidOperationException($"No schema is known for {file}."),
