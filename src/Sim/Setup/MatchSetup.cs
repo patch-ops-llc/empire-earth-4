@@ -1,3 +1,4 @@
+using Sim.Combat;
 using Sim.Core;
 using Sim.Data;
 using Sim.Map;
@@ -44,16 +45,30 @@ public static class MatchSetup
         // here changes nothing. A name is never changed once it has merged: it places the store in
         // the state hash.
         var bodies = world.AddStore(new ComponentStore<Body>(Body.StoreName));
+        var combatants = world.AddStore(new ComponentStore<Combatant>(Combatant.StoreName));
+        var health = world.AddStore(new ComponentStore<Health>(Health.StoreName));
         var movers = world.AddStore(new ComponentStore<Mover>(Mover.StoreName));
+        var shots = world.AddStore(new ComponentStore<Shot>(Shot.StoreName));
 
         // Worked out from the state and not state itself. Match.RefreshDerivedState renews it.
         var routes = new RouteCache(grid);
         var spatialIndex = new SpatialIndex(grid, world.Entities, bodies);
 
+        // Fixed for the match: until research runs in a match, every player keeps the tech of the starting epoch.
+        var combat = new CombatRules(data, players.Count);
+        var targeting = new Targeting(grid, bodies, combatants, health, spatialIndex, combat);
+        var approach = new Approach(grid);
+
         var simulation = new Simulation(world);
 
         // Command handlers, in alphabetical order of their types. The order here changes nothing.
-        simulation.SetCommandHandler(CommandType.Move, new MoveCommandHandler(grid, bodies, movers, players.Count));
+        // The four orders of a unit share one handler, which walks a move through the move order's own.
+        var orders = new OrderCommandHandler(
+            new MoveCommandHandler(grid, bodies, movers, players.Count), grid, bodies, movers, combatants, targeting, approach, players.Count);
+        simulation.SetCommandHandler(CommandType.Attack, orders);
+        simulation.SetCommandHandler(CommandType.AttackMove, orders);
+        simulation.SetCommandHandler(CommandType.Move, orders);
+        simulation.SetCommandHandler(CommandType.Stop, orders);
 
         // Systems. Their order is a rule of the game: a pull request that adds one says where it
         // goes and why.
@@ -65,6 +80,14 @@ public static class MatchSetup
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
 
+        // Combat comes after movement, so that it sees where everything stands in this tick and
+        // which units have moved in it: a unit attacks only in a tick in which it does not move.
+        // Shots land before the attacks, so a shot fired in one tick flies from the next. Deaths
+        // come last: every attack due in a tick is made before any death of that tick takes effect.
+        simulation.AddSystem(new ShotSystem(bodies, shots, targeting));
+        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach));
+        simulation.AddSystem(new DeathSystem(health));
+
         var match = new Match
         {
             Data = data,
@@ -74,8 +97,12 @@ public static class MatchSetup
             Simulation = simulation,
             Grid = grid,
             Bodies = bodies,
+            Combat = combat,
+            Combatants = combatants,
+            Health = health,
             Movers = movers,
             Routes = routes,
+            Shots = shots,
             SpatialIndex = spatialIndex,
         };
 
@@ -181,7 +208,7 @@ public static class MatchSetup
                 return 0;
             }
 
-            match.SpawnUnit(player, MapGrid.TileCenter(tileX, tileY), StartingWorkerSpeed);
+            match.SpawnWorker(player, MapGrid.TileCenter(tileX, tileY), StartingWorkerSpeed);
             return 1;
         }
     }

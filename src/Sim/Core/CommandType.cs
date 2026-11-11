@@ -14,5 +14,8 @@ public enum CommandType
 {
     /// <summary>Not a command. The default value, which no handler can be registered for.</summary>
     None = 0,
+    Attack = 2,
+    AttackMove = 3,
     Move = 1,
+    Stop = 4,
 }
