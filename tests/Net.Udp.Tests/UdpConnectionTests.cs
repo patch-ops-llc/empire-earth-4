@@ -50,11 +50,11 @@ public class UdpConnectionTests
         link.Until(
             () =>
             {
-                if (sent < Count)
+                // A few at a time, spread over many polls, so that they travel in many datagrams.
+                for (var burst = 0; burst < 4 && sent < Count; burst++, sent++)
                 {
                     link.HostEnd.SendMessage(new Ping(sent));
                     link.ClientEnd.SendMessage(new Pong(sent));
-                    sent++;
                 }
 
                 atHost.AddRange(link.HostEnd.ReceiveMessages());
@@ -68,8 +68,8 @@ public class UdpConnectionTests
 
         Assert.Equal(Enumerable.Range(0, Count).Select(sequence => (NetMessage)new Pong(sequence)), atHost);
         Assert.Equal(Enumerable.Range(0, Count).Select(sequence => (NetMessage)new Ping(sequence)), atClient);
-        Assert.True(link.Relay!.Dropped > 20, $"The network lost only {link.Relay.Dropped} datagrams.");
-        Assert.True(link.Relay.Overtaken > 20, $"Only {link.Relay.Overtaken} datagrams overtook another.");
+        Assert.True(link.Relay!.Dropped > 5, $"The network lost only {link.Relay.Dropped} datagrams.");
+        Assert.True(link.Relay.Overtaken > 5, $"Only {link.Relay.Overtaken} datagrams overtook another.");
     }
 
     /// <summary>

@@ -101,6 +101,13 @@ internal sealed class UdpRelay : IDisposable
     private static Socket NewSocket()
     {
         var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows otherwise fails the next receive on a socket after a datagram it sent found
+            // nobody listening. SIO_UDP_CONNRESET, turned off.
+            socket.IOControl(unchecked((int)0x9800000C), [0], null);
+        }
+
         socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         return socket;
     }

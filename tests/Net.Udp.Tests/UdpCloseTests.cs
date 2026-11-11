@@ -53,7 +53,7 @@ public class UdpCloseTests
     [Fact]
     public void TheEndThatClosedLetsGoAsSoonAsTheOtherConfirms()
     {
-        var options = new UdpOptions { CloseTimeout = TimeSpan.FromMinutes(10) };
+        var options = new UdpOptions { CloseTimeout = TimeSpan.FromSeconds(20) };
         using var link = new UdpLink(options: options);
 
         var clock = Stopwatch.StartNew();
@@ -73,10 +73,10 @@ public class UdpCloseTests
     [Fact]
     public void AQuietConnectionIsNotGivenUpOn()
     {
-        var options = new UdpOptions { DisconnectTimeout = TimeSpan.FromMilliseconds(500) };
+        var options = new UdpOptions { DisconnectTimeout = TimeSpan.FromMilliseconds(800) };
         using var link = new UdpLink(options: options);
 
-        link.For(1500);
+        link.For(2500);
 
         Assert.Equal(UdpConnectionState.Connected, link.HostEnd.State);
         Assert.Equal(UdpConnectionState.Connected, link.ClientEnd.State);
