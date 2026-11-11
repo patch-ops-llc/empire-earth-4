@@ -161,7 +161,7 @@ jobs:
           fi
 
           if [ "$TESTS_RESULT" != "success" ]; then
-            echo "::error::Not every system ran its tests and the golden replays to the end (result: $TESTS_RESULT), so $count reports were compared and not all."
+            echo "::error::A job above did not pass (result: $TESTS_RESULT). The $count reports it left were compared, and the systems are not shown to agree until every job passes."
             failed=1
           fi
 
