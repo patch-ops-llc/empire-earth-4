@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="4.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Net.Udp/Net.Udp.csproj" />
+  </ItemGroup>
+
+  <!-- The made-up simulation and the message helpers of the session's own tests, used as they are. -->
+  <ItemGroup>
+    <Compile Include="../Net.Tests/ToyGame.cs" Link="Shared/ToyGame.cs" />
+    <Compile Include="../Net.Tests/ConnectionExtensions.cs" Link="Shared/ConnectionExtensions.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="Net.Tests" />
+  </ItemGroup>
+
+</Project>
