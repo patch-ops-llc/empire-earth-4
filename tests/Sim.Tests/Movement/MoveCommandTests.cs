@@ -82,8 +82,9 @@ public class MoveCommandTests
         match.OrderMove(0, FixedVector2.Zero, unit);
         match.Simulation.Tick();
 
+        // The edge of the map is blocked ground, which a destination keeps off.
         Assert.Equal(0, match.Simulation.DroppedCommandCount);
-        Assert.Equal(FixedVector2.Zero, match.Movers.Get(unit).Destination);
+        Assert.Equal(new FixedVector2(Mover.StandOff, Mover.StandOff), match.Movers.Get(unit).Destination);
     }
 
     /// <summary>
