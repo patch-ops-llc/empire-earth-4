@@ -3,7 +3,7 @@ using Sim.Numerics;
 
 namespace Sim.Movement;
 
-/// <summary>What a mover is doing. The numbers are fed to the state hash and do not change.</summary>
+/// <summary>What a mover is doing. The numbers are in the state hash and in snapshots, and do not change.</summary>
 public enum MoveState
 {
     /// <summary>Standing still, with no order.</summary>
@@ -17,7 +17,7 @@ public enum MoveState
 /// What lets an entity move: its speed, the way it faces, and the move order it is carrying out.
 /// Its position is in its <see cref="Map.Body"/>.
 /// </summary>
-public struct Mover : IStateHashable
+public struct Mover : IStateValue
 {
     /// <summary>The name of the store that holds every mover.</summary>
     public const string StoreName = "movers";
@@ -42,12 +42,11 @@ public struct Mover : IStateHashable
     /// </summary>
     public static Fixed SpeedPerTick(Fraction tilesPerSecond) => (tilesPerSecond / SimInfo.TicksPerSecond).ToFixed();
 
-    public readonly void AddToHash(ref StateHasher hasher)
+    public void Walk(IStateWalker walker)
     {
-        hasher.Add(Speed);
-        hasher.Add(Facing);
-        hasher.Add((int)State);
-        hasher.Add(Destination.X);
-        hasher.Add(Destination.Y);
+        Speed = walker.Field(Speed);
+        Facing = walker.Field(Facing);
+        State = (MoveState)walker.Field((int)State);
+        Destination = new FixedVector2(walker.Field(Destination.X), walker.Field(Destination.Y));
     }
 }

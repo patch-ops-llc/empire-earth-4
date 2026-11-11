@@ -23,8 +23,10 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request replaces the run of the older one. On main every commit keeps
+# its own run, so that a failure names the merge that caused it.
 concurrency:
-  group: determinism-${{ github.ref }}
+  group: determinism-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
 env:
