@@ -71,7 +71,7 @@ Arguments after `--` on the command line start a match without the menu:
 | `--match-files <folder>` | Writes replays and snapshots to this folder. |
 | `--net-test <ticks>` | With `--host` or `--join`: plays a match with nobody at the keyboard, on the local address only. The host starts when the other game is ready, each game orders its units to move, the host ends the match after this many ticks, and each game prints a line that starts with `NET_TEST_OK` with the last tick and the state hash. The two lines must agree. |
 
-Two games on one machine, the second in another terminal:
+Two games on one machine, the second in another terminal once the first has printed that it is hosting. CI runs the same pair:
 
 ```sh
 godot --headless --path game -- --host --net-test 300
@@ -101,7 +101,7 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 
 | Workflow | Runs on | What it does |
 | --- | --- | --- |
-| `ci.yml` | Every pull request, on Linux | Build with warnings as errors, format check, tests, `datacheck`, the golden replays, Godot import and build, a check that Godot changed or created no file in the working tree, and the smoke test. |
+| `ci.yml` | Every pull request, on Linux | Build with warnings as errors, format check, tests, `datacheck`, the golden replays, Godot import and build, a check that Godot changed or created no file in the working tree, the smoke test, and a network match between two copies of the game on the runner, which must end on the same tick with the same state hash and leave two replays that reproduce. |
 | `determinism.yml` | Every push to `main`, every night, and pull requests that change the workflow, `Directory.Build.props`, `global.json`, `src/Net.Udp/` or `tests/Net.Udp.Tests/` | The tests on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build. The tests hold recorded values, so this is where a result that differs between systems shows up. The transport's tests use real sockets, which also differ between systems. Each of the eight jobs then runs the golden replays, and a last job fails unless all eight report the same final hashes. |
 | `export.yml` | Every tag that starts with `v`, a manual run, and pull requests that change the workflow, `game/export_presets.cfg` or `Directory.Build.props` | Exports the Windows build on Linux and the macOS build on macOS, and uploads both. Runs the smoke test in a Linux export, in the Windows build on Windows and in the macOS build as an Apple silicon and as an Intel program. Opens the Windows and the macOS build in a window for 300 frames. Fails unless every build reports the game version of the run, the content hash that `datacheck` prints and the same state hash as the others. |
 
