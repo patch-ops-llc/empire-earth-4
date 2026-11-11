@@ -2,8 +2,19 @@ namespace Sim.Data;
 
 internal static class TracksReader
 {
-    public static (IReadOnlyList<string> EpochNames, IReadOnlyList<TrackDef> Tracks) Read(JsonValue root)
+    private static readonly string[] TracksTheRulesName =
+    [
+        DataRules.FirepowerTrack,
+        DataRules.ProtectionTrack,
+        DataRules.MobilityTrack,
+        DataRules.ManufacturingTrack,
+        DataRules.LogisticsTrack,
+        DataRules.ExtractionTrack,
+    ];
+
+    public static (IReadOnlyList<string> EpochNames, IReadOnlyList<TrackDef> Tracks, TrackRoles Roles) Read(JsonValue root)
     {
+        var errorsBefore = root.ErrorCount;
         var file = root.Object();
         file.Optional(DataRules.SchemaKey)?.String();
 
@@ -46,7 +57,25 @@ internal static class TracksReader
         }
 
         file.End();
-        return (epochNames, tracks);
+
+        var roles = new int[TracksTheRulesName.Length];
+        var missing = new List<string>();
+        for (var role = 0; role < roles.Length; role++)
+        {
+            roles[role] = tracks.FindIndex(track => track.Id == TracksTheRulesName[role]);
+            if (roles[role] < 0)
+            {
+                missing.Add(TracksTheRulesName[role]);
+            }
+        }
+
+        if (missing.Count > 0 && root.ErrorCount == errorsBefore)
+        {
+            tracksValue.Error(
+                $"the rules name the tracks {string.Join(", ", TracksTheRulesName)}, and each needs an entry with that ID; missing: {string.Join(", ", missing)}");
+        }
+
+        return (epochNames, tracks, new TrackRoles(roles[0], roles[1], roles[2], roles[3], roles[4], roles[5]));
     }
 
     private static TrackGroup ReadGroup(JsonValue value)

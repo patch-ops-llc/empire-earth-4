@@ -1,4 +1,5 @@
 using Sim.Data;
+using Sim.Numerics;
 
 namespace Sim.Tests.Data;
 
@@ -92,6 +93,18 @@ public class DataNumberTests
     public void WritesItselfBackAsText(string text)
     {
         Assert.Equal(text, Parse(text).ToString());
+    }
+
+    [Theory]
+    [InlineData("0", 0, 1)]
+    [InlineData("130", 130, 1)]
+    [InlineData("1.25", 5, 4)]
+    [InlineData("0.90", 9, 10)]
+    [InlineData("-0.5", -1, 2)]
+    [InlineData("0.000000001", 1, 1_000_000_000)]
+    public void ConvertsToAnExactFraction(string text, long numerator, long denominator)
+    {
+        Assert.Equal(new Fraction(numerator, denominator), Parse(text).ToFraction());
     }
 
     private static DataNumber Parse(string text)

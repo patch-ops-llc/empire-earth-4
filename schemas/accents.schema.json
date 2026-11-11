@@ -1,0 +1,142 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "accents.jsonc",
+  "description": "The accent each track gives a unit and the perks of its two levels (game design 2.3). A multiplier is what a value is multiplied by: \"1.15\" is 15% more and \"0.75\" is 25% less.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["accents"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "accents": {
+      "description": "Accents by track ID. A track without an entry gives no accent.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/definitions/id" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "level_1", "level_2"],
+        "properties": {
+          "name": { "description": "The accent's display name, such as Overgunned. Not empty, and no space at either end.", "type": "string", "pattern": "^\\S(.*\\S)?$" },
+          "level_1": { "description": "Perks at level I: the track is one tier ahead of the chassis.", "$ref": "#/definitions/perks" },
+          "level_2": { "description": "Perks added at level II: the track is two tiers ahead. A unit at level II has the perks of both levels.", "$ref": "#/definitions/perks" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "id": {
+      "description": "Lowercase letters, digits and underscores, starting with a letter.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$"
+    },
+    "number": {
+      "description": "A whole number, or text in plain decimal notation such as \"2.6\". A bare number with a fraction is not accepted, so that every value is read exactly.",
+      "anyOf": [
+        { "type": "integer" },
+        { "type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$" }
+      ]
+    },
+    "multiplier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["multiplier"],
+      "properties": {
+        "multiplier": { "$ref": "#/definitions/number" }
+      }
+    },
+    "perks": {
+      "description": "Perks by kind. A kind may appear only once in the whole file.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "range_bonus": {
+          "description": "Range times the multiplier, which is at least 1. For a chassis with a ranged attack.",
+          "$ref": "#/definitions/multiplier"
+        },
+        "attack_rate_bonus": {
+          "description": "That many times as many attacks in the same time; at least 1. \"1.15\" is 23 attacks in the time of 20. For a chassis with a melee attack.",
+          "$ref": "#/definitions/multiplier"
+        },
+        "splash": {
+          "description": "Every hit also deals a share of its damage to each other enemy near the target. For a chassis whose attack has no blast.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["share", "radius"],
+          "properties": {
+            "share": { "description": "The share of the hit's damage, above 0 and at most 1.", "$ref": "#/definitions/number" },
+            "radius": { "description": "How far from the target, in tiles.", "$ref": "#/definitions/number" }
+          }
+        },
+        "blast_radius_bonus": {
+          "description": "Blast radius times the multiplier, which is at least 1. For a chassis whose attack has a blast.",
+          "$ref": "#/definitions/multiplier"
+        },
+        "area_damage_reduction": {
+          "description": "Area damage taken times the multiplier, which is above 0 and at most 1.",
+          "$ref": "#/definitions/multiplier"
+        },
+        "plating": {
+          "description": "Damage taken times the multiplier, above 0 and at most 1, when the attacker's effective Firepower is below this unit's effective Protection.",
+          "$ref": "#/definitions/multiplier"
+        },
+        "sight_bonus": {
+          "description": "More sight range.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tiles"],
+          "properties": {
+            "tiles": { "type": "integer", "minimum": 1, "maximum": 64 }
+          }
+        },
+        "charge": {
+          "description": "The first attack after moving far enough deals more damage. For a chassis with an attack.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["distance", "multiplier"],
+          "properties": {
+            "distance": { "description": "Tiles moved since the last attack.", "$ref": "#/definitions/number" },
+            "multiplier": { "description": "What that attack's damage is multiplied by; at least 1.", "$ref": "#/definitions/number" }
+          }
+        },
+        "batch": {
+          "description": "Each queue slot produces two units.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["time_multiplier"],
+          "properties": {
+            "time_multiplier": { "description": "The pair's build time, as a multiple of the build time of one unit.", "$ref": "#/definitions/number" }
+          }
+        },
+        "death_refund": {
+          "description": "Part of the Materials paid for the unit is refunded when it dies.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["share"],
+          "properties": {
+            "share": { "description": "The share refunded, above 0 and at most 1.", "$ref": "#/definitions/number" }
+          }
+        },
+        "regeneration": {
+          "description": "The unit regains hit points once per second after a time without damage.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["share_per_second", "delay_seconds"],
+          "properties": {
+            "share_per_second": { "description": "The share of maximum hit points regained each second, above 0 and at most 1.", "$ref": "#/definitions/number" },
+            "delay_seconds": { "description": "Seconds without damage before it starts. It must be a whole number of ticks.", "$ref": "#/definitions/number" }
+          }
+        },
+        "supply_reduction": {
+          "description": "The unit costs less supply.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["amount", "minimum"],
+          "properties": {
+            "amount": { "description": "How much less.", "type": "integer", "minimum": 1, "maximum": 100 },
+            "minimum": { "description": "The least a unit can cost.", "type": "integer", "minimum": 1, "maximum": 100 }
+          }
+        }
+      }
+    }
+  }
+}

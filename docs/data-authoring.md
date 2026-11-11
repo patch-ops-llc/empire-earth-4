@@ -24,10 +24,12 @@ It exits with 0 when the data is valid, 1 when it found errors and 2 when it cou
 | --- | --- | --- |
 | `tracks.jsonc` | The tracks in their fixed order, the epoch names and the tier names. | `schemas/tracks.schema.json` |
 | `rules.jsonc` | The constants of the rule set, the roster of line and structure IDs, and the rules every map must satisfy. | `schemas/rules.schema.json` |
+| `research.jsonc` | What each tier of a track costs to research and how long it takes. | `schemas/research.schema.json` |
+| `accents.jsonc` | The accent each track gives a unit, and the perks of its two levels. | `schemas/accents.schema.json` |
 | `lines/<id>.jsonc` | One line of units: its tracks, tier-1 values, attack, counters and chassis. | `schemas/line.schema.json` |
 | `maps/<id>.jsonc` | One map: terrain, starting positions, deposits and markers. | `schemas/map.schema.json` |
 
-The loader reads exactly these. Any other file in the folder is an error, so a misnamed file is noticed and not skipped. Files and folders whose names start with a dot are ignored.
+The loader reads exactly these, and the first four are required. Any other file in the folder is an error, so a misnamed file is noticed and not skipped. Files and folders whose names start with a dot are ignored.
 
 More kinds of file arrive with the milestones that need them. Adding a kind means adding its reader in `src/Sim/Data/`, its schema in `schemas/`, a row in the table above and tests.
 
@@ -49,10 +51,12 @@ Game design 1.1 and 1.2.
 | --- | --- |
 | `epochs` | The name of each epoch, epoch 1 first. Its length is the number of tiers every track has. |
 | `tracks` | The tracks. **Their order in the file is the fixed track order** the rules use, for example as the last tie-break when a unit picks its accents. |
-| `tracks[].id` | The track's ID. |
+| `tracks[].id` | The track's ID. Six IDs are required, because the rules name them: `firepower`, `protection`, `mobility`, `manufacturing`, `logistics` and `extraction`. |
 | `tracks[].name`, `short` | Its display name and abbreviation. |
 | `tracks[].group` | `better`, `more` or `richer`. |
 | `tracks[].tiers` | The name of each tier, tier 1 first: one per epoch. |
+
+The formulas say which track scales what: Firepower scales damage, Logistics sets the supply cap and so on. The code finds each of those tracks by its ID, so renaming one of the six IDs is a code change, while names, abbreviations, tier names and the order are free. More tracks may be listed; they count toward the epoch and can be a line's primary or secondary track.
 
 ## rules.jsonc
 
@@ -62,7 +66,7 @@ The values the design says to tune first. Each block carries a comment naming it
 | --- | --- | --- |
 | `roster.lines`, `roster.structures` | Every line and structure ID the design names. Files may refer to these before the line or structure has a file of its own. `structures` is reserved as a counter target and cannot be a line ID. | 2.2, 2.5 |
 | `epoch.tracks_needed`, `epoch.reach` | The epoch is the highest tier that this many tracks have reached; no track may be more than `reach` tiers above it. | 1.4 |
-| `research_price.catch_up`, `frontier`, `ahead` | Multipliers on a research's `cost` and `time` at or below the epoch, one above and two above. | 1.3 |
+| `research_price.catch_up`, `frontier`, `ahead` | Multipliers on a research's `cost` and `time` at or below the epoch, one above, and further above up to `reach`. | 1.3 |
 | `effective_tier_window` | A chassis uses track tiers within this many tiers of its own epoch. | 2.3 |
 | `per_tier.damage`, `hp`, `speed`, `income` | What one tier of Firepower, Protection, Mobility and Extraction multiplies. | 2.3, 4.2 |
 | `per_step.quality_cost`, `manufacturing_cost`, `manufacturing_time` | What one step of offset multiplies in a unit's price and build time. | 2.3 |
@@ -74,6 +78,48 @@ The values the design says to tune first. Each block carries a comment naming it
 | `map` | The map rules below. | 5.3, 5.4 |
 
 `map.start_territory` repeats the Capitol's footprint and territory radius, because structures have no data files yet. When the Capitol gets one, the two must agree.
+
+## research.jsonc
+
+Game design 1.3. Every track uses the same table.
+
+| Key | Meaning |
+| --- | --- |
+| `tiers` | One entry for each tier from 2 to the last, in that order. Tier 1 is where every track starts and has no entry. |
+| `tiers[].tier` | The tier this research reaches. It is written out so that a row cannot slip. |
+| `tiers[].cost.materials`, `energy` | The price one tier above the epoch. Whole resources; either may be 0. |
+| `tiers[].seconds` | The research time one tier above the epoch. |
+
+The price a player pays is this price times a multiplier from `rules.jsonc` `research_price`, rounded half up to a whole resource, Materials and Energy each on its own. The time is multiplied the same way and rounded half up to a tick, and is never less than one tick.
+
+## accents.jsonc
+
+Game design 2.3. A unit whose chassis uses a track above the chassis's own epoch carries that track's accent: level I at one tier above, level II at two. Level II includes level I.
+
+| Key | Meaning |
+| --- | --- |
+| `accents` | The accents, keyed by track ID. A track without an entry gives no accent, as Extraction does not. |
+| `accents.<track>.name` | The accent's display name. The interface adds I or II. |
+| `accents.<track>.level_1`, `level_2` | The perks each level adds, keyed by kind of perk. An empty object is allowed. |
+
+A kind of perk is a rule in the code with numbers from this file. Which accent gives a perk, at which level and how strongly is data; what the perk does and which units it applies to is code. Each kind may appear once in the file, since a unit with the same kind twice would need a rule for how the two combine.
+
+| Kind | Keys | What it does | Applies to |
+| --- | --- | --- | --- |
+| `range_bonus` | `multiplier`, 1 or more | Multiplies attack range. | Ranged attacks |
+| `attack_rate_bonus` | `multiplier`, 1 or more | Multiplies attacks per second. | Melee attacks |
+| `splash` | `share`, `radius` | Each hit also deals `share` of its damage to every other enemy within `radius` tiles of the target. | Attacks without a blast radius |
+| `blast_radius_bonus` | `multiplier`, 1 or more | Multiplies the blast radius. | Attacks with a blast radius |
+| `area_damage_reduction` | `multiplier`, above 0 to 1 | Multiplies area damage taken. | Every unit |
+| `plating` | `multiplier`, above 0 to 1 | Multiplies damage taken from an attacker whose effective Firepower is below this unit's effective Protection. | Every unit |
+| `sight_bonus` | `tiles`, whole | Adds to sight. | Every unit |
+| `charge` | `distance`, `multiplier` 1 or more | The first hit after moving at least `distance` tiles deals `multiplier` times the damage. | Units with an attack |
+| `batch` | `time_multiplier` | Each queue slot produces two units in `time_multiplier` times the build time of one. | Every unit |
+| `death_refund` | `share`, above 0 to 1 | Returns `share` of the unit's Materials price when it dies. | Every unit |
+| `regeneration` | `share_per_second`, `delay_seconds` | Heals `share_per_second` of full hit points each second once the unit has taken no damage for `delay_seconds`. | Every unit |
+| `supply_reduction` | `amount`, `minimum` | Lowers supply by `amount`, but not below `minimum`. A unit already below `minimum` keeps its supply. | Every unit |
+
+A multiplier is what the value is multiplied by: 15% more range is `"1.15"`, a quarter less area damage is `"0.75"` and 30% less damage is `"0.7"`.
 
 ## lines/&lt;id&gt;.jsonc
 
@@ -115,8 +161,11 @@ Besides the shape of each file:
 | --- | --- |
 | References | A line's `id`, `primary`, `secondary`, `built_at`, `counters` and `cannot_hit` must name a track in `tracks.jsonc` or an ID in the roster. |
 | Tiers | Counts of tracks and tiers in `rules.jsonc` must fit `tracks.jsonc`; `epoch_cap` is not below `start_epoch`; every track names one tier per epoch. |
+| Tracks | The six tracks the rules name are all defined. |
+| Research | `research.jsonc` has exactly one entry for each tier from 2 to the last, in order. |
+| Accents | Every accent belongs to a track in `tracks.jsonc`. No kind of perk appears twice. |
 | Chassis | An epoch outside the tiers could never unlock and is an error. Epochs rise and do not repeat. IDs are unique. |
-| Times | Attack intervals and build times are whole numbers of ticks. |
+| Times | Attack intervals, build times, research times and perk delays are whole numbers of ticks. |
 | Stat bounds | Hit points, damage, speed, sight, supply, spacing, prices, ranges and multipliers must be positive where zero makes no sense and inside wide sanity limits, listed in `src/Sim/Data/DataRules.cs`. The limits catch slips such as a missing decimal point; they are not balance rules. |
 | Map symmetry | Terrain, starts, deposits and markers must all mirror under the map's `symmetry`. |
 | Map footprints | Starting Capitols, deposits and markers stand on open ground inside the map. Deposits overlap neither each other nor a Capitol. |
@@ -145,6 +194,9 @@ A change to this form changes every hash, so it needs a new version line.
 
 - The loader is `Sim.Data.DataLoader.Load(IDataFiles)`. It returns `GameData`, or the list of errors. `IDataFiles` is the only way it reaches files: the tools read from disk (`Tools.DiskDataFiles`), tests read from memory (`Sim.Data.InMemoryDataFiles`) and the game will read from its packed export.
 - Numbers arrive as `DataNumber`, an integer and a count of decimal places. Converting them to the simulation's fixed-point and fraction types belongs to the code that uses them.
+- The rules that use the data are in `Sim.Tech`. `TechResolver.Resolve(data, tiers)` is a pure function from a player's track tiers to their epoch, supply cap, income multiplier and the price of each track's next tier. `TechRules` has each rule by itself.
+- `DataNumber.ToFraction()` gives a data number as an exact `Fraction`. Multiply everything exactly and round once, at the end.
+- `GameData.TrackRoles` holds the index of each track the rules name, so code never searches for a track by ID.
 - IDs become dense integers at load. A position in `GameData.Tracks` is a track's index, in file order. A position in `RuleSet.Lines` or `RuleSet.Structures` is a line's or structure's index; those lists are sorted by ID. Lines refer to tracks, structures and other lines by these indexes.
 - The loader follows the determinism rules: no floating-point types and no iteration over hash-based collections.
 - `schemas/` is for editors. The loader does not read it, and is stricter than a schema can be. Tests in `tests/Tools.Tests/SchemaTests.cs` hold the two together: every data file must satisfy its schema, and each schema must reject a list of typical mistakes.

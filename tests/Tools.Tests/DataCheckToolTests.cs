@@ -31,6 +31,14 @@ public class DataCheckToolTests
     [InlineData("rules.jsonc", "\"epoch_cap\": 4", "\"epoch_cap\": 10", "rules.jsonc: $.match.epoch_cap: must be between 1 and 9, found 10")]
     [InlineData("rules.jsonc", "\"tracks_needed\": 3", "\"tracks_needed\": 7", "rules.jsonc: $.epoch.tracks_needed: must be between 1 and 6, found 7")]
     [InlineData("tracks.jsonc", "\"Antimatter\"", "\"Antimatter\", \"Beyond\"", "tracks.jsonc: $.tracks[5].tiers: must name 9 tiers, one per epoch, found 10")]
+    [InlineData("tracks.jsonc", "\"id\": \"extraction\"", "\"id\": \"mining\"", "tracks.jsonc: $.tracks: the rules name the tracks firepower, protection, mobility, manufacturing, logistics, extraction, and each needs an entry with that ID; missing: extraction")]
+    [InlineData("research.jsonc", "\"tier\": 5,", "\"tier\": 6,", "research.jsonc: $.tiers[3].tier: list every tier from 2 to 9 in order; expected tier 5 here, found 6")]
+    [InlineData("research.jsonc", "\"seconds\": 150 }", "\"seconds\": 150 },\n    { \"tier\": 10, \"cost\": { \"materials\": 1, \"energy\": 1 }, \"seconds\": 1 }", "research.jsonc: $.tiers[8].tier: tracks have tiers 1 to 9, so the last entry is tier 9; found tier 10")]
+    [InlineData("research.jsonc", "\"materials\": 225,", "\"materials\": \"225\",", "research.jsonc: $.tiers[2].cost.materials: expected a whole number, found text")]
+    [InlineData("accents.jsonc", "\"mobility\": {", "\"speed\": {", "accents.jsonc: $.accents.speed: unknown track 'speed'")]
+    [InlineData("accents.jsonc", "\"plating\":", "\"armor\":", "accents.jsonc: $.accents.protection.level_2.armor: unknown key \"armor\"")]
+    [InlineData("accents.jsonc", "\"share\": \"0.25\"", "\"share\": \"25\"", "accents.jsonc: $.accents.manufacturing.level_2.death_refund.share: must be above 0 and at most 1, found 25")]
+    [InlineData("accents.jsonc", "\"plating\":", "\"batch\": { \"time_multiplier\": \"1.2\" }, \"plating\":", "accents.jsonc: $.accents.manufacturing.level_1.batch: \"batch\" is already given at $.accents.protection.level_2.batch")]
     [InlineData("maps/ridge.jsonc", "{ \"x\": 82, \"y\": 46 }", "{ \"x\": 82, \"y\": 47 }", "maps/ridge.jsonc: $.starts[1]: must mirror start 0 under mirror_x: expected x = 82, y = 46")]
     [InlineData("maps/ridge.jsonc", "    { \"kind\": \"contested\", \"x\": 38, \"y\": 62 },\n", "", "maps/ridge.jsonc: $.deposits: needs 4 contested deposits, found 3")]
     [InlineData("maps/ridge.jsonc", "{ \"kind\": \"main\", \"x\": 6, \"y\": 38 }", "{ \"kind\": \"main\", \"x\": 6, \"y\": 30 }", "maps/ridge.jsonc: $.deposits[0]: a main deposit must lie wholly inside a starting territory")]
@@ -92,6 +100,21 @@ public class DataCheckToolTests
 
         Assert.Equal(ExitCodes.Failed, exitCode);
         Assert.Contains("rules.jsonc: this file is required and is missing", errors, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("research.jsonc")]
+    [InlineData("accents.jsonc")]
+    public void AMissingResearchOrAccentsFileFails(string file)
+    {
+        using var data = Repository.CopyOfData();
+        File.Delete(Path.Combine(data.Path, file));
+
+        var (exitCode, _, errors) = Run("datacheck", data.Path);
+
+        Assert.Equal(ExitCodes.Failed, exitCode);
+        Assert.Contains($"{file}: this file is required and is missing", errors, StringComparison.Ordinal);
+        Assert.Contains("datacheck: 1 error in ", errors, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -6,7 +6,7 @@ public class LineTests
     private const string Path = SampleData.GuardPath;
 
     [Theory]
-    [InlineData("\"primary\": \"protection\"", "\"primary\": \"armor\"", "$.primary", "unknown track 'armor'; tracks.jsonc has: firepower, protection, logistics")]
+    [InlineData("\"primary\": \"protection\"", "\"primary\": \"armor\"", "$.primary", "unknown track 'armor'; tracks.jsonc has: firepower, protection, mobility, manufacturing, logistics, extraction")]
     [InlineData("\"secondary\": \"firepower\"", "\"secondary\": \"fire_power\"", "$.secondary", "unknown track 'fire_power'")]
     [InlineData("\"built_at\": \"barracks\"", "\"built_at\": \"baracks\"", "$.built_at", "unknown structure 'baracks'; the roster in rules.jsonc has: barracks, capitol")]
     [InlineData("\"cavalry_armor\": \"1.5\"", "\"cavalry\": \"1.5\"", "$.counters.cavalry", "unknown line 'cavalry'; the roster in rules.jsonc has: air, cavalry_armor, guard")]

@@ -23,8 +23,8 @@ public class DataLoaderTests
     {
         var data = DataAssert.Valid(SampleData.Files());
 
-        Assert.Equal(["firepower", "protection", "logistics"], data.Tracks.Select(track => track.Id));
-        var logistics = data.Tracks[2];
+        Assert.Equal(["firepower", "protection", "mobility", "manufacturing", "logistics", "extraction"], data.Tracks.Select(track => track.Id));
+        var logistics = data.Tracks[4];
         Assert.Equal(("Logistics", "LG", TrackGroup.More), (logistics.Name, logistics.ShortName, logistics.Group));
         Assert.Equal(["L1", "L2", "L3", "L4"], logistics.TierNames);
     }
@@ -135,6 +135,8 @@ public class DataLoaderTests
     [Theory]
     [InlineData(SampleData.TracksPath, "tracks.jsonc")]
     [InlineData(SampleData.RulesPath, "rules.jsonc")]
+    [InlineData(SampleData.ResearchPath, "research.jsonc")]
+    [InlineData(SampleData.AccentsPath, "accents.jsonc")]
     [InlineData(SampleData.GuardPath, "lines/")]
     [InlineData(SampleData.MapPath, "maps/")]
     public void EveryKindOfFileIsRequired(string removed, string reportedAs)
@@ -263,7 +265,7 @@ public class DataLoaderTests
                 "lines/guard.jsonc: $.base.hp: must be above 0 and at most 1000000, found 0",
                 "lines/guard.jsonc: $.base.sight: must be between 1 and 64, found 0",
                 "maps/arena.jsonc: $.symmetry: unknown symmetry 'rotate'; use mirror_x or mirror_y",
-                "notes.txt: unexpected file; the loader reads tracks.jsonc, rules.jsonc, lines/<id>.jsonc and maps/<id>.jsonc",
+                "notes.txt: unexpected file; the loader reads tracks.jsonc, rules.jsonc, research.jsonc, accents.jsonc, lines/<id>.jsonc and maps/<id>.jsonc",
             ],
             result.Errors.Select(error => error.ToString()));
     }

@@ -5,13 +5,15 @@ namespace Sim.Tests.Data;
 
 /// <summary>
 /// A small, valid data set held in memory. Each test changes one thing in it and checks what the
-/// loader says. It has the shape of the real data with smaller numbers: three tracks, four tiers and
-/// a 40 by 16 map.
+/// loader says. It has the shape of the real data with smaller numbers: the six tracks with four
+/// tiers each, one line and a 40 by 16 map.
 /// </summary>
 internal static class SampleData
 {
     public const string TracksPath = "tracks.jsonc";
     public const string RulesPath = "rules.jsonc";
+    public const string ResearchPath = "research.jsonc";
+    public const string AccentsPath = "accents.jsonc";
     public const string GuardPath = "lines/guard.jsonc";
     public const string MapPath = "maps/arena.jsonc";
 
@@ -22,8 +24,53 @@ internal static class SampleData
           "tracks": [
             { "id": "firepower", "name": "Firepower", "short": "FP", "group": "better", "tiers": ["F1", "F2", "F3", "F4"] },
             { "id": "protection", "name": "Protection", "short": "PR", "group": "better", "tiers": ["P1", "P2", "P3", "P4"] },
-            { "id": "logistics", "name": "Logistics", "short": "LG", "group": "more", "tiers": ["L1", "L2", "L3", "L4"] }
+            { "id": "mobility", "name": "Mobility", "short": "MO", "group": "better", "tiers": ["M1", "M2", "M3", "M4"] },
+            { "id": "manufacturing", "name": "Manufacturing", "short": "MF", "group": "more", "tiers": ["A1", "A2", "A3", "A4"] },
+            { "id": "logistics", "name": "Logistics", "short": "LG", "group": "more", "tiers": ["L1", "L2", "L3", "L4"] },
+            { "id": "extraction", "name": "Extraction", "short": "EX", "group": "richer", "tiers": ["E1", "E2", "E3", "E4"] }
           ]
+        }
+        """;
+
+    public const string Research = """
+        {
+          "tiers": [
+            { "tier": 2, "cost": { "materials": 100, "energy": 100 }, "seconds": 45 },
+            { "tier": 3, "cost": { "materials": 150, "energy": 200 }, "seconds": 60 },
+            { "tier": 4, "cost": { "materials": 225, "energy": 350 }, "seconds": 75 }
+          ]
+        }
+        """;
+
+    public const string Accents = """
+        {
+          "accents": {
+            "firepower": {
+              "name": "Overgunned",
+              "level_1": { "range_bonus": { "multiplier": "1.15" }, "attack_rate_bonus": { "multiplier": "1.15" } },
+              "level_2": { "splash": { "share": "0.3", "radius": 1 }, "blast_radius_bonus": { "multiplier": "1.5" } }
+            },
+            "protection": {
+              "name": "Hardened",
+              "level_1": { "area_damage_reduction": { "multiplier": "0.75" } },
+              "level_2": { "plating": { "multiplier": "0.7" } }
+            },
+            "mobility": {
+              "name": "Rapid",
+              "level_1": { "sight_bonus": { "tiles": 2 } },
+              "level_2": { "charge": { "distance": 4, "multiplier": "1.5" } }
+            },
+            "manufacturing": {
+              "name": "Standardized",
+              "level_1": { "batch": { "time_multiplier": "1.5" } },
+              "level_2": { "death_refund": { "share": "0.25" } }
+            },
+            "logistics": {
+              "name": "Supplied",
+              "level_1": { "regeneration": { "share_per_second": "0.02", "delay_seconds": 5 } },
+              "level_2": { "supply_reduction": { "amount": 1, "minimum": 1 } }
+            }
+          }
         }
         """;
 
@@ -82,6 +129,8 @@ internal static class SampleData
     public static InMemoryDataFiles Files() => new InMemoryDataFiles()
         .Set(TracksPath, Tracks)
         .Set(RulesPath, Rules)
+        .Set(ResearchPath, Research)
+        .Set(AccentsPath, Accents)
         .Set(GuardPath, Guard)
         .Set(MapPath, new MapBuilder().ToJson());
 
