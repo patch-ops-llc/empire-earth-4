@@ -18,6 +18,11 @@ namespace Game;
 /// It works in a match played alone. In a shared match it is not offered, so that each player
 /// there is shown their own picture and no more, which is what the fog is for.
 /// </para>
+/// <para>
+/// Like the aid that makes units, it is there only while the rules have <c>debug.spawn</c> on,
+/// the one switch for development in <c>game/data/rules.jsonc</c>. With the switch off this
+/// part shows nothing and reads no key, so the aid leaves the game when the other does.
+/// </para>
 /// </remarks>
 public partial class DevelopmentFog : InterfacePart
 {
@@ -27,14 +32,23 @@ public partial class DevelopmentFog : InterfacePart
     private Button? _button;
     private Label? _state;
 
-    /// <summary>True when the switch is offered in this match: one played alone.</summary>
-    public bool IsOffered => View.Run is LocalRun;
+    /// <summary>True when the rules allow development aids in this match.</summary>
+    public bool IsAllowed => View.Match.Data.Rules.Debug.Spawn;
 
-    protected override void Attach() => Build();
+    /// <summary>True when the switch is offered in this match: an allowed one that is played alone.</summary>
+    public bool IsOffered => IsAllowed && View.Run is LocalRun;
+
+    protected override void Attach()
+    {
+        if (IsAllowed)
+        {
+            Build();
+        }
+    }
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (!@event.IsActionPressed(ToggleAction))
+        if (!IsAllowed || !@event.IsActionPressed(ToggleAction))
         {
             return;
         }

@@ -112,7 +112,7 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | Go somewhere and fight what is met on the way | Hold Ctrl and right click on the place |
 | Stop | X, or the Stop button in the selection panel |
 | Development aid, while `debug.spawn` is on in `rules.jsonc`: make units at the pointer | G for your own. Alone, H for the other player's. The orange panel at the left edge chooses which and how many |
-| Development aid, alone: lift the fog of war from the screen, and lay it back | F, or the button in the orange panel under the first. Only the screen changes: the simulation has no such switch |
+| Development aid, alone and while `debug.spawn` is on: lift the fog of war from the screen, and lay it back | F, or the button in the orange panel under the first. Only the screen changes: the simulation has no such switch |
 
 ## Test builds
 

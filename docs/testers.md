@@ -119,7 +119,7 @@ You are shown only what your own units see. Each unit sees a circle round itself
 - The edge of what you see moves in steps of a tile a few times a second, and the screen smooths that.
 - In a shared match each player has their own picture. What you see is not what the other player sees.
 
-**The development switch.** A tester alone has to see the other player's units, so this build has a second development aid, in an orange panel under the first: "Development aid: fog of war". Its button, or the F key, lifts the fog from your screen: the whole map and every unit on it are shown. Press it again to lay the fog back. It is not part of the game, and it changes only what is drawn. Your units still see only what they see: they do not shoot at a unit outside their sight, and a right-click on such a unit sends them walking there, with a line of text that says so. In a shared match the switch is not offered, and the panel says so.
+**The development switch.** A tester alone has to see the other player's units, so this build has a second development aid, in an orange panel under the first: "Development aid: fog of war". Its button, or the F key, lifts the fog from your screen: the whole map and every unit on it are shown. Press it again to lay the fog back. It is not part of the game, and it changes only what is drawn. Your units still see only what they see: they do not shoot at a unit outside their sight, and a right-click on such a unit sends them walking there, with a line of text that says so. In a shared match the switch is not offered, and the panel says so. Like the aid that makes units, it goes away once units can be trained.
 
 ## What to know about multiplayer
 

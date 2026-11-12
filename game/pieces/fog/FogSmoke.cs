@@ -73,6 +73,8 @@ public sealed class FogSmoke : SmokePart
                 if (!orders.Failed)
                 {
                     MustBeHidden(orders, "before the player has come near it");
+
+                    // The switch itself, as the development aid sets it.
                     orders.View.Sight.FogOff = true;
                 }
 
