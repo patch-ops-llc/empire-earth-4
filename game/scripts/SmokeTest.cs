@@ -89,6 +89,9 @@ public sealed class SmokeTest
         new StructuresSmoke(),
         new BuildSmoke(),
 
+        // 15v, second half. Production: a worker trained to a rally point.
+        new ProductionSmoke(),
+
         // 17v. Fog of war.
 
         // Inspection: what the panel shows for a selection.

@@ -19,9 +19,12 @@ public enum CommandType
     Build = 9,
     CancelBuild = 10,
     CancelResearch = 2,
+    CancelTrain = 12,
     DebugSpawn = 8,
     Gather = 7,
     Move = 1,
+    SetRallyPoint = 13,
     StartResearch = 3,
     Stop = 6,
+    Train = 11,
 }

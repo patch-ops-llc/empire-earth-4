@@ -94,6 +94,9 @@ If joining fails, the menu says why in orange:
 | Open or close the research panel | R, or the Research button in the bar at the top. Escape closes it too |
 | Start a research | In the research panel, click a bright cell |
 | Cancel a research | In the research panel, click Cancel beside its progress bar |
+| Train a unit | Click your Capitol, then click a button in the panel at the bottom, or press the key the button names. The first button is Q |
+| Cancel an order in the queue | Click it. Backspace cancels the last one |
+| Set where new units go | Right-click while the structure that trains them is selected |
 | Show or hide the readout in the corner | F3 |
 | Attack a unit of the other player | Right-click it |
 | Go somewhere and fight whatever is met on the way | Hold Ctrl and right-click the place |
@@ -126,7 +129,13 @@ The brown blocks on the map are deposits. Select workers and right-click a depos
 - Each player has a Capitol where they start, on the square their workers stand around: a stone hall with a keep and a pointed roof in the player's color. Nobody can stand on it, and units walk round it.
 - The ground a player holds is tinted in the player's color, with a line along its edge. It reaches 16 tiles from the middle of the Capitol. The line follows the sides of the tiles, so it has steps: a tile is either held or it is not. A deposit pays only when all of it is inside, and every structure but a Capitol and an Outpost has to stand inside.
 - Click your Capitol to select it. A green line runs round it, and the panel at the bottom of the window names it and its hit points. Nothing can damage a structure yet, so they stay full.
-- Structures and units are not selected together. A box takes units only, and a structure leaves the selection as soon as a unit joins it. A selected structure takes no orders yet, so a right-click does nothing while one is selected.
+- Structures and units are not selected together. A box takes units only, and a structure leaves the selection as soon as a unit joins it. A right-click with a structure selected sets its rally point: see the next lines.
+- With your Capitol selected, the panel at the bottom offers a worker. The button says the price, 50 Materials, shown as "50 M", the supply it takes and how long it takes. Click it or press Q, and the worker joins the queue under the buttons. You pay when you order. The match starts with 400 Materials and room for 49 more supply.
+- The queue holds five orders. Each says what was paid for it. The first is the one being made: a green line fills along its lower edge and it counts the seconds down. A worker takes 12 seconds. When it is done, the worker appears beside the Capitol.
+- A button that cannot be used is grey and says why: the queue is full, you have too little to pay, or no supply is free. When it is supply, it says how much you use of how much you may. Resting the pointer on it says the same in a sentence.
+- Click an order in the queue to cancel it, or press Backspace for the last one. You get back what you paid when you ordered it, also for the one being made.
+- Right-click the ground while the Capitol is selected to set its rally point. A flag stands there, with a line to it from the Capitol, while the Capitol is selected. New workers walk to the flag. If the flag stands on a deposit, they go to work there instead.
+- If there is nowhere for a new unit to stand, its order says "no room" and waits until there is.
 
 ## Building
 

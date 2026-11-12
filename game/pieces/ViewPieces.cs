@@ -33,6 +33,9 @@ public static class ViewPieces
         new StructuresPiece(),
         new BuildPiece(),
 
+        // 15v, second half. Production: the panel, the queue, the rally point.
+        new ProductionPiece(),
+
         // 17v. Fog of war.
 
         // Inspection: what the selected units are, accent badges, the epoch announcement.

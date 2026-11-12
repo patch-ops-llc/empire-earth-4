@@ -105,6 +105,9 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | Clear the selection | Left click on the ground |
 | Send the selected workers to work at a deposit | Right click on the deposit |
 | Send the selected units somewhere | Right click on the ground |
+| Train a unit | Select one finished structure of your own that trains. The bottom panel offers its units: click one, or press its key, which the button names: Q, E, F, T, Y, Z, C, V in the order of the buttons |
+| Cancel an order | Click it in the queue. Backspace cancels the last one |
+| Set the rally point | Right click with structures that train selected |
 | Show or hide the overlay | F3 |
 | Attack a unit of the other player | Right click on it |
 | Go somewhere and fight what is met on the way | Hold Ctrl and right click on the place |
