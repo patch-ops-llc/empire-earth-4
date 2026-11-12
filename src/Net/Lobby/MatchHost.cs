@@ -1,3 +1,4 @@
+using Sim.Core;
 using Sim.Data;
 using Sim.Serialization;
 
@@ -9,25 +10,44 @@ namespace Net;
 /// The other seats are given to connections from the real network with <see cref="TryAttach"/>.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The command delay is left for the host session to choose from the round trips it measures, so
 /// <see cref="CanStart"/> waits until every remote player has answered a ping.
+/// </para>
+/// <para>
+/// A seat that is not a person's (<see cref="SeatKind"/>) gets no connection, and the match does
+/// not wait for it. Its player's orders, if it gives any, go in with
+/// <see cref="HostSession.Submit"/>: that is where a computer opponent gives its orders.
+/// </para>
+/// <para>
+/// A player who is gone has conceded (design 5.1). When a player leaves a running match, loses
+/// its connection or is dropped, the host gives the order to concede in its name, so that the
+/// match is decided for those who stay instead of leaving them a Capitol to hunt down. The
+/// host's own player concedes the same way with <see cref="Leave"/>.
+/// </para>
 /// </remarks>
 public sealed class MatchHost
 {
     private readonly LoopbackNetwork _network = new();
+    private readonly SeatKind[] _seats;
 
     /// <param name="data">This machine's game data, which the description must fit.</param>
     /// <param name="description">The match, with one player for each seat. The host draws its seed and its starts.</param>
     /// <param name="localPlayer">The seat of the person at this machine.</param>
     /// <param name="hostOptions">The seat count, the first tick and the match are always taken from the other arguments.</param>
     /// <param name="clientOptions">The options of the local player's session.</param>
+    /// <param name="seats">
+    /// What takes each seat, in the order of the players (<see cref="MatchSettings.Kinds"/>). Left
+    /// out, every seat is a person's. The local player's is always a person's.
+    /// </param>
     /// <exception cref="ArgumentException">The match cannot be built from the data. The message says why.</exception>
     public MatchHost(
         GameData data,
         MatchDescription description,
         int localPlayer = 0,
         HostOptions? hostOptions = null,
-        ClientOptions? clientOptions = null)
+        ClientOptions? clientOptions = null,
+        IReadOnlyList<SeatKind>? seats = null)
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(description);
@@ -36,6 +56,17 @@ public sealed class MatchHost
         if (description.FindProblem(data) is { } problem)
         {
             throw new ArgumentException(problem, nameof(description));
+        }
+
+        _seats = seats is null ? new SeatKind[description.Players.Count] : [.. seats];
+        if (_seats.Length != description.Players.Count)
+        {
+            throw new ArgumentException($"The match has {description.Players.Count} players and {_seats.Length} seats are named.", nameof(seats));
+        }
+
+        if (_seats[localPlayer] != SeatKind.Person)
+        {
+            throw new ArgumentException($"Seat {localPlayer} is the seat of the person at this machine.", nameof(seats));
         }
 
         Description = description;
@@ -47,6 +78,7 @@ public sealed class MatchHost
             Match = description,
         });
 
+        Session.PlayerLeft += ConcedeFor;
         var link = _network.Connect();
         Session.Attach(localPlayer, link.HostEnd);
         Local = new MatchClient(link.ClientEnd, data, description.GameVersion, clientOptions, readyWhenBuilt: true);
@@ -73,9 +105,12 @@ public sealed class MatchHost
 
     public int PlayerCount => Description.Players.Count;
 
+    /// <summary>What takes a seat.</summary>
+    public SeatKind SeatOf(int player) => _seats[player];
+
     /// <summary>
-    /// True when the match can start: every seat has a player who is ready, and every remote
-    /// player has answered a ping, so that the command delay fits the network between them.
+    /// True when the match can start: every seat of a person has a player who is ready, and every
+    /// remote player has answered a ping, so that the command delay fits the network between them.
     /// </summary>
     public bool CanStart
     {
@@ -88,7 +123,8 @@ public sealed class MatchHost
 
             for (var player = 0; player < PlayerCount; player++)
             {
-                if (!Session.IsReady(player) || (player != LocalPlayer && Session.GetRoundTrip(player) is null))
+                if (_seats[player] == SeatKind.Person
+                    && (!Session.IsReady(player) || (player != LocalPlayer && Session.GetRoundTrip(player) is null)))
                 {
                     return false;
                 }
@@ -99,9 +135,9 @@ public sealed class MatchHost
     }
 
     /// <summary>
-    /// Gives the lowest free seat to a connection from the network. Returns false, having done
-    /// nothing, when every seat is taken or the match has started; the caller then closes the
-    /// connection.
+    /// Gives the lowest free seat of a person to a connection from the network. Returns false,
+    /// having done nothing, when every such seat is taken or the match has started; the caller
+    /// then closes the connection.
     /// </summary>
     public bool TryAttach(IConnection connection) => TryAttach(connection, out _);
 
@@ -118,7 +154,7 @@ public sealed class MatchHost
 
         for (var seat = 0; seat < PlayerCount; seat++)
         {
-            if (!Session.IsAttached(seat))
+            if (_seats[seat] == SeatKind.Person && !Session.IsAttached(seat))
             {
                 Session.Attach(seat, connection);
                 player = seat;
@@ -134,7 +170,7 @@ public sealed class MatchHost
     {
         if (!CanStart)
         {
-            throw new InvalidOperationException("Not every seat has a player who is ready.");
+            throw new InvalidOperationException("Not every seat of a person has a player who is ready.");
         }
 
         Session.Start();
@@ -163,6 +199,35 @@ public sealed class MatchHost
         for (var i = 0; i < 1000 && Local.Session.Phase != SessionPhase.Stopped; i++)
         {
             Local.Advance(TimeSpan.Zero);
+        }
+    }
+
+    /// <summary>
+    /// The person at this machine leaves, which ends the match for everyone as <see cref="End"/>
+    /// does. If the match is running and not yet decided, the host's player concedes first, in
+    /// the last tick of the match, so that every machine ends with the same result: the host
+    /// gave up, and whoever is left has won.
+    /// </summary>
+    public void Leave()
+    {
+        if (Session.Phase == SessionPhase.Running
+            && Local.Match is { } match
+            && !match.Standings.IsDecided
+            && Local.Session.Submit(new Command(CommandType.Concede, LocalPlayer)))
+        {
+            // The loopback delivers at once: the host takes the order in before it ends the match.
+            Session.Advance(TimeSpan.Zero);
+        }
+
+        End();
+    }
+
+    /// <summary>A player who is gone from a running match has conceded: the host gives the order in its name.</summary>
+    private void ConcedeFor(int player, SessionEndReason reason)
+    {
+        if (Session.Phase == SessionPhase.Running)
+        {
+            Session.Submit(new Command(CommandType.Concede, player));
         }
     }
 }

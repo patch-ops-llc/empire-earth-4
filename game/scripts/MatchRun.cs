@@ -28,6 +28,27 @@ public abstract class MatchRun : IDisposable
     /// <summary>The files of this match, once the match is built.</summary>
     public MatchFiles? Files { get; protected set; }
 
+    /// <summary>
+    /// The seats the computer plays, on the machine that hosts the match or plays it alone. Null
+    /// on a guest's machine, which is not told what sits at a seat.
+    /// </summary>
+    public ComputerSeats? Computers { get; protected set; }
+
+    /// <summary>
+    /// True when this machine sets the pace of the match: when it hosts it or plays it alone
+    /// (design: pause and speed are the host's). A guest is told the pace and cannot change it.
+    /// </summary>
+    public bool CanSetPace => PaceHost is not null;
+
+    /// <summary>The host's side of the session when it is on this machine, which is where the pace is set.</summary>
+    protected abstract HostSession? PaceHost { get; }
+
+    /// <summary>Pauses the match for everyone, or lets it go on. Returns false when this machine cannot, or the match is not running.</summary>
+    public bool SetPaused(bool paused) => PaceHost?.SetPaused(paused) ?? false;
+
+    /// <summary>Sets the time between two ticks for everyone. Returns false when this machine cannot, or the match is not running.</summary>
+    public bool SetTickInterval(TimeSpan interval) => PaceHost?.SetTickInterval(interval) ?? false;
+
     /// <summary>True once the match has started, and from then on.</summary>
     public bool HasStarted => Client.Phase == SessionPhase.Running || (Client.Phase == SessionPhase.Stopped && Match is { World.Tick: > 0 });
 
@@ -70,11 +91,16 @@ public sealed class LocalRun : MatchRun
     /// <param name="data">The game data the match is built from.</param>
     /// <param name="localPlayer">The seat of the player at this machine.</param>
     /// <param name="keepFiles">False for a match that leaves no replay, as the smoke test's.</param>
-    public LocalRun(MatchDescription description, GameData data, int localPlayer, bool keepFiles = true)
+    /// <param name="seats">What takes each seat, as the settings of the match have it. Left out, nobody sits at the other seats.</param>
+    public LocalRun(MatchDescription description, GameData data, int localPlayer, bool keepFiles = true, IReadOnlyList<SeatSetting>? seats = null)
     {
         Description = description;
         _match = description.CreateMatch(data);
         Session = new LocalSession(_match.Simulation, description.Players.Count, localPlayer);
+        Computers = new ComputerSeats(_match, Session.Host, seats ?? []);
+
+        // The computer thinks after every tick this machine has run, before the view reads it.
+        Session.Client.TickCompleted += _ => Computers.Think();
         if (keepFiles)
         {
             Files = new MatchFiles(Session.Client, description, _match, localPlayer);
@@ -88,6 +114,8 @@ public sealed class LocalRun : MatchRun
     public override Match Match => _match;
 
     public override MatchDescription Description { get; }
+
+    protected override HostSession PaceHost => Session.Host;
 
     public override int Advance(TimeSpan elapsed) => Session.Advance(elapsed);
 
@@ -106,10 +134,15 @@ public sealed class HostRun : MatchRun
 {
     private readonly UdpListener _listener;
 
+    /// <param name="seats">What takes each seat, as the settings of the match have it. Left out, every seat is a person's.</param>
     /// <exception cref="IOException">The port could not be opened.</exception>
-    public HostRun(MatchDescription description, GameData data, int port, bool localOnly)
+    public HostRun(MatchDescription description, GameData data, int port, bool localOnly, IReadOnlyList<SeatSetting>? seats = null)
     {
-        Host = new MatchHost(data, description);
+        Host = new MatchHost(data, description, seats: seats is null ? null : [.. seats.Select(seat => seat.Kind)]);
+        Computers = new ComputerSeats(Host.Local.Match!, Host.Session, seats ?? []);
+
+        // The computer thinks after every tick the host's own match has run.
+        Host.Local.Session.TickCompleted += _ => Computers.Think();
         _listener = new UdpListener(localOnly ? IPAddress.Loopback : IPAddress.Any, port);
         Files = new MatchFiles(Host.Local.Session, description, Host.Local.Match!, Host.LocalPlayer);
     }
@@ -123,6 +156,8 @@ public sealed class HostRun : MatchRun
     public override Match Match => Host.Local.Match!;
 
     public override MatchDescription Description => Host.Description;
+
+    protected override HostSession PaceHost => Host.Session;
 
     public override int Advance(TimeSpan elapsed)
     {
@@ -148,7 +183,9 @@ public sealed class HostRun : MatchRun
 
     protected override void Close()
     {
-        Host.End();
+        // The host's leaving ends the match for everyone. If it is not decided yet, the host's
+        // player concedes in its last tick, so that every machine ends with the same result.
+        Host.Leave();
 
         // Disposing waits, for a moment, until the guests have what was sent: the end of the match.
         _listener.Dispose();
@@ -196,6 +233,8 @@ public sealed class JoinRun : MatchRun
     public override Match? Match => Player.Match;
 
     public override MatchDescription? Description => Player.Description;
+
+    protected override HostSession? PaceHost => null;
 
     public override int Advance(TimeSpan elapsed)
     {

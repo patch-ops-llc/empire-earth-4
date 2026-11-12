@@ -88,6 +88,27 @@ public class LocalSessionTests
         Assert.Throws<ArgumentException>(() => session.Client.Submit(new Command(ToyGame.Spawn, 1)));
     }
 
+    /// <summary>
+    /// A computer player's round is a list whose order matters: its gather orders come before
+    /// its build orders. The host runs a seat's commands in the order they were handed over.
+    /// </summary>
+    [Fact]
+    public void ARoundOfOrdersForOneSeatRunsInTheOrderItWasHandedOver()
+    {
+        var game = new ToyGame();
+        var session = new LocalSession(game.Simulation);
+        int[] round = [7, 3, 9, 1, 8, 2];
+
+        foreach (var contentId in round)
+        {
+            Assert.True(session.Host.Submit(new Command(ToyGame.Spawn, 1, contentId: contentId)));
+        }
+
+        session.Advance(100 * Millisecond);
+
+        Assert.Equal(round.Select(contentId => (0, 1, contentId)), game.Log.Select(entry => (entry.Tick, entry.Player, entry.ContentId)));
+    }
+
     [Fact]
     public void ThePersonCanSitInAnySeat()
     {

@@ -52,12 +52,13 @@ public sealed class SmokeTest
     private readonly SmokeOrders _orders;
     private readonly int _firstTick;
 
-    public SmokeTest(Match match, LocalSession session)
+    public SmokeTest(Match match, LocalSession session, MatchView view)
     {
         _match = match;
         _session = session;
-        _orders = new SmokeOrders(match, session.Client);
+        _orders = new SmokeOrders(match, session.Client, session.Host);
         _firstTick = match.World.Tick;
+        _orders.View = view;
     }
 
     /// <summary>The number of ticks the smoke test's match runs for: those of every part of the script.</summary>
@@ -72,18 +73,29 @@ public sealed class SmokeTest
     // plays the script in every exported build.
     private static SmokePart[] Script() =>
     [
+        // The match itself: its pause and speed, and what the end screen says. No orders.
+        new MatchFlowSmoke(),
+
         // Units: move orders. 30 seconds of play.
         new MoveOrdersSmoke(),
 
         // 11v. Combat: a short fight.
+        new FightSmoke(),
 
         // 13v. Economy: a work order.
+        new GatherOrdersSmoke(),
 
         // 14v. Research: one research.
+        new ResearchSmoke(),
 
         // 15v. Construction and production.
+        new StructuresSmoke(),
+        new BuildSmoke(),
 
         // 17v. Fog of war.
+
+        // Inspection: what the panel shows for a selection.
+        new InspectionSmoke(),
 
         // Later pieces.
     ];

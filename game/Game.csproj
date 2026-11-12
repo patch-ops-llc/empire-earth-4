@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../src/Ai/Ai.csproj" />
     <ProjectReference Include="../src/Net/Net.csproj" />
     <ProjectReference Include="../src/Net.Udp/Net.Udp.csproj" />
     <ProjectReference Include="../src/Sim/Sim.csproj" />

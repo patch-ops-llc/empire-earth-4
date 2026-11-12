@@ -44,6 +44,8 @@ internal static class FormulaCheck
                 }
             }
         }
+
+        StructureBlueprintResolver.Check(data, errors);
     }
 
     /// <summary>

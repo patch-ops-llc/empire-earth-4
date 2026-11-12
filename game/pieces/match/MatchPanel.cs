@@ -6,12 +6,28 @@ namespace Game;
 
 /// <summary>
 /// The right of the top bar: which player this is, how the match is played, who has left it, and
-/// the button that leaves it.
+/// the button that leaves it, which opens the <see cref="EndScreen"/>.
 /// </summary>
+/// <remarks>
+/// The sentences give way to everything else in the top bar, a whole sentence at a time and
+/// never in the middle of one, so that the buttons of the bar stay in the window however many
+/// parts fill it. What is said first, with the room there is: everything; then without how the
+/// match is played; then who has left alone, in full and then in short; then who the player is;
+/// then nothing. Having given way they do not come back until the window is wider or a player
+/// leaves.
+/// </remarks>
 public partial class MatchPanel : InterfacePart
 {
-    private readonly List<string> _left = [];
+    private readonly List<(int Player, SessionEndReason Reason)> _left = [];
+
+    // What the bar can say, from the longest to the shortest, each with its width.
+    private readonly List<(string Text, float Width)> _forms = [];
     private Label _text = null!;
+
+    // The first of the forms that has had room, in a window of this width.
+    private int _shortest;
+    private float _window;
+    private bool _out;
 
     protected override void Attach()
     {
@@ -20,20 +36,68 @@ public partial class MatchPanel : InterfacePart
 
         if (View.Leave is { } leave)
         {
-            var button = UiStyle.FrameButton("Leave the match");
+            // One word, because the bar is short of room. The sentence beside it names the match.
+            var button = UiStyle.FrameButton("Leave");
             button.Name = "LeaveButton";
-            button.Pressed += leave;
+            button.TooltipText = "Leave the match and go back to the menu, or concede it. Leaving concedes, so it asks first";
+            button.Pressed += () =>
+            {
+                // The end screen asks first, since leaving concedes (design 5.1). A match shown
+                // without it is left at once.
+                if (Frame.Parts.OfType<EndScreen>().FirstOrDefault() is { } screen)
+                {
+                    screen.Open();
+                }
+                else
+                {
+                    leave();
+                }
+            };
             Frame.TopRight.AddChild(button);
         }
 
         View.Client.PlayerLeft += (player, reason) =>
         {
-            var sentence = $"{PlayerName(player)} {HowLeft(reason)}.";
-            _left.Add(sentence);
-            Frame.Say(sentence, seconds: 12.0);
+            _left.Add((player, reason));
+            Frame.Say(LeftSentence(player, reason), seconds: 12.0);
             Refresh();
         };
         Refresh();
+    }
+
+    public override void AfterTick()
+    {
+        // A player who is out of the match gives no more orders, and the bar says so.
+        var isOut = !View.Match.Standings.IsPlaying(View.Player);
+        if (isOut != _out)
+        {
+            _out = isOut;
+            Refresh();
+        }
+    }
+
+    public override void EveryFrame(double delta)
+    {
+        // Having given way, the sentences stay as short for as long as the window is as wide,
+        // so that they do not come and go with what the other parts of the bar show.
+        var window = _text.GetViewportRect().Size.X;
+        if (!Mathf.IsEqualApprox(window, _window))
+        {
+            _window = window;
+            _shortest = 0;
+        }
+
+        var room = Frame.TopBarRoomFor(_text);
+        while (_shortest < _forms.Count && _forms[_shortest].Width > room)
+        {
+            _shortest++;
+        }
+
+        var text = _shortest < _forms.Count ? _forms[_shortest].Text : string.Empty;
+        if (_text.Text != text)
+        {
+            _text.Text = text;
+        }
     }
 
     /// <summary>A player as a sentence names it: seats count from 1.</summary>
@@ -42,16 +106,54 @@ public partial class MatchPanel : InterfacePart
     private void Refresh()
     {
         var seat = View.Player;
-        var who = $"{PlayerName(seat)}, {PlayerColors.NameOf(seat)}.";
+        var who = _out
+            ? $"{PlayerName(seat)}, {PlayerColors.NameOf(seat)}, out of the match."
+            : $"{PlayerName(seat)}, {PlayerColors.NameOf(seat)}.";
         var how = View.Run switch
         {
             HostRun host => string.Create(CultureInfo.InvariantCulture, $"Hosting on port {host.Port}."),
             JoinRun join => $"Joined {join.HostAddress}.",
+            _ when View.Run.Computers is { Count: > 0 } computers => $"Playing against the computer{ComputerNames(computers)}.",
             _ => "Playing alone.",
         };
 
-        _text.Text = string.Join(' ', [who, how, .. _left]);
+        _forms.Clear();
+        _shortest = 0;
+        if (_left.Count == 0)
+        {
+            AddForm($"{who} {how}");
+        }
+        else
+        {
+            var left = string.Join(' ', _left.Select(one => LeftSentence(one.Player, one.Reason)));
+            AddForm($"{who} {how} {left}");
+            AddForm($"{who} {left}");
+            AddForm(left);
+            AddForm(_left.Count == 1
+                ? $"{PlayerName(_left[0].Player)} is out."
+                : string.Create(CultureInfo.InvariantCulture, $"{_left.Count} players are out."));
+        }
+
+        AddForm(who);
     }
+
+    // The personalities of the computer's seats, as the end of a sentence: " (Swarm)".
+    private string ComputerNames(ComputerSeats computers)
+    {
+        var names = Enumerable.Range(0, View.Match.Players.Count)
+            .Select(computers.PersonalityOf)
+            .Where(personality => personality is not null)
+            .Select(personality => personality!.Name);
+        return $" ({string.Join(", ", names)})";
+    }
+
+    private void AddForm(string text)
+    {
+        var size = _text.GetThemeFont("font").GetStringSize(text, fontSize: _text.GetThemeFontSize("font_size"));
+        _forms.Add((text, Mathf.Ceil(size.X)));
+    }
+
+    private static string LeftSentence(int player, SessionEndReason reason) => $"{PlayerName(player)} {HowLeft(reason)}.";
 
     private static string HowLeft(SessionEndReason reason) => reason switch
     {
