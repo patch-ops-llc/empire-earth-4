@@ -235,6 +235,26 @@ public class EnemySpacingTests
     }
 
     /// <summary>
+    /// Whatever gives a unit a new aim or stops it ends its wait at once, so that a unit that
+    /// stands is not taken for one held by enemies.
+    /// </summary>
+    [Fact]
+    public void EveryNewStateOfAMoverEndsItsWait()
+    {
+        var straight = new Mover { Waiting = true };
+        straight.WalkStraightTo(Point("3", "4"));
+        Assert.False(straight.Waiting);
+
+        var route = new Mover { Waiting = true };
+        route.WalkRouteTo(Point("3", "4"), routeStart: 1, routeGoal: 2);
+        Assert.False(route.Waiting);
+
+        var stopped = new Mover { Waiting = true };
+        stopped.Stop();
+        Assert.False(stopped.Waiting);
+    }
+
+    /// <summary>
     /// Design 2.4: enemy units never push each other. Two that stand closer than their spacing,
     /// as after one was produced beside the other, stay where they are. Either may walk away at
     /// once, and neither may come nearer: one ordered to the far side of the other first leaves
