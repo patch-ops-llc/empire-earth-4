@@ -56,7 +56,7 @@ public sealed class SmokeTest
     {
         _match = match;
         _session = session;
-        _orders = new SmokeOrders(match, session.Client);
+        _orders = new SmokeOrders(match, session.Client, session.Host);
         _firstTick = match.World.Tick;
     }
 
@@ -76,6 +76,7 @@ public sealed class SmokeTest
         new MoveOrdersSmoke(),
 
         // 11v. Combat: a short fight.
+        new FightSmoke(),
 
         // 13v. Economy: a work order.
 
@@ -86,6 +87,9 @@ public sealed class SmokeTest
         // 17v. Fog of war.
 
         // Later pieces.
+
+        // Sound: what the match so far has played, and an order answered. 1 second of play.
+        new SoundSmoke(),
     ];
 
     /// <summary>

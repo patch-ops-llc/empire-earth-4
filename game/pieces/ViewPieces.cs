@@ -21,6 +21,7 @@ public static class ViewPieces
         new UnitsPiece(),
 
         // 11v. Combat: health bars, shots and hits, the fighting orders.
+        new CombatPiece(),
 
         // 13v. Economy: resources and supply, deposits, the work order.
 
@@ -31,5 +32,8 @@ public static class ViewPieces
         // 17v. Fog of war.
 
         // Later pieces.
+
+        // Sound: what a fight, a finished structure or research, a new epoch and the player's own orders sound like.
+        new SoundPiece(),
     ];
 }
