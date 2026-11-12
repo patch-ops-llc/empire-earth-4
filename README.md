@@ -66,6 +66,7 @@ Arguments after `--` on the command line start a match without the menu:
 
 | Argument | What it does |
 | --- | --- |
+| `--alone` | Starts a match alone at once, with no network. |
 | `--host [port]` | Hosts a match at once. |
 | `--join <address>[:port]` | Joins a match at once. |
 | `--match-files <folder>` | Writes replays and snapshots to this folder. |
@@ -78,7 +79,18 @@ godot --headless --path game -- --host --net-test 300
 godot --headless --path game -- --join 127.0.0.1 --net-test 300
 ```
 
-Selection works without physics. A click or a box is turned into an area of the ground, the simulation's spatial index names the units there, and each is tested again where it appears on screen. Started with Godot's `--verbose`, the game prints every selection and every order.
+Selection works without physics. A click or a box is turned into an area of the ground, the simulation's spatial index names the units there, and each is tested again where it appears on screen. Started with Godot's `--verbose`, the game prints every selection, every order and every message to the player.
+
+What the player sees and does in a match is put together from pieces, each in a folder of its own under `game/pieces/` and named in `game/pieces/ViewPieces.cs`. A piece adds what it has to four things the game gives it:
+
+| What | Where | A piece adds |
+| --- | --- | --- |
+| The world view | `game/scripts/WorldView.cs` | A `WorldLayer` for each kind of thing it draws. The world view draws the units and calls every layer after every tick and in every frame. |
+| The frame of the interface | `game/ui/InterfaceFrame.cs` | An `InterfacePart` that puts controls into the top bar or the bottom panel, a full-screen panel, a command for the selection, or a sentence in the message line. |
+| What is under the pointer | `game/ui/UnderPointer.cs` | A `PointerPicker` for each kind of thing that can be pointed at. The answer is one of: a unit of the player's, an enemy unit, a deposit, a structure, the ground. |
+| The order table | `game/ui/OrderTable.cs` | An `OrderRow`: for a kind of target, and a modifier or none, the command the selection is given. |
+
+Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own that runs after the parts before it. The smoke test shows its match through every piece, and it fails on the first error the engine logs while it runs: a piece that throws, when it is added or later, fails it. Warnings do not. Three files are shared by all pieces: `ViewPieces.cs`, the list of parts in `game/scripts/SmokeTest.cs`, and the input map in `game/project.godot`. In each, every piece of the plan has a comment line, and a piece adds its lines directly under its own. Pieces built at the same time then never add at the same place, and their pull requests merge in either order.
 
 | Control | Keys and mouse |
 | --- | --- |
@@ -118,10 +130,11 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 | `tests/Net.Udp.Tests/` | Tests for `Net.Udp` over real sockets on the local address, on ports the system picks: what a connection promises, the orderly close, and whole matches between a host and clients, through a relay that delays, reorders and loses datagrams. |
 | `tests/golden/` | The golden replays: `replays/` holds recorded matches that every build must reproduce on every system, and `data/` holds the frozen data they run on, which changes to `game/data/` do not touch. [determinism.md](docs/determinism.md) says how to update them. |
 | `tests/Tools.Tests/` | Tests for the tools, for the data in `game/data/` and for the schemas. |
-| `game/` | The Godot project: `project.godot`, `Game.csproj`, `scenes/`, `scripts/`, `ui/`. References `Sim` and `Net`. |
+| `game/` | The Godot project: `project.godot`, `Game.csproj`, `scenes/`, `scripts/`, `ui/`, `pieces/`. References `Sim` and `Net`. |
 | `game/export_presets.cfg` | The export presets: Windows x86_64, macOS universal, and Linux x86_64, which the export workflow uses for its first smoke test. Each packs the data files with the game. |
 | `game/data/` | The content of the game as JSON-with-comments files: tracks, rules, resources and the worker, unit lines, structures and maps. |
-| `game/ui/` | What the player does to the match, as scripts: the menu and lobby where a match is started, hosted or joined, the selection, the box and the rings that show it, and move orders with their mark on the ground. Orders leave through the session of `Net`. |
+| `game/ui/` | What the player does to the match, as scripts: the menu and lobby where a match is started alone, hosted or joined; the frame of the interface round a match; the selection, the box and the rings that show it; the one answer to what is under the pointer; and the table that turns a click into an order, with the mark it leaves on the ground. Orders leave through the session of `Net`. |
+| `game/pieces/` | The pieces of the view, a folder each: what a piece draws in the world, shows in the interface, lets the pointer find and adds to the order table and to the smoke test. `ViewPieces.cs` lists them. |
 | `schemas/` | JSON Schemas for the files in `game/data/`. |
 | `docs/` | [determinism.md](docs/determinism.md): the rules that keep the simulation deterministic, the kernel, the byte format, snapshots, replays and the golden replays. [data-authoring.md](docs/data-authoring.md): how the data files are written and checked. [testers.md](docs/testers.md): how a tester gets a build and starts it. |
 | `.github/workflows/` | `ci.yml`, `determinism.yml` and `export.yml`, described above. |
