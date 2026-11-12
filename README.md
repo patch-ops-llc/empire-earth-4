@@ -72,7 +72,7 @@ Arguments after `--` on the command line start a match without the menu:
 | `--join <address>[:port]` | Joins a match at once. |
 | `--match-files <folder>` | Writes replays and desync bundles to this folder. |
 | `--net-test <ticks>` | With `--host` or `--join`: plays a match with nobody at the keyboard, on the local address only. The host starts when the other game is ready, each game orders its units to move, the host ends the match after this many ticks, and each game prints a line that starts with `NET_TEST_OK` with the last tick and the state hash. The two lines must agree. |
-| `--net-test-desync <ticks>` | With `--net-test`: makes the test one of a desync made on purpose. Once it has run this many ticks, the joining game moves one of its units by the smallest step on its own machine only. Both games must then stop because they no longer agree, and each prints what the end screen says and a line that starts with `NET_TEST_DESYNC` and names its desync bundle. |
+| `--net-test-desync <ticks>` | With `--net-test`: makes the test one of a desync made on purpose. Once it has run this many ticks, the joining game moves one of its units by the smallest step on its own machine only. Both games must then stop because they no longer agree, and each prints what the end screen says and a line that starts with `NET_TEST_DESYNC` and names its desync bundle. CI runs the pair below once more with `--net-test-desync 30` added to both, and `desync-diff` must then name the store, the machine and the field from the two bundles. |
 
 Two games on one machine, the second in another terminal once the first has printed that it is hosting. CI runs the same pair:
 
@@ -80,8 +80,6 @@ Two games on one machine, the second in another terminal once the first has prin
 godot --headless --path game -- --host --net-test 300
 godot --headless --path game -- --join 127.0.0.1 --net-test 300
 ```
-
-CI then runs the pair once more with `--net-test-desync 30` added to both, a desync made on purpose: both games must stop, say so in the words of the end screen and write a desync bundle, and `desync-diff` must name the store, the machine and the field from the two bundles.
 
 Selection works without physics. A click or a box is turned into an area of the ground, the simulation's spatial index names the units there, and each is tested again where it appears on screen. Started with Godot's `--verbose`, the game prints every selection, every order and every message to the player.
 
