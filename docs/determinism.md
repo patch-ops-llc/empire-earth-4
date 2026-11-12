@@ -60,10 +60,11 @@ Do not add a value to a store, or remove one directly, while walking that store,
 
 `Simulation.Tick()` runs one tick, in this order:
 
-1. The commands scheduled for this tick, in the order they were queued.
-2. Each system, in the order it was added.
-3. Destroyed entities are removed from the entity list and from every store.
-4. The tick number goes up by one.
+1. The event list is emptied (see "Events").
+2. The commands scheduled for this tick, in the order they were queued.
+3. Each system, in the order it was added.
+4. Destroyed entities are removed from the entity list and from every store.
+5. The tick number goes up by one.
 
 Nothing reads a clock. The caller decides when a tick runs; there are `SimInfo.TicksPerSecond` (20) per second of game time. Single-player, network play, replays and tests all go through `Simulation.Tick()`.
 
@@ -87,6 +88,17 @@ A `Command` is the only way anything outside the simulation changes it. It is im
 - Whoever orders commands (the host, the local session, a replay) schedules each for a tick with `Simulation.Commands.Enqueue(tick, command)`. Commands for one tick run in the order they were queued, so that order must be the same on every machine. Scheduling a command for a tick that has already run throws.
 - Each command type has one `ICommandHandler`. It checks the command against the world as it is when the command runs (ownership, affordability, placement) and returns `false`, having changed nothing, if the command is not valid. The command is then dropped, on every machine alike. A type with no handler is dropped too.
 - The queue is input, not state. It is not in the state hash, because peers may hold different amounts of the future when they compare hashes.
+
+## Events
+
+Commands go in; events come out. `Simulation.Events` is the list of what happened in the last tick that the state alone does not show afterwards: a hit, a shot fired, a death. The view, sound and tools read it after every tick.
+
+- A `SimEvent` is immutable data: a kind (`SimEventKind`), the tick, a player, up to two entities, a point and a number. Which of those a kind fills is written at the kind. An event carries the place it happened at, because an entity it names may be gone when it is read: destroyed entities leave the stores at the end of the tick.
+- A command handler or a system is handed the list when the match is set up (`simulation.Events`) and calls `Add`, which stamps the tick. The events of a tick stand in the order they were added: those of the commands, then those of each system.
+- The tick empties the list before it runs its commands. So after `Tick()` the list holds that tick's events, and a reader that skips a tick has missed them. A handler that refuses its command changes no state, but it may add an event that says why.
+- **The list is output, not state.** It is not walked, so it is in neither the state hash nor a snapshot, and restoring a snapshot empties it. A match runs to the same state whether or not anything is reported: `SimEventTests` runs the toy match with and without a system that reports, and compares every hash and the snapshots.
+- **Nothing in the simulation reads the list.** What a rule needs to know goes in a store. Adding an event draws nothing from the random generator and changes nothing in the world. Enforced by review.
+- A piece that reports something adds its kinds to `SimEventKind`, in alphabetical order and without numbers. The number of a kind is recorded nowhere, unlike that of a command type, so it may change from one build to the next and nothing may store one.
 
 ## The state hash
 
@@ -311,6 +323,7 @@ dotnet run --project src/Tools -- replay verify tests/golden/replays --data test
 6. Add the snapshot test for it: one line with `SnapshotAssert.RestoresAndContinues`, described above.
 7. Data it works out from the state follows the rule in "Derived data".
 8. Update the golden replays, whose hashes it changes, and add a replay that reaches its rules: see "Golden replays".
+9. What the view should show of it and cannot see in the state, it adds to the event list: see "Events".
 
 ## What the tests pin
 
