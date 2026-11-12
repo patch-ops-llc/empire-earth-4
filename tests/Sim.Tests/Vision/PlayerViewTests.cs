@@ -569,7 +569,12 @@ public class PlayerViewTests
         match.SpawnWorker(2, "6.5", "5.5");
         var seen = TestMatches.Point("8.5", "5.5");
         var unseen = TestMatches.Point("30.5", "5.5");
-        foreach (var kind in new[] { SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost, SimEventKind.SplashHit })
+        SimEventKind[] kinds =
+        [
+            SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost,
+            SimEventKind.SplashHit, SimEventKind.ChargedAttack, SimEventKind.Regenerated,
+        ];
+        foreach (var kind in kinds)
         {
             Assert.True(view.Knows(new SimEvent(kind, 5, 0, new EntityId(1), new EntityId(2), seen, 7)));
             Assert.False(view.Knows(new SimEvent(kind, 5, 0, new EntityId(1), new EntityId(2), unseen, 7)));
@@ -636,8 +641,20 @@ public class PlayerViewTests
             SimEventKind.Blast, SimEventKind.Splash, SimEventKind.SplashHit,
             SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost,
             SimEventKind.StructurePlaced, SimEventKind.StructureFinished, SimEventKind.StructureRemoved,
+
+            // What a seen unit does or shows: a charge is part of an attack that is seen, and hit
+            // points that come back are seen on the unit.
+            SimEventKind.ChargedAttack, SimEventKind.Regenerated,
         ];
-        SimEventKind[] knownToItsPlayerAlone = [SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded];
+
+        // A queue, what comes out of it, its rally point and a stockpile are their owner's alone,
+        // and so is what is paid into one.
+        SimEventKind[] knownToItsPlayerAlone =
+        [
+            SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded,
+            SimEventKind.RallyPointSet, SimEventKind.TrainOrdered, SimEventKind.TrainCancelled, SimEventKind.TrainRefunded,
+            SimEventKind.TrainRefused, SimEventKind.UnitTrained, SimEventKind.ReservesRefunded,
+        ];
 
         foreach (var kind in Enum.GetValues<SimEventKind>())
         {

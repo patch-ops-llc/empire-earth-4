@@ -2,6 +2,7 @@ using Sim.Core;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
+using Sim.Perks;
 using Sim.Structures;
 using Sim.Vision;
 
@@ -69,6 +70,12 @@ public sealed class Targeting
     /// be named by an attack order, picked as design 2.4 says, and damaged as design 2.5 says.
     /// </summary>
     public ComponentStore<PlacedStructure>? Structures { get; init; }
+
+    /// <summary>
+    /// Who is told of every hit that does damage, when the match keeps count for the perks: a
+    /// unit's ticks without damage begin again with it (Regeneration, design 2.3).
+    /// </summary>
+    public PerkCounters? Counters { get; init; }
 
     /// <summary>
     /// True when the entity can be attacked by a player: it is alive, on the map, has hit points,
@@ -500,7 +507,7 @@ public sealed class Targeting
     /// <summary>
     /// Lands a hit: takes the damage off the target's hit points, with the target's side multiplied
     /// in and the result rounded once. Hit points stop at zero, and the target stays until the end
-    /// of the tick even there.
+    /// of the tick even there. A hit that does damage is told to <see cref="Counters"/>.
     /// </summary>
     /// <remarks>
     /// The target's side of a unit is the counter multiplier of the two lines and what its
@@ -547,6 +554,11 @@ public sealed class Targeting
         }
 
         health.HitPoints = Math.Max(0, checked(health.HitPoints - damage));
+        if (damage > 0)
+        {
+            Counters?.Damaged(target);
+        }
+
         return damage;
     }
 }
