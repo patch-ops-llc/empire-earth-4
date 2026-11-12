@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Sim.Combat;
 using Sim.Core;
 using Sim.Data;
@@ -392,6 +393,106 @@ public class BattlesToolTests
 
         Assert.Equal(new ShellCount(Landed: 4, Caught: 6, MostCaught: 3), counter.Count);
         Assert.Equal(0.0, ShellCount.None.AverageCaught);
+    }
+
+    /// <summary>
+    /// The battle that counts what splash reaches: every hit of a Legionary at the elite tiers
+    /// splashes (Overgunned II), so the hits that splash are the attacks the elite army made,
+    /// and none reaches more than the four neighbours a unit has in a square grid (design 2.4).
+    /// The battles of the design have no unit whose hit splashes.
+    /// </summary>
+    [Fact]
+    public void TheSplashesOfAFightAreCountedWithWhatEachReached()
+    {
+        var measure = AcceptanceBattles.SplashMeasure;
+
+        var result = Battle.Fight(Data, measure, massWest: true);
+
+        Assert.True(measure.IsMeasure);
+        Assert.Null(Battle.Problem(Data, measure));
+        Assert.DoesNotContain(AcceptanceBattles.All, battle => battle.IsMeasure || battle.Number == measure.Number);
+        Assert.Equal(result.Elite.Attacks, result.Splashes.Made);
+        Assert.InRange(result.Splashes.ReachedAnyone, 1, result.Splashes.Made);
+        Assert.InRange(result.Splashes.MostReached, 1, 4);
+        Assert.InRange(result.Splashes.Reached, result.Splashes.ReachedAnyone, result.Splashes.ReachedAnyone * result.Splashes.MostReached);
+        Assert.Equal(ShellCount.None, result.Shells);
+        Assert.All(AcceptanceBattles.All, battle => Assert.Equal(SplashCount.None, Battle.Fight(Data, battle, massWest: true).Splashes));
+    }
+
+    /// <summary>
+    /// What a splash reaches is every hit that names its shot or attacker in the tick it
+    /// landed: a splash that reaches nobody is counted too, and a hit that names no splash of
+    /// the tick is not.
+    /// </summary>
+    [Fact]
+    public void ASplashHasReachedEveryUnitThatAHitNamesItFor()
+    {
+        var counter = new SplashCounter();
+        var (crowd, alone, pair, stranger) = (new EntityId(1), new EntityId(2), new EntityId(3), new EntityId(9));
+
+        counter.Splashed(crowd);
+        counter.Reached(crowd);
+        counter.Splashed(alone);
+        counter.Reached(crowd);
+        counter.Reached(stranger);
+        counter.Reached(crowd);
+        counter.EndOfTick();
+
+        Assert.Equal(new SplashCount(Made: 2, ReachedAnyone: 1, Reached: 3, MostReached: 3), counter.Count);
+
+        // The same attacker hits again in a later tick: that is another splash.
+        counter.Reached(crowd);
+        counter.Splashed(crowd);
+        counter.Splashed(pair);
+        counter.Reached(pair);
+        counter.EndOfTick();
+        counter.EndOfTick();
+
+        var count = counter.Count;
+        Assert.Equal(new SplashCount(Made: 4, ReachedAnyone: 2, Reached: 4, MostReached: 3), count);
+        Assert.Equal((1.0, 50.0), (count.AverageReached, count.PercentThatReachedAnyone));
+        Assert.Equal((0.0, 0.0), (SplashCount.None.AverageReached, SplashCount.None.PercentThatReachedAnyone));
+        Assert.Equal(new SplashCount(5, 3, 9, 5), count.Plus(new SplashCount(1, 1, 5, 5)));
+        Assert.Equal(new ShellCount(5, 9, 4), new ShellCount(4, 6, 3).Plus(new ShellCount(1, 3, 4)));
+    }
+
+    /// <summary>
+    /// The battle that is fought to count has no target: its report says what the splashes
+    /// reached, judges nothing, and the summary leaves it out.
+    /// </summary>
+    [Fact]
+    public void TheBattleThatCountsSplashIsReportedAndNotJudged()
+    {
+        var measured = new BattleReport(
+            AcceptanceBattles.SplashMeasure,
+            Result(Side.Elite, 70) with { Splashes = new SplashCount(1200, 300, 660, 3) },
+            Result(Side.Mass, 20, massWest: false));
+        var writer = new StringWriter();
+        var summary = new StringWriter();
+
+        measured.Write(writer);
+        BattleReport.WriteSummary([new BattleReport(Number(2), Result(Side.Elite, 80), Result(Side.Elite, 80, massWest: false)), measured], summary);
+
+        var lines = writer.ToString().Split(Environment.NewLine);
+        Assert.Equal("5. Not a battle of the design: what splash reaches, open field", lines[0]);
+        Assert.Contains("   target: none; it is fought to count what the splash of the Legionaries reaches.", lines);
+        Assert.Equal("              splash: 1,200 hits that splash, 300 of them (25%) reached another unit, 0.55 other units on average, 3 at most", Assert.Single(lines, line => line.Contains("splash:", StringComparison.Ordinal)));
+        Assert.DoesNotContain(lines, line => line.Contains("target M", StringComparison.Ordinal) || line.Contains("The design expects", StringComparison.Ordinal));
+        Assert.Equal("battles: 1 of 1 targets met (2)." + Environment.NewLine, summary.ToString());
+    }
+
+    /// <summary>The tool fights it after the battles of the design when asked, and only then.</summary>
+    [Fact]
+    public void TheToolFightsTheBattleThatCountsSplashWhenAsked()
+    {
+        var (exitCode, output, errors) = Run("--data", Repository.DataFolder, "--battle", "2", "--splash");
+
+        Assert.Equal(("", ExitCodes.Ok), (errors, exitCode));
+        var lines = output.Split(Environment.NewLine);
+        Assert.Equal(["2. Equal supply, open field", "5. Not a battle of the design: what splash reaches, open field"], lines.Where(line => line.Length > 1 && char.IsDigit(line[0]) && line[1] == '.'));
+        Assert.Equal(2, lines.Count(line => Regex.IsMatch(line, @"^              splash: \d+ hits that splash, \d+ of them \(\d+%\) reached another unit, \d\.\d\d other units on average, [1-4] at most$")));
+        Assert.Equal("battles: 1 of 1 targets met (2).", lines[^2]);
+        Assert.DoesNotContain("splash", Run("--data", Repository.DataFolder, "--battle", "2").Output, StringComparison.Ordinal);
     }
 
     /// <summary>Design 3.1's targets, judged at the edges of their bands.</summary>

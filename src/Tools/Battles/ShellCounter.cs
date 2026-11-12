@@ -15,11 +15,15 @@ namespace Tools.Battles;
 /// </remarks>
 public sealed class ShellCounter
 {
+    private readonly int? _player;
     private readonly Dictionary<EntityId, int> _flying = [];
     private readonly List<EntityId> _landed = [];
     private int _count;
     private int _caught;
     private int _most;
+
+    /// <param name="player">The player whose shells are counted, or null for those of every player.</param>
+    public ShellCounter(int? player = null) => _player = player;
 
     public ShellCount Count => new(_count, _caught, _most);
 
@@ -30,6 +34,7 @@ public sealed class ShellCounter
         foreach (var simEvent in match.Simulation.Events)
         {
             if (simEvent.Kind == SimEventKind.ShotFired
+                && (_player is not { } player || simEvent.Player == player)
                 && match.Combatants.TryGet(simEvent.Other, out var firer)
                 && match.Research.Tech(simEvent.Player).Blueprints[firer.Chassis].BlastRadius is not null)
             {

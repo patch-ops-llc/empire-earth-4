@@ -1,6 +1,7 @@
 using Sim.Data;
 using Tools.AiMatch;
 using Tools.AiSeries;
+using Tools.Battles;
 
 namespace Tools.Tests;
 
@@ -96,7 +97,15 @@ public class AiSeriesToolTests
     [Fact]
     public void TheSummaryAndTheFileSayWhoWonFromWhere()
     {
-        var elite = Seat(0, [100, 300, 400, 500], "elite") with { Start = 1, FirstAttackOrderTick = 600, ResearchMaterials = [0, 0, 0, 300, 0, 0], ResearchEnergy = [0, 0, 0, 100, 0, 0] };
+        var elite = Seat(0, [100, 300, 400, 500], "elite") with
+        {
+            Start = 1,
+            FirstAttackOrderTick = 600,
+            ResearchMaterials = [0, 0, 0, 300, 0, 0],
+            ResearchEnergy = [0, 0, 0, 100, 0, 0],
+            Shells = new ShellCount(10, 25, 6),
+            Splashes = new SplashCount(40, 10, 12, 2),
+        };
         var swarm = Seat(1, [100, 200, 199, 0], "swarm") with { Start = 0, OutTick = 1000, Workers = 4, TicksAtSupplyCap = 100, TicksAboveSupplyCap = 40, MostAboveSupplyCap = 3 };
         SeriesMatch[] matches =
         [
@@ -122,6 +131,8 @@ public class AiSeriesToolTests
         Assert.Contains("  firepower      0 (0%)      0 (0%)", lines);
         Assert.Contains("  manufacturing  400 (100%)  0 (0%)", lines);
         Assert.Contains("  swarm  at the cap in 2 of 2 (100%) seats, for 0:05 (0:05 to 0:05)  above it in 2 of 2 (100%) seats, by at most 3, for 0:02 (0:02 to 0:02)", lines);
+        Assert.Contains("  elite  20 shells landed, 2.5 units caught on average, 6 at most  80 hits that splash in 2 of 2 (100%) seats, 20 of them (25%) reached another unit, 0.30 other units on average, 2 at most", lines);
+        Assert.Contains("  swarm  no shell landed                                           no hit that splashes", lines);
         Assert.Contains("  from the last moment the loser had half the winner's army value to the end: 0:30 (0:30 to 1:20)", lines);
         Assert.Contains("  workers the loser still had at the end: 4 (4 to 4)", lines);
 
@@ -131,7 +142,8 @@ public class AiSeriesToolTests
         Assert.StartsWith("2,ridge,3,conquest,100,elite,35,20,0,0,0000000000000000,0,0,swarm,elite,lost,50,", rows[3], StringComparison.Ordinal);
         Assert.StartsWith("2,ridge,3,conquest,100,elite,35,20,0,0,0000000000000000,1,1,elite,swarm,won,,", rows[4], StringComparison.Ordinal);
         Assert.Contains(",2,2,2,2,2,2,0,0,0,300,0,0,0,0,0,100,0,0,0,40,0,0,0,", rows[1], StringComparison.Ordinal);
-        Assert.EndsWith(",0,40,5,2,3,4,0,0,0,0,0,0", rows[2], StringComparison.Ordinal);
+        Assert.EndsWith(",0,0,0,0,0,10,25,6,40,10,12,2", rows[1], StringComparison.Ordinal);
+        Assert.EndsWith(",0,40,5,2,3,4,0,0,0,0,0,0,0,0,0,0,0,0,0", rows[2], StringComparison.Ordinal);
     }
 
     private static SeatResult Seat(int player, int[] armyValues, string personality = "swarm") => new(
@@ -180,7 +192,7 @@ public class AiSeriesToolTests
         Assert.Contains("  by conquest, with a winner        0", lines);
         Assert.Contains("  at the time limit                16", lines);
         Assert.Contains("  length of those that ended by conquest: none", lines);
-        Assert.Contains("  first hit of a match: none", lines);
+        Assert.Matches(@"^  first hit of a match: 3:\d\d \(3:\d\d to 3:\d\d\)$", lines.Single(line => line.StartsWith("  first hit of a match", StringComparison.Ordinal)));
         Assert.Contains("  map    player 0  player 1  matches  player 0 won  player 1 won  no winner  length by conquest", lines);
         Assert.Contains("  ridge  elite     swarm     4        0             0             4          none", lines);
         Assert.Contains("  ridge  swarm     swarm     4        0             0             4          none", lines);
@@ -198,10 +210,14 @@ public class AiSeriesToolTests
         var rows = File.ReadAllLines(csv);
         Assert.Equal(1 + 32, rows.Length);
         Assert.StartsWith("match,map,command_delay,ended,length_s,winner,first_hit_s,loser_behind_from_s,commands_given,commands_dropped,state_hash,player,start,personality,opponent,result,out_s,epoch_2_s,epoch_3_s,epoch_4_s,every_track_at_cap_s,first_attack_order_s,tier_firepower,", rows[0], StringComparison.Ordinal);
-        Assert.EndsWith(",supply_used,supply_cap,at_cap_s,above_cap_s,most_above_cap,workers,units,army_value,units_lost,structures_lost,materials,energy", rows[0], StringComparison.Ordinal);
+        Assert.EndsWith(
+            ",supply_used,supply_cap,at_cap_s,above_cap_s,most_above_cap,workers,units,army_value,units_lost,structures_lost,materials,energy"
+            + ",shells_landed,shell_units_caught,shell_most_caught,splashes,splashes_that_reached,splash_units_reached,splash_most_reached",
+            rows[0],
+            StringComparison.Ordinal);
         Assert.All(rows, row => Assert.Equal(rows[0].Split(',').Length, row.Split(',').Length));
         Assert.Matches(@"^1,ridge,2,time_limit,240,,,,\d+,0,[0-9a-f]{16},0,0,elite,elite,none,,2\d\d(\.\d+)?,,,,,", rows[1]);
-        Assert.Matches(@"^16,ridge,5,time_limit,240,,,,\d+,0,[0-9a-f]{16},1,0,swarm,swarm,none,", rows[^1]);
+        Assert.Matches(@"^16,ridge,5,time_limit,240,,2\d\d(\.\d+)?,,\d+,0,[0-9a-f]{16},1,0,swarm,swarm,none,", rows[^1]);
 
         var moments = File.ReadAllLines(samples);
         Assert.Equal("match,map,command_delay,player,start,personality,time_s,workers,units,army_value,supply_used,supply_cap,materials,energy", moments[0]);

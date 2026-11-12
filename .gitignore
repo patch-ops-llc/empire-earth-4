@@ -14,3 +14,4 @@ mono_crash.*
 .idea/
 .DS_Store
 Thumbs.db
+/out/

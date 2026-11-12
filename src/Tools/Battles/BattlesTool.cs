@@ -22,20 +22,22 @@ public sealed class BattlesTool : ITool
     private const string Usage =
         """
         Usage:
-          battles [--data <folder>] [--battle <number>]... [--seconds <number>] [--chokepoint <tiles>]
+          battles [--data <folder>] [--battle <number>]... [--seconds <number>] [--chokepoint <tiles>] [--splash]
 
         --data     The data folder, default game/data. The armies fight with its numbers.
         --battle   Fight only the battle with this number, 1 to 4. May be given more than once.
         --seconds  Stop a fight that has no winner after this much game time, default 600.
         --chokepoint  The width of the chokepoint of battle 3, and of the blocks in it, 4 to 8,
                    default the design's 6. For tuning the test, not a result against the design.
+        --splash   Fights one more battle, which is not the design's and has no target: battle 1
+                   with Legionaries, whose every hit splashes, to count what splash reaches.
         """;
 
     public string Name => "battles";
 
     public string Summary =>
         "Fight the four acceptance battles of the design headless, both ways round, and report winner, army value kept and whether each target was met. "
-        + $"Arguments: [--data <folder>, default {DefaultFolder}] [--battle <number>]... [--seconds <number>] [--chokepoint <tiles>, default 6].";
+        + $"Arguments: [--data <folder>, default {DefaultFolder}] [--battle <number>]... [--seconds <number>] [--chokepoint <tiles>, default 6] [--splash].";
 
     public int Run(IReadOnlyList<string> arguments, TextWriter output, TextWriter errors)
     {
@@ -47,6 +49,7 @@ public sealed class BattlesTool : ITool
         var mostTicks = Battle.DefaultMostTicks;
         var wanted = new List<int>();
         var chokepoint = AcceptanceBattles.ChokepointWidth;
+        var splash = false;
         for (var i = 0; i < arguments.Count; i++)
         {
             switch (arguments[i])
@@ -72,6 +75,9 @@ public sealed class BattlesTool : ITool
                     chokepoint = tiles;
                     i++;
                     break;
+                case "--splash":
+                    splash = true;
+                    break;
                 default:
                     errors.WriteLine($"battles: unknown or incomplete argument '{arguments[i]}'.");
                     errors.WriteLine(Usage);
@@ -93,11 +99,16 @@ public sealed class BattlesTool : ITool
         }
 
         var battles = AcceptanceBattles.WithChokepoint(chokepoint).Where(battle => wanted.Count == 0 || wanted.Contains(battle.Number)).ToList();
+        if (splash)
+        {
+            battles.Add(AcceptanceBattles.SplashMeasure);
+        }
+
         foreach (var battle in battles)
         {
             if (Battle.Problem(loaded.Data, battle) is { } problem)
             {
-                errors.WriteLine($"battles: battle {battle.Number} cannot be fought with the data in {folder}: {problem}.");
+                errors.WriteLine($"battles: {(battle.IsMeasure ? "the splash battle" : $"battle {battle.Number}")} cannot be fought with the data in {folder}: {problem}.");
                 return ExitCodes.Failed;
             }
         }

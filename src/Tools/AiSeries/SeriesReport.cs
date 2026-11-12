@@ -2,6 +2,7 @@ using System.Globalization;
 using Sim;
 using Sim.Data;
 using Tools.AiMatch;
+using Tools.Battles;
 
 namespace Tools.AiSeries;
 
@@ -150,6 +151,26 @@ public static class SeriesReport
 
         Table(output, above);
 
+        output.WriteLine();
+        output.WriteLine("Area damage, over every seat: what a shell caught, and what a hit that splashes (Overgunned II) reached besides its target");
+        var area = new List<string[]>();
+        foreach (var personality in personalities)
+        {
+            var seats = totals[personality].Seats;
+            var shells = seats.Aggregate(ShellCount.None, (sum, seat) => sum.Plus(seat.Shells));
+            var splashes = seats.Aggregate(SplashCount.None, (sum, seat) => sum.Plus(seat.Splashes));
+            area.Add(
+            [
+                personality,
+                shells.Landed == 0 ? "no shell landed" : Invariant($"{shells.Landed:N0} shells landed, {shells.AverageCaught:0.0} units caught on average, {shells.MostCaught} at most"),
+                splashes.Made == 0
+                    ? "no hit that splashes"
+                    : Invariant($"{splashes.Made:N0} hits that splash in {Share(seats.Count(seat => seat.Splashes.Made > 0), seats.Count)} seats, {splashes.ReachedAnyone:N0} of them ({splashes.PercentThatReachedAnyone:0}%) reached another unit, {splashes.AverageReached:0.00} other units on average, {splashes.MostReached} at most"),
+            ]);
+        }
+
+        Table(output, area);
+
         var decided = matches.Where(match => match.Decided is not null).ToList();
         output.WriteLine();
         output.WriteLine("After the fight was lost, in the matches with a winner");
@@ -178,6 +199,7 @@ public static class SeriesReport
                 .. data.Tracks.Select(track => $"research_materials_{track.Id}"),
                 .. data.Tracks.Select(track => $"research_energy_{track.Id}"),
                 "supply_used", "supply_cap", "at_cap_s", "above_cap_s", "most_above_cap", "workers", "units", "army_value", "units_lost", "structures_lost", "materials", "energy",
+                "shells_landed", "shell_units_caught", "shell_most_caught", "splashes", "splashes_that_reached", "splash_units_reached", "splash_most_reached",
             ]));
         for (var index = 0; index < matches.Count; index++)
         {
@@ -199,6 +221,8 @@ public static class SeriesReport
                         .. seat.ResearchEnergy.Select(amount => Invariant($"{amount}")),
                         Number(seat.SupplyUsed), Number(seat.SupplyCap), Seconds(seat.TicksAtSupplyCap), Seconds(seat.TicksAboveSupplyCap), Number(seat.MostAboveSupplyCap), Number(seat.Workers), Number(seat.Units),
                         Invariant($"{seat.ArmyValue}"), Number(seat.UnitsLost), Number(seat.StructuresLost), Invariant($"{seat.Materials}"), Invariant($"{seat.Energy}"),
+                        Number(seat.Shells.Landed), Number(seat.Shells.Caught), Number(seat.Shells.MostCaught),
+                        Number(seat.Splashes.Made), Number(seat.Splashes.ReachedAnyone), Number(seat.Splashes.Reached), Number(seat.Splashes.MostReached),
                     ]));
             }
         }

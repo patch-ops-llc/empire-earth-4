@@ -194,10 +194,34 @@ public sealed class AiMatchTool : ITool
                 + (seat.TicksAtSupplyCap == 0 ? "" : $"; at its supply cap for {Clock(seat.TicksAtSupplyCap)}")
                 + (seat.TicksAboveSupplyCap == 0 ? "" : Invariant($"; above its supply cap for {Clock(seat.TicksAboveSupplyCap)}, by {seat.MostAboveSupplyCap} at most"))
                 + (seat.OutTick < 0 ? "" : $"; out at {Clock(seat.OutTick)}"));
+            if (seat.Shells.Landed > 0 || seat.Splashes.Made > 0)
+            {
+                output.WriteLine($"    area damage: {AreaDamage(seat)}");
+            }
+
             output.WriteLine(Invariant($"    supply {seat.SupplyUsed} of {seat.SupplyCap}; {seat.Workers} workers; {seat.Units} fighting units worth {seat.ArmyValue:N0}{units}"));
             output.WriteLine(Invariant($"    structures: {string.Join(", ", seat.Structures.Select(entry => $"{entry.Count} {entry.Structure}"))}"));
             output.WriteLine(Invariant($"    lost {seat.UnitsLost} units and {seat.StructuresLost} structures; stockpile {seat.Materials:N0} Materials and {seat.Energy:N0} Energy"));
         }
+    }
+
+    /// <summary>What a player's shells caught and its splash reached, for the report.</summary>
+    public static string AreaDamage(SeatResult seat)
+    {
+        ArgumentNullException.ThrowIfNull(seat);
+        var parts = new List<string>();
+        if (seat.Shells.Landed > 0)
+        {
+            parts.Add(Invariant($"{seat.Shells.Landed:N0} shells landed and caught {seat.Shells.AverageCaught:0.0} units on average, {seat.Shells.MostCaught} at most"));
+        }
+
+        if (seat.Splashes.Made > 0)
+        {
+            parts.Add(Invariant(
+                $"{seat.Splashes.Made:N0} hits that splash, of which {seat.Splashes.ReachedAnyone:N0} ({seat.Splashes.PercentThatReachedAnyone:0}%) reached another unit, {seat.Splashes.AverageReached:0.00} other units on average, {seat.Splashes.MostReached} at most"));
+        }
+
+        return string.Join("; ", parts);
     }
 
     /// <summary>The last line of the report: who won, from the winner of each match, none for a match without one.</summary>
@@ -207,7 +231,7 @@ public sealed class AiMatchTool : ITool
 
         if (winners.All(winner => winner is null))
         {
-            return "ai-match: no winner. A computer player of this build builds, researches and trains, and does not attack.";
+            return "ai-match: no winner. No match was decided within the time limit.";
         }
 
         if (winners.Count == 1)
