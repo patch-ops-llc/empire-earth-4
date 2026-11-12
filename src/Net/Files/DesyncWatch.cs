@@ -177,7 +177,7 @@ public sealed class DesyncWatch
             {
                 // The second run is a help in finding the fault. It must not cost the tester the rest.
                 states.Clear();
-                second = new SecondRun(SecondRunOutcome.NotRun, Detail: $"it failed: {failed.GetType().Name}: {failed.Message}");
+                second = new SecondRun(SecondRunOutcome.NotRun, Detail: $"it failed: {failed.GetType().Name}: {failed.Message.TrimEnd('.')}");
             }
         }
 
@@ -301,15 +301,15 @@ public sealed class DesyncWatch
         ImmutableArray<TickState>.Builder states)
     {
         var again = description.CreateMatch(_match.Data);
-        var reader = new ByteReader(agreed);
-        Snapshot.Restore(again, reader);
-        reader.ExpectEnd();
-
         var parts = StoreHasher.PartNames(again.World);
         if (!parts.AsSpan().SequenceEqual(_parts.AsSpan()))
         {
             return new SecondRun(SecondRunOutcome.NotRun, Detail: "a match built again from the description has other stores than the match that was played");
         }
+
+        var reader = new ByteReader(agreed);
+        Snapshot.Restore(again, reader);
+        reader.ExpectEnd();
 
         foreach (var (tick, commands) in _commands)
         {

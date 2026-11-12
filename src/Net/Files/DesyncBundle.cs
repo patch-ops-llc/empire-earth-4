@@ -73,6 +73,12 @@ public sealed class DesyncBundle
     /// <summary>The ending of a bundle's file name.</summary>
     public const string FileEnding = ".desync.zip";
 
+    /// <summary>
+    /// The key under which the game says, in <see cref="Machine"/>, when it wrote the file. It is
+    /// the one fact about a machine that differs between any two and means nothing by it.
+    /// </summary>
+    public const string WrittenAtKey = "written_at";
+
     /// <summary>The version of the layout above.</summary>
     public const int FormatVersion = 1;
 
