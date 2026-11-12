@@ -9,6 +9,11 @@ namespace Game;
 /// order button on an enemy unit; attack-move, by the same click with a key held; and stop, by
 /// a button and a key. Each leaves as one command through the session.
 /// </summary>
+/// <remarks>
+/// The orders are for units, which are what can walk. A selection with no unit in it, as a
+/// selected structure, is offered no stop and given no attack-move: the simulation would refuse
+/// both, and the player would be told of an order they never meant to give.
+/// </remarks>
 public static class CombatOrders
 {
     /// <summary>Held with the order click for an attack-move. Named in the input map of project.godot.</summary>
@@ -47,9 +52,24 @@ public static class CombatOrders
     {
         Label = "Stop",
         Action = StopAction,
-        Applies = view => view.Selection.Count > 0,
+        Applies = view => HasUnit(view, view.Selection.Entities),
         Run = Stop,
     };
+
+    /// <summary>True when at least one of these can walk, and so is a unit that takes the orders of this piece.</summary>
+    public static bool HasUnit(MatchView view, IEnumerable<EntityId> selected)
+    {
+        var movers = view.Match.Movers;
+        foreach (var entity in selected)
+        {
+            if (movers.Contains(entity))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// True when at least one of these units can take an attack order on the target: the
@@ -104,17 +124,20 @@ public static class CombatOrders
             && view.Client.Submit(new Command(CommandType.Attack, view.Player, request.Selected, targetEntity: target));
     }
 
-    // For a unit without an attack the simulation takes an attack-move as a move order, so the row has an order for every selection.
+    // For a unit without an attack the simulation takes an attack-move as a move order, so the
+    // row has an order for every selection with a unit in it. With none the row has no order,
+    // and the click goes on to the rows after it.
     private static bool AttackMove(OrderRequest request)
     {
         var view = request.View;
         var point = request.Target.Point;
-        return view.Client.Submit(new Command(CommandType.AttackMove, view.Player, request.Selected, point.X, point.Y));
+        return HasUnit(view, request.Selected)
+            && view.Client.Submit(new Command(CommandType.AttackMove, view.Player, request.Selected, point.X, point.Y));
     }
 
     private static void Stop(MatchView view)
     {
-        if (view.Selection.Count == 0)
+        if (!HasUnit(view, view.Selection.Entities))
         {
             return;
         }

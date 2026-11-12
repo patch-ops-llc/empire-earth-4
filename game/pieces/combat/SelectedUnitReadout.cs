@@ -5,7 +5,8 @@ namespace Game;
 
 /// <summary>
 /// The bottom panel's line about one selected unit: what it is and its hit points. With several
-/// units selected the bars over them say it, and the line is not shown.
+/// units selected the bars over them say it, and the line is not shown. A unit is what can walk:
+/// a selected structure is left to the line of the piece that draws structures.
 /// </summary>
 public partial class SelectedUnitReadout : InterfacePart
 {
@@ -24,7 +25,7 @@ public partial class SelectedUnitReadout : InterfacePart
     {
         var selection = View.Selection;
         var entity = selection.Count == 1 ? selection.Entities.First() : EntityId.None;
-        if (entity == EntityId.None || !View.Match.Health.TryGet(entity, out var health))
+        if (entity == EntityId.None || !View.Match.Movers.Contains(entity) || !View.Match.Health.TryGet(entity, out var health))
         {
             _text.Visible = false;
             return;
