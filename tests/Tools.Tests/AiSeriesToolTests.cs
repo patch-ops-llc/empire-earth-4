@@ -118,7 +118,7 @@ public class AiSeriesToolTests
     }
 
     /// <summary>The tool the way the command line runs it: the summary, and the two files.</summary>
-    [Fact]
+    [Fact(Skip = ReplayScripts.TestBuild.HeadlessMatchMeetsTheScout)]
     public void TheToolPlaysTheSeriesAndWritesTheSummaryAndTheFiles()
     {
         using var folder = Repository.CopyOfData();

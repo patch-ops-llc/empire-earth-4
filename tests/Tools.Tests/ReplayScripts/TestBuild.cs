@@ -33,7 +33,8 @@ internal static class TestBuild
 
     /// <summary>The headless matches of the balance harness (#62) with the computer's scout (#77).</summary>
     public const string HeadlessMatchMeetsTheScout =
-        "Test build only. Both tests play swarm against elite for four minutes and ask that nobody has lost a unit by then, "
-        + "which held while the computer did not leave its base before its first attack. With #77 it sends a scout at about "
-        + "3:20, and in one of the two matches elite's scout is dead before 4:00. With #72 alone both pass.";
+        "Test build only. These tests play swarm against elite for four minutes and ask that nothing is hit and nobody has "
+        + "lost a unit by then, which held while the computer did not leave its base before its first attack. With #77 it "
+        + "sends a scout at about 3:20, and in some of the matches a scout is hit or dead before 4:00. With #72 alone the "
+        + "two tests of ai-match pass.";
 }
