@@ -109,7 +109,7 @@ public class ProductionScriptTests
     /// cap, and the supply the queues hold is what their orders add up to. What it does not
     /// reach, because nothing in it researches and nothing destroys a structure: a pair, an order
     /// refused for want of supply, and the refund of a destroyed structure. The scenario tests of
-    /// the simulation cover those.
+    /// the simulation cover those, and <see cref="PairsReplayTests"/> has a replay with pairs.
     /// </remarks>
     [Fact]
     public void ItsGoldenReplayReachesTheRulesItGuards()
