@@ -153,7 +153,10 @@ The values the design says to tune first. Each block carries a comment naming it
 | `match.start_epoch`, `epoch_cap` | The tier all tracks start at and the tier none may pass. | 5.2 |
 | `start.workers`, `materials`, `energy` | What every player starts with, besides a Capitol. | 5.2 |
 | `map` | The map rules below. | 5.3, 5.4 |
-| `debug.spawn` | `true` or `false`: whether a match carries out the development spawn, a command that makes units of any chassis from nothing for the player who sends it. It is not in the design. It is on in `game/data/` until units can be trained in a match, and stays on in `tests/golden/data/`, whose replay with a fight needs it. Both players of a match have the same data, so they have the same switch. | |
+| `combat.look_interval_ticks` | A unit or a Tower without a target looks for one every this many ticks. | 2.4 |
+| `combat.unit_reach_margin`, `structure_reach` | Melee reach in tiles: against a unit, the spacing between the two units plus the margin; against a structure, the reach to the nearest edge of its footprint. | 2.4 |
+| `combat.fortification` | What multiplies the damage a structure takes from an attacker whose effective Firepower is below the Protection tier of the structure's owner. Above 0 and at most 1. | 2.5 |
+| `debug.spawn` | `true` or `false`: whether a match carries out the development spawn, a command that makes units of any chassis from nothing for the player who sends it, and the development placement, which lays a finished structure the same way. Neither is in the design. It is on in `game/data/` until units can be trained and structures built in a match, and stays on in `tests/golden/data/`, whose replays with a fight and with Towers need it. Both players of a match have the same data, so they have the same switch. | |
 
 The footprint and the territory radius of a start are not here: they are the `footprint` and `territory_radius` of `structures/capitol.jsonc`, which every data folder must have. The map checks read them from that file, and a match places that structure, finished, at each player's start.
 

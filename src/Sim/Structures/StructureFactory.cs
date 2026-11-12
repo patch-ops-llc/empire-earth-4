@@ -28,6 +28,7 @@ public sealed class StructureFactory
     private readonly ComponentStore<PlacedStructure> _structures;
     private readonly ComponentStore<Territory> _territories;
     private readonly ComponentStore<WorkSite> _workSites;
+    private readonly ComponentStore<Combat.Turret> _turrets;
     private readonly StructureTiles _tiles;
     private readonly MatchResearch _research;
     private readonly MatchProduction _production;
@@ -42,6 +43,7 @@ public sealed class StructureFactory
         ComponentStore<PlacedStructure> structures,
         ComponentStore<Territory> territories,
         ComponentStore<WorkSite> workSites,
+        ComponentStore<Combat.Turret> turrets,
         StructureTiles tiles,
         MatchResearch research,
         MatchProduction production,
@@ -66,6 +68,7 @@ public sealed class StructureFactory
         _structures = structures;
         _territories = territories;
         _workSites = workSites;
+        _turrets = turrets;
         _tiles = tiles;
         _research = research;
         _production = production;
@@ -155,6 +158,12 @@ public sealed class StructureFactory
             _workSites.Add(
                 entity,
                 new WorkSite { Kind = WorkSiteKind.Generator, Owner = body.Owner, X = structure.X, Y = structure.Y, Size = structure.Size });
+        }
+
+        if (def.Attack is not null)
+        {
+            // A Tower's attack comes with completion (design 2.5): ready, and with no target yet.
+            _turrets.Add(entity, default);
         }
 
         _production.Open(entity);

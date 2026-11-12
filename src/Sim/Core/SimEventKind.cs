@@ -16,6 +16,18 @@ public enum SimEventKind
     None = 0,
 
     /// <summary>
+    /// A shell landed: a shot with a blast radius. <see cref="SimEvent.Player"/> is the owner of
+    /// the unit that fired it, <see cref="SimEvent.Entity"/> the shell, which is gone after this
+    /// tick, <see cref="SimEvent.Other"/> the target it was fired at, which may be gone by now,
+    /// <see cref="SimEvent.Position"/> the center of the blast, and <see cref="SimEvent.Amount"/>
+    /// its radius in units of 1/65,536 of a tile, the raw value of a
+    /// <see cref="Numerics.Fixed"/>. A <see cref="ShotHit"/> follows for each enemy the blast
+    /// reached, with the shell as its <see cref="SimEvent.Other"/>; none follows when it reached
+    /// nobody.
+    /// </summary>
+    Blast,
+
+    /// <summary>
     /// A build order ended before its foundation was laid, and its whole price was given back.
     /// <see cref="SimEvent.Player"/> is the owner, for whom alone the event is meant,
     /// <see cref="SimEvent.Entity"/> the worker that had the order,
@@ -77,16 +89,19 @@ public enum SimEventKind
     ShotFired,
 
     /// <summary>
-    /// A shot reached its target. <see cref="SimEvent.Player"/> is the owner of the unit that
-    /// fired it, <see cref="SimEvent.Entity"/> the target, <see cref="SimEvent.Other"/> the
-    /// shot, which is gone after this tick, <see cref="SimEvent.Position"/> where the target
-    /// stood, and <see cref="SimEvent.Amount"/> the damage of the hit in thousandths of a hit
-    /// point, which may be more than the target had left.
+    /// A shot reached its target, or the blast of a shell reached an enemy: one event for each
+    /// enemy a blast reaches, after its <see cref="Blast"/>. <see cref="SimEvent.Player"/> is the
+    /// owner of the unit that fired the shot, <see cref="SimEvent.Entity"/> what was hit,
+    /// <see cref="SimEvent.Other"/> the shot, which is gone after this tick,
+    /// <see cref="SimEvent.Position"/> where what was hit stood, and
+    /// <see cref="SimEvent.Amount"/> the damage of the hit in thousandths of a hit point, which
+    /// may be more than it had left.
     /// </summary>
     ShotHit,
 
     /// <summary>
-    /// A shot's target was gone before the shot arrived, and the shot with it.
+    /// A shot's target was gone before the shot arrived, and the shot with it. Never reported for
+    /// a shell, which lands where its target last stood and is reported as a <see cref="Blast"/>.
     /// <see cref="SimEvent.Player"/> is the owner of the unit that fired it,
     /// <see cref="SimEvent.Entity"/> the shot, <see cref="SimEvent.Other"/> the target it had,
     /// and <see cref="SimEvent.Position"/> where the shot was.
