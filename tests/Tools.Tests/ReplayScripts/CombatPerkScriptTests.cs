@@ -16,9 +16,8 @@ public class CombatPerkScriptTests
     /// <summary>
     /// The match recorded for the script when a finished research brings the units on the map up
     /// to date (live refresh). The first, <c>switchback-combat-perks.replay</c>, was recorded
-    /// before that: it is kept and reproduces, but its fights go another way now, some of its
-    /// attack orders name what their player does not see, and it no longer reaches five of the
-    /// rules below.
+    /// without that: it is kept and reproduces, but its fights go another way with it, and it
+    /// does not reach every rule below.
     /// </summary>
     private const string GoldenReplay = "switchback-combat-perks-live-refresh.replay";
 
