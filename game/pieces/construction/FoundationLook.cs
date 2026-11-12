@@ -83,6 +83,18 @@ public sealed class FoundationLook
         return look;
     }
 
+    /// <summary>
+    /// Puts an unseen shape with the unfinished look under a node, so that the renderer has what
+    /// it needs to draw the look before the first foundation is laid, and that one appears at
+    /// once and without a pause.
+    /// </summary>
+    public static void Prepare(Node3D under, StructureDef structure)
+    {
+        var shape = new MeshInstance3D { Name = "UnfinishedLook", Mesh = StructureShapes.MeshOf(structure), Visible = false };
+        On(shape, structure, Bare, Bare);
+        under.AddChild(shape);
+    }
+
     /// <summary>Draws the structure as built for this many ticks of its build time.</summary>
     public void Show(int built)
     {

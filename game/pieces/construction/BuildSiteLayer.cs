@@ -1,6 +1,7 @@
 using Godot;
 using Sim.Construction;
 using Sim.Core;
+using Sim.Data;
 
 namespace Game;
 
@@ -40,6 +41,17 @@ public partial class BuildSiteLayer : WorldLayer
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
             Roughness = 1f,
         };
+
+        // An unseen site from the start, so that the renderer has what it needs to draw one
+        // before the first is ordered, and that one appears without a pause.
+        foreach (var structure in View.Match.Data.Structures)
+        {
+            var site = NodeFor(structure, structure.Footprint);
+            site.Name = "Unseen";
+            site.Visible = false;
+            AddChild(site);
+            break;
+        }
     }
 
     public override void AfterTick()
@@ -85,24 +97,32 @@ public partial class BuildSiteLayer : WorldLayer
             return;
         }
 
+        var node = NodeFor(structure, order.Size);
+        node.Name = $"Site{worker.Value}";
+        node.Position = new Vector3(order.X + (order.Size / 2f), 0f, order.Y + (order.Size / 2f));
+        AddChild(node);
+        _sites.Add(worker, new Site(order, node));
+    }
+
+    // The shape of a structure as a plan, with a line round the tiles it will take.
+    private MeshInstance3D NodeFor(StructureDef structure, int size)
+    {
         if (!_meshes.TryGetValue(structure.Index, out var mesh))
         {
             mesh = StructureShapes.MeshOf(structure);
             _meshes.Add(structure.Index, mesh);
         }
 
-        if (!_outlines.TryGetValue(order.Size, out var outline))
+        if (!_outlines.TryGetValue(size, out var outline))
         {
-            outline = StructureShapes.Outline(order.Size, PlayerColors.Of(View.Player).Lerp(Colors.White, 0.35f));
-            _outlines.Add(order.Size, outline);
+            outline = StructureShapes.Outline(size, PlayerColors.Of(View.Player).Lerp(Colors.White, 0.35f));
+            _outlines.Add(size, outline);
         }
 
         var node = new MeshInstance3D
         {
-            Name = $"Site{worker.Value}",
             Mesh = mesh,
             MaterialOverride = _material,
-            Position = new Vector3(order.X + (order.Size / 2f), 0f, order.Y + (order.Size / 2f)),
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
         node.AddChild(new MeshInstance3D
@@ -112,8 +132,7 @@ public partial class BuildSiteLayer : WorldLayer
             Position = Vector3.Up * OutlineLift,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         });
-        AddChild(node);
-        _sites.Add(worker, new Site(order, node));
+        return node;
     }
 
     private readonly record struct Site(BuildOrder Order, MeshInstance3D Node);

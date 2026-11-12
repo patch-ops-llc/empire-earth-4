@@ -75,6 +75,15 @@ public partial class PlacementPreview : WorldLayer
             Visible = false,
         };
         AddChild(_shape);
+
+        // With a shape from the start, though unseen, the renderer has what it needs to draw the
+        // material before the first structure is placed, and that one appears at once.
+        foreach (var structure in View.Match.Data.Structures)
+        {
+            _shape.Mesh = MeshOf(structure);
+            break;
+        }
+
         _tiles = InstancedShapes.Under(
             this,
             "Tiles",
@@ -90,20 +99,25 @@ public partial class PlacementPreview : WorldLayer
         _shape.Visible = _structure is not null;
         if (_structure is { } structure)
         {
-            if (!_meshes.TryGetValue(structure.Index, out var mesh))
-            {
-                mesh = StructureShapes.MeshOf(structure);
-                _meshes.Add(structure.Index, mesh);
-            }
-
             var color = ColorOf(_site);
-            _shape.Mesh = mesh;
+            _shape.Mesh = MeshOf(structure);
             _shape.Position = new Vector3(_site.X + (structure.Footprint / 2f), 0f, _site.Y + (structure.Footprint / 2f));
             _material.AlbedoColor = new Color(color, ShapeAlpha);
             MarkTiles(structure, color);
         }
 
         _tiles.End();
+    }
+
+    private ArrayMesh MeshOf(StructureDef structure)
+    {
+        if (!_meshes.TryGetValue(structure.Index, out var mesh))
+        {
+            mesh = StructureShapes.MeshOf(structure);
+            _meshes.Add(structure.Index, mesh);
+        }
+
+        return mesh;
     }
 
     private void MarkTiles(StructureDef structure, Color good)

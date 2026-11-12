@@ -48,12 +48,17 @@ public partial class BuildMenu : InterfacePart
     // that is not named here comes after these.
     private static readonly string[] EntryOrder = ["capitol", "outpost", "generator", "barracks", "works", "academy", "tower"];
 
-    private const int Columns = 4;
-    private const float EntryWidth = 138f;
+    // The entries stand in one row where the window has the width for it, so that the menu
+    // covers as little of the world above the bottom panel as it can, and in rows of four where
+    // it has not.
+    private const int FewColumns = 4;
+    private const float EntryWidth = 126f;
     private const float EntryHeight = 50f;
     private const int EntryGap = 6;
+    private const float PanelPadding = 10f;
     private const float GapAboveBottomPanel = 8f;
-    private const float DetailHeight = 42f;
+    private const float GapBesideWindow = 8f;
+    private const float DetailLineHeight = 21f;
 
     private static readonly Color Chosen = new(0.55f, 1f, 0.55f);
 
@@ -63,6 +68,7 @@ public partial class BuildMenu : InterfacePart
     private PanelContainer _panel = null!;
     private Label _hint = null!;
     private Label _detail = null!;
+    private GridContainer _grid = null!;
     private Entry? _placing;
     private Entry? _hovered;
     private Placement? _site;
@@ -452,8 +458,16 @@ public partial class BuildMenu : InterfacePart
     // Over the bottom panel, in the middle, wherever the bottom panel begins now.
     private void PlacePanel()
     {
-        var size = _panel.GetCombinedMinimumSize();
         var window = _panel.GetViewportRect().Size;
+        var columns = WidthOf(_entries.Count) + (2f * (PanelPadding + GapBesideWindow)) <= window.X ? Math.Max(_entries.Count, 1) : FewColumns;
+        if (_grid.Columns != columns)
+        {
+            // What is said about an entry fits one line under a whole row, and two under a short one.
+            _grid.Columns = columns;
+            _detail.CustomMinimumSize = new Vector2(WidthOf(columns), DetailLineHeight * (columns > FewColumns ? 1 : 2));
+        }
+
+        var size = _panel.GetCombinedMinimumSize();
         _panel.Size = size;
         _panel.Position = new Vector2(
             Mathf.Round((window.X - size.X) / 2f),
@@ -463,7 +477,7 @@ public partial class BuildMenu : InterfacePart
     private void BuildPanel()
     {
         _panel = new PanelContainer { Name = "BuildMenuPanel", Visible = false };
-        _panel.AddThemeStyleboxOverride("panel", UiStyle.PanelStyle(10f));
+        _panel.AddThemeStyleboxOverride("panel", UiStyle.PanelStyle(PanelPadding));
         AddChild(_panel);
 
         var column = UiStyle.Column(6);
@@ -478,24 +492,28 @@ public partial class BuildMenu : InterfacePart
         _hint.ClipText = true;
         header.AddChild(_hint);
 
-        var grid = new GridContainer { Columns = Columns };
-        grid.AddThemeConstantOverride("h_separation", EntryGap);
-        grid.AddThemeConstantOverride("v_separation", EntryGap);
-        column.AddChild(grid);
+        _grid = new GridContainer { Columns = FewColumns };
+        _grid.AddThemeConstantOverride("h_separation", EntryGap);
+        _grid.AddThemeConstantOverride("v_separation", EntryGap);
+        column.AddChild(_grid);
         foreach (var structure in ListedStructures())
         {
             var entry = MakeEntry(structure);
             _entries.Add(entry);
-            grid.AddChild(entry.Button);
+            _grid.AddChild(entry.Button);
         }
 
-        // Two lines' room always, so that the panel does not change height as the pointer moves.
+        // The same room always, so that the panel does not change height as the pointer moves.
         _detail = InspectionUi.Text(string.Empty, ResearchColors.Faint, 14);
         _detail.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _detail.VerticalAlignment = VerticalAlignment.Top;
-        _detail.CustomMinimumSize = new Vector2((Columns * EntryWidth) + ((Columns - 1) * EntryGap), DetailHeight);
+        _detail.ClipText = true;
+        _detail.CustomMinimumSize = new Vector2(WidthOf(FewColumns), DetailLineHeight * 2f);
         column.AddChild(_detail);
     }
+
+    // The width of a row of this many entries.
+    private static float WidthOf(int entries) => (entries * EntryWidth) + (Math.Max(entries - 1, 0) * EntryGap);
 
     // The structures a worker places, in the order of the menu.
     private List<StructureDef> ListedStructures()

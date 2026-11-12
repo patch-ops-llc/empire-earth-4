@@ -38,6 +38,11 @@ public partial class FoundationBars : WorldLayer
             new QuadMesh { Size = Vector2.One },
             InstancedShapes.Material(seeThrough: false, overEverything: true),
             InstancedShapes.MapArea(View.Match.Map));
+        foreach (var structure in View.Match.Data.Structures)
+        {
+            FoundationLook.Prepare(this, structure);
+            break;
+        }
     }
 
     public override void EveryFrame(double delta)
