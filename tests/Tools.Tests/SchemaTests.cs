@@ -11,7 +11,7 @@ public class SchemaTests
 {
     private static readonly JsonDocumentOptions Jsonc = new() { CommentHandling = JsonCommentHandling.Skip };
 
-    private static readonly string[] OneFileOfEachKind = ["tracks.jsonc", "rules.jsonc", "research.jsonc", "resources.jsonc", "accents.jsonc", "lines/x.jsonc", "structures/x.jsonc", "maps/x.jsonc"];
+    private static readonly string[] OneFileOfEachKind = ["tracks.jsonc", "rules.jsonc", "research.jsonc", "resources.jsonc", "accents.jsonc", "lines/x.jsonc", "structures/x.jsonc", "maps/x.jsonc", "ai/x.jsonc"];
 
     public static TheoryData<string> DataFiles() =>
         [.. new DiskDataFiles(Repository.DataFolder).ListFiles()];
@@ -83,6 +83,12 @@ public class SchemaTests
     [InlineData("maps/ridge.jsonc", "{ \"x\": 82, \"y\": 46 }", "{ \"x\": 82, \"y\": 46 }, { \"x\": 40, \"y\": 46 }", "$.starts: has more than 2 items")]
     [InlineData("maps/ridge.jsonc", "\"across\": \"y\" },", "\"across\": \"z\" },", "$.markers[0].across: is not one of the allowed values")]
     [InlineData("maps/ridge.jsonc", "FFFFFF", "FFwFFF", "$.terrain[4]: does not match")]
+    [InlineData("ai/swarm.jsonc", "\"expand_at_materials\": 600", "\"expand_at\": 600", "$.economy: has an unknown key expand_at")]
+    [InlineData("ai/swarm.jsonc", "{ \"epoch\": 1, \"workers\": 18 }", "{ \"epoch\": 0, \"workers\": 18 }", "$.economy.workers[0].epoch: is below 1")]
+    [InlineData("ai/swarm.jsonc", "\"manufacturing\": 6", "\"manufacturing\": \"6\"", "$.research.weights.manufacturing: is not of type integer")]
+    [InlineData("ai/elite.jsonc", "\"firepower\": 6", "\"Firepower\": 6", "$.research.weights.Firepower (key): does not match")]
+    [InlineData("ai/elite.jsonc", "{ \"line\": \"artillery\", \"share\": 1 }", "{ \"line\": \"artillery\", \"share\": 0 }", "$.army.lines[1].share: is below 1")]
+    [InlineData("ai/elite.jsonc", "\"name\": \"Elite\",", "", "$: has no name")]
     public void ASchemaRejectsTheMistakesAnEditorShouldUnderline(string file, string oldText, string newText, string expectedError)
     {
         var text = File.ReadAllText(Path.Combine(Repository.DataFolder, file));
@@ -127,6 +133,7 @@ public class SchemaTests
             _ when file.StartsWith("lines/", StringComparison.Ordinal) => "line.schema.json",
             _ when file.StartsWith("structures/", StringComparison.Ordinal) => "structure.schema.json",
             _ when file.StartsWith("maps/", StringComparison.Ordinal) => "map.schema.json",
+            _ when file.StartsWith("ai/", StringComparison.Ordinal) => "ai.schema.json",
             _ => throw new InvalidOperationException($"No schema is known for {file}."),
         };
         return Path.Combine(Repository.SchemasFolder, name);

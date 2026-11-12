@@ -17,6 +17,7 @@ public class DataCheckToolTests
         Assert.Contains("  research:     8 tiers, from 2 to 9\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         Assert.Contains("  accents:      5\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         Assert.Contains("  structures:   8 of the 11 in the roster\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("  ai:           2\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         Assert.Matches("content hash: sha256:[0-9a-f]{64}", output);
     }
 

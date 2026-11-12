@@ -1,0 +1,36 @@
+// Swarm: many cheap units and a large economy (game design 5.5).
+{
+  "$schema": "../../../schemas/ai.schema.json",
+  "id": "swarm",
+  "name": "Swarm",
+
+  // Item 1: the workers it keeps in each epoch, and the stockpile at which it expands.
+  "economy": {
+    "workers": [
+      { "epoch": 1, "workers": 18 },
+      { "epoch": 2, "workers": 26 },
+      { "epoch": 3, "workers": 32 }
+    ],
+    "expand_at_materials": 600
+  },
+
+  // Item 2: it leads with Manufacturing, Logistics and Extraction.
+  "research": {
+    "weights": {
+      "firepower": 3,
+      "protection": 1,
+      "mobility": 2,
+      "manufacturing": 6,
+      "logistics": 5,
+      "extraction": 4
+    }
+  },
+
+  // Item 3: Line infantry, with some Cavalry or Armor.
+  "army": {
+    "lines": [
+      { "line": "line_infantry", "share": 3 },
+      { "line": "cavalry_armor", "share": 1 }
+    ]
+  }
+}

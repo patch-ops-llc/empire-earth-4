@@ -12,6 +12,7 @@ internal static class DataRules
     public const string ResearchFile = "research.jsonc";
     public const string ResourcesFile = "resources.jsonc";
     public const string AccentsFile = "accents.jsonc";
+    public const string AiFolder = "ai/";
     public const string LinesFolder = "lines/";
     public const string MapsFolder = "maps/";
     public const string StructuresFolder = "structures/";
@@ -59,6 +60,8 @@ internal static class DataRules
     public const int MaxResearchSlots = 8;
     public const int MaxStructuresPerPlayer = 1_000;
     public const int MaxFullRateAmount = 100_000_000;
+    public const int MaxAiWorkers = 200;
+    public const int MaxAiWeight = 1_000;
 
     public static readonly DataNumber Zero = DataNumber.FromInteger(0);
     public static readonly DataNumber One = DataNumber.FromInteger(1);

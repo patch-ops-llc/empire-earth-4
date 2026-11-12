@@ -52,8 +52,9 @@ Hit points, damage and distances are shown to three decimal places and times in 
 | `lines/<id>.jsonc` | One line of units: its tracks, tier-1 values, attack, counters and chassis. | `schemas/line.schema.json` |
 | `structures/<id>.jsonc` | One structure: its footprint, price, hit points, build time and sight, and what it does. | `schemas/structure.schema.json` |
 | `maps/<id>.jsonc` | One map: terrain, starting positions, deposits and markers. | `schemas/map.schema.json` |
+| `ai/<id>.jsonc` | One personality of the computer player: the workers it keeps, when it expands, its research weights and the lines of its army. | `schemas/ai.schema.json` |
 
-The loader reads exactly these, and the first five are required. It needs at least one line and one map. Structure files are optional: a structure of the roster may have no file yet, and a data folder may have none at all. Any other file in the folder is an error, so a misnamed file is noticed and not skipped. Files and folders whose names start with a dot are ignored.
+The loader reads exactly these, and the first five are required. It needs at least one line and one map. Structure files are optional: a structure of the roster may have no file yet, and a data folder may have none at all. Personality files are optional too. Any other file in the folder is an error, so a misnamed file is noticed and not skipped. Files and folders whose names start with a dot are ignored.
 
 More kinds of file arrive with the milestones that need them. Adding a kind means adding its reader in `src/Sim/Data/`, its schema in `schemas/`, a row in the table above and tests.
 
@@ -236,6 +237,21 @@ A deposit covers `map.deposit_size` tiles a side (`rules.jsonc`). No unit can st
 
 A marker is a rectangle covering the passage. `across` is the axis the passage's width runs along: with `"across": "y"` the width is `size_y`, and units pass through along x. Nothing in the game finds chokepoints by itself; the AI and the balance battles use these markers.
 
+## ai/&lt;id&gt;.jsonc
+
+Game design 5.5. One file per personality of the computer player. The simulation does not read these files; the computer player in `src/Ai/` does. They are data so that a personality is edited, checked and hashed like every other number of the game. A data folder may have none.
+
+| Key | Meaning |
+| --- | --- |
+| `id` | The personality's ID. It must equal the file name. |
+| `name` | Its display name. |
+| `economy.workers` | How many workers it keeps, by epoch, counting those in training: a list of `{ "epoch", "workers" }`. The first entry is for epoch 1 and epochs rise from one entry to the next. An entry holds until the epoch of the next. |
+| `economy.expand_at_materials` | It claims another deposit when its stockpile holds more Materials than this. It also does when a deposit it holds has dropped to the lower rate and its other deposits have no free place. |
+| `research.weights` | One whole number from 1 to 1000 for every track of `tracks.jsonc`, by track ID. For every free research slot it starts the research with the highest weight among those it may start and can pay for. A catch-up tier, which is half price, goes before any other. Tracks with the same weight go in the order of `tracks.jsonc`. |
+| `army.lines` | The lines its army is made of: a list of `{ "line", "share" }`, with a line ID from the roster and a whole number from 1 to 1000. Of each line it trains the newest chassis it has unlocked. The shares are parts of the army's units: 3 and 1 make three units of four. It always orders the line that is furthest behind its share, and lines that are level go in the order of the file. |
+
+The rest of what a computer player does is the same for every personality and is in the code: it divides its workers between Materials and Energy by what its next purchases still lack, builds a Generator when it wants more workers at Generators than they have places, builds the structure that trains each of its lines, and an Academy when every research slot is busy and it could pay for another research.
+
 ## What datacheck checks
 
 Besides the shape of each file:
@@ -253,6 +269,7 @@ Besides the shape of each file:
 | Income | A worker's payment for one second can be computed exactly at every Extraction tier and never rounds to nothing, at the whole rate and at the depleted one. |
 | Formulas | Every stat and price of every chassis can be computed exactly at every tier mix. The game multiplies exact fractions, and a multiplier with many decimal places raised to a high power no longer fits. `1.15` is fine at any tier; `1.123456789` is not. The error names the chassis. The same holds for a structure's hit points at every Protection tier and its damage at every Firepower tier. |
 | Stat bounds | Hit points, damage, speed, sight, supply, spacing, prices, ranges and multipliers must be positive where zero makes no sense and inside wide sanity limits, listed in `src/Sim/Data/DataRules.cs`. The limits catch slips such as a missing decimal point; they are not balance rules. |
+| Personalities | A personality has a weight for every track, names only lines of the roster and names none twice, and its worker counts start at epoch 1 with rising epochs. |
 | Map symmetry | Terrain, starts, deposits and markers must all mirror under the map's `symmetry`. |
 | Map footprints | Starting Capitols, deposits and markers stand on open ground inside the map. Deposits overlap neither each other nor a Capitol. |
 | Start distance | The Capitols' centers are at least two territory radii apart, so the two starting territories do not overlap. |
@@ -285,6 +302,7 @@ A change to this form changes every hash, so it needs a new version line.
 - A `ChassisBlueprint` has the chassis's stats, price, accents and perks, each value rounded once. It is computed for locked chassis too; `Unlocked` says whether the player may build it. `Perks` holds only the perks that apply to the chassis, as typed records with the numbers from `accents.jsonc`.
 - `TechResolver.Preview(data, tiers, track)` resolves the tiers with one track raised and lists the chassis that would unlock and every accent that would appear, disappear or change level.
 - The economy is in `Sim.Economy`. `GameData.Resources` holds `resources.jsonc`, and `IncomeRules.Payment` is the one place a payment is worked out.
+- `GameData.Personalities` holds the files of `ai/`, sorted by ID, and `GameData.PersonalityOf(id)` finds one. Nothing in `Sim` reads them. `Ai.AiPlayer` takes one when it is made.
 - `DataNumber.ToFraction()` gives a data number as an exact `Fraction`. Multiply everything exactly and round once, at the end.
 - `GameData.TrackRoles` holds the index of each track the rules name, so code never searches for a track by ID.
 - IDs become dense integers at load. A position in `GameData.Tracks` is a track's index, in file order. A position in `RuleSet.Lines` or `RuleSet.Structures` is a line's or structure's index; those lists are sorted by ID. Lines refer to tracks, structures and other lines by these indexes. A position in `GameData.Chassis` is a chassis's index; that list is sorted by ID over all lines, and `PlayerTech.Blueprints` uses the same positions.

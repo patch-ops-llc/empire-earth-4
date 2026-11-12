@@ -55,6 +55,7 @@ public sealed class DataCheckTool : ITool
         output.WriteLine($"  lines:        {data.Lines.Count}, with {data.Lines.Sum(line => line.Chassis.Count)} chassis");
         output.WriteLine($"  structures:   {data.Structures.Count} of the {data.Rules.Structures.Count} in the roster");
         output.WriteLine($"  maps:         {data.Maps.Count}");
+        output.WriteLine($"  ai:           {data.Personalities.Count}");
         output.WriteLine($"  content hash: sha256:{data.ContentHash}");
         return ExitCodes.Ok;
     }
