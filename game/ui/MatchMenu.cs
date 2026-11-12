@@ -155,6 +155,16 @@ public partial class MatchMenu : CanvasLayer
     /// </summary>
     public void LeaveMatch() => BackToStart(null);
 
+    /// <summary>
+    /// Goes back to the first page and does once more what the command line asked for, as when
+    /// the game started. The network test plays its second match this way.
+    /// </summary>
+    public void FollowRequestAgain()
+    {
+        s_requestUsed = false;
+        BackToStart(null);
+    }
+
     // A match alone has no network in it: no port is opened and nothing is sent, so the system
     // has nothing to ask the player about.
     private void PlayAlone()

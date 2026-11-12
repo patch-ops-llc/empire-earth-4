@@ -83,7 +83,7 @@ public partial class Main : Node3D
             return;
         }
 
-        _netTest = request.NetTestTicks > 0 ? new NetTest(request.NetTestTicks, request.NetTestDesyncTick) : null;
+        _netTest = request.NetTestTicks > 0 ? new NetTest(request.NetTestTicks) : null;
         _menu = new MatchMenu { Name = "MatchMenu" };
         _menu.Open(data, request);
         AddChild(_menu);

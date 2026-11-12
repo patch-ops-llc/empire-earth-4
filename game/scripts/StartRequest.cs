@@ -40,16 +40,6 @@ public sealed record StartRequest(StartKind Kind, string Address, int Port, int 
     /// <summary>Followed by a number of ticks, and with one of the other two, this plays the network test.</summary>
     public const string NetTestArgument = "--net-test";
 
-    /// <summary>Followed by a number of ticks, and with <see cref="NetTestArgument"/>, this makes the network test one of a desync made on purpose.</summary>
-    public const string NetTestDesyncArgument = "--net-test-desync";
-
-    /// <summary>
-    /// Above 0, the network test is one of a desync made on purpose: the game that joins puts a
-    /// fault into its own state once it has run this many ticks, and both games are to stop for
-    /// it and write their desync bundles. See <see cref="NetTest"/>.
-    /// </summary>
-    public int NetTestDesyncTick { get; init; }
-
     /// <summary>The request of a game started without arguments.</summary>
     public static StartRequest Menu { get; } = new(StartKind.Menu, string.Empty, GameInfo.DefaultPort, 0);
 
@@ -99,16 +89,6 @@ public sealed record StartRequest(StartKind Kind, string Address, int Port, int 
                     request = request with { NetTestTicks = ticks };
                     break;
 
-                case NetTestDesyncArgument:
-                    if (!hasValue || !int.TryParse(arguments[++i], NumberStyles.None, CultureInfo.InvariantCulture, out var desyncTick) || desyncTick <= 0)
-                    {
-                        problem = $"{NetTestDesyncArgument} needs a number of ticks after it.";
-                        return false;
-                    }
-
-                    request = request with { NetTestDesyncTick = desyncTick };
-                    break;
-
                 case MatchFiles.FolderArgument:
                     if (!hasValue)
                     {
@@ -128,12 +108,6 @@ public sealed record StartRequest(StartKind Kind, string Address, int Port, int 
         if (request.NetTestTicks > 0 && request.Kind is not (StartKind.Host or StartKind.Join))
         {
             problem = $"{NetTestArgument} needs {HostArgument} or {JoinArgument} with it.";
-            return false;
-        }
-
-        if (request.NetTestDesyncTick > 0 && request.NetTestTicks <= 0)
-        {
-            problem = $"{NetTestDesyncArgument} needs {NetTestArgument} with it.";
             return false;
         }
 

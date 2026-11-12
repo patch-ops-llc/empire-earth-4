@@ -83,6 +83,13 @@ public sealed class MatchFiles : IDisposable
         }
     }
 
+    /// <summary>
+    /// Added to the name of the folder, for the matches that start from now on. The network test
+    /// sets it for the match it makes fail: the replay of a game that was made to go wrong does
+    /// not give the same match again, and must not lie among the replays that are checked for that.
+    /// </summary>
+    public static string FolderEnding { get; set; } = string.Empty;
+
     /// <summary>Where match files go.</summary>
     public static string Folder
     {
@@ -90,9 +97,10 @@ public sealed class MatchFiles : IDisposable
         {
             var arguments = OS.GetCmdlineUserArgs();
             var index = Array.IndexOf(arguments, FolderArgument);
-            return index >= 0 && index + 1 < arguments.Length
+            var folder = index >= 0 && index + 1 < arguments.Length
                 ? Path.GetFullPath(arguments[index + 1])
                 : Path.Combine(OS.GetUserDataDir(), "matches");
+            return Path.TrimEndingDirectorySeparator(folder) + FolderEnding;
         }
     }
 
