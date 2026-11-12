@@ -1,26 +1,30 @@
 using Godot;
 using Sim.Core;
 using Sim.Data;
-using Sim.Structures;
+using Sim.Vision;
 
 namespace Game;
 
 /// <summary>
-/// Draws the structures where the match has them: a stand-in shape over the tiles each one
-/// blocks, with its roof in its owner's color, and a line round a selected one.
+/// Draws the structures the local player knows of (design 5.3): a stand-in shape over the tiles
+/// each one blocks, with its roof in its owner's color, and a line round a selected one. A
+/// structure the player remembers and does not see now is drawn as a memory: the same shape,
+/// dimmed.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A structure appears with the simulation's <see cref="SimEventKind.StructurePlaced"/> and goes
-/// with <see cref="SimEventKind.StructureRemoved"/>. Those that stood before the view opened,
-/// as the starting Capitols, are read from the match once. After every tick the layer counts
-/// what it draws against the match, and says so as an error when the two differ, which fails
-/// the smoke test: an event that was missed must not leave a structure that is not there.
+/// What is drawn is asked of the view's <see cref="PlayerSight"/> after every tick, and the
+/// match's own structures are never read here: a structure of another player that the player
+/// has never seen has no node, and one that the player remembers keeps its node, as it was
+/// last seen, also when it is gone, until the player sees its tiles again. Every node is made
+/// from a <see cref="SeenStructure"/> and from nothing else, so whatever is drawn of a
+/// structure's condition is drawn as the player last saw it.
 /// </para>
 /// <para>
 /// A structure is drawn the same from the moment it is laid. Construction (15c) brings
 /// structures that are not finished yet, and their look is decided here, in
-/// <see cref="Create"/>.
+/// <see cref="Create"/>, from <see cref="SeenStructure.IsFinished"/> and
+/// <see cref="SeenStructure.Built"/>.
 /// </para>
 /// </remarks>
 public partial class StructureLayer : WorldLayer
@@ -34,78 +38,110 @@ public partial class StructureLayer : WorldLayer
     // How much of the owner's color the walls take, so that a structure reads as its owner's from every side.
     private const float WallTint = 0.3f;
 
+    // A memory loses this much of its color, and then takes the share of the fog that lies on
+    // explored ground, so that it is as dim as the forest beside it and grayer.
+    private const float MemoryGray = 0.45f;
+
     private readonly Dictionary<EntityId, StructureNode> _structures = [];
     private readonly Dictionary<int, ArrayMesh> _meshes = [];
     private readonly Dictionary<int, ArrayMesh> _outlines = [];
-    private readonly Dictionary<int, (Material Walls, Material Roof)> _materials = [];
+    private readonly List<SeenStructure> _known = [];
+    private readonly List<EntityId> _gone = [];
+    private int _pass;
+    private bool _settled = true;
 
-    /// <summary>The number of structures drawn.</summary>
+    /// <summary>The number of structures drawn, memories among them.</summary>
     public int Count => _structures.Count;
 
-    /// <summary>True when this structure is drawn.</summary>
+    /// <summary>True when this structure is drawn, as it stands or as a memory.</summary>
     public bool Draws(EntityId entity) => _structures.ContainsKey(entity);
 
-    protected override void Attach()
-    {
-        ReadAll();
-        View.Selection.Changed += ShowSelection;
-    }
+    /// <summary>True when this structure is drawn as a memory: dimmed, as the player last saw it.</summary>
+    public bool DrawsAsMemory(EntityId entity) => _structures.TryGetValue(entity, out var node) && node.Drawn.IsRemembered;
 
+    protected override void Attach() => View.Selection.Changed += ShowSelection;
+
+    // Draws what the player knows of and nothing else, whatever was drawn before.
     public override void AfterTick()
     {
-        foreach (var happened in View.Match.Simulation.Events)
+        View.Sight.CollectStructures(_known);
+        _pass++;
+        foreach (var seen in _known)
         {
-            if (happened.Kind == SimEventKind.StructurePlaced)
+            if (_structures.TryGetValue(seen.Entity, out var node) && !SameShape(node.Drawn, seen))
             {
-                Add(happened.Entity);
+                Remove(seen.Entity);
+                node = null;
             }
-            else if (happened.Kind == SimEventKind.StructureRemoved)
+
+            node ??= Add(seen);
+            if (node is not null)
             {
-                Remove(happened.Entity);
+                node.Drawn = seen;
+                node.Pass = _pass;
+                _settled &= node.Dimmed == Wanted(seen);
             }
         }
 
-        var standing = View.Match.Structures.Count;
-        if (_structures.Count != standing)
+        foreach (var (entity, node) in _structures)
         {
-            GD.PushError($"The view draws {_structures.Count} structures and the match has {standing} at tick {View.Match.World.Tick}.");
-            ReadAll();
+            if (node.Pass != _pass)
+            {
+                _gone.Add(entity);
+            }
         }
+
+        foreach (var entity in _gone)
+        {
+            Remove(entity);
+        }
+
+        _gone.Clear();
     }
 
-    // Draws what the match has and nothing else, whatever was drawn before.
-    private void ReadAll()
+    // A structure that goes out of sight dims as the fog comes over the ground round it, and
+    // one that comes into sight brightens with it.
+    public override void EveryFrame(double delta)
     {
-        var structures = View.Match.Structures;
-        foreach (var entity in _structures.Keys.ToArray())
-        {
-            if (!structures.Contains(entity))
-            {
-                Remove(entity);
-            }
-        }
-
-        for (var i = 0; i < structures.Count; i++)
-        {
-            Add(structures.EntityAt(i));
-        }
-    }
-
-    private void Add(EntityId entity)
-    {
-        var match = View.Match;
-        if (_structures.ContainsKey(entity)
-            || !match.World.Entities.IsAlive(entity)
-            || !match.Structures.TryGet(entity, out var placed)
-            || !match.Bodies.TryGet(entity, out var body)
-            || match.Data.StructureOf(placed.Type) is not { } structure)
+        if (_settled)
         {
             return;
         }
 
-        var node = Create(entity, structure, placed, body.Owner);
-        node.Outline.Visible = View.Selection.Contains(entity);
-        _structures.Add(entity, node);
+        var step = (float)delta / FogPicture.FadeSeconds;
+        var settled = true;
+        foreach (var node in _structures.Values)
+        {
+            var wanted = Wanted(node.Drawn);
+            if (node.Dimmed != wanted)
+            {
+                node.Dimmed = Mathf.MoveToward(node.Dimmed, wanted, step);
+                Paint(node);
+                settled &= node.Dimmed == wanted;
+            }
+        }
+
+        _settled = settled;
+    }
+
+    private static float Wanted(in SeenStructure seen) => seen.IsRemembered ? 1f : 0f;
+
+    // Whatever the shape and the place of a node are made from. A structure never changes them,
+    // so this is true for every structure that is drawn already.
+    private static bool SameShape(in SeenStructure drawn, in SeenStructure seen) =>
+        drawn.Type == seen.Type && drawn.Owner == seen.Owner && drawn.X == seen.X && drawn.Y == seen.Y && drawn.Size == seen.Size;
+
+    private StructureNode? Add(in SeenStructure seen)
+    {
+        if (View.Match.Data.StructureOf(seen.Type) is not { } structure)
+        {
+            return null;
+        }
+
+        var node = Create(structure, in seen);
+        node.Outline.Visible = View.Selection.Contains(seen.Entity);
+        _structures.Add(seen.Entity, node);
+        return node;
     }
 
     private void Remove(EntityId entity)
@@ -124,7 +160,7 @@ public partial class StructureLayer : WorldLayer
         }
     }
 
-    private StructureNode Create(EntityId entity, StructureDef structure, in PlacedStructure placed, int owner)
+    private StructureNode Create(StructureDef structure, in SeenStructure seen)
     {
         if (!_meshes.TryGetValue(structure.Index, out var mesh))
         {
@@ -132,28 +168,26 @@ public partial class StructureLayer : WorldLayer
             _meshes.Add(structure.Index, mesh);
         }
 
-        if (!_outlines.TryGetValue(placed.Size, out var outline))
+        if (!_outlines.TryGetValue(seen.Size, out var outline))
         {
-            outline = StructureShapes.Outline(placed.Size, SelectedColor);
-            _outlines.Add(placed.Size, outline);
-        }
-
-        if (!_materials.TryGetValue(owner, out var materials))
-        {
-            var color = PlayerColors.Of(owner);
-            materials = (PlaceholderMeshes.Flat(Stone.Lerp(color, WallTint)), PlaceholderMeshes.Flat(color));
-            _materials.Add(owner, materials);
+            outline = StructureShapes.Outline(seen.Size, SelectedColor);
+            _outlines.Add(seen.Size, outline);
         }
 
         // The middle of the footprint, from the tiles themselves: a whole or a half number of tiles.
         var body = new MeshInstance3D
         {
-            Name = $"Structure{entity.Value}",
+            Name = $"Structure{seen.Entity.Value}",
             Mesh = mesh,
-            Position = new Vector3(placed.X + (placed.Size / 2f), 0f, placed.Y + (placed.Size / 2f)),
+            Position = new Vector3(seen.X + (seen.Size / 2f), 0f, seen.Y + (seen.Size / 2f)),
         };
-        body.SetSurfaceOverrideMaterial(StructureShapes.WallsSurface, materials.Walls);
-        body.SetSurfaceOverrideMaterial(StructureShapes.RoofSurface, materials.Roof);
+
+        // Each structure has materials of its own, because each dims by itself.
+        var color = PlayerColors.Of(seen.Owner);
+        var walls = PlaceholderMeshes.Flat(Stone.Lerp(color, WallTint));
+        var roof = PlaceholderMeshes.Flat(color);
+        body.SetSurfaceOverrideMaterial(StructureShapes.WallsSurface, walls);
+        body.SetSurfaceOverrideMaterial(StructureShapes.RoofSurface, roof);
 
         var line = new MeshInstance3D
         {
@@ -165,8 +199,47 @@ public partial class StructureLayer : WorldLayer
         };
         body.AddChild(line);
         AddChild(body);
-        return new StructureNode(body, line);
+
+        // A structure that is first drawn as a memory, as after the development switch, is dim from the start.
+        var node = new StructureNode(body, line, walls, roof, walls.AlbedoColor, color) { Dimmed = Wanted(seen) };
+        Paint(node);
+        return node;
     }
 
-    private readonly record struct StructureNode(MeshInstance3D Body, MeshInstance3D Outline);
+    private static void Paint(StructureNode node)
+    {
+        node.Walls.AlbedoColor = Dim(node.WallColor, node.Dimmed);
+        node.Roof.AlbedoColor = Dim(node.RoofColor, node.Dimmed);
+    }
+
+    /// <summary>A color of a structure as a memory shows it, by how far the structure has dimmed: 0 for seen now, 1 for remembered.</summary>
+    public static Color Dim(Color color, float dimmed)
+    {
+        var gray = color.Luminance;
+        var memory = color.Lerp(new Color(gray, gray, gray), MemoryGray).Lerp(FogPicture.Unknown, FogPicture.ExploredShade);
+        return color.Lerp(memory, dimmed);
+    }
+
+    private sealed class StructureNode(MeshInstance3D body, MeshInstance3D outline, StandardMaterial3D walls, StandardMaterial3D roof, Color wallColor, Color roofColor)
+    {
+        public MeshInstance3D Body { get; } = body;
+
+        public MeshInstance3D Outline { get; } = outline;
+
+        public StandardMaterial3D Walls { get; } = walls;
+
+        public StandardMaterial3D Roof { get; } = roof;
+
+        public Color WallColor { get; } = wallColor;
+
+        public Color RoofColor { get; } = roofColor;
+
+        /// <summary>What the node was last made or checked against.</summary>
+        public SeenStructure Drawn { get; set; }
+
+        /// <summary>How far it has dimmed, from 0 for a structure seen now to 1 for a memory.</summary>
+        public float Dimmed { get; set; }
+
+        public int Pass { get; set; }
+    }
 }

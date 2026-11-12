@@ -1,12 +1,15 @@
 using Godot;
 using Sim.Core;
+using Sim.Vision;
 
 namespace Game;
 
 /// <summary>
 /// Finds the structure under the pointer, the local player's or another player's. A structure
 /// is found where it is drawn: on the box that stands on its tiles and is as tall as its shape,
-/// so that a click on its roof finds it and not the ground behind it.
+/// so that a click on its roof finds it and not the ground behind it. Only what is drawn is
+/// found (design 5.3): a structure of another player's that the player sees or remembers, and
+/// never one they have not seen. A memory is found where it was last seen.
 /// </summary>
 /// <remarks>
 /// Nothing here uses physics. The line from the camera through the point of the screen is
@@ -16,6 +19,8 @@ namespace Game;
 /// </remarks>
 public sealed class StructurePicker : PointerPicker
 {
+    private readonly List<SeenStructure> _known = [];
+
     public override bool TryPick(in PointerProbe probe, out PointerTarget target)
     {
         target = default;
@@ -33,19 +38,16 @@ public sealed class StructurePicker : PointerPicker
         var bestKind = PointerTargets.None;
         var bestDistance = float.MaxValue;
 
-        var structures = match.Structures;
-        for (var i = 0; i < structures.Count; i++)
+        view.Sight.CollectStructures(_known);
+        foreach (var placed in _known)
         {
-            var entity = structures.EntityAt(i);
-            var placed = structures.ValueAt(i);
-            if (!match.World.Entities.IsAlive(entity)
-                || !match.Bodies.TryGet(entity, out var body)
-                || match.Data.StructureOf(placed.Type) is not { } structure)
+            if (match.Data.StructureOf(placed.Type) is not { } structure)
             {
                 continue;
             }
 
-            var kind = body.Owner == view.Player ? PointerTargets.OwnStructure : PointerTargets.EnemyStructure;
+            var entity = placed.Entity;
+            var kind = placed.Owner == view.Player ? PointerTargets.OwnStructure : PointerTargets.EnemyStructure;
             if ((probe.Wanted & kind) == 0)
             {
                 continue;

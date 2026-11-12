@@ -8,9 +8,9 @@ namespace Game;
 
 /// <summary>
 /// What of the match the local player may be shown (design 5.3): the fog of war as the view asks
-/// about it. Everything under <c>game/</c> that draws a unit, a shot or an effect, or that turns a
-/// click into a target, asks here first, so that the screen shows the player's own picture of
-/// the match and nothing else.
+/// about it. Everything under <c>game/</c> that draws a unit, a structure, a territory, a shot or
+/// an effect, or that turns a click into a target, asks here first, so that the screen shows the
+/// player's own picture of the match and nothing else.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,6 +18,14 @@ namespace Game;
 /// A player always sees their own units. Another player's unit is shown while the tile under its
 /// center is visible, a shot of another player's while it is over a visible tile, and an event of
 /// another player's when it is of a kind anyone sees and it happened on a visible tile.
+/// </para>
+/// <para>
+/// A structure is not a unit. The player knows of their own, of another player's while any tile
+/// under it is visible, and after that of the same structure as it was when last seen: a memory
+/// (<see cref="SeenStructure.IsRemembered"/>), which may have changed since or be gone, and which
+/// ends when the player sees its tiles again without it. A structure the player has never seen
+/// is not there for the view at all. <see cref="CollectStructures"/> lists them, and
+/// <see cref="CollectTerritories"/> the territories that follow from them.
 /// </para>
 /// <para>
 /// <b>The development switch.</b> <see cref="FogOff"/> lifts the fog from the screen for a tester
@@ -129,6 +137,90 @@ public sealed class PlayerSight
         return false;
     }
 
+    /// <summary>
+    /// Lists every structure that is to be drawn, in ascending ID order: the player's own, those
+    /// of other players that the player sees, and those the player remembers, each of the last
+    /// as it was when last seen. The list is emptied first.
+    /// </summary>
+    /// <remarks>
+    /// With the development switch the fog is off, and the list is every structure that stands,
+    /// as it is now: nothing is a memory then.
+    /// </remarks>
+    public void CollectStructures(List<SeenStructure> structures)
+    {
+        if (_fogOff)
+        {
+            CollectStanding(_match, structures);
+        }
+        else
+        {
+            Seen.CollectStructures(structures);
+        }
+    }
+
+    /// <summary>
+    /// A structure as it is to be drawn. False for one of another player's that the player has
+    /// never seen, for a memory that has ended, and for anything that is no structure.
+    /// </summary>
+    public bool TryGetStructure(EntityId entity, out SeenStructure structure)
+    {
+        if (!_fogOff)
+        {
+            return Seen.TryGetStructure(entity, out structure);
+        }
+
+        if (_match.Vision.TryDescribeStructure(entity, out var standing))
+        {
+            structure = AsItStands(in standing);
+            return true;
+        }
+
+        structure = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Lists the territories that are to be drawn: the player's own, and those of the finished
+    /// Capitols and Outposts of other players that the player sees or remembers. The list is
+    /// emptied first. With the development switch it is every territory of the match.
+    /// </summary>
+    public void CollectTerritories(List<Territory> territories)
+    {
+        if (!_fogOff)
+        {
+            Seen.CollectTerritories(territories);
+            return;
+        }
+
+        territories.Clear();
+        var store = _match.Territories;
+        for (var i = 0; i < store.Count; i++)
+        {
+            if (_match.World.Entities.IsAlive(store.EntityAt(i)))
+            {
+                territories.Add(store.ValueAt(i));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Lists every structure that stands in a match, as it is now and whoever may see it, in
+    /// ascending ID order. The list is emptied first. This is the match without the fog: for the
+    /// development switch, and for whatever shows a match that has no player's view.
+    /// </summary>
+    public static void CollectStanding(Match match, List<SeenStructure> structures)
+    {
+        structures.Clear();
+        var store = match.Structures;
+        for (var i = 0; i < store.Count; i++)
+        {
+            if (match.Vision.TryDescribeStructure(store.EntityAt(i), out var standing))
+            {
+                structures.Add(AsItStands(in standing));
+            }
+        }
+    }
+
     /// <summary>True when something that happened in the last tick is to be shown or told to the player.</summary>
     public bool Knows(in SimEvent happened) => _fogOff || Seen.Knows(in happened);
 
@@ -156,4 +248,20 @@ public sealed class PlayerSight
             }
         }
     }
+
+    private static SeenStructure AsItStands(in RememberedStructure standing) => new(
+        standing.Entity,
+        standing.Owner,
+        standing.Type,
+        standing.X,
+        standing.Y,
+        standing.Size,
+        standing.HitPoints,
+        standing.MaxHitPoints,
+        standing.IsFinished,
+        standing.Built,
+        standing.LookTier,
+        standing.Banner,
+        IsRemembered: false,
+        standing.Tick);
 }

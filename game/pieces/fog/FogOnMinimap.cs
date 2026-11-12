@@ -1,5 +1,6 @@
 using Godot;
 using Sim.Economy;
+using Sim.Vision;
 
 namespace Game;
 
@@ -14,6 +15,8 @@ public sealed class FogOnMinimap(MatchView view) : MinimapSight
     public override bool ShowsUnit(int owner, Vector2 ground) => view.Sight.ShowsUnitAt(owner, ground);
 
     public override bool ShowsDeposit(in WorkSite deposit) => view.Sight.ShowsDeposit(deposit);
+
+    public override void CollectStructures(MatchView view, List<SeenStructure> structures) => view.Sight.CollectStructures(structures);
 
     public override Texture2D? Shade => view.World.Fog.Texture;
 }

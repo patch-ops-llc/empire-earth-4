@@ -1,5 +1,6 @@
 using Godot;
 using Sim.Economy;
+using Sim.Vision;
 
 namespace Game;
 
@@ -10,8 +11,9 @@ namespace Game;
 /// <remarks>
 /// There is no fog yet (M17), so today everything is shown. With it, a player sees their own
 /// units always, an enemy unit only on ground they see now, a deposit only on ground they have
-/// explored, and <see cref="Shade"/> darkens what is unexplored or out of sight. Piece 17v gives
-/// these answers from the view of one player, and the drawing stays as it is.
+/// explored, a structure once they have seen it and then as they remember it, and
+/// <see cref="Shade"/> darkens what is unexplored or out of sight. Piece 17v gives these answers
+/// from the view of one player, and the drawing stays as it is.
 /// </remarks>
 public class MinimapSight
 {
@@ -22,6 +24,14 @@ public class MinimapSight
 
     /// <summary>True when the player knows of this deposit.</summary>
     public virtual bool ShowsDeposit(in WorkSite deposit) => true;
+
+    /// <summary>
+    /// Lists the structures the player knows of, each as the player may be shown it: their own,
+    /// those of other players that they see, and those they remember, which are marked so and
+    /// are as they were when last seen. The list is emptied first.
+    /// </summary>
+    public virtual void CollectStructures(MatchView view, List<SeenStructure> structures) =>
+        PlayerSight.CollectStanding(view.Match, structures);
 
     /// <summary>
     /// A picture of the whole map, a pixel for a tile, drawn over the terrain and the deposits and

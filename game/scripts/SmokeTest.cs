@@ -87,8 +87,9 @@ public sealed class SmokeTest
         // 15v. Construction and production.
         new StructuresSmoke(),
 
-        // 17v. Fog of war: a unit out of sight, found and attacked.
+        // 17v. Fog of war: a unit out of sight, found and attacked; a structure seen and remembered.
         new FogSmoke(),
+        new StructuresInFogSmoke(),
 
         // 24v. Minimap: an order given on it.
         new MinimapSmoke(),

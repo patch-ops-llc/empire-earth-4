@@ -1,19 +1,20 @@
-using Sim.Core;
 using Sim.Economy;
-using Sim.Setup;
 
 namespace Game;
 
 /// <summary>
-/// Which players hold each tile of the map, as the simulation rules it: a tile is a player's
-/// when <see cref="Territory.Contains"/> says so for one of that player's territories whose
-/// structure still stands. The view asks nothing else about territory, so what it shows ends
-/// exactly where income and the right to build end.
+/// Which players hold each tile of the map, as far as the local player knows (design 5.3): a
+/// tile is a player's when <see cref="Territory.Contains"/> says so for one of the territories
+/// the view's <see cref="PlayerSight"/> lists. Those are the player's own, and those of the
+/// finished Capitols and Outposts of other players that the player sees or remembers. The view
+/// asks nothing else about territory, so what it shows of the player's own ends exactly where
+/// income and the right to build end, and what it shows of another player's is what the
+/// placement of a structure is judged by when the order is given.
 /// </summary>
 /// <remarks>
-/// This is the view's own copy and no state of the match. <see cref="Refresh"/> reads the match
-/// again and works the tiles out only when a territory has come, gone or changed. Whatever
-/// shows territory reads it here: the layer on the ground, and after it the minimap and the
+/// This is the view's own copy and no state of the match. <see cref="Refresh"/> asks again and
+/// works the tiles out only when a territory has come, gone or changed. Whatever shows
+/// territory reads it here: the layer on the ground, and after it the minimap and the
 /// placement preview of the build menu.
 /// </remarks>
 public sealed class TerritoryTiles
@@ -36,31 +37,21 @@ public sealed class TerritoryTiles
     public int Players { get; private set; }
 
     /// <summary>
-    /// Reads the territories of the match. Returns true when the tiles are not what they were
-    /// after the last call, and on the first call.
+    /// Asks which territories the local player knows of. Returns true when the tiles are not
+    /// what they were after the last call, and on the first call.
     /// </summary>
-    public bool Refresh(Match match)
+    public bool Refresh(PlayerSight sight)
     {
-        var territories = match.Territories;
-        var entities = match.World.Entities;
-        _now.Clear();
-        for (var i = 0; i < territories.Count; i++)
-        {
-            if (entities.IsAlive(territories.EntityAt(i)))
-            {
-                _now.Add(territories.ValueAt(i));
-            }
-        }
+        sight.CollectTerritories(_now);
 
-        var map = match.Map;
-        if (_read && map.Width == Width && map.Height == Height && Same(_now, _seen))
+        if (_read && sight.Width == Width && sight.Height == Height && Same(_now, _seen))
         {
             return false;
         }
 
         _read = true;
-        Width = map.Width;
-        Height = map.Height;
+        Width = sight.Width;
+        Height = sight.Height;
         _seen.Clear();
         _seen.AddRange(_now);
 

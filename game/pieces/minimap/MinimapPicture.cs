@@ -1,18 +1,20 @@
 using Godot;
 using Sim.Data;
 using Sim.Economy;
+using Sim.Vision;
 
 namespace Game;
 
 /// <summary>
-/// The picture of the minimap: the terrain, the deposits, every unit as a dot in its owner's
-/// color, and the outline of the ground the camera shows. It takes the presses on it and says
+/// The picture of the minimap: the terrain, the deposits, every structure as a square and every
+/// unit as a dot in its owner's color, and the outline of the ground the camera shows. It takes the presses on it and says
 /// what they ask for, and it changes nothing itself.
 /// </summary>
 /// <remarks>
 /// It is drawn in this order, each over those before it: terrain, deposits, the shade of the fog
-/// when there is one, other players' units, the local player's units, the outline of the view,
-/// the mark of an order. What the player may not know is left out by <see cref="MinimapSight"/>.
+/// when there is one, the structures, other players' units, the local player's units, the
+/// outline of the view, the mark of an order. A structure the player remembers and does not see
+/// now is drawn dimmed, as it is in the world. What the player may not know is left out by <see cref="MinimapSight"/>.
 /// </remarks>
 public partial class MinimapPicture : Control
 {
@@ -25,6 +27,7 @@ public partial class MinimapPicture : Control
     private const float UnitDot = 4f;
     private const float SelectedRim = 1f;
     private const float SmallestDeposit = 4f;
+    private const float SmallestStructure = 5f;
     private const double MarkSeconds = 0.7;
 
     private static readonly Color GroundColor = new(0.33f, 0.45f, 0.26f);
@@ -32,11 +35,13 @@ public partial class MinimapPicture : Control
     private static readonly Color CliffColor = new(0.46f, 0.44f, 0.42f);
     private static readonly Color DepositColor = new(0.80f, 0.54f, 0.30f);
     private static readonly Color DepositEdge = new(0.30f, 0.18f, 0.10f);
+    private static readonly Color StructureEdge = new(0.06f, 0.06f, 0.07f);
     private static readonly Color ViewColor = new(1f, 1f, 1f, 0.9f);
     private static readonly Color MarkColor = new(1f, 0.95f, 0.4f);
     private static readonly Color EdgeColor = new(0.35f, 0.39f, 0.47f);
 
     private readonly Vector2[] _viewOutline = new Vector2[5];
+    private readonly List<SeenStructure> _structures = [];
 
     private MatchView? _view;
     private MinimapGeometry _geometry;
@@ -140,6 +145,7 @@ public partial class MinimapPicture : Control
             DrawTextureRect(shade, whole, tile: false);
         }
 
+        DrawStructures(view);
         DrawUnits(view, own: false);
         DrawUnits(view, own: true);
         DrawViewOutline();
@@ -167,6 +173,23 @@ public partial class MinimapPicture : Control
             var square = new Rect2(middle - (Vector2.One * (side / 2f)), Vector2.One * side);
             DrawRect(square.Grow(1f), DepositEdge);
             DrawRect(square, DepositColor);
+        }
+    }
+
+    // Over the shade of the fog, since each is dimmed by itself: a structure the player sees is
+    // bright also where some of its tiles are out of sight, and a memory is dim on all of them.
+    private void DrawStructures(MatchView view)
+    {
+        _sight.CollectStructures(view, _structures);
+        foreach (var structure in _structures)
+        {
+            // Round its own middle and at least this large, as a deposit is.
+            var middle = _geometry.ToMinimap(new Vector2(structure.X + (structure.Size / 2f), structure.Y + (structure.Size / 2f)));
+            var side = Math.Max(SmallestStructure, structure.Size * _geometry.PixelsPerTile);
+            var square = new Rect2(middle - (Vector2.One * (side / 2f)), Vector2.One * side);
+            var dimmed = structure.IsRemembered ? 1f : 0f;
+            DrawRect(square.Grow(1f), StructureEdge);
+            DrawRect(square, StructureLayer.Dim(PlayerColors.Of(structure.Owner), dimmed));
         }
     }
 

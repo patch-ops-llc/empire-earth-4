@@ -3,8 +3,10 @@ using Godot;
 namespace Game;
 
 /// <summary>
-/// Draws the ground each player holds (design 2.5 and 5.4): a faint wash of the player's color
-/// over every tile of their territory and a line of it along the edge.
+/// Draws the ground each player holds (design 2.5 and 5.4), as far as the local player knows
+/// (design 5.3): a faint wash of the player's color over every tile of their territory and a
+/// line of it along the edge. Another player's territory is drawn once the local player has
+/// seen the finished Capitol or Outpost it lies round, and for as long as they remember it.
 /// </summary>
 /// <remarks>
 /// It is drawn tile by tile from <see cref="TerritoryTiles"/>, so the line runs along the sides
@@ -49,7 +51,7 @@ public partial class TerritoryLayer : WorldLayer
 
     public override void AfterTick()
     {
-        if (Tiles.Refresh(View.Match))
+        if (Tiles.Refresh(View.Sight))
         {
             _ground.Mesh = Build();
         }
