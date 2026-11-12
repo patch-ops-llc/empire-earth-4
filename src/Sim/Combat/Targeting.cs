@@ -36,6 +36,7 @@ public sealed class Targeting
 
     // Scratch for one search, emptied at its start. Not state.
     private readonly List<EntityId> _found = [];
+    private readonly List<Filed> _filed = [];
 
     public Targeting(
         MapGrid grid,
@@ -323,15 +324,36 @@ public sealed class Targeting
         var bestStructureDistance = long.MaxValue;
 
         // The index files a structure under its center, which is further off than its nearest edge.
-        _spatialIndex.QueryCircle(position, profile.Acquisition + _rules.FurthestEdge, _found);
-        foreach (var candidate in _found)
+        //
+        // In a large fight this search is most of a tick: hundreds of units each look at
+        // hundreds of candidates. So the candidates come unsorted, each with where its body is
+        // in the store, and of each the search asks first what costs least and rules out most:
+        // whose it is, then how far it is. Most are the unit's own side or no nearer than the
+        // best so far, and of those nothing else is looked up. Of several equally near the
+        // lowest ID wins by comparing IDs, since the candidates do not come in ID order. The
+        // index lists only what is alive, and every test here reads the same state whatever
+        // the order they are made in, so what is picked is what asking everything of every
+        // candidate, lowest ID first, would pick.
+        var structures = Structures;
+        _spatialIndex.QueryCircleUnsorted(position, profile.Acquisition + _rules.FurthestEdge, _filed);
+        foreach (var filed in _filed)
         {
-            if (candidate == self || !IsEnemy(world, body.Owner, candidate, out var other))
+            var candidate = filed.Entity;
+            var index = _bodies.IndexOf(candidate, filed.Body);
+            if (candidate == self || index < 0)
             {
                 continue;
             }
 
-            var mark = MarkOf(candidate, in other);
+            ref readonly var other = ref _bodies.ValueAt(index);
+            if (other.Owner == body.Owner)
+            {
+                continue;
+            }
+
+            var mark = structures is not null && structures.TryGet(candidate, out var structure)
+                ? new Mark(other.Position, CombatRules.NoLine, structure.Type, structure.Tiles)
+                : new Mark(other.Position, CombatRules.NoLine, Mark.NoStructure, default);
             var last = false;
             if (mark.IsStructure)
             {
@@ -343,13 +365,26 @@ public sealed class Targeting
                 }
             }
 
-            // The candidates come in ascending ID order, so the first of several equally near wins.
             var distance = mark.DistanceSquaredRawTo(position);
+            var leastSoFar = last ? bestStructureDistance : bestDistance;
             if (distance > profile.AcquisitionSquared
-                || distance >= (last ? bestStructureDistance : bestDistance)
+                || distance > leastSoFar
+                || (distance == leastSoFar && candidate > (last ? bestStructure : best))
                 || distance < profile.MinRangeSquared)
             {
                 continue;
+            }
+
+            // The rest of what makes it an enemy that can be attacked: hit points, and being seen.
+            if (!_health.Contains(candidate)
+                || !(mark.IsStructure ? _vision.SeesStructure(body.Owner, other.Owner, mark.Tiles) : _vision.Sees(body.Owner, in other)))
+            {
+                continue;
+            }
+
+            if (!mark.IsStructure)
+            {
+                mark = mark with { Line = LineOf(candidate) };
             }
 
             if (!_rules.CanHit(profile.Line, mark.Line) || (profile.Melee && !IsBesideRegion(in mark, region)))
