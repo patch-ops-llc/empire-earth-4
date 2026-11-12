@@ -145,7 +145,8 @@ public class RealMatchTests
         var positions = new List<FixedVector2>();
         for (var i = 0; i < view.Match.Bodies.Count; i++)
         {
-            if (view.Match.Bodies.ValueAt(i).Owner == owner)
+            // Units only: a Capitol has a body too and stays where it is.
+            if (view.Match.Bodies.ValueAt(i).Owner == owner && view.Match.Movers.Contains(view.Match.Bodies.EntityAt(i)))
             {
                 positions.Add(view.Match.Bodies.ValueAt(i).Position);
             }

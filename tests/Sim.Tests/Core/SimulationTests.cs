@@ -104,6 +104,41 @@ public class SimulationTests
         Assert.Equal(1, match.Movers.Get(new EntityId(1)).Owner);
     }
 
+    /// <summary>Lets through the commands of every player but one.</summary>
+    private sealed class Barring(int player) : ICommandGate
+    {
+        public bool Admits(World world, in Command command) => command.Player != player;
+    }
+
+    [Fact]
+    public void TheGateDropsACommandBeforeItsHandlerSeesIt()
+    {
+        var (simulation, log) = Create();
+        simulation.SetCommandGate(new Barring(1));
+        simulation.Commands.Enqueue(0, new Command(Note, 1, contentId: 1));
+        simulation.Commands.Enqueue(0, new Command(Note, 0, contentId: 2));
+        simulation.Commands.Enqueue(0, new Command(Unhandled, 1, contentId: 3));
+        simulation.Commands.Enqueue(1, new Command(Note, 1, contentId: 4));
+
+        simulation.Run(2);
+
+        Assert.Equal(["0:note(2)", "0:first", "0:second", "1:first", "1:second"], log);
+        Assert.Equal(3, simulation.DroppedCommandCount);
+    }
+
+    [Fact]
+    public void ThereIsOneGateAndItIsSetBeforeTheFirstTick()
+    {
+        var (simulation, _) = Create();
+        Assert.Throws<ArgumentNullException>(() => simulation.SetCommandGate(null!));
+        simulation.SetCommandGate(new Barring(1));
+        Assert.Throws<InvalidOperationException>(() => simulation.SetCommandGate(new Barring(0)));
+
+        var (started, _) = Create();
+        started.Tick();
+        Assert.Throws<InvalidOperationException>(() => started.SetCommandGate(new Barring(1)));
+    }
+
     [Fact]
     public void SystemsAndHandlersAreFixedOnceTheFirstTickHasRun()
     {

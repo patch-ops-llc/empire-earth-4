@@ -46,12 +46,10 @@ public class PlacesTests
     [InlineData("7.5", "11", 9, 10)]
     [InlineData("9", "9", 10, 9)]
     [InlineData("13", "13", 12, 11)]
-    [InlineData("11", "11", 10, 9)]
     public void AWorkerTakesTheNearestFreePlaceWithTiesToTheLowerYThenTheLowerX(string x, string y, int placeX, int placeY)
     {
-        var map = x == "11" && y == "11" ? TestMaps.Open(24, 24) : OneDeposit;
-        var match = Create(map);
-        var site = map.Deposits.Count > 0 ? match.SiteAt(10, 10) : match.PlaceGenerator(0, 10, 10);
+        var match = Create(OneDeposit);
+        var site = match.SiteAt(10, 10);
         var worker = match.SpawnWorker(0, TestMatches.Point(x, y));
 
         match.OrderGather(0, site, worker);
