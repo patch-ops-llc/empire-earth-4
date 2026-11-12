@@ -10,7 +10,7 @@ public static class CombatSpawn
     /// <summary>
     /// Places a unit of a chassis for a player: an entity that walks at the speed of the player's
     /// blueprint of that chassis and keeps the spacing of its line, with its full hit points, idle
-    /// at its post. Call it before the
+    /// at its post, and with its <see cref="Perks.PerkCounts"/> begun in this tick. Call it before the
     /// first tick, or inside a tick from a system or a command handler, as
     /// <see cref="Match.SpawnUnit"/> asks.
     /// </summary>
@@ -28,6 +28,7 @@ public static class CombatSpawn
         var entity = match.SpawnUnit(player, position, blueprint.SpeedPerTick, blueprint.Line.Base.Spacing.ToFraction().ToFixed());
         match.Combatants.Add(entity, new Combatant { Chassis = chassis, Anchor = position, Stood = position });
         match.Health.Add(entity, Health.Full(blueprint.HitPoints));
+        match.PerkCounts.Add(entity, Perks.PerkCounts.MadeAt(match.World.Tick));
         return entity;
     }
 }

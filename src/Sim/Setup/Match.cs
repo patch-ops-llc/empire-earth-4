@@ -6,6 +6,8 @@ using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
+using Sim.Perks;
+using Sim.Production;
 using Sim.Research;
 using Sim.Structures;
 using Sim.Vision;
@@ -69,6 +71,19 @@ public sealed class Match
     public required ComponentStore<Mover> Movers { get; init; }
 
     /// <summary>
+    /// What every unit of a chassis keeps count of for Regeneration, Reserves and Charge (design
+    /// 2.3): the tick of its last damage, the Materials paid for it and the distance it has walked
+    /// since its last attack.
+    /// </summary>
+    public required ComponentStore<PerkCounts> PerkCounts { get; init; }
+
+    /// <summary>
+    /// The rules of production, with the orders, progress and rally point of every structure that
+    /// trains in <see cref="MatchProduction.Producers"/>.
+    /// </summary>
+    public required MatchProduction Production { get; init; }
+
+    /// <summary>
     /// Every player's tiers and research slots, and what follows from the tiers: the table of
     /// blueprints per player. The table is not state: see <see cref="MatchResearch"/>.
     /// </summary>
@@ -103,6 +118,9 @@ public sealed class Match
 
     /// <summary>The ground each Capitol and Outpost holds for its owner.</summary>
     public required ComponentStore<Territory> Territories { get; init; }
+
+    /// <summary>The attack of each finished structure that has one: the Towers.</summary>
+    public required ComponentStore<Turret> Turrets { get; init; }
 
     /// <summary>
     /// What each player sees: the fog of war, which is state, and the questions asked of it. What

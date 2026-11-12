@@ -16,6 +16,18 @@ public enum SimEventKind
     None = 0,
 
     /// <summary>
+    /// A shell landed: a shot with a blast radius. <see cref="SimEvent.Player"/> is the owner of
+    /// the unit that fired it, <see cref="SimEvent.Entity"/> the shell, which is gone after this
+    /// tick, <see cref="SimEvent.Other"/> the target it was fired at, which may be gone by now,
+    /// <see cref="SimEvent.Position"/> the center of the blast, and <see cref="SimEvent.Amount"/>
+    /// its radius in units of 1/65,536 of a tile, the raw value of a
+    /// <see cref="Numerics.Fixed"/>. A <see cref="ShotHit"/> follows for each enemy the blast
+    /// reached, with the shell as its <see cref="SimEvent.Other"/>; none follows when it reached
+    /// nobody.
+    /// </summary>
+    Blast,
+
+    /// <summary>
     /// A build order ended before its foundation was laid, and its whole price was given back.
     /// <see cref="SimEvent.Player"/> is the owner, for whom alone the event is meant,
     /// <see cref="SimEvent.Entity"/> the worker that had the order,
@@ -35,6 +47,17 @@ public enum SimEventKind
     BuildRefused,
 
     /// <summary>
+    /// An attack was made with Charge (design 2.3): the unit had walked the distance of its
+    /// perk since its last attack, and all damage of this one attack is multiplied. It comes
+    /// just before the <see cref="MeleeHit"/> or the <see cref="ShotFired"/> of that attack.
+    /// <see cref="SimEvent.Player"/> is the attacker's owner, <see cref="SimEvent.Entity"/> the
+    /// attacker, <see cref="SimEvent.Other"/> its target, <see cref="SimEvent.Position"/> where
+    /// the attacker stood, and <see cref="SimEvent.Amount"/> the multiplier in thousandths,
+    /// 1500 for +50%.
+    /// </summary>
+    ChargedAttack,
+
+    /// <summary>
     /// Something was destroyed because its hit points were at zero when the attacks of the tick
     /// had been made. <see cref="SimEvent.Player"/> is its owner, <see cref="SimEvent.Entity"/>
     /// is what died, and <see cref="SimEvent.Position"/> is where it stood. Nothing says who
@@ -52,14 +75,39 @@ public enum SimEventKind
     MeleeHit,
 
     /// <summary>
-    /// One of the orders a unit takes, the development spawn, or an order to cancel a build was
-    /// not carried out and changed nothing. <see cref="SimEvent.Player"/> is the player the command names,
+    /// One of the orders a unit takes, the development spawn, or an order to cancel a build, to
+    /// cancel training or to set a rally point was not carried out and changed nothing.
+    /// <see cref="SimEvent.Player"/> is the player the command names,
     /// <see cref="SimEvent.Amount"/> the number of its <see cref="CommandType"/>,
     /// <see cref="SimEvent.Entity"/> the first entity it lists, if any,
     /// <see cref="SimEvent.Other"/> its target entity, if any, and
     /// <see cref="SimEvent.Position"/> its target point.
     /// </summary>
     OrderRefused,
+
+    /// <summary>
+    /// A production structure got its rally point. <see cref="SimEvent.Player"/> is its owner,
+    /// <see cref="SimEvent.Entity"/> the structure and <see cref="SimEvent.Position"/> the point.
+    /// </summary>
+    RallyPointSet,
+
+    /// <summary>
+    /// A unit with Regeneration (design 2.3) got hit points back. <see cref="SimEvent.Player"/>
+    /// is its owner, <see cref="SimEvent.Entity"/> the unit, <see cref="SimEvent.Position"/>
+    /// where it stood, and <see cref="SimEvent.Amount"/> what was added, in thousandths of a hit
+    /// point: less than the perk's share when the unit reached its maximum.
+    /// </summary>
+    Regenerated,
+
+    /// <summary>
+    /// A unit with Reserves (design 2.3) died and its owner got back a share of the Materials
+    /// paid for it. It comes in the tick of the unit's <see cref="Death"/>, after it.
+    /// <see cref="SimEvent.Player"/> is the owner, for whom alone the event is meant,
+    /// <see cref="SimEvent.Entity"/> the unit, <see cref="SimEvent.Position"/> where it stood,
+    /// and <see cref="SimEvent.Amount"/> the refund in whole Materials. A unit whose refund
+    /// rounds to nothing reports none.
+    /// </summary>
+    ReservesRefunded,
 
     /// <summary>
     /// A ranged attack was made. <see cref="SimEvent.Player"/> is the attacker's owner,
@@ -70,21 +118,49 @@ public enum SimEventKind
     ShotFired,
 
     /// <summary>
-    /// A shot reached its target. <see cref="SimEvent.Player"/> is the owner of the unit that
-    /// fired it, <see cref="SimEvent.Entity"/> the target, <see cref="SimEvent.Other"/> the
-    /// shot, which is gone after this tick, <see cref="SimEvent.Position"/> where the target
-    /// stood, and <see cref="SimEvent.Amount"/> the damage of the hit in thousandths of a hit
-    /// point, which may be more than the target had left.
+    /// A shot reached its target, or the blast of a shell reached an enemy: one event for each
+    /// enemy a blast reaches, after its <see cref="Blast"/>. <see cref="SimEvent.Player"/> is the
+    /// owner of the unit that fired the shot, <see cref="SimEvent.Entity"/> what was hit,
+    /// <see cref="SimEvent.Other"/> the shot, which is gone after this tick,
+    /// <see cref="SimEvent.Position"/> where what was hit stood, and
+    /// <see cref="SimEvent.Amount"/> the damage of the hit in thousandths of a hit point, which
+    /// may be more than it had left.
     /// </summary>
     ShotHit,
 
     /// <summary>
-    /// A shot's target was gone before the shot arrived, and the shot with it.
+    /// A shot's target was gone before the shot arrived, and the shot with it. Never reported for
+    /// a shell, which lands where its target last stood and is reported as a <see cref="Blast"/>.
     /// <see cref="SimEvent.Player"/> is the owner of the unit that fired it,
     /// <see cref="SimEvent.Entity"/> the shot, <see cref="SimEvent.Other"/> the target it had,
     /// and <see cref="SimEvent.Position"/> where the shot was.
     /// </summary>
     ShotLost,
+
+    /// <summary>
+    /// A hit landed that splashes (design 2.3, Overgunned II): besides its target, it damages
+    /// every other enemy within a distance of the target's center. Reported right after the
+    /// <see cref="ShotHit"/> or <see cref="MeleeHit"/> of the hit itself, whether or not it
+    /// reached anyone else. <see cref="SimEvent.Player"/> is the attacker's owner,
+    /// <see cref="SimEvent.Entity"/> the shot, which is gone after this tick, or the attacker
+    /// for a melee hit, <see cref="SimEvent.Other"/> the target that was hit,
+    /// <see cref="SimEvent.Position"/> the target's center, from which the distance is measured,
+    /// and <see cref="SimEvent.Amount"/> that distance in units of 1/65,536 of a tile, the raw
+    /// value of a <see cref="Numerics.Fixed"/>. A <see cref="SplashHit"/> follows for each
+    /// other enemy it reached.
+    /// </summary>
+    Splash,
+
+    /// <summary>
+    /// The splash of a hit reached an enemy other than its target: one event for each, after
+    /// their <see cref="Splash"/>, in the order of their IDs. <see cref="SimEvent.Player"/> is
+    /// the attacker's owner, <see cref="SimEvent.Entity"/> what was hit,
+    /// <see cref="SimEvent.Other"/> the shot or, for a melee hit, the attacker, as in the
+    /// <see cref="Splash"/>, <see cref="SimEvent.Position"/> where what was hit stood, and
+    /// <see cref="SimEvent.Amount"/> the damage in thousandths of a hit point, which may be more
+    /// than it had left.
+    /// </summary>
+    SplashHit,
 
     /// <summary>
     /// A structure has built itself and gives what its file says from now on.
@@ -111,4 +187,42 @@ public enum SimEventKind
     /// one that its owner cancelled while it was building itself is not.
     /// </summary>
     StructureRemoved,
+
+    /// <summary>
+    /// The player took an order out of a structure's queue and got back what was paid for it.
+    /// <see cref="SimEvent.Player"/> is the owner, <see cref="SimEvent.Entity"/> the structure,
+    /// <see cref="SimEvent.Position"/> its center, and <see cref="SimEvent.Amount"/> holds what
+    /// the order trained and how many, which <c>Production.TrainEvent.TryRead</c> takes apart.
+    /// </summary>
+    TrainCancelled,
+
+    /// <summary>
+    /// An order was placed in a structure's queue and paid for. The fields are those of
+    /// <see cref="TrainCancelled"/>.
+    /// </summary>
+    TrainOrdered,
+
+    /// <summary>
+    /// A structure was destroyed and one order of its queue was given back in full: one event
+    /// for each order, in the order of the queue. The fields are those of
+    /// <see cref="TrainCancelled"/>.
+    /// </summary>
+    TrainRefunded,
+
+    /// <summary>
+    /// An order to train was not placed and changed nothing. <see cref="SimEvent.Player"/> is
+    /// the player the command names, <see cref="SimEvent.Entity"/> the first entity it lists, if
+    /// any, and <see cref="SimEvent.Amount"/> holds what it asked for and why it was refused,
+    /// which <c>Production.TrainEvent.TryRead</c> takes apart.
+    /// </summary>
+    TrainRefused,
+
+    /// <summary>
+    /// A unit came out of a production structure: one event for each unit, so two for a pair.
+    /// <see cref="SimEvent.Player"/> is its owner, <see cref="SimEvent.Entity"/> the unit,
+    /// <see cref="SimEvent.Other"/> the structure, <see cref="SimEvent.Position"/> where the
+    /// unit appeared, and <see cref="SimEvent.Amount"/> holds what it is, which
+    /// <c>Production.TrainEvent.TryRead</c> takes apart.
+    /// </summary>
+    UnitTrained,
 }

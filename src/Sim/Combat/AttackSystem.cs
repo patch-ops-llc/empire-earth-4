@@ -2,6 +2,7 @@ using Sim.Core;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
+using Sim.Perks;
 
 namespace Sim.Combat;
 
@@ -22,6 +23,15 @@ namespace Sim.Combat;
 /// of a melee block fights.
 /// </para>
 /// <para>
+/// <b>Charge</b> (design 2.3). "The distance is what the unit has actually moved since its last
+/// attack. The bonus applies to all damage of one attack, then the count restarts." A unit whose
+/// chassis carries Charge in this tick and that has walked the perk's distance or more since its
+/// last attack, or since it was made when it has not attacked, makes this attack with the
+/// attacker's side multiplied: the melee hit, or the shot, which keeps it until it lands. Every
+/// attack, with the bonus or without, sets the count of <see cref="PerkCounts.Walked"/> back to
+/// zero. Such an attack is reported as a <see cref="SimEventKind.ChargedAttack"/> first.
+/// </para>
+/// <para>
 /// <b>Nothing between enemies depends on the order of the units.</b> A unit decides from positions,
 /// which no attack changes, and never from hit points; deaths wait for <see cref="DeathSystem"/>.
 /// So a unit brought to zero earlier in the loop still attacks, a unit still attacks a target that
@@ -40,6 +50,16 @@ namespace Sim.Combat;
 /// move order never picks, and the target of an attack order is never swapped.
 /// </para>
 /// <para>
+/// <b>Structures</b> (design 2.5). A structure is a target like a unit, measured to the nearest
+/// edge of its footprint, and a shot at it flies to its center. Units pick a Tower like a unit. A
+/// unit on an attack-move picks another structure only when it can pick no unit and no Tower, and
+/// while it has such a structure it looks again on each of its turns to look: it turns on a unit
+/// or a Tower as soon as one can be picked, and otherwise keeps the structure it has. A wall or a
+/// gate is attacked only on an attack order. A unit sent at a structure walks up to the tile
+/// beside its footprint that is nearest to itself. Towers themselves attack in
+/// <see cref="TurretSystem"/>.
+/// </para>
+/// <para>
 /// <b>How far a unit goes.</b> An idle unit walks straight toward its target, and never further
 /// from its post than its acquisition range; when a look finds nothing to pick it walks back to
 /// its post. A unit on an attack-move follows its target while it is within acquisition range,
@@ -50,7 +70,17 @@ namespace Sim.Combat;
 /// <b>Fog.</b> A unit fights only what its owner sees (design 5.3). A target that an idle unit or a
 /// unit on an attack-move picked is given up in the tick its owner stops seeing it, like one out
 /// of range. A unit on an attack order then walks to where the target was last seen and is idle
-/// there. A shot already in the air still lands.
+/// there. A shot already in the air still lands. A structure is seen by any tile of its
+/// footprint, and an attack order on one holds while it is out of sight, since it stands where
+/// it was seen. One that is destroyed out of its attackers' owner's sight is still remembered by
+/// that player, so the units go on to where it stood, and are idle there.
+/// </para>
+/// <para>
+/// <b>Accents</b> (design 2.3). The rate bonus of a melee unit makes each tick of waiting count as
+/// more than one (<see cref="AttackProfile.Rate"/>). A unit with splash also deals a share of
+/// each hit to the other enemies round its target: a melee hit at once, a shot when it lands
+/// (<see cref="SplashDamage"/>). What a target's accents take off a hit is the target's side,
+/// read when the hit lands (<see cref="CombatRules.DamageToUnit"/>).
 /// </para>
 /// </remarks>
 public sealed class AttackSystem : ISystem
@@ -62,7 +92,11 @@ public sealed class AttackSystem : ISystem
     private readonly Targeting _targeting;
     private readonly Approach _approach;
     private readonly Fighters _fighters;
+    private readonly PerkCounters _counters;
     private readonly SimEventList _events;
+
+    // Scratch for one splash, emptied at its start. Not state.
+    private readonly List<EntityId> _splashed = [];
 
     public AttackSystem(
         ComponentStore<Body> bodies,
@@ -72,6 +106,7 @@ public sealed class AttackSystem : ISystem
         Targeting targeting,
         Approach approach,
         Fighters fighters,
+        PerkCounters counters,
         SimEventList events)
     {
         ArgumentNullException.ThrowIfNull(bodies);
@@ -81,6 +116,7 @@ public sealed class AttackSystem : ISystem
         ArgumentNullException.ThrowIfNull(targeting);
         ArgumentNullException.ThrowIfNull(approach);
         ArgumentNullException.ThrowIfNull(fighters);
+        ArgumentNullException.ThrowIfNull(counters);
         ArgumentNullException.ThrowIfNull(events);
         _bodies = bodies;
         _movers = movers;
@@ -89,6 +125,7 @@ public sealed class AttackSystem : ISystem
         _targeting = targeting;
         _approach = approach;
         _fighters = fighters;
+        _counters = counters;
         _events = events;
     }
 
@@ -113,7 +150,7 @@ public sealed class AttackSystem : ISystem
                 profile,
                 _movers.IndexOf(entity),
                 Moved: body.Position != unit.Stood,
-                TurnToLook: (world.Tick + entity.Value) % CombatRules.LookInterval == 0);
+                TurnToLook: (world.Tick + entity.Value) % _targeting.Rules.LookInterval == 0);
 
             unit.Stood = body.Position;
             if (unit.Wait > Fraction.Zero)
@@ -147,6 +184,14 @@ public sealed class AttackSystem : ISystem
             case UnitOrder.Attack:
                 if (!_targeting.IsEnemyThere(turn.World, owner, unit.Target, out var named))
                 {
+                    // A structure its owner remembers and has not seen gone: the owner cannot
+                    // know, so the unit goes on to where the structure stood (design 5.3).
+                    if (_targeting.IsRememberedGone(turn.World, owner, unit.Target, out _))
+                    {
+                        GoWhereLastSeen(ref unit, in turn);
+                        return false;
+                    }
+
                     if (turn.Mover >= 0)
                     {
                         _movers.ValueAt(turn.Mover).Stop();
@@ -156,7 +201,9 @@ public sealed class AttackSystem : ISystem
                     return false;
                 }
 
-                if (!_targeting.Sees(owner, in named))
+                // Losing sight ends the order for a unit, which may have walked on. A structure
+                // stands where it was seen, so the order on one holds while it is out of sight.
+                if (!_targeting.IsStructure(unit.Target) && !_targeting.Sees(owner, unit.Target, in named))
                 {
                     GoWhereLastSeen(ref unit, in turn);
                     return false;
@@ -177,18 +224,26 @@ public sealed class AttackSystem : ISystem
 
         if (unit.Target != EntityId.None)
         {
-            if (!_targeting.Reaches(turn.Profile, position, target.Position, _targeting.LineOf(unit.Target)))
+            // A unit that has a structure only for want of a unit or a Tower keeps looking for one.
+            var mark = _targeting.MarkOf(unit.Target, in target);
+            var lookPast = turn.TurnToLook && mark.IsStructure && _targeting.Rules.PickOf(mark.Structure) == StructurePick.Last;
+            if (_targeting.Reaches(turn.Profile, position, in mark))
             {
-                if (unit.Wait <= Fraction.Zero)
-                {
-                    retargeted = Look(ref unit, in turn);
-                }
-                else if (unit.Order == UnitOrder.AttackMove
-                    && FixedVector2.DistanceSquaredRaw(position, target.Position) > turn.Profile.AcquisitionSquared)
-                {
-                    unit.Target = EntityId.None;
-                    Resume(ref unit, in turn);
-                }
+                retargeted = lookPast && LookPastStructure(ref unit, in turn);
+            }
+            else if (unit.Wait <= Fraction.Zero)
+            {
+                retargeted = Look(ref unit, in turn);
+            }
+            else if (lookPast)
+            {
+                retargeted = LookPastStructure(ref unit, in turn);
+            }
+            else if (unit.Order == UnitOrder.AttackMove
+                && mark.DistanceSquaredRawTo(position) > turn.Profile.AcquisitionSquared)
+            {
+                unit.Target = EntityId.None;
+                Resume(ref unit, in turn);
             }
         }
         else if (turn.TurnToLook)
@@ -244,6 +299,23 @@ public sealed class AttackSystem : ISystem
     }
 
     /// <summary>
+    /// For a unit whose target is a structure it picked for want of anything else: takes up a unit
+    /// or a Tower if one can be picked now, and otherwise keeps the structure it has. True when it
+    /// changed its target.
+    /// </summary>
+    private bool LookPastStructure(ref Combatant unit, in Turn turn)
+    {
+        var picked = _targeting.Pick(turn.World, turn.Entity, turn.Body, turn.Profile, unit.Order, unit.Anchor);
+        if (picked == EntityId.None || picked == unit.Target || _targeting.IsPickedLast(picked))
+        {
+            return false;
+        }
+
+        unit.Target = picked;
+        return true;
+    }
+
+    /// <summary>
     /// Sends a unit that combat took off its post or its walk back to it: an idle unit to its post,
     /// a unit on an attack-move on to where its order ends.
     /// </summary>
@@ -273,7 +345,8 @@ public sealed class AttackSystem : ISystem
 
     /// <summary>
     /// Ends an attack order whose target its owner no longer sees (design 5.3): the unit walks to
-    /// where the target was last seen and is idle there.
+    /// where the target was last seen and is idle there. The same for a remembered structure that
+    /// is gone without its owner's enemy having seen it go.
     /// </summary>
     /// <remarks>
     /// The walk is a move order, so the unit does not fight on the way, and does not take the
@@ -306,11 +379,12 @@ public sealed class AttackSystem : ISystem
     {
         var profile = turn.Profile;
         var position = turn.Body.Position;
-        var targetLine = _targeting.LineOf(unit.Target);
-        var reaches = _targeting.Reaches(profile, position, target.Position, targetLine);
+        var mark = _targeting.MarkOf(unit.Target, in target);
+        var nearest = mark.NearestTo(position);
+        var reaches = _targeting.Reaches(profile, position, in mark);
 
         // A unit does not step back from a target inside its minimum range. It stands and waits.
-        if (reaches || Targeting.IsTooClose(profile, position, target.Position))
+        if (reaches || Targeting.IsTooClose(profile, position, nearest))
         {
             unit.Engaged = true;
             unit.AimedAt = target.Position;
@@ -334,10 +408,27 @@ public sealed class AttackSystem : ISystem
                 _movers.ValueAt(turn.Mover).Facing = (target.Position - position).ToAngle();
             }
 
+            // The attacker's side is settled now, Charge included, also for a shot that lands later,
+            // and the splash of the hit is a share of the same side.
+            var side = profile.Damage;
+            var walked = _counters.TakeWalked(turn.Entity);
+            if (profile.Charge is { } charge && walked >= charge.Distance)
+            {
+                side *= charge.Multiplier;
+                _events.Add(SimEventKind.ChargedAttack, turn.Body.Owner, turn.Entity, unit.Target, position, charge.Multiplier.RoundHalfUp(1000));
+            }
+
             if (profile.Melee)
             {
-                var damage = _targeting.Hit(unit.Target, profile.Damage, profile.Line);
-                _events.Add(SimEventKind.MeleeHit, turn.Body.Owner, unit.Target, turn.Entity, target.Position, damage);
+                var damage = _targeting.Hit(unit.Target, side, profile.Line, profile.Firepower);
+                _events.Add(SimEventKind.MeleeHit, turn.Body.Owner, unit.Target, turn.Entity, nearest, damage);
+                if (profile.SplashRadius > Fixed.Zero)
+                {
+                    var hit = new SplashingHit(
+                        turn.Body.Owner, turn.Entity, unit.Target, target.Position, profile.SplashRadius, side, profile.SplashShare,
+                        profile.Line, profile.Firepower);
+                    SplashDamage.Land(turn.World, _targeting, _bodies, _events, _splashed, in hit);
+                }
             }
             else
             {
@@ -346,11 +437,15 @@ public sealed class AttackSystem : ISystem
                 {
                     Position = position,
                     Target = unit.Target,
+                    Aim = target.Position,
                     Speed = profile.ShotSpeed,
-                    Damage = profile.Damage,
+                    Damage = side,
                     Owner = turn.Body.Owner,
                     Line = profile.Line,
                     Firepower = profile.Firepower,
+                    Blast = profile.Blast,
+                    SplashShare = profile.SplashShare,
+                    SplashRadius = profile.SplashRadius,
                 });
                 _events.Add(SimEventKind.ShotFired, turn.Body.Owner, shot, turn.Entity, position);
             }
@@ -385,13 +480,17 @@ public sealed class AttackSystem : ISystem
 
         if (unit.Order == UnitOrder.Idle)
         {
-            if (!_targeting.TryFindStand(profile, position, unit.Anchor, target.Position, targetLine, out var stand))
+            if (!_targeting.TryFindStand(profile, position, unit.Anchor, in mark, out var stand))
             {
                 unit.Target = EntityId.None;
                 return false;
             }
 
             mover.WalkStraightTo(stand);
+        }
+        else if (mark.IsStructure)
+        {
+            _approach.WalkToStructure(ref mover, position, mark.Tiles);
         }
         else
         {

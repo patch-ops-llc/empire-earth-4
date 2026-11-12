@@ -51,6 +51,19 @@
   // Design 2.5. In the second path search, crossing one enemy wall tile costs this many tiles of walking.
   "wall_crossing_cost": 20,
 
+  // Design 2.4 and 2.5. The numbers of combat that belong to no line and no structure.
+  "combat": {
+    // A unit or a Tower without a target looks for one every this many ticks.
+    "look_interval_ticks": 4,
+    // Melee reach against a unit: the spacing between the two units plus this, in tiles.
+    "unit_reach_margin": "0.25",
+    // Melee reach against a structure, in tiles, to the nearest edge of its footprint.
+    "structure_reach": "0.75",
+    // The fortification rule: what multiplies the damage a structure takes from an attacker whose
+    // effective Firepower is below the Protection tier of the structure's owner.
+    "fortification": "0.5"
+  },
+
   // Design 5.2, first playable.
   "match": { "start_epoch": 1, "epoch_cap": 4 },
 

@@ -537,20 +537,21 @@ public class PlayerViewTests
 
         Assert.False(match.IsAlive(victim));
 
-        // The player whose worker it was: the refusal, the hits and the death, and not that anything was fired.
-        Assert.Equal([SimEventKind.Death, SimEventKind.OrderRefused, SimEventKind.ShotHit], KindsOf(0));
+        // The player whose worker it was: the refusal, the blasts, the hits and the death, and not that anything was fired.
+        Assert.Equal([SimEventKind.Blast, SimEventKind.Death, SimEventKind.OrderRefused, SimEventKind.ShotHit], KindsOf(0));
 
-        // The Ballista's owner: its shots, its hits, and the death, on a tile the Ballista sees.
-        Assert.Equal([SimEventKind.Death, SimEventKind.ShotFired, SimEventKind.ShotHit], KindsOf(1));
+        // The Ballista's owner: its shots, their blasts, its hits, and the death, on a tile the Ballista sees.
+        Assert.Equal([SimEventKind.Blast, SimEventKind.Death, SimEventKind.ShotFired, SimEventKind.ShotHit], KindsOf(1));
 
         // The onlooker: all of the fight, and not the order that was refused.
-        Assert.Equal([SimEventKind.Death, SimEventKind.ShotFired, SimEventKind.ShotHit], KindsOf(2));
+        Assert.Equal([SimEventKind.Blast, SimEventKind.Death, SimEventKind.ShotFired, SimEventKind.ShotHit], KindsOf(2));
         Assert.Empty(known[3]);
 
         Assert.Equal(1, Count(0, SimEventKind.OrderRefused));
         Assert.Equal(1, Count(0, SimEventKind.Death));
         Assert.InRange(Count(1, SimEventKind.ShotHit), 2, 20);
         Assert.Equal(Count(1, SimEventKind.ShotHit), Count(0, SimEventKind.ShotHit));
+        Assert.Equal(Count(1, SimEventKind.Blast), Count(0, SimEventKind.Blast));
         Assert.Equal(known[1], known[2]);
 
         // An event is handed over whole: the hits name the shot, and say nothing of where it came from.
@@ -568,7 +569,12 @@ public class PlayerViewTests
         match.SpawnWorker(2, "6.5", "5.5");
         var seen = TestMatches.Point("8.5", "5.5");
         var unseen = TestMatches.Point("30.5", "5.5");
-        foreach (var kind in new[] { SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost })
+        SimEventKind[] kinds =
+        [
+            SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost,
+            SimEventKind.SplashHit, SimEventKind.ChargedAttack, SimEventKind.Regenerated,
+        ];
+        foreach (var kind in kinds)
         {
             Assert.True(view.Knows(new SimEvent(kind, 5, 0, new EntityId(1), new EntityId(2), seen, 7)));
             Assert.False(view.Knows(new SimEvent(kind, 5, 0, new EntityId(1), new EntityId(2), unseen, 7)));
@@ -580,6 +586,50 @@ public class PlayerViewTests
     }
 
     /// <summary>
+    /// A blast is seen by whoever sees a tile of it: the tile under its center, or a tile whose
+    /// center is within its radius, as sight itself is measured (design 5.3). Its radius is the
+    /// event's amount, the raw value of a <see cref="Fixed"/>. The splash of a hit is such a
+    /// circle too, round the target that was hit.
+    /// </summary>
+    [Theory]
+    [InlineData(SimEventKind.Blast)]
+    [InlineData(SimEventKind.Splash)]
+    public void ABlastAndASplashAreSeenByAnyTileOfThem(SimEventKind kind)
+    {
+        var match = Create(TestMaps.Open(40, 12), players: 3);
+        var view = new PlayerView(match, 2);
+
+        // The worker sees 6 tiles from (6.5, 5.5): the tile (12, 5) and not (13, 5).
+        match.SpawnWorker(2, "6.5", "5.5");
+        Assert.True(match.Vision.Grid.IsVisible(2, 12, 5));
+        Assert.False(match.Vision.Grid.IsVisible(2, 13, 5));
+
+        SimEvent Blast(string x, string y, string radius, int player = 0) =>
+            new(kind, 5, player, new EntityId(1), new EntityId(2), TestMatches.Point(x, y), Fraction.Parse(radius).ToFixed().Raw);
+
+        // Centered on a tile the player sees, whatever its radius.
+        Assert.True(view.Knows(Blast("12.5", "5.5", "1.5")));
+        Assert.True(view.Knows(Blast("12.9", "5.1", "0")));
+
+        // Centered in the fog: seen when the center of a seen tile is within the radius, the radius itself included.
+        Assert.True(view.Knows(Blast("14", "5.5", "1.5")));
+        Assert.False(view.Knows(Blast("14", "5.5", "1.4")));
+        Assert.True(view.Knows(Blast("14.75", "5.5", "2.25")));
+        Assert.False(view.Knows(Blast("15", "5.5", "2.25")));
+
+        // Off the worker's row: the tile (11, 8) is seen and (11, 9) is not.
+        Assert.True(view.Knows(Blast("13", "8.5", "1.5")));
+        Assert.False(view.Knows(Blast("13", "9.5", "1.5")));
+
+        // At the far edge of the map, out of reach of anything seen; and with a radius larger than the map.
+        Assert.False(view.Knows(Blast("39.5", "11.5", "2.25")));
+        Assert.True(view.Knows(Blast("39.5", "11.5", "1000")));
+
+        // The player's own is known wherever it lands.
+        Assert.True(view.Knows(Blast("30.5", "5.5", "1.5", player: 2)));
+    }
+
+    /// <summary>
     /// Every kind of event is on one of two lists. A piece that adds a kind adds it to one of them
     /// here, and so decides who may know of it.
     /// </summary>
@@ -588,10 +638,23 @@ public class PlayerViewTests
     {
         SimEventKind[] seenWhereItHappens =
         [
+            SimEventKind.Blast, SimEventKind.Splash, SimEventKind.SplashHit,
             SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost,
             SimEventKind.StructurePlaced, SimEventKind.StructureFinished, SimEventKind.StructureRemoved,
+
+            // What a seen unit does or shows: a charge is part of an attack that is seen, and hit
+            // points that come back are seen on the unit.
+            SimEventKind.ChargedAttack, SimEventKind.Regenerated,
         ];
-        SimEventKind[] knownToItsPlayerAlone = [SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded];
+
+        // A queue, what comes out of it, its rally point and a stockpile are their owner's alone,
+        // and so is what is paid into one.
+        SimEventKind[] knownToItsPlayerAlone =
+        [
+            SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded,
+            SimEventKind.RallyPointSet, SimEventKind.TrainOrdered, SimEventKind.TrainCancelled, SimEventKind.TrainRefunded,
+            SimEventKind.TrainRefused, SimEventKind.UnitTrained, SimEventKind.ReservesRefunded,
+        ];
 
         foreach (var kind in Enum.GetValues<SimEventKind>())
         {
