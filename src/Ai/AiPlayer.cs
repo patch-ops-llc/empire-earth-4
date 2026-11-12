@@ -51,6 +51,7 @@ public sealed class AiPlayer
     private readonly StructureDef? _outpost;
     private readonly List<EntityId> _withoutRallyPoint = [];
     private readonly List<int> _deposits = [];
+    private readonly List<Command> _gathers = [];
     private int _nextThink;
 
     /// <param name="match">The match, as the host runs it.</param>
@@ -126,13 +127,21 @@ public sealed class AiPlayer
         _budget.Reset(_sight.Materials, _sight.Energy);
         _construction.BeginRound();
 
+        var first = commands.Count;
         _research.Think(_budget, commands);
         _economy.TrainWorkers(_budget, commands);
         BuildStructures(homeX, homeY, homeRadius, commands);
         _army.Think(Math.Max(0, _sight.SupplyFree - _economy.SupplyKeptForWorkers), _budget, commands);
         _economy.FillSupply(_army.SmallestUnitSupply, _budget, commands);
         SetRallyPoints(homeX, homeY, homeRadius, commands);
-        _economy.AssignWorkers(_budget, commands);
+
+        // The workers are divided last, when the budget knows every purchase of the round, and
+        // their orders go first. An order to build is taken by the nearest of the workers, which
+        // leaves its work for it, and an order to gather ends a build order: in the other order,
+        // a structure would not be built whenever the round also sends its builder to work.
+        _gathers.Clear();
+        _economy.AssignWorkers(_budget, _gathers);
+        commands.InsertRange(first, _gathers);
     }
 
     /// <summary>The middle of its Capitol, or of the first structure that gives it territory, and that territory's radius.</summary>

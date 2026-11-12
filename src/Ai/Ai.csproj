@@ -9,4 +9,10 @@
     <ProjectReference Include="../Sim/Sim.csproj" />
   </ItemGroup>
 
+  <!-- Each choice (research, the split of workers, the army's ratio, sites) is a class of its
+       own that only the tests and AiPlayer see. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ai.Tests" />
+  </ItemGroup>
+
 </Project>
