@@ -75,8 +75,11 @@ public class DebugSpawnTests
         Assert.True(match.Combatants.EntityAt(0).Value < match.Combatants.EntityAt(1).Value);
         Assert.True(match.Combatants.EntityAt(1).Value < match.Combatants.EntityAt(2).Value);
 
-        // Two units of one player may be made on the same point.
-        Assert.Equal(match.PositionOf(match.Combatants.EntityAt(0)), match.PositionOf(match.Combatants.EntityAt(2)));
+        // Two units of one player may be made on the same point: it is the post of both. They
+        // stand closer than their spacing there, so they step apart in the same tick (design 2.4).
+        var point = TestMatches.Point("3.5", "8.5");
+        Assert.Equal((point, point), (match.Combatants.ValueAt(0).Anchor, match.Combatants.ValueAt(2).Anchor));
+        Assert.NotEqual(match.PositionOf(match.Combatants.EntityAt(0)), match.PositionOf(match.Combatants.EntityAt(2)));
     }
 
     [Fact]
