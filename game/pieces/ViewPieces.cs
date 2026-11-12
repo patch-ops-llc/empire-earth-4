@@ -30,6 +30,7 @@ public static class ViewPieces
         new ResearchPiece(),
 
         // 15v. Construction and production: structures, the build menu, the production panel.
+        new StructuresPiece(),
 
         // 17v. Fog of war.
 
