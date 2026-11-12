@@ -10,8 +10,8 @@ namespace Game;
 /// Root of <c>scenes/main.tscn</c>, the scene the game starts in. It loads the game data and opens
 /// the menu, where a match is started alone, hosted or joined. Once there is a match it builds the
 /// <see cref="MatchView"/> of it: the world view, the frame of the interface and the unit control
-/// are given the match, and every piece of the view adds itself. The smoke test's match is shown
-/// the same way.
+/// are given the match, and every piece of the view adds itself. The smoke test's match and the
+/// frame test's are shown the same way.
 /// </summary>
 /// <remarks>
 /// Code under <c>game/</c> reads the match and never changes it. Only commands change the
@@ -47,6 +47,7 @@ public partial class Main : Node3D
     private SmokeLog? _smokeLog;
     private MatchMenu? _menu;
     private NetTest? _netTest;
+    private FrameTest? _frameTest;
     private MatchView? _view;
     private WorldView _world = null!;
     private RtsCamera _camera = null!;
@@ -76,6 +77,12 @@ public partial class Main : Node3D
             return;
         }
 
+        if (arguments.Contains(FrameTest.Argument))
+        {
+            StartFrameTest(data, arguments);
+            return;
+        }
+
         if (!StartRequest.TryRead(arguments, out var request, out var problem))
         {
             GD.PrintErr($"Command line: {problem}");
@@ -99,6 +106,12 @@ public partial class Main : Node3D
         if (_smokeLog is not null)
         {
             RunSmokeTest(_smokeLog);
+            return;
+        }
+
+        if (_frameTest is not null)
+        {
+            RunFrameTest(_frameTest);
             return;
         }
 
@@ -151,7 +164,11 @@ public partial class Main : Node3D
         }
     }
 
-    public override void _ExitTree() => _menu?.CloseRun();
+    public override void _ExitTree()
+    {
+        _menu?.CloseRun();
+        _frameTest?.Dispose();
+    }
 
     // Hands a match to everything that draws it or gives orders in it. The view reads the match
     // again after every tick, before anything else hears of the tick.
@@ -244,6 +261,40 @@ public partial class Main : Node3D
         }
     }
 
+    // The frame test's match is shown as any match is. The test plays it and times every frame.
+    private void StartFrameTest(GameData data, string[] arguments)
+    {
+        if (!FrameTest.TryRead(arguments, data, out var test, out var problem) || test is null)
+        {
+            GD.PrintErr($"Frame test: {problem}");
+            GetTree().Quit(1);
+            return;
+        }
+
+        _frameTest = test;
+        Show(test.Run, test.Run.Match, leave: null);
+
+        // The test selects and looks where it wants to, so the player's hand is kept off both.
+        _camera.ProcessMode = ProcessModeEnum.Disabled;
+        _units.ProcessMode = ProcessModeEnum.Disabled;
+        if (_view is { } view)
+        {
+            test.Attach(view, _camera, _units);
+        }
+    }
+
+    private void RunFrameTest(FrameTest test)
+    {
+        if (test.RunFrame())
+        {
+            _world.TickFraction = test.TickFraction;
+        }
+        else
+        {
+            Quit(test.Report() ? 0 : 1);
+        }
+    }
+
     private void Quit(int exitCode)
     {
         _quitting = true;
@@ -253,6 +304,7 @@ public partial class Main : Node3D
         }
 
         _menu?.CloseRun();
+        _frameTest?.Dispose();
         GetTree().Quit(exitCode);
     }
 

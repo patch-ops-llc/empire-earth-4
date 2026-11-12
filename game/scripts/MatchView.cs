@@ -104,9 +104,17 @@ public sealed class MatchView
         // gone, then the interface reads it. Each hears of one tick at a time.
         run.Client.TickCompleted += _ =>
         {
+            var span = FrameClock.Begin();
             world.AfterTick();
+            FrameClock.End("after tick: the world view itself", span);
+
+            span = FrameClock.Begin();
             units.AfterTick();
+            FrameClock.End("after tick: the unit control", span);
+
+            span = FrameClock.Begin();
             frame.AfterTick();
+            FrameClock.End("after tick: the interface frame itself", span);
         };
         return view;
     }

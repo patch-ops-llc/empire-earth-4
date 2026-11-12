@@ -80,6 +80,14 @@ public partial class RtsCamera : Node3D
         ApplyTransform();
     }
 
+    /// <summary>Puts the camera at a distance from the focus point at once, with no glide.</summary>
+    public void ZoomTo(float distance)
+    {
+        _distance = Mathf.Clamp(distance, MinDistance, MaxDistance);
+        _targetDistance = _distance;
+        ApplyTransform();
+    }
+
     public override void _Ready()
     {
         _camera = GetNode<Camera3D>("Camera");

@@ -182,11 +182,20 @@ public partial class InterfaceFrame : CanvasLayer
         _commandsStale = true;
         foreach (var part in _parts)
         {
+            var span = FrameClock.Begin();
             part.AfterTick();
+            FrameClock.End("after tick", part, span);
         }
     }
 
     public override void _Process(double delta)
+    {
+        var span = FrameClock.Begin();
+        EveryFrame(delta);
+        FrameClock.End("every frame: the interface frame itself", span);
+    }
+
+    private void EveryFrame(double delta)
     {
         if (_view is not { } view)
         {
@@ -195,7 +204,9 @@ public partial class InterfaceFrame : CanvasLayer
 
         foreach (var part in _parts)
         {
+            var span = FrameClock.Begin();
             part.EveryFrame(delta);
+            FrameClock.End("every frame", part, span);
         }
 
         if (_commandsStale)
