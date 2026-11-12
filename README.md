@@ -34,7 +34,9 @@ godot --headless --path game --import --build-solutions
 godot --headless --path game --quit-after 600 -- --smoke-test
 ```
 
-The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, gives it a fixed script of four move orders through the session, runs it for 600 ticks, prints one line that starts with `SMOKE_TEST_OK` and quits. It takes about a second. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, gives it a fixed script of orders through the session, runs it to the script's end, prints one line that starts with `SMOKE_TEST_OK` and quits. It takes about a second. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+
+The script is made of parts that run one after another, one for each kind of order the view can give: `game/scripts/SmokeTest.cs` lists them, and the line's `tick` and `orders` say how many ticks and orders they came to.
 
 The line carries two hashes. `content_hash` is the hash of the data files as the game read them, and it must equal the one `datacheck` prints. `state_hash` is the hash of the match's state after the script, and it must be the same on every system. `ci.yml` checks the first. `export.yml` checks both for every build it makes, and an exported build takes the same argument:
 
@@ -102,6 +104,10 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | Clear the selection | Left click on the ground |
 | Send the selected units somewhere | Right click on the ground |
 | Show or hide the overlay | F3 |
+| Attack a unit of the other player | Right click on it |
+| Go somewhere and fight what is met on the way | Hold Ctrl and right click on the place |
+| Stop | X, or the Stop button in the selection panel |
+| Development aid, while `debug.spawn` is on in `rules.jsonc`: make units at the pointer | G for your own. Alone, H for the other player's. The orange panel at the top left chooses which and how many |
 
 ## Test builds
 

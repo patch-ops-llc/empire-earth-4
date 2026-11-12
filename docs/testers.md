@@ -1,6 +1,6 @@
 # Running a test build
 
-This is an early build of a hobby real-time strategy prototype, and the first one two people can play together. Each player has six workers on a map with forest and a ridge of cliffs, and can select them and send them round it. There is nothing to build and nobody to fight yet. Its job for now is to show that the game starts on your machine, that selecting units and moving them works, and that two machines can share one match.
+This is an early build of a hobby real-time strategy prototype, and the first one two people can play together. Each player has six workers on a map with forest and a ridge of cliffs, and can select them and send them round it. There is nothing to build yet, and no match can train a fighting unit, so for now a development aid makes them from nothing: see Trying a fight below. Its job for now is to show that the game starts on your machine, that selecting units, moving them and fighting with them works, and that two machines can share one match.
 
 The builds are not signed, because signing costs money and this is a hobby project. Windows and macOS both warn about that the first time you start the game. The steps below get past the warning.
 
@@ -83,6 +83,10 @@ If joining fails, the menu says why in orange:
 | Clear the selection | Click the ground |
 | Send the selected units somewhere | Right-click the ground. On a trackpad that is a click with two fingers, unless you have set it otherwise |
 | Show or hide the readout in the corner | F3 |
+| Attack a unit of the other player | Right-click it |
+| Go somewhere and fight whatever is met on the way | Hold Ctrl and right-click the place |
+| Stop | X, or the Stop button in the panel at the bottom |
+| Development aid: make units where the pointer is | G for yours. Alone, H for the other player's. See Trying a fight |
 | Quit | Close the window |
 
 ## What you will see
@@ -105,9 +109,28 @@ Every player's machine runs the whole game and they exchange only commands. That
 - A player who drops out cannot rejoin the match.
 - A slow machine or connection on the host's side slows the match for everyone.
 
-This build also has a development switch on. No match can train a fighting unit yet, so the game accepts an order that makes units from nothing, for either player, to try out fights. Nothing in the game sends that order yet. It is switched off again once units can be trained.
+This build also has a development switch on. No match can train a fighting unit yet, so the game accepts an order that makes units from nothing, to try out fights. The development aid described under Trying a fight sends it. It is switched off again once units can be trained.
 
 The two games check each other all the time. If they ever disagree about the state of the match, both stop and say so. That is a fault in the game, and its files are what finds it: see the next section.
+
+## Trying a fight
+
+No match can train a fighting unit yet. Until one can, this build has a development aid that makes them from nothing, free of charge. It is not part of the game and goes away once units can be trained. Its panel has an orange border and sits at the top left of a match.
+
+1. In the panel, choose a unit and how many to make at a time. There are four lines of units, each in four epochs. Line infantry shoots. Guards fight hand to hand. Cavalry fights hand to hand and is larger. Artillery shoots far and cannot shoot at what stands close to it. Its shells do not yet hit what stands round the target.
+2. Point at open ground and press G. Your units appear there.
+3. Alone, point somewhere else and press H. Units of the other player appear there, and nothing but their own reflexes controls them. In a shared match H makes nothing: each player makes their own units with G.
+
+What you will see:
+
+- All units still share one stand-in shape, so each fighting unit carries a pale mark on top that says how it fights: a cross for hand to hand, a ball for shooting, a ring for artillery. Cavalry's cross is larger. Workers carry no mark.
+- Units fight on their own when an enemy comes near, and go back to where they stood afterwards.
+- A right-click on an enemy leaves a red ring, and the selected units go after that unit. A right-click with Ctrl held leaves an orange ring, and the units go there and fight what they meet. A plain right-click on the ground moves them, and on that walk they do not fight, even when attacked.
+- A unit that has lost hit points has a bar above it: green, yellow below half and red below a quarter. The pale part of a bar is what the unit has just lost. A selected unit shows its bar even when unhurt, and the panel at the bottom gives the number when one unit is selected.
+- A shot is a pale streak in its owner's color, and a shell of artillery is thicker. A unit that is hit flashes white. A shot whose target died or got away before it arrived ends in a grey puff.
+- A unit that dies sinks into the ground and leaves a ring in its owner's color that spreads and fades.
+- Workers can be attacked and do not fight back.
+- If an order cannot be carried out, a line of text on screen says why.
 
 ## The files of a match
 
