@@ -134,6 +134,13 @@ public sealed class ProductionSmoke : SmokePart
             return;
         }
 
+        // The time a button names is the time the simulation gives the order in production.
+        if (_ordered > 0 && producer.BuildTicks > 0 && part.Offers[0].BuildTicks != producer.BuildTicks)
+        {
+            orders.Fail($"the panel says a worker takes {part.Offers[0].BuildTicks} ticks, and the one in production takes {producer.BuildTicks}.");
+            return;
+        }
+
         if (RallyLayer(orders) is not { FlagCount: 1 })
         {
             orders.Fail("the rally point of the selected structure is not drawn.");

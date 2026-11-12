@@ -13,9 +13,10 @@ namespace Game;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A button says what an order placed now would be: one unit or a pair, its whole price and its
-/// supply. One that cannot be placed is greyed and says why, in the simulation's own answer
-/// (<c>CheckTrain</c>). A click on an order in the queue cancels it. Everything leaves as a
+/// A button says what an order placed now would be: one unit or a pair, its whole price, its
+/// supply and its time. One that cannot be placed is greyed and says why, in the simulation's
+/// own answer (<c>CheckTrain</c>). An order in the queue shows what it was placed with, and a
+/// click on it cancels it. Everything leaves as a
 /// command through the session and shows once the simulation has carried it out, a tick or more
 /// later; an order the simulation then refuses is said in the message line.
 /// </para>
@@ -36,7 +37,8 @@ public partial class ProductionPart : InterfacePart
     private const int ButtonsInARow = 4;
     private const int SmallFont = 13;
 
-    private static readonly Vector2 TrainButtonSize = new(172f, 46f);
+    // Three lines: what is ordered and its key, the price, the supply and the time.
+    private static readonly Vector2 TrainButtonSize = new(172f, 62f);
     private static readonly Vector2 SlotSize = new(136f, 50f);
     private static readonly Color Dim = new(1f, 1f, 1f, 0.55f);
 
@@ -243,13 +245,16 @@ public partial class ProductionPart : InterfacePart
             var button = _trainButtons[place];
             var name = ProductionWords.Order(match, offer.Unit, offer.Count);
             var key = place < TrainActions.Length ? KeyOf(TrainActions[place]) : string.Empty;
-            var second = offer.Allowed
-                ? string.Create(CultureInfo.InvariantCulture, $"{ProductionWords.Price(offer.Materials, offer.Energy)} · {offer.Supply} supply")
-                : ProductionWords.Reason(match, View.Player, offer);
-            button.Text = key.Length > 0 ? $"{name}  ({key})\n{second}" : $"{name}\n{second}";
+
+            // The whole order's numbers: a pair shows the price and supply of two and the
+            // pair's time. One that cannot be placed says why in place of the price.
+            var price = ProductionWords.Price(offer.Materials, offer.Energy);
+            var second = offer.Allowed ? price : ProductionWords.Reason(match, View.Player, offer);
+            var third = offer.Allowed ? ProductionWords.SupplyAndTime(offer) : $"{price} · {ProductionWords.Time(offer.BuildTicks)}";
+            button.Text = key.Length > 0 ? $"{name}  ({key})\n{second}\n{third}" : $"{name}\n{second}\n{third}";
             button.Disabled = !offer.Allowed;
             button.TooltipText = offer.Allowed
-                ? offer.Count > 1 ? "Adds a pair to the queue: the price and supply of two, in one and a half times the time of one." : "Adds one to the queue."
+                ? ProductionWords.OfferSentence(offer)
                 : ProductionWords.ReasonSentence(match, View.Player, offer.Unit, offer.Check);
         }
 
@@ -277,16 +282,17 @@ public partial class ProductionPart : InterfacePart
             var order = producer[position];
             var name = ProductionWords.Order(match, order.Unit, order.Count);
             slot.Disabled = false;
-            slot.TooltipText = "Click to cancel this order. Its price is given back.";
+            slot.TooltipText = ProductionWords.CancelSentence(order);
             track.Visible = position == 0;
             if (position > 0)
             {
-                slot.Text = name;
+                // What it was placed with, which a research since then does not change.
+                slot.Text = $"{name}\n{ProductionWords.Paid(order)}";
             }
             else if (producer.BuildTicks <= 0)
             {
                 // Production begins in the tick after the order was placed.
-                slot.Text = name;
+                slot.Text = $"{name}\n{ProductionWords.Paid(order)}";
                 fill.AnchorRight = 0f;
             }
             else if (producer.Progress >= producer.BuildTicks)
@@ -297,7 +303,7 @@ public partial class ProductionPart : InterfacePart
             }
             else
             {
-                slot.Text = $"{name}\n{ProductionWords.TimeLeft(producer.Progress, producer.BuildTicks)}";
+                slot.Text = $"{name}\n{ProductionWords.Paid(order)} · {ProductionWords.TimeLeft(producer.Progress, producer.BuildTicks)}";
                 fill.AnchorRight = producer.Progress / (float)producer.BuildTicks;
             }
         }
