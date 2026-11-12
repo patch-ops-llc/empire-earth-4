@@ -17,7 +17,7 @@ namespace Ai;
 /// Without this, two computers stop each other for good: the raiders of one stand at the other's
 /// Barracks on orders to attack workers behind it, and the units that come out of it stand
 /// before them on move orders to where the army gathers. The scout is not its concern: it is
-/// sent to look, and goes on to its next point by itself.
+/// sent to look, and turns for home by itself when its walk has taken too long.
 /// </remarks>
 internal sealed class AiWay
 {
