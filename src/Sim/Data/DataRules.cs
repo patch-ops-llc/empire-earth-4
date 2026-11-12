@@ -10,6 +10,7 @@ internal static class DataRules
     public const string TracksFile = "tracks.jsonc";
     public const string RulesFile = "rules.jsonc";
     public const string ResearchFile = "research.jsonc";
+    public const string ResourcesFile = "resources.jsonc";
     public const string AccentsFile = "accents.jsonc";
     public const string LinesFolder = "lines/";
     public const string MapsFolder = "maps/";
@@ -38,6 +39,8 @@ internal static class DataRules
     public const int MinMapSize = 16;
     public const int MaxPrice = 1_000_000;
     public const int MaxSeconds = 3_600;
+    public const int MaxWorkerPlaces = 64;
+    public const int MaxFullRateAmount = 100_000_000;
 
     public static readonly DataNumber Zero = DataNumber.FromInteger(0);
     public static readonly DataNumber One = DataNumber.FromInteger(1);
@@ -47,6 +50,7 @@ internal static class DataRules
     public static readonly DataNumber MaxSpeed = DataNumber.FromInteger(100);
     public static readonly DataNumber MaxDistance = DataNumber.FromInteger(64);
     public static readonly DataNumber MaxProjectileSpeed = DataNumber.FromInteger(1_000);
+    public static readonly DataNumber MaxIncomeRate = DataNumber.FromInteger(100_000);
 
     public static bool IsId(string text)
     {

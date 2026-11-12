@@ -6,8 +6,8 @@ namespace Sim.Map;
 /// <summary>
 /// The tile grid of a match, built from a <see cref="MapDef"/>: which tiles units can stand on,
 /// which of them connect, and whether a straight walk between two points is free.
-/// Open ground is passable; forest and cliff are not (design 5.3), and neither is anything outside
-/// the map.
+/// Open ground is passable; forest and cliff are not (design 5.3), neither are the tiles of a
+/// deposit (design 4.1), and neither is anything outside the map.
 /// </summary>
 /// <remarks>
 /// Tile (x, y) covers the points from (x, y) up to but not including (x + 1, y + 1), with (0, 0) at
@@ -22,9 +22,28 @@ public sealed class MapGrid
     private readonly bool[] _passable;
     private readonly int[] _regions;
 
+    /// <summary>The grid of a map without deposits, as tests and the battle harness make them.</summary>
     public MapGrid(MapDef map)
+        : this(map, depositSize: 0)
+    {
+    }
+
+    /// <param name="map">The map.</param>
+    /// <param name="depositSize">
+    /// The tiles a deposit covers along each side, as in <see cref="MapRules.DepositSize"/>. The
+    /// map says where its deposits are and the rules say how large one is. Zero is only for a map
+    /// that has none.
+    /// </param>
+    public MapGrid(MapDef map, int depositSize)
     {
         ArgumentNullException.ThrowIfNull(map);
+        ArgumentOutOfRangeException.ThrowIfNegative(depositSize);
+        if (depositSize == 0 && map.Deposits.Count > 0)
+        {
+            throw new ArgumentException(
+                $"Map '{map.Id}' has deposits, which block their tiles: say how large a deposit is.", nameof(depositSize));
+        }
+
         ArgumentOutOfRangeException.ThrowIfLessThan(map.Width, 1, nameof(map));
         ArgumentOutOfRangeException.ThrowIfLessThan(map.Height, 1, nameof(map));
         ArgumentOutOfRangeException.ThrowIfGreaterThan(map.Width, MaxSize, nameof(map));
@@ -41,6 +60,20 @@ public sealed class MapGrid
         for (var i = 0; i < _passable.Length; i++)
         {
             _passable[i] = map.Tiles[i] == TerrainKind.Open;
+        }
+
+        foreach (var deposit in map.Deposits)
+        {
+            for (var y = deposit.Y; y < deposit.Y + depositSize; y++)
+            {
+                for (var x = deposit.X; x < deposit.X + depositSize; x++)
+                {
+                    if (Contains(x, y))
+                    {
+                        _passable[(y * Width) + x] = false;
+                    }
+                }
+            }
         }
 
         _regions = new int[_passable.Length];

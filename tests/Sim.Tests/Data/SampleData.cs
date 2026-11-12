@@ -13,6 +13,7 @@ internal static class SampleData
     public const string TracksPath = "tracks.jsonc";
     public const string RulesPath = "rules.jsonc";
     public const string ResearchPath = "research.jsonc";
+    public const string ResourcesPath = "resources.jsonc";
     public const string AccentsPath = "accents.jsonc";
     public const string GuardPath = "lines/guard.jsonc";
     public const string MapPath = "maps/arena.jsonc";
@@ -39,6 +40,19 @@ internal static class SampleData
             { "tier": 3, "cost": { "materials": 150, "energy": 200 }, "seconds": 60 },
             { "tier": 4, "cost": { "materials": 225, "energy": 350 }, "seconds": 75 }
           ]
+        }
+        """;
+
+    /// <summary>The numbers of design 4.1.</summary>
+    public const string Resources = """
+        {
+          "materials": { "per_worker_per_minute": 45, "workers_per_deposit": 8, "full_rate_amount": 8000, "depleted_rate": "0.5" },
+          "energy": { "per_worker_per_minute": 30, "workers_per_generator": 4 },
+          "worker": {
+            "hp": 50, "speed": 3, "sight": 6, "supply": 1, "spacing": 1,
+            "cost": { "materials": 50, "energy": 0 },
+            "build_seconds": 12
+          }
         }
         """;
 
@@ -130,6 +144,7 @@ internal static class SampleData
         .Set(TracksPath, Tracks)
         .Set(RulesPath, Rules)
         .Set(ResearchPath, Research)
+        .Set(ResourcesPath, Resources)
         .Set(AccentsPath, Accents)
         .Set(GuardPath, Guard)
         .Set(MapPath, new MapBuilder().ToJson());

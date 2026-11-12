@@ -241,6 +241,7 @@ internal static class DesignData
         .Set(TracksPath, Tracks)
         .Set(RulesPath, Rules)
         .Set(ResearchPath, Research)
+        .Set(SampleData.ResourcesPath, SampleData.Resources)
         .Set(AccentsPath, SampleData.Accents)
         .Set(LineInfantryPath, LineInfantry)
         .Set(GuardPath, Guard)
