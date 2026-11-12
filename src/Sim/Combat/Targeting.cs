@@ -210,6 +210,39 @@ public sealed class Targeting
     }
 
     /// <summary>
+    /// Lists what a blast reaches (design 2.4): every entity of another player than
+    /// <paramref name="owner"/> that can be damaged, that the attacker's line can hit, and whose
+    /// center is within <paramref name="radius"/> of <paramref name="center"/>, the radius itself
+    /// included. In ascending ID order. The list is emptied first.
+    /// </summary>
+    /// <remarks>
+    /// Nothing blocks a blast, and it never reaches its owner's side. What its owner sees does not
+    /// matter either: fog of war decides what a unit may fire at, not what a shell that has landed
+    /// damages, so no test for it belongs here.
+    /// </remarks>
+    public void ReachedByBlast(World world, int owner, int attackerLine, FixedVector2 center, Fixed radius, List<EntityId> reached)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(reached);
+        _spatialIndex.QueryCircle(center, radius, reached);
+        var kept = 0;
+        for (var i = 0; i < reached.Count; i++)
+        {
+            var entity = reached[i];
+            if (world.Entities.IsAlive(entity)
+                && _bodies.TryGet(entity, out var body)
+                && body.Owner != owner
+                && _health.Contains(entity)
+                && _rules.CanHit(attackerLine, LineOf(entity)))
+            {
+                reached[kept++] = entity;
+            }
+        }
+
+        reached.RemoveRange(kept, reached.Count - kept);
+    }
+
+    /// <summary>
     /// Lands a hit: takes the damage off the target's hit points, with the target's side multiplied
     /// in and the result rounded once. Hit points stop at zero, and the target stays until the end
     /// of the tick even there.

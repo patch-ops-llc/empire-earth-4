@@ -207,6 +207,7 @@ public sealed class CombatRules
             RangeSquared = melee ? 0 : FixedVector2.SquareRaw(range),
             MinRangeSquared = !melee && blueprint.MinRange is { } minRange ? FixedVector2.SquareRaw(minRange) : 0,
             ShotSpeed = shotSpeed,
+            Blast = !melee && blueprint.BlastRadius is { } blast ? blast : Fixed.Zero,
             Acquisition = acquisition,
             AcquisitionSquared = FixedVector2.SquareRaw(acquisition),
         };
@@ -252,6 +253,12 @@ public sealed class AttackProfile
 
     /// <summary>The distance a shot covers in one tick. Zero for a melee attack.</summary>
     public required Fixed ShotSpeed { get; init; }
+
+    /// <summary>
+    /// The blast radius of a ranged attack, with the blast radius bonus: where its shot lands,
+    /// every enemy within this distance takes the damage. Zero for an attack that hits one target.
+    /// </summary>
+    public required Fixed Blast { get; init; }
 
     /// <summary>
     /// How far the unit looks for targets: its sight or its weapon range, whichever is larger, with
