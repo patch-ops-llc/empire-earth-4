@@ -16,6 +16,8 @@ namespace Sim.Movement;
 /// Which two units keep which distance is <see cref="SpacingRule.DistanceOwnUnitsKeep"/>. Enemy
 /// units never push each other: a unit steps away from its own side only, and like every movement
 /// its step is taken only if the enemies near it allow it (<see cref="SpacingRule.AllowsStep"/>).
+/// A standing unit whose step an enemy does not allow takes the part of it that leads along that
+/// enemy's side, so units that stop before an enemy line spread out along it.
 /// </para>
 /// <para>
 /// Every tick, each unit adds up what it is short of with each neighbor that is too close, half
@@ -108,14 +110,49 @@ public sealed class SeparationSystem : ISystem
 
             ref var mover = ref _movers.ValueAt(i);
             ref var body = ref _bodies.ValueAt(_blocking.BodyIndexOf(i));
-            var next = mover.State == MoveState.Idle
-                ? StepStanding(body.Position, step)
-                : StepWalking(mover, body.Position, step);
-            if (_blocking.Allows(i, mover.Spacing, body.Position, next, out _))
+            var standing = mover.State == MoveState.Idle;
+            var next = standing ? StepStanding(body.Position, step) : StepWalking(mover, body.Position, step);
+            if (!_blocking.Allows(i, mover.Spacing, body.Position, next, out var blocker))
             {
-                body.Position = next;
+                // An enemy is in the way of the step. A standing unit takes the part of the step
+                // that leads along that enemy's side, if the enemies allow that.
+                if (!standing)
+                {
+                    continue;
+                }
+
+                next = StepStanding(body.Position, Beside(step, body.Position, blocker.Position));
+                if (!_blocking.Allows(i, mover.Spacing, body.Position, next, out _))
+                {
+                    continue;
+                }
             }
+
+            body.Position = next;
         }
+    }
+
+    /// <summary>
+    /// A step without its part toward an enemy: what is left leads along the enemy's side, and
+    /// by rounding a hair away from it.
+    /// </summary>
+    private static Step Beside(Step step, FixedVector2 position, FixedVector2 enemy)
+    {
+        var towardX = (long)enemy.X.Raw - position.X.Raw;
+        var towardY = (long)enemy.Y.Raw - position.Y.Raw;
+        var squared = (towardX * towardX) + (towardY * towardY);
+        var along = (step.X * towardX) + (step.Y * towardY);
+        if (squared == 0 || along <= 0)
+        {
+            return default;
+        }
+
+        return new Step(
+            step.X - (int)AwayFromZero(towardX * along, squared),
+            step.Y - (int)AwayFromZero(towardY * along, squared));
+
+        static long AwayFromZero(long value, long divisor) =>
+            value >= 0 ? (value + divisor - 1) / divisor : -((-value + divisor - 1) / divisor);
     }
 
     /// <summary>The step a unit would take away from the neighbors that are too close, before the ground has its say.</summary>

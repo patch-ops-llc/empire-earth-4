@@ -250,7 +250,14 @@ public sealed class MovementSystem : ISystem
             side = (_movers.EntityAt(unit).Value & 1) == 0 ? 1 : -1;
         }
 
-        var before = FixedVector2.DistanceSquaredRaw(position, target);
+        // A step must bring the mover nearer its aim, so that it never walks back or to and fro.
+        // A mover inside the circle whose aim lies outside it is measured from the point of the
+        // circle it is nearest to: its first step leads out onto the circle, which on its own
+        // gains nothing.
+        var leavesCircle = distance < radius.Raw
+            && FixedVector2.DistanceSquaredRaw(blocker.Position, target) > FixedVector2.SquareRaw(radius);
+        var measuredFrom = leavesCircle ? blocker.Position + (outward * radius) : position;
+        var before = FixedVector2.DistanceSquaredRaw(measuredFrom, target);
         for (var attempt = 0; attempt < 2; attempt++, side = -side)
         {
             var angle = side > 0 ? turn : -turn;
