@@ -1,5 +1,6 @@
 using Sim.Combat;
 using Sim.Core;
+using Sim.Economy;
 using Sim.Movement;
 using Sim.Numerics;
 using Sim.Setup;
@@ -218,7 +219,7 @@ public class TargetPickingTests
 
         // A nearer enemy appears beside it. Tick 10 is not its turn to look, and it turns on it all the same.
         var position = match.PositionOf(hoplite);
-        var near = match.SpawnWorker(1, new FixedVector2(position.X + Fixed.One, position.Y), MatchSetup.StartingWorkerSpeed);
+        var near = match.SpawnWorker(1, new FixedVector2(position.X + Fixed.One, position.Y));
         match.Run(1);
         Assert.Equal(near, match.UnitOf(hoplite).Target);
         match.Run(2);

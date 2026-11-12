@@ -23,21 +23,10 @@ public static class CombatSpawn
         ArgumentOutOfRangeException.ThrowIfNegative(chassis);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(chassis, match.Data.Chassis.Count);
 
-        var entity = match.SpawnUnit(player, position, match.Combat.TechOf(player).Blueprints[chassis].SpeedPerTick);
+        var blueprint = match.Research.Tech(player).Blueprints[chassis];
+        var entity = match.SpawnUnit(player, position, blueprint.SpeedPerTick);
         match.Combatants.Add(entity, new Combatant { Chassis = chassis, Anchor = position, Stood = position });
-        match.Health.Add(entity, Health.Full(match.Combat.TechOf(player).Blueprints[chassis].HitPoints));
-        return entity;
-    }
-
-    /// <summary>
-    /// Places a worker for a player: an entity that walks, with a worker's hit points (design 4.1).
-    /// It is not of a chassis, so it never fights.
-    /// </summary>
-    public static EntityId SpawnWorker(this Match match, int player, FixedVector2 position, Fixed speedPerTick)
-    {
-        ArgumentNullException.ThrowIfNull(match);
-        var entity = match.SpawnUnit(player, position, speedPerTick);
-        match.Health.Add(entity, match.Combat.WorkerHealth(player));
+        match.Health.Add(entity, Health.Full(blueprint.HitPoints));
         return entity;
     }
 }

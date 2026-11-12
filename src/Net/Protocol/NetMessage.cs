@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Sim.Core;
+using Sim.Serialization;
 
 namespace Net;
 
@@ -9,9 +10,10 @@ namespace Net;
 /// </summary>
 /// <remarks>
 /// The protocol has two sides. A client sends <see cref="JoinRequest"/>, <see cref="ReadyNotice"/>,
-/// <see cref="CommandRequest"/>, <see cref="HashReport"/> and <see cref="Pong"/>. The host sends
-/// <see cref="JoinAccept"/>, <see cref="Ping"/>, <see cref="MatchStart"/>, <see cref="TickBundle"/>,
-/// <see cref="PeerLeft"/> and <see cref="SessionEnd"/>. A message that arrives from the wrong side,
+/// <see cref="CommandRequest"/>, <see cref="HashReport"/>, <see cref="Pong"/> and
+/// <see cref="LeaveNotice"/>. The host sends <see cref="JoinAccept"/>, <see cref="MatchNotice"/>,
+/// <see cref="Ping"/>, <see cref="MatchStart"/>, <see cref="TickBundle"/>, <see cref="PeerLeft"/>
+/// and <see cref="SessionEnd"/>. A message that arrives from the wrong side,
 /// or at a point where it makes no sense, ends the sender's part in the session.
 /// </remarks>
 public abstract record NetMessage;
@@ -70,3 +72,19 @@ public sealed record PeerLeft(int Player, SessionEndReason Reason) : NetMessage;
 /// </param>
 /// <param name="DesyncTick">The tick whose hashes differed, or -1 when that is not the reason.</param>
 public sealed record SessionEnd(SessionEndReason Reason, int FinalTick, int DesyncTick) : NetMessage;
+
+/// <summary>
+/// Host to client, straight after <see cref="JoinAccept"/> when the host has a match to describe:
+/// what the client needs to build the same match. The client checks it against its own build and
+/// data, builds the match and answers with <see cref="ReadyNotice"/>, or leaves with
+/// <see cref="SessionEndReason.SetupMismatch"/>.
+/// </summary>
+/// <param name="Description">The match, in the one encoding it has. Two notices are equal when they hold the same object.</param>
+public sealed record MatchNotice(MatchDescription Description) : NetMessage;
+
+/// <summary>
+/// Client to host, last: the client leaves on purpose and closes its connection. Without it the
+/// host could not tell a player who quit from one whose network failed.
+/// </summary>
+/// <param name="Reason"><see cref="SessionEndReason.Left"/> or <see cref="SessionEndReason.SetupMismatch"/>.</param>
+public sealed record LeaveNotice(SessionEndReason Reason) : NetMessage;

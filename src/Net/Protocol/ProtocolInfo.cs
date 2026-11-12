@@ -8,7 +8,11 @@ public static class ProtocolInfo
     /// away any other. Raise it whenever a message changes its meaning or its layout
     /// (<see cref="MessageCodec"/>).
     /// </summary>
-    public const int Version = 1;
+    /// <remarks>
+    /// Version 2 added <see cref="MatchNotice"/> and <see cref="LeaveNotice"/>, and the reason
+    /// <see cref="SessionEndReason.SetupMismatch"/>.
+    /// </remarks>
+    public const int Version = 2;
 
     /// <summary>The longest command delay a host may set, in ticks.</summary>
     public const int MaxCommandDelay = 20;

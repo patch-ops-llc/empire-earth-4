@@ -9,17 +9,18 @@ namespace Net.Udp.Tests;
 /// <param name="Jitter">The most a datagram is held on top of that. Each one draws its own, so they overtake each other.</param>
 /// <param name="Loss">The chance, from 0 to 1, that a datagram is thrown away.</param>
 /// <param name="Blocked">Nothing passes at all, like a pulled cable.</param>
-/// <param name="BulkyLatency">
-/// How much longer a datagram of <see cref="BulkySize"/> bytes or more is held. The library's own
-/// traffic, its acknowledgements and keep-alives, is far smaller, and so is a short message. A
-/// test that sends one message of that size and a short one after it knows which arrives first.
+/// <param name="KeepBulky">
+/// A datagram of <see cref="BulkySize"/> bytes or more is kept back for as long as this is set,
+/// and passed on when it is turned off. The library's own traffic, its acknowledgements and
+/// keep-alives, is far smaller, and so is a short message. A test that sends one message of that
+/// size and a short one after it decides which arrives first, and no clock has a say in it.
 /// </param>
 internal sealed record RelayConditions(
     TimeSpan Latency = default,
     TimeSpan Jitter = default,
     double Loss = 0,
     bool Blocked = false,
-    TimeSpan BulkyLatency = default)
+    bool KeepBulky = false)
 {
     public const int BulkySize = 500;
 
@@ -46,6 +47,7 @@ internal sealed class UdpRelay : IDisposable
     private readonly Dictionary<IPEndPoint, Socket> _upstreamOf = [];
     private readonly Dictionary<Socket, IPEndPoint> _clientOf = [];
     private readonly PriorityQueue<Held, (long Due, long Order)> _held = new();
+    private readonly Queue<Held> _kept = new();
     private readonly Random _random;
     private readonly Thread _thread;
     private readonly byte[] _buffer = new byte[65536];
@@ -55,6 +57,7 @@ internal sealed class UdpRelay : IDisposable
     private int _forwarded;
     private int _dropped;
     private int _overtaken;
+    private int _largestPassedAKept;
     private long _lastOrderOut = -1;
 
     /// <param name="targetPort">The port of the listener on the local address.</param>
@@ -86,6 +89,13 @@ internal sealed class UdpRelay : IDisposable
 
     /// <summary>How many datagrams were passed on after one that had come in later.</summary>
     public int Overtaken => Volatile.Read(ref _overtaken);
+
+    /// <summary>
+    /// The size of the largest datagram that was passed on while another was being kept back,
+    /// see <see cref="RelayConditions.KeepBulky"/>. It is set once the datagram has been handed
+    /// to the system, so the receiver can read it.
+    /// </summary>
+    public int LargestPassedAKept => Volatile.Read(ref _largestPassedAKept);
 
     public void Dispose()
     {
@@ -129,6 +139,15 @@ internal sealed class UdpRelay : IDisposable
             }
 
             var now = clock.Elapsed.Ticks;
+            if (_kept.Count > 0 && !_conditions.KeepBulky)
+            {
+                // Let go, in the order they came. They are due at once.
+                while (_kept.TryDequeue(out var kept))
+                {
+                    _held.Enqueue(kept, (now, kept.Order));
+                }
+            }
+
             while (_held.TryPeek(out var held, out var priority) && priority.Due <= now)
             {
                 _held.Dequeue();
@@ -146,6 +165,12 @@ internal sealed class UdpRelay : IDisposable
                 catch (SocketException)
                 {
                     // The receiver has gone. A network does not care either.
+                    continue;
+                }
+
+                if (_kept.Count > 0 && held.Data.Length > _largestPassedAKept)
+                {
+                    Volatile.Write(ref _largestPassedAKept, held.Data.Length);
                 }
             }
         }
@@ -195,13 +220,15 @@ internal sealed class UdpRelay : IDisposable
             }
 
             var delay = conditions.Latency + (conditions.Jitter * _random.NextDouble());
-            if (length >= RelayConditions.BulkySize)
+            var order = _order++;
+            var held = new Held(_buffer.AsSpan(0, length).ToArray(), via, to, order);
+            if (conditions.KeepBulky && length >= RelayConditions.BulkySize)
             {
-                delay += conditions.BulkyLatency;
+                _kept.Enqueue(held);
+                continue;
             }
 
-            var order = _order++;
-            _held.Enqueue(new Held(_buffer.AsSpan(0, length).ToArray(), via, to, order), (now + delay.Ticks, order));
+            _held.Enqueue(held, (now + delay.Ticks, order));
         }
     }
 

@@ -299,8 +299,8 @@ public class PacingTests
         Assert.Equal(SessionPhase.Stopped, match.Clients[2].Session.Phase);
         Assert.Equal(leftAt, match.Clients[2].Tick);
         Assert.False(match.Clients[2].Spawn(1));
-        Assert.Equal([(2, SessionEndReason.ConnectionLost)], match.HostDepartures);
-        Assert.Equal([(2, SessionEndReason.ConnectionLost)], match.Clients[0].Departures);
+        Assert.Equal([(2, SessionEndReason.Left)], match.HostDepartures);
+        Assert.Equal([(2, SessionEndReason.Left)], match.Clients[0].Departures);
         Assert.Equal(SessionPhase.Running, match.Host.Phase);
         Assert.InRange(match.Clients[0].Tick, leftAt + 19, leftAt + 21);
 

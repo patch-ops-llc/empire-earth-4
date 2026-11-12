@@ -97,7 +97,7 @@ public class BattleTests
 
         // The hash of the whole state after the last tick. It changes only when the rules do; a
         // pull request that changes it on purpose says so. Linux, Windows and macOS must all get it.
-        Assert.Equal("b661faa5704c963f", match.World.ComputeHash().ToString("x16", System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal("9052d3e05ff75b71", match.World.ComputeHash().ToString("x16", System.Globalization.CultureInfo.InvariantCulture));
     }
 
     [Fact]

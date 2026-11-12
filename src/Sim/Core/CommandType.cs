@@ -16,6 +16,9 @@ public enum CommandType
     None = 0,
     Attack = 4,
     AttackMove = 5,
+    CancelResearch = 2,
+    Gather = 7,
     Move = 1,
+    StartResearch = 3,
     Stop = 6,
 }

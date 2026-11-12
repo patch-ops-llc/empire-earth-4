@@ -1,6 +1,7 @@
 using Sim.Combat;
 using Sim.Core;
 using Sim.Data;
+using Sim.Economy;
 using Sim.Numerics;
 using Sim.Setup;
 using Sim.Tech;
@@ -41,14 +42,14 @@ internal static class CombatMatches
 
     /// <summary>A worker: it can be hit, belongs to no line, and never acts on its own.</summary>
     public static EntityId SpawnWorker(this Match match, int player, string x, string y) =>
-        match.SpawnWorker(player, TestMatches.Point(x, y), MatchSetup.StartingWorkerSpeed);
+        match.SpawnWorker(player, TestMatches.Point(x, y));
 
     /// <summary>Gives a player other tiers than the starting ones. Call it before placing that player's units.</summary>
     public static void SetTiers(this Match match, int player, params int[] tiers) =>
-        match.Combat.SetTech(player, TechResolver.Resolve(Data, tiers));
+        match.Research.SetTiers(player, tiers);
 
     public static ChassisBlueprint Blueprint(this Match match, int player, string chassis) =>
-        match.Combat.TechOf(player).Blueprints[Chassis(chassis)];
+        match.Research.Tech(player).Blueprints[Chassis(chassis)];
 
     /// <summary>Queues an attack order for the next tick to run.</summary>
     public static void OrderAttack(this Match match, int player, EntityId target, params EntityId[] entities) =>

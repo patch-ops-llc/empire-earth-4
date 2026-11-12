@@ -1,4 +1,6 @@
+using Sim.Core;
 using Sim.Data;
+using Sim.Economy;
 using Sim.Map;
 using Sim.Numerics;
 using Sim.Setup;
@@ -72,6 +74,63 @@ public class GameDataMatchTests
         {
             Assert.Equal(MapGrid.TileCenter(9 + i, 50), match.Bodies.ValueAt(i).Position);
             Assert.Equal(MapGrid.TileCenter(86 - i, 50), match.Bodies.ValueAt(6 + i).Position);
+        }
+    }
+
+    /// <summary>
+    /// Design 4.1 and 5.3: on every map of the game each player holds the main deposits from the
+    /// start, and the starting workers can walk to one and earn the design's 45 a minute each.
+    /// </summary>
+    [Fact]
+    public void TheStartingWorkersOfEveryMapEarnAtAMainDeposit()
+    {
+        var data = Loaded.Value;
+        var workers = data.Rules.Start.Workers;
+        Assert.True(workers <= data.Resources.Materials.WorkersPerDeposit);
+
+        foreach (var map in data.Maps)
+        {
+            var match = MatchSetup.Create(data, map, 1, [new(0), new(1)]);
+            Assert.Equal(map.Deposits.Count, match.WorkSites.Count);
+
+            for (var player = 0; player < 2; player++)
+            {
+                var held = new List<EntityId>();
+                for (var index = 0; index < match.WorkSites.Count; index++)
+                {
+                    var site = match.WorkSites.ValueAt(index);
+                    if (Territory.Holds(match.Territories, match.World.Entities, player, site.X, site.Y, site.Size))
+                    {
+                        held.Add(match.WorkSites.EntityAt(index));
+                    }
+                }
+
+                Assert.Equal(data.Rules.Map.MainDepositsPerPlayer, held.Count);
+
+                var own = new EntityId[workers];
+                for (var i = 0; i < workers; i++)
+                {
+                    own[i] = match.Bodies.EntityAt((player * workers) + i);
+                }
+
+                match.Simulation.Commands.Enqueue(0, new Command(CommandType.Gather, player, own, targetEntity: held[0]));
+            }
+
+            // Long enough for the walk, and then one whole minute of work.
+            match.Simulation.Run(600);
+            Assert.Equal(0, match.Simulation.DroppedCommandCount);
+            for (var index = 0; index < match.Workers.Count; index++)
+            {
+                Assert.Equal(WorkerState.Working, match.Workers.ValueAt(index).State);
+            }
+
+            long[] before = [match.Stockpiles.Materials(0), match.Stockpiles.Materials(1)];
+            match.Simulation.Run(60 * SimInfo.TicksPerSecond);
+
+            var aMinute = workers * 45 * Stockpiles.PerResource;
+            Assert.Equal(aMinute, match.Stockpiles.Materials(0) - before[0]);
+            Assert.Equal(aMinute, match.Stockpiles.Materials(1) - before[1]);
+            Assert.Equal(data.Rules.Start.Energy * Stockpiles.PerResource, match.Stockpiles.Energy(0));
         }
     }
 }

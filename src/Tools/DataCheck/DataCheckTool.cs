@@ -50,6 +50,8 @@ public sealed class DataCheckTool : ITool
         output.WriteLine($"datacheck: {folder} is valid.");
         output.WriteLine($"  files:        {result.FileCount}");
         output.WriteLine($"  tracks:       {data.Tracks.Count}, with {data.TierCount} tiers each");
+        output.WriteLine($"  research:     {data.Research.Count} tiers, from 2 to {data.TierCount}");
+        output.WriteLine($"  accents:      {data.Accents.Count}");
         output.WriteLine($"  lines:        {data.Lines.Count}, with {data.Lines.Sum(line => line.Chassis.Count)} chassis");
         output.WriteLine($"  maps:         {data.Maps.Count}");
         output.WriteLine($"  content hash: sha256:{data.ContentHash}");

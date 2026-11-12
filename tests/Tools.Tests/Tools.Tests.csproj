@@ -10,6 +10,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Net only so that a test can leave the files of a real session for desync-diff to read. -->
+    <ProjectReference Include="../../src/Net/Net.csproj" />
     <ProjectReference Include="../../src/Tools/Tools.csproj" />
   </ItemGroup>
 

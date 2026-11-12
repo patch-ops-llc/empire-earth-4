@@ -1,6 +1,8 @@
 using Sim.Core;
 using Sim.Data;
+using Sim.Economy;
 using Sim.Movement;
+using Sim.Research;
 using Sim.Serialization;
 using Tools.Replay;
 
@@ -14,7 +16,7 @@ namespace Tools.Tests;
 public class ReplayToolTests
 {
     private static readonly string[] GoldenNames =
-        ["ridge-skirmish.replay", "switchback-crossing.replay", "switchback-three-players.replay"];
+        ["ridge-skirmish.replay", "switchback-crossing.replay", "switchback-research.replay", "switchback-three-players.replay", "switchback-workers.replay"];
 
     private static GameData GoldenData { get; } = Load(Repository.GoldenDataFolder);
 
@@ -33,7 +35,7 @@ public class ReplayToolTests
             Assert.Matches($"^ok      {GoldenNames[i]}  map=[a-z]+ players=[23] ticks=[0-9]+ commands=[0-9]+ hashes=[0-9]+ final=[0-9a-f]{{16}}$", lines[i]);
         }
 
-        Assert.Equal("replay: 3 replays reproduced.", lines[^1]);
+        Assert.Equal("replay: 5 replays reproduced.", lines[^1]);
     }
 
     /// <summary>
@@ -87,8 +89,8 @@ public class ReplayToolTests
 
         Assert.Equal(ExitCodes.Failed, exitCode);
         Assert.All(Lines(output), line => Assert.Matches("^FAILED  [a-z-]+\\.replay  The match was made with other data: its content hash is [0-9a-f]{64} and this data has [0-9a-f]{64}\\.$", line));
-        Assert.Equal(3, Lines(output).Length);
-        Assert.Contains("replay: 3 of 3 replays did not reproduce.", errors, StringComparison.Ordinal);
+        Assert.Equal(5, Lines(output).Length);
+        Assert.Contains("replay: 5 of 5 replays did not reproduce.", errors, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -124,10 +126,22 @@ public class ReplayToolTests
                 match.Simulation.Commands.Enqueue(tick, command);
             }
 
+            match.Research.Reported += reported => seen.Add(reported.Kind switch
+            {
+                ResearchEventKind.Started => "a research started and paid for",
+                ResearchEventKind.Cancelled => "a research cancelled and refunded",
+                ResearchEventKind.Finished => "a research finished and the tier raised",
+                _ => $"research event {reported.Kind}",
+            });
+            var due = replay.Commands.ToLookup(entry => entry.Tick, entry => entry.Command);
             var waited = new int[match.Movers.Count];
+            var workers = new Worker[match.Workers.Count];
+            long[] materials = [.. Enumerable.Range(0, match.Players.Count).Select(match.Stockpiles.Materials)];
             for (var tick = 0; tick < replay.TickCount; tick++)
             {
+                seen.UnionWith(ResearchOrdersRefused(match, due[tick]));
                 match.Simulation.Tick();
+                seen.UnionWith(WhatTheWorkersDid(match, workers, materials));
                 for (var i = 0; i < match.Movers.Count; i++)
                 {
                     var state = match.Movers.ValueAt(i).State;
@@ -157,6 +171,21 @@ public class ReplayToolTests
             "a unit walking a route",
             "a unit waiting for a route",
             "a unit waiting more than a tick for a route",
+            "a research started and paid for",
+            "a research cancelled and refunded",
+            "a research finished and the tier raised",
+            "a research refused: its track is in research already",
+            "a research refused: no free slot",
+            "a research refused: the stockpile does not cover it",
+            "a research refused: the player has no slot",
+            "a cancel refused: the track is not in research",
+            "a worker walking to its place",
+            "a worker at work",
+            "a worker waiting for a place",
+            "a worker given a place it waited for",
+            "a worker taken off its work by another order",
+            "a payment",
+            "a payment skipped at a deposit outside its owner's territory",
         ];
         Assert.Equal(expected.Order(StringComparer.Ordinal), seen.Order(StringComparer.Ordinal));
     }
@@ -164,7 +193,7 @@ public class ReplayToolTests
     /// <summary>
     /// The generator behind <c>replay record</c> gives every kind of command it is meant to, so
     /// that a match recorded with it reaches the rules: here in one long match on each map. The
-    /// rarest kinds come about once in 2,000 ticks, so a shorter match can miss one.
+    /// rarest kinds come about once in 6,000 ticks, so a shorter match can miss one.
     /// </summary>
     [Theory]
     [InlineData("ridge")]
@@ -174,7 +203,7 @@ public class ReplayToolTests
         using var folder = new TemporaryFolder();
         var path = Path.Combine(folder.Path, "long.replay");
 
-        var (exitCode, _, errors) = Run("record", path, "--map", map, "--data", Repository.GoldenDataFolder, "--ticks", "12000", "--orders", "33");
+        var (exitCode, _, errors) = Run("record", path, "--map", map, "--data", Repository.GoldenDataFolder, "--ticks", "30000", "--orders", "33");
 
         Assert.Equal((ExitCodes.Ok, ""), (exitCode, errors));
         var replay = Sim.Serialization.Replay.Read(new ByteReader(File.ReadAllBytes(path)));
@@ -199,14 +228,16 @@ public class ReplayToolTests
 
         Assert.Equal(ExitCodes.Failed, exitCode);
         var lines = Lines(output);
-        Assert.Equal(3, lines.Length);
+        Assert.Equal(5, lines.Length);
         Assert.StartsWith("ok      ridge-skirmish.replay", lines[0], StringComparison.Ordinal);
         Assert.Matches(
             $"^FAILED  switchback-crossing.replay  map=switchback players=2 ticks=140 commands=[0-9]+ hashes=8 final={recorded.Hash:x16}  "
             + $"The state differs from the recording after 140 ticks: recorded {recorded.Hash ^ 1:x16}, computed {recorded.Hash:x16}\\.$",
             lines[1]);
-        Assert.StartsWith("ok      switchback-three-players.replay", lines[2], StringComparison.Ordinal);
-        Assert.Equal("replay: 1 of 3 replays did not reproduce.", errors.Trim());
+        Assert.StartsWith("ok      switchback-research.replay", lines[2], StringComparison.Ordinal);
+        Assert.StartsWith("ok      switchback-three-players.replay", lines[3], StringComparison.Ordinal);
+        Assert.StartsWith("ok      switchback-workers.replay", lines[4], StringComparison.Ordinal);
+        Assert.Equal("replay: 1 of 5 replays did not reproduce.", errors.Trim());
     }
 
     /// <summary>A changed command changes the match: the first hash after it differs.</summary>
@@ -489,7 +520,7 @@ public class ReplayToolTests
 
         Assert.Equal(ExitCodes.Failed, exitCode);
         Assert.Equal("replay: text.replay: The data is not a replay: it does not start with RPLY.", errors.Trim());
-        Assert.Equal(3, Lines(output).Length);
+        Assert.Equal(5, Lines(output).Length);
         Assert.Equal("This is not a replay.", File.ReadAllText(path));
     }
 
@@ -515,6 +546,15 @@ public class ReplayToolTests
         "a target as far off the map as a number goes",
         "an order for units that are not the player's",
         "an order for an entity that never existed",
+        "a research order",
+        "a cancel of a research",
+        "a research order for a track that does not exist",
+        "a research order from nobody in the match",
+        "a gather order",
+        "a gather order for a deposit the player holds",
+        "a gather order for a deposit the player does not hold",
+        "gather orders from every player for one deposit in one tick",
+        "a gather order at something that is no work site",
     ];
 
     /// <summary>What the commands of a replay are, in the words of <see cref="EveryKindOfCommand"/>.</summary>
@@ -526,19 +566,60 @@ public class ReplayToolTests
         var tickOfThose = -1;
         foreach (var (tick, command) in replay.Commands)
         {
-            seen.Add(command.Type == CommandType.Move ? "a move" : "a command of a kind without a handler");
+            seen.Add(command.Type switch
+            {
+                CommandType.Move => "a move",
+                CommandType.Gather => "a gather order",
+                CommandType.StartResearch => "a research order",
+                CommandType.CancelResearch => "a cancel of a research",
+                _ => "a command of a kind without a handler",
+            });
+            if (command.Type is CommandType.StartResearch or CommandType.CancelResearch)
+            {
+                if (command.Player >= players)
+                {
+                    seen.Add("a research order from nobody in the match");
+                }
+                else if (command.ContentId < 0 || command.ContentId >= match.Data.Tracks.Count)
+                {
+                    seen.Add("a research order for a track that does not exist");
+                }
+
+                continue;
+            }
+
             if (command.Player >= players)
             {
                 seen.Add("a command from nobody in the match");
             }
 
-            if (command.Type != CommandType.Move || command.Player >= players)
+            if (command.Type is not (CommandType.Move or CommandType.Gather) || command.Player >= players)
             {
                 continue;
             }
 
+            if (command.Type == CommandType.Gather)
+            {
+                if (!match.WorkSites.TryGet(command.TargetEntity, out var site))
+                {
+                    seen.Add("a gather order at something that is no work site");
+                    continue;
+                }
+
+                // The territories of a scripted match are those of the start and do not change.
+                seen.Add(Territory.Holds(match.Territories, match.World.Entities, command.Player, site.X, site.Y, site.Size)
+                    ? "a gather order for a deposit the player holds"
+                    : "a gather order for a deposit the player does not hold");
+                var others = replay.Commands.Count(other =>
+                    other.Tick == tick && other.Command.Type == CommandType.Gather && other.Command.TargetEntity == command.TargetEntity && other.Command.Player != command.Player);
+                if (others == players - 1)
+                {
+                    seen.Add("gather orders from every player for one deposit in one tick");
+                }
+            }
+
             seen.Add(command.Entities.Length == 1 ? "an order for one unit" : "an order for a group");
-            if (!match.Grid.Contains(new Sim.Numerics.FixedVector2(command.TargetX, command.TargetY)))
+            if (command.Type == CommandType.Move && !match.Grid.Contains(new Sim.Numerics.FixedVector2(command.TargetX, command.TargetY)))
             {
                 seen.Add(command.TargetX == Sim.Numerics.Fixed.MaxValue ? "a target as far off the map as a number goes" : "a target off the map");
             }
@@ -555,7 +636,7 @@ public class ReplayToolTests
                 }
             }
 
-            if (command.Entities.Length == 1)
+            if (command.Type == CommandType.Move && command.Entities.Length == 1)
             {
                 if (tick != tickOfThose)
                 {
@@ -572,6 +653,106 @@ public class ReplayToolTests
         }
 
         return seen;
+    }
+
+    /// <summary>
+    /// What the tick that has just run did to the workers, in the words of the list of
+    /// <see cref="TheGoldenReplaysReachTheRulesTheyGuard"/>. The two arrays hold what the workers
+    /// and the stockpiles of Materials were before it, and are brought up to date.
+    /// </summary>
+    private static HashSet<string> WhatTheWorkersDid(Sim.Setup.Match match, Worker[] before, long[] materialsBefore)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < before.Length; i++)
+        {
+            var worker = match.Workers.ValueAt(i);
+            var owner = match.Bodies.Get(match.Workers.EntityAt(i)).Owner;
+            switch (worker.State)
+            {
+                case WorkerState.Walking:
+                    seen.Add(before[i].State == WorkerState.Waiting ? "a worker given a place it waited for" : "a worker walking to its place");
+                    break;
+                case WorkerState.Working:
+                    seen.Add("a worker at work");
+                    var site = match.WorkSites.Get(worker.Site);
+                    if (before[i].Timer == Sim.SimInfo.TicksPerSecond - 1
+                        && worker.Timer == 0
+                        && !Territory.Holds(match.Territories, match.World.Entities, owner, site.X, site.Y, site.Size))
+                    {
+                        seen.Add("a payment skipped at a deposit outside its owner's territory");
+                    }
+
+                    break;
+                case WorkerState.Waiting:
+                    seen.Add("a worker waiting for a place");
+                    break;
+                case WorkerState.Idle when before[i].State == WorkerState.Working:
+                    seen.Add("a worker taken off its work by another order");
+                    break;
+                default:
+                    break;
+            }
+
+            before[i] = worker;
+        }
+
+        for (var player = 0; player < materialsBefore.Length; player++)
+        {
+            var materials = match.Stockpiles.Materials(player);
+            if (materials > materialsBefore[player])
+            {
+                seen.Add("a payment");
+            }
+
+            materialsBefore[player] = materials;
+        }
+
+        return seen;
+    }
+
+    /// <summary>
+    /// Why the research orders due in the tick that runs next will be dropped, for those that
+    /// will. An order is judged only when it is its player's one research order of the tick, so
+    /// that the state it is judged against here is the state it runs in.
+    /// </summary>
+    private static IEnumerable<string> ResearchOrdersRefused(Sim.Setup.Match match, IEnumerable<Command> due)
+    {
+        var orders = due.Where(command => command.Type is CommandType.StartResearch or CommandType.CancelResearch).ToList();
+        var tracks = match.Data.Tracks.Count;
+        foreach (var order in orders)
+        {
+            var alone = orders.Count(other => other.Player == order.Player) == 1;
+            if (!alone || order.Player >= match.Players.Count || order.ContentId < 0 || order.ContentId >= tracks)
+            {
+                continue;
+            }
+
+            if (order.Type == CommandType.CancelResearch)
+            {
+                if (match.Research.State.SlotResearching(order.Player, order.ContentId) < 0)
+                {
+                    yield return "a cancel refused: the track is not in research";
+                }
+
+                continue;
+            }
+
+            var check = match.Research.CheckStart(order.Player, order.ContentId);
+            if (check == ResearchStartCheck.NoFreeSlot && !match.Players[order.Player].HasStart)
+            {
+                yield return "a research refused: the player has no slot";
+            }
+            else if (check != ResearchStartCheck.Allowed)
+            {
+                yield return check switch
+                {
+                    ResearchStartCheck.InProgress => "a research refused: its track is in research already",
+                    ResearchStartCheck.NoFreeSlot => "a research refused: no free slot",
+                    ResearchStartCheck.TooExpensive => "a research refused: the stockpile does not cover it",
+                    _ => $"a research refused: {check}",
+                };
+            }
+        }
     }
 
     private static Sim.Serialization.Replay ReadGolden(string name) =>

@@ -101,8 +101,8 @@ public class JoinTests
 
         Assert.Equal(SessionEndReason.Left, match.Clients[1].Session.EndInfo!.Reason);
         Assert.False(match.Host.IsAttached(1));
-        Assert.Equal([(1, SessionEndReason.ConnectionLost)], match.HostDepartures);
-        Assert.Equal([(1, SessionEndReason.ConnectionLost)], match.Clients[0].Departures);
+        Assert.Equal([(1, SessionEndReason.Left)], match.HostDepartures);
+        Assert.Equal([(1, SessionEndReason.Left)], match.Clients[0].Departures);
 
         // The seat can be given to someone else, and the match starts without it otherwise.
         var link = match.Network.Connect();

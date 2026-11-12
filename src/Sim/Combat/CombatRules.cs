@@ -1,6 +1,7 @@
 using Sim.Data;
 using Sim.Movement;
 using Sim.Numerics;
+using Sim.Research;
 using Sim.Tech;
 
 namespace Sim.Combat;
@@ -16,12 +17,11 @@ namespace Sim.Combat;
 /// to no line: a worker, which no counter names (design 4.1).
 /// </para>
 /// <para>
-/// <b>Where the tech comes from.</b> Combat asks for a player's <see cref="PlayerTech"/> each time
-/// it needs it and keeps nothing but the attack profiles it made from the table it was last
-/// handed, so it can never fight with an old table. Until research runs in a match, the table is
-/// one resolved here from the starting tiers. Research in a match hands over its own lookup
-/// instead, through the second constructor, and then needs to tell combat nothing when a tier
-/// lands or a snapshot is restored.
+/// <b>Where the tech comes from.</b> Combat asks the match's research for a player's
+/// <see cref="PlayerTech"/> each time it needs it (<see cref="MatchResearch.Tech"/>), and keeps
+/// nothing but the attack profiles it made from the table it was last handed. So it can never
+/// fight with an old table, and research needs to tell it nothing when a tier lands or a snapshot
+/// is restored.
 /// </para>
 /// </remarks>
 public sealed class CombatRules
@@ -35,12 +35,6 @@ public sealed class CombatRules
     /// </summary>
     public const int LookInterval = 4;
 
-    /// <summary>
-    /// The hit points of a worker at Protection tier 1, before the owner's Protection tiers
-    /// multiply them (design 4.1). It stands here until the worker's profile is in the data.
-    /// </summary>
-    public const int WorkerHitPoints = 50;
-
     private readonly GameData _data;
     private readonly int _lineCount;
     private readonly bool[] _cannotHit;
@@ -49,31 +43,23 @@ public sealed class CombatRules
     private readonly Fixed[] _reachOfWorker;
     private readonly Fixed[] _longestReach;
     private readonly Func<int, PlayerTech> _techOf;
-    private readonly PlayerTech[]? _ownTech;
     private readonly PlayerTech?[] _profiled;
     private readonly AttackProfile[][] _profiles;
 
-    /// <summary>
-    /// Works out the rules for a match in which every player keeps every track at the data's
-    /// starting epoch, or the tiers a test gives it with <see cref="SetTech"/>.
-    /// </summary>
-    public CombatRules(GameData data, int playerCount)
-        : this(data, playerCount, null)
-    {
-    }
-
-    /// <summary>Works out the rules for a match in which a player's tech is looked up elsewhere.</summary>
+    /// <summary>Works out the rules for a match.</summary>
     /// <param name="data">The loaded game data.</param>
     /// <param name="playerCount">The number of players.</param>
     /// <param name="techOf">
-    /// Gives a player's tech as it is now. It must hand out another object whenever the tech has
-    /// changed, as the resolver does. Null for a table kept here.
+    /// Gives a player's tech as it is now: in a match, <see cref="MatchResearch.Tech"/>. It must
+    /// hand out another object whenever the tech has changed, as research does.
     /// </param>
-    public CombatRules(GameData data, int playerCount, Func<int, PlayerTech>? techOf)
+    public CombatRules(GameData data, int playerCount, Func<int, PlayerTech> techOf)
     {
         ArgumentNullException.ThrowIfNull(data);
+        ArgumentNullException.ThrowIfNull(techOf);
         ArgumentOutOfRangeException.ThrowIfNegative(playerCount);
         _data = data;
+        _techOf = techOf;
         _lineCount = data.Rules.Lines.Count;
         _cannotHit = new bool[_lineCount * _lineCount];
         _multipliers = new Fraction[_lineCount * _lineCount];
@@ -82,6 +68,8 @@ public sealed class CombatRules
         _longestReach = new Fixed[_lineCount];
         Array.Fill(_multipliers, Fraction.One);
 
+        // A worker has no line to carry its spacing: it is in the worker's profile.
+        var workerSpacing = data.Resources.Worker.Spacing.ToFraction();
         foreach (var line in data.Lines)
         {
             foreach (var counter in line.Counters)
@@ -95,7 +83,7 @@ public sealed class CombatRules
             }
 
             var spacing = line.Base.Spacing.ToFraction();
-            var reach = Reach(Max(spacing, WorkerSpacing));
+            var reach = Reach(Max(spacing, workerSpacing));
             _reachOfWorker[line.Index] = reach;
             _longestReach[line.Index] = reach;
             foreach (var other in data.Lines)
@@ -108,22 +96,6 @@ public sealed class CombatRules
 
         _profiled = new PlayerTech?[playerCount];
         _profiles = new AttackProfile[playerCount][];
-        if (techOf is not null)
-        {
-            _techOf = techOf;
-            return;
-        }
-
-        var tiers = new int[data.Tracks.Count];
-        Array.Fill(tiers, data.Rules.Match.StartEpoch);
-        var own = new PlayerTech[playerCount];
-        for (var player = 0; player < playerCount; player++)
-        {
-            own[player] = TechResolver.Resolve(data, tiers);
-        }
-
-        _ownTech = own;
-        _techOf = player => own[player];
     }
 
     /// <summary>
@@ -137,27 +109,6 @@ public sealed class CombatRules
     /// footprint: three quarters of a tile (design 2.4). Nothing uses it until structures exist.
     /// </summary>
     public static Fraction StructureReach => new(3, 4);
-
-    /// <summary>The spacing of a worker, which has no line to carry it: 1 tile (design 2.4).</summary>
-    public static Fraction WorkerSpacing => Fraction.One;
-
-    /// <summary>The tech a player's units fight with.</summary>
-    public PlayerTech TechOf(int player) => _techOf(player);
-
-    /// <summary>
-    /// Gives a player other tech in the table kept here, which every unit of that player fights
-    /// with from then on. Not for a match whose tech is looked up elsewhere.
-    /// </summary>
-    public void SetTech(int player, PlayerTech tech)
-    {
-        ArgumentNullException.ThrowIfNull(tech);
-        if (_ownTech is null)
-        {
-            throw new InvalidOperationException("This match's tech is not kept by its combat rules.");
-        }
-
-        _ownTech[player] = tech;
-    }
 
     /// <summary>What a player's units of a chassis attack with, under the player's tech as it is now.</summary>
     public AttackProfile ProfileOf(int player, int chassis)
@@ -207,14 +158,14 @@ public sealed class CombatRules
         (attackerSide * Multiplier(attackerLine, targetLine)).RoundHalfUp(1000);
 
     /// <summary>
-    /// The hit points of a player's worker: <see cref="WorkerHitPoints"/> at Protection tier 1, times
-    /// the hit point factor of the rule set for each tier above it, rounded once (design 4.1).
+    /// The hit points of a player's worker: those of the worker's profile at Protection tier 1,
+    /// times the hit point factor of the rule set for each Protection tier of its owner above it
+    /// (design 4.1).
     /// </summary>
     public Health WorkerHealth(int player)
     {
         var protection = _techOf(player).Tiers[_data.TrackRoles.Protection];
-        var hitPoints = WorkerHitPoints * _data.Rules.PerTier.HitPoints.ToFraction().Pow(protection - 1);
-        return Health.Full(hitPoints.RoundHalfUp(1000));
+        return Health.Full(HitPointRules.AtProtectionTier(_data, _data.Resources.Worker.HitPoints.ToFraction(), protection));
     }
 
     private static Fixed Reach(Fraction spacing) => (spacing + UnitReachMargin).ToFixed();

@@ -46,6 +46,13 @@ public sealed class ClientSession
     /// <summary>The host accepted the join. <see cref="Player"/> is set.</summary>
     public event Action? Joined;
 
+    /// <summary>
+    /// The host described the match (<see cref="HostOptions.Match"/>). Build it and call
+    /// <see cref="ReportReady"/>, or call <see cref="Leave"/> with
+    /// <see cref="SessionEndReason.SetupMismatch"/> if this machine cannot.
+    /// </summary>
+    public event Action<MatchDescription>? MatchDescribed;
+
     /// <summary>The match started. The first tick has not run yet.</summary>
     public event Action? Started;
 
@@ -59,7 +66,7 @@ public sealed class ClientSession
     /// <summary>A tick, whose number is given, has run.</summary>
     public event Action<int>? TickCompleted;
 
-    /// <summary>Another player's connection is gone, or the host dropped it. The match goes on.</summary>
+    /// <summary>Another player left, its connection is gone, or the host dropped it. The match goes on.</summary>
     public event Action<int, SessionEndReason>? PlayerLeft;
 
     /// <summary>The session is over. No tick runs after this.</summary>
@@ -74,6 +81,9 @@ public sealed class ClientSession
 
     /// <summary>The number of seats in the match. 0 until the host accepts the join.</summary>
     public int PlayerCount { get; private set; }
+
+    /// <summary>The match as the host described it, or null if the host has not, or never does.</summary>
+    public MatchDescription? Description { get; private set; }
 
     /// <summary>The simulation the session drives, once <see cref="ReportReady"/> has given it one.</summary>
     public Simulation? Simulation { get; private set; }
@@ -179,12 +189,25 @@ public sealed class ClientSession
         return Phase == SessionPhase.Running ? RunTicks(elapsed) : 0;
     }
 
-    /// <summary>Leaves the session and closes the connection. The host tells the other players.</summary>
-    public void Leave()
+    /// <summary>
+    /// Leaves the session and closes the connection. The host is told why and tells the other
+    /// players.
+    /// </summary>
+    /// <param name="reason">
+    /// <see cref="SessionEndReason.Left"/>, or <see cref="SessionEndReason.SetupMismatch"/> when
+    /// this machine cannot build the match the host described.
+    /// </param>
+    public void Leave(SessionEndReason reason = SessionEndReason.Left)
     {
+        if (reason is not (SessionEndReason.Left or SessionEndReason.SetupMismatch))
+        {
+            throw new ArgumentException($"A client cannot leave with the reason {reason}.", nameof(reason));
+        }
+
         if (Phase != SessionPhase.Stopped)
         {
-            Stop(new SessionEndInfo(SessionEndReason.Left, -1));
+            Send(new LeaveNotice(reason));
+            Stop(new SessionEndInfo(reason, -1));
         }
     }
 
@@ -198,6 +221,12 @@ public sealed class ClientSession
                 PlayerCount = accept.PlayerCount;
                 Joined?.Invoke();
                 SendReadyOnceJoined();
+                break;
+
+            case MatchNotice notice when Phase == SessionPhase.Joining && Player >= 0 && Description is null
+                && notice.Description.Players.Count == PlayerCount:
+                Description = notice.Description;
+                MatchDescribed?.Invoke(notice.Description);
                 break;
 
             case Ping ping:
