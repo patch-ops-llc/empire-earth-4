@@ -53,8 +53,10 @@ namespace Game;
 /// of the game begins that reaches into its width: the bottom panel, the part in the bottom
 /// right corner, and every control a part has named with <see cref="KeepClear"/>. An aid is as
 /// wide as its column and as high as it needs. When the aids of a column need more height than
-/// the column has, the column scrolls. What the game shows in the middle under the top bar, as
-/// the messages are, stays between the columns: <see cref="MiddleWidth"/>.
+/// the column has, the column scrolls, and a click on an aid's title folds it away to make
+/// room. What the game shows in the middle under the top bar, as the messages are, stays
+/// between the columns (<see cref="MiddleWidth"/>) and ends above the bottom panel, the
+/// messages by giving up their oldest (<see cref="MiddleEnd"/>).
 /// </para>
 /// <para>
 /// A part that shows a control of its own over the world, outside the places above, names it
@@ -235,7 +237,8 @@ public partial class InterfaceFrame : CanvasLayer
     /// <summary>
     /// Adds a development aid: a box in the column at the left edge, marked as an aid by its
     /// border and its title. Returns the column inside it, under the title, for the aid to fill.
-    /// What it holds is as wide as the box: a line of text that is longer has to wrap.
+    /// What it holds is as wide as the box: a line of text that is longer has to wrap. A click
+    /// on the title folds the aid away to its title, and another opens it again.
     /// </summary>
     /// <param name="title">The title, which says that this is an aid and what for.</param>
     /// <param name="about">What the aid does and that it is not part of the game, shown when the pointer rests on the box.</param>
@@ -250,11 +253,36 @@ public partial class InterfaceFrame : CanvasLayer
 
         var column = UiStyle.Column(4);
         box.AddChild(column);
-        var heading = new Label { Text = title, ClipText = true };
+        var body = UiStyle.Column(4);
+        body.Name = "Body";
+
+        // The title folds the aid away to its title and opens it again, so that a tester keeps
+        // open what is in use when the aids are more than the column has height for.
+        var heading = new Button
+        {
+            Name = "Title",
+            Text = title,
+            Flat = true,
+            ClipText = true,
+            Alignment = HorizontalAlignment.Left,
+            FocusMode = Control.FocusModeEnum.None,
+            TooltipText = $"{about}\nClick the title to fold this aid away or open it.",
+        };
         heading.AddThemeFontSizeOverride("font_size", 15);
-        heading.AddThemeColorOverride("font_color", UiStyle.Warning);
+        foreach (var color in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color" })
+        {
+            heading.AddThemeColorOverride(color, UiStyle.Warning);
+        }
+
+        foreach (var state in new[] { "normal", "hover", "pressed", "focus" })
+        {
+            heading.AddThemeStyleboxOverride(state, new StyleBoxEmpty());
+        }
+
+        heading.Pressed += () => body.Visible = !body.Visible;
         column.AddChild(heading);
-        return column;
+        column.AddChild(body);
+        return body;
     }
 
     /// <summary>

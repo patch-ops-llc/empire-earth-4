@@ -103,7 +103,7 @@ If joining fails, the menu says why in orange:
 | Open or close the research panel | R, or the Research button in the bar at the top. Escape closes it too |
 | Start a research | In the research panel, click a bright cell |
 | Cancel a research | In the research panel, click Cancel beside its progress bar |
-| Show or hide the readout in the corner | F3 |
+| Show or hide the readout at the right edge, under the top bar | F3 |
 | Attack a unit of the other player | Right-click it |
 | Go somewhere and fight whatever is met on the way | Hold Ctrl and right-click the place |
 | Stop | X, or the Stop button in the panel at the bottom |
@@ -224,7 +224,7 @@ The two games check each other all the time. If they ever disagree about the sta
 
 ## Trying a fight
 
-No match can train a fighting unit yet. Until one can, this build has a development aid that makes them from nothing, free of charge. It is not part of the game and goes away once units can be trained. Its panel has an orange border and sits at the left edge of the window.
+No match can train a fighting unit yet. Until one can, this build has a development aid that makes them from nothing, free of charge. It is not part of the game and goes away once units can be trained. Its panel has an orange border and sits at the left edge of the window, in a column with the other development aids. The column ends above the panel at the bottom and above the build menu, so an aid never covers them: when the aids need more height than is left, the column scrolls, and a click on an aid's title folds it away to its title and opens it again.
 
 1. In the panel, choose a unit and how many to make at a time. There are four lines of units, each in four epochs. Line infantry shoots. Guards fight hand to hand. Cavalry fights hand to hand and is larger. Artillery shoots far and cannot shoot at what stands close to it. Its shells do not yet hit what stands round the target.
 2. Point at open ground and press G. Your units appear there.

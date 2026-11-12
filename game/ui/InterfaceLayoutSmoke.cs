@@ -159,7 +159,7 @@ public sealed class InterfaceLayoutSmoke : SmokePart
             lines.AddChild(new Label { Text = string.Create(CultureInfo.InvariantCulture, $"Line {line} of 40") });
         }
 
-        _aid = lines.GetParent<Control>();
+        _aid = lines.GetParent().GetParent<Control>();
     }
 
     private void FindUnits(SmokeOrders orders)
