@@ -98,9 +98,11 @@ If joining fails, the menu says why in orange:
 | Cancel a research | In the research panel, click Cancel beside its progress bar |
 | Show or hide the readout in the corner | F3 |
 | Attack a unit of the other player | Right-click it |
+| Attack a structure of the other player | Right-click it, whether you see it now or remember it. See Structures in a fight |
 | Go somewhere and fight whatever is met on the way | Hold Ctrl and right-click the place |
 | Stop | X, or the Stop button in the panel at the bottom |
 | Development aid: make units where the pointer is | G for yours. Alone, H for the other player's. See Trying a fight |
+| Development aid: lay a finished structure where the pointer is | N for yours. Alone, M for the other player's. See Structures in a fight |
 | Development aid: lift the fog of war from your screen, and lay it back | F, alone, or the button in the orange panel "Development aid: fog of war". See The fog of war |
 | Quit | Close the window |
 
@@ -146,10 +148,11 @@ You are shown only what your own units see. Each unit sees a circle round itself
 - **Another player's structures are shown once you have seen them, and then as you last saw them.** A structure is seen when any tile under it is. Until then it is not on your screen and not on the small map, and a click where it stands finds only the ground. Once it is out of your sight again it stays where you saw it, greyed and dimmed, in the world and on the small map: that is what you remember, not what is there. It may have changed since, or be gone, and you learn that when you see its tiles again. A structure that was still building itself when you last saw it stays as far built as it was then, with its bar, though it may long be finished.
 - **Another player's territory is shown with its Capitol.** Its tint and its line appear when you have seen the Capitol, and stay for as long as you remember it. Your own territory is always shown, also where its edge runs over ground you have not seen yet.
 - **You cannot give an attack order on a unit you do not see**, since it is not on your screen to click. When a unit you ordered attacked walks out of sight, your units walk to where it was last seen and stop there.
+- **You can give an attack order on a structure you remember.** Your units go to it and attack it, and those that shoot far enough fire before they see it. What that does to it you learn only by seeing its tiles: until then it stays on your screen as you remember it, with no bar, no smoke and no fall. See Structures in a fight.
 - The edge of what you see moves in steps of a tile a few times a second, and the screen smooths that.
 - In a shared match each player has their own picture. What you see is not what the other player sees.
 
-**The development switch.** A tester alone has to see the other player's units, so this build has a second development aid, in an orange panel under the first: "Development aid: fog of war". Its button, or the F key, lifts the fog from your screen: the whole map and every unit, structure and territory on it are shown, as they are now. Press it again to lay the fog back. It is not part of the game, and it changes only what is drawn. Your units still see only what they see: they do not shoot at a unit outside their sight, and a right-click on such a unit sends them walking there, with a line of text that says so. The build menu also goes by what you know and not by what the switch shows. In a shared match the switch is not offered, and the panel says so. Like the aid that makes units, it goes away once units can be trained.
+**The development switch.** A tester alone has to see the other player's units, so this build has another development aid, in the lowest of the orange panels: "Development aid: fog of war". Its button, or the F key, lifts the fog from your screen: the whole map and every unit, structure and territory on it are shown, as they are now. Press it again to lay the fog back. It is not part of the game, and it changes only what is drawn. Your units still see only what they see: they do not shoot at a unit outside their sight, and a right-click on such a unit sends them walking there, with a line of text that says so. The build menu also goes by what you know and not by what the switch shows. In a shared match the switch is not offered, and the panel says so. Like the aid that makes units, it goes away once units can be trained.
 
 ## Building
 
@@ -167,7 +170,7 @@ Select one or more workers and press B, or click Build in the panel at the botto
 - Hold Shift while you click to place the same structure again. Each order takes another of the selected workers, so select as many workers as you want sites.
 - Cancel with Delete, or the Cancel build button. For a worker on its way, you get the whole price back. For a structure that is not finished, you get three quarters back and it is taken away.
 - If the worker cannot lay the foundation when it arrives, because something stands in the way or the rules no longer allow it, a line under the top bar says why and the whole price comes back.
-- What the structures do so far: an Outpost claims the ground 12 tiles round it once it is finished, so that you can build and work deposits there. A Generator is where workers earn Energy: select workers and right-click a finished Generator. Each earns 30 Energy a minute, and a Generator has room for four. An Academy gives you a second research at a time. A second Capitol claims ground like the first. The Barracks, the Works and the Tower can be built but do nothing yet: no match can train units yet.
+- What the structures do so far: an Outpost claims the ground 12 tiles round it once it is finished, so that you can build and work deposits there. A Generator is where workers earn Energy: select workers and right-click a finished Generator. Each earns 30 Energy a minute, and a Generator has room for four. An Academy gives you a second research at a time. A second Capitol claims ground like the first. A finished Tower shoots at enemy units that come within seven tiles of it. The Barracks and the Works can be built but do nothing yet: no match can train units yet.
 - A worker that was working at a deposit or a Generator goes back to it once the foundation is laid. A worker that had no work stays beside the site.
 
 ## What your units are
@@ -230,6 +233,27 @@ What you will see:
 - A unit that dies sinks into the ground and leaves a ring in its owner's color that spreads and fades.
 - Workers can be attacked and do not fight back.
 - If an order cannot be carried out, a line of text on screen says why.
+
+## Structures in a fight
+
+Structures can be attacked and destroyed, walls included, and a finished Tower shoots. To try that alone, this build has one more development aid, in the orange panel "Development aid: lay a structure": choose a structure in its list, point at the ground and press N for one of yours, or M for one of the other player's. It appears finished and free of charge, with its middle where you point. If something is in the way, a line of text says so. In a shared match M lays nothing: each player lays their own with N. Like the other aids, it is not part of the game.
+
+1. Make a few fighting units with G.
+2. Choose the Tower in the list, point at ground some way off that you see, and press M.
+3. Select your units and right-click the Tower.
+
+What you will see:
+
+- A right-click on a structure of the other player's leaves a red line round its tiles that closes on it, and the selected units go and attack it. Hand-to-hand units go up to its walls. Units that shoot stop when it is in range, and artillery does three times its damage to a structure.
+- Units attack a Tower on their own when it comes near, as they do an enemy unit. Other structures they attack only on your order, or on a walk with Ctrl and a right-click when no unit and no Tower is near. They never attack a wall on their own.
+- A Tower shoots from its top at enemy units within seven tiles of it, and at enemy Towers, as a unit that stands still would. A Tower that is still building itself does not shoot.
+- A structure that has lost hit points has a bar above it, like a unit's, and wider for a larger structure. The pale part is what it has just lost. One of your own shows its bar also when you select it.
+- A structure that is hit flashes pale, and a shot leaves a spark where it goes in. The more it has lost, the darker and more scorched it is. Below two thirds of its hit points it smokes, and below two fifths it burns.
+- A structure that is destroyed sinks and leans as it fades, with dust and a ring in its owner's color, and leaves rubble that fades after a few seconds.
+- All of that is shown only for a structure you see. One that you remember stays as you last saw it, however much it has been hit since.
+- You can right-click a structure you remember, and your units go and attack it. Artillery reaches a tile further than it sees, so it can shell a structure that stays a memory all the while: you see the shells fly and, at the edge of what you see, land, and the structure on your screen does not change.
+- When a structure you remember is destroyed out of your sight, nothing on your screen says so. It stays there, greyed, until you see one of its tiles, and then it is simply gone, with no fall. Units that destroyed it without seeing it walk on to where it stood, so they are usually the ones who find out.
+- A right-click on a remembered structure that is already gone is taken as it looks: the units walk to where it stood, see that it is gone, and stop.
 
 ## The files of a match
 

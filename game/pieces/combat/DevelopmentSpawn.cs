@@ -201,10 +201,10 @@ public partial class DevelopmentSpawn : InterfacePart
         _count.Select(DefaultCount);
         column.AddChild(Row("At a time", _count));
 
-        column.AddChild(Small($"{KeyOf(SpawnOwnAction)}: yours, where the pointer is"));
+        // One line, so that the column of aids keeps clear of the corners in a small window.
         column.AddChild(Small(CanSpawnForOther
-            ? $"{KeyOf(SpawnOtherAction)}: the other player's, where the pointer is"
-            : "The other player makes their own."));
+            ? $"At the pointer. {KeyOf(SpawnOwnAction)}: yours.  {KeyOf(SpawnOtherAction)}: the other player's."
+            : $"At the pointer. {KeyOf(SpawnOwnAction)}: yours. The other player makes their own."));
     }
 
     private static HBoxContainer Row(string name, Control control)

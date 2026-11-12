@@ -12,7 +12,7 @@ namespace Game;
 /// <remarks>
 /// <list type="bullet">
 /// <item>A melee hit: a pale streak from the attacker to its target, a spark on the target, and the target flashes white.</item>
-/// <item>A shot fired: a flash where it was fired from. The shot itself is the <see cref="ShotLayer"/>'s.</item>
+/// <item>A shot fired: a flash where it was fired from, which for a Tower is its top. The shot itself is the <see cref="ShotLayer"/>'s.</item>
 /// <item>A shot that lands: a spark on the target, and the target flashes white.</item>
 /// <item>A shot that is lost, because its target died first: a grey puff where the shot was.</item>
 /// <item>A shell that lands: a burst at the place, inside a pale ring that spreads to the edge of the blast and stays there while it fades, so that the ring shows who was in reach. Each unit the blast reached is a shot that lands.</item>
@@ -94,7 +94,8 @@ public partial class CombatEffects : WorldLayer
                     break;
 
                 case SimEventKind.ShotFired:
-                    Add(new Effect(EffectKind.Muzzle, place, 0.12));
+                    // A Tower fires from its top, and its flash is there.
+                    Add(new Effect(EffectKind.Muzzle, place + (Vector3.Up * (ShotLayer.LaunchHeight(match, happened.Other) - ShotLayer.FlightHeight)), 0.12));
                     break;
 
                 case SimEventKind.ShotHit:

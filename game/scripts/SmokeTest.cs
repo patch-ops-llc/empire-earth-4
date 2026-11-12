@@ -100,6 +100,9 @@ public sealed class SmokeTest
         // Inspection: what the panel shows for a selection.
         new InspectionSmoke(),
 
+        // 16bv. Structures in combat: a remembered wall shelled from out of sight, a Tower destroyed in sight.
+        new SiegeSmoke(),
+
         // Later pieces.
     ];
 

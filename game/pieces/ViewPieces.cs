@@ -33,6 +33,9 @@ public static class ViewPieces
         new StructuresPiece(),
         new BuildPiece(),
 
+        // 16bv. Structures in combat: damage shown on structures, Towers shooting, the attack order on a structure.
+        new SiegePiece(),
+
         // 17v. Fog of war.
         new FogPiece(),
 
