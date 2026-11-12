@@ -48,15 +48,17 @@ public sealed class SmokeTest
 
     private readonly SmokePart[] _script = Script();
     private readonly Match _match;
+    private readonly MatchView _view;
     private readonly LocalSession _session;
     private readonly SmokeOrders _orders;
     private readonly int _firstTick;
 
-    public SmokeTest(Match match, LocalSession session)
+    public SmokeTest(Match match, MatchView view, LocalSession session)
     {
         _match = match;
+        _view = view;
         _session = session;
-        _orders = new SmokeOrders(match, session.Client);
+        _orders = new SmokeOrders(match, view, session.Client, session.Host);
         _firstTick = match.World.Tick;
     }
 
@@ -76,14 +78,30 @@ public sealed class SmokeTest
         new MoveOrdersSmoke(),
 
         // 11v. Combat: a short fight.
+        new FightSmoke(),
 
         // 13v. Economy: a work order.
+        new GatherOrdersSmoke(),
 
         // 14v. Research: one research.
+        new ResearchSmoke(),
 
         // 15v. Construction and production.
+        new StructuresSmoke(),
+        new BuildSmoke(),
 
-        // 17v. Fog of war.
+        // 17v. Fog of war: a unit out of sight, found and attacked; a structure seen and remembered.
+        new FogSmoke(),
+        new StructuresInFogSmoke(),
+
+        // 24v. Minimap: an order given on it.
+        new MinimapSmoke(),
+
+        // Inspection: what the panel shows for a selection.
+        new InspectionSmoke(),
+
+        // M20. Accent badges: a research that finishes, a unit of the other seat seen and lost from sight.
+        new BadgesSmoke(),
 
         // Later pieces.
     ];
@@ -119,16 +137,24 @@ public sealed class SmokeTest
     /// <summary>Prints the marker line. Returns false, with an error, when the match or the view is not as it should be.</summary>
     public bool Report(int unitsDrawn)
     {
+        // The view draws the units the local player sees (design 5.3): their own, and those of
+        // the other seat on ground they see.
         var entities = _match.Bodies.Count;
         var units = 0;
+        var seen = 0;
         for (var i = 0; i < entities; i++)
         {
-            units += _match.Movers.Contains(_match.Bodies.EntityAt(i)) ? 1 : 0;
+            var entity = _match.Bodies.EntityAt(i);
+            if (_match.Movers.Contains(entity))
+            {
+                units++;
+                seen += _view.Sight.Seen.Sees(entity) ? 1 : 0;
+            }
         }
 
-        if (unitsDrawn != units)
+        if (unitsDrawn != seen)
         {
-            GD.PrintErr($"Smoke test: the view draws {unitsDrawn} units and the match has {units}.");
+            GD.PrintErr($"Smoke test: the view draws {unitsDrawn} units, and the local player sees {seen} of the match's {units}.");
             return false;
         }
 
