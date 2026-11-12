@@ -114,6 +114,8 @@ public sealed class SmokeTest
 
         // 16bv. Structures in combat: a remembered wall shelled from out of sight, a Tower destroyed in sight.
         new SiegeSmoke(),
+        // M20. Accent badges: a research that finishes, a unit of the other seat seen and lost from sight.
+        new BadgesSmoke(),
 
         // Later pieces.
     ];

@@ -249,7 +249,8 @@ public sealed class InspectionSmoke : SmokePart
         }
     }
 
-    // The layer of the badges draws one for every accent of every fighting unit, and no other.
+    // The layer of the badges draws one for every accent of every fighting unit the world
+    // draws, and no other: the player's own units, and those of the other seat that they see.
     private static void CheckBadges(SmokeOrders orders)
     {
         var match = orders.Match;
@@ -260,18 +261,17 @@ public sealed class InspectionSmoke : SmokePart
         }
 
         var expected = 0;
-        for (var i = 0; i < match.Combatants.Count; i++)
+        foreach (var entity in orders.View.World.Units)
         {
-            var entity = match.Combatants.EntityAt(i);
-            if (match.Bodies.TryGet(entity, out var body) && match.World.Entities.IsAlive(entity))
+            if (match.Combatants.TryGet(entity, out var combatant) && match.Bodies.TryGet(entity, out var body))
             {
-                expected += match.Research.Tech(body.Owner).Blueprints[match.Combatants.ValueAt(i).Chassis].Accents.Count;
+                expected += match.Research.Tech(body.Owner).Blueprints[combatant.Chassis].Accents.Count;
             }
         }
 
         if (badges.Count != expected)
         {
-            orders.Fail($"the world shows {badges.Count} accent badges and the fighting units carry {expected} accents.");
+            orders.Fail($"the world shows {badges.Count} accent badges and the fighting units it draws carry {expected} accents.");
         }
     }
 
