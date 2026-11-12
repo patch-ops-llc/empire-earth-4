@@ -89,15 +89,16 @@ If joining fails, the menu says why in orange:
 | Go somewhere and fight whatever is met on the way | Hold Ctrl and right-click the place |
 | Stop | X, or the Stop button in the panel at the bottom |
 | Development aid: make units where the pointer is | G for yours. Alone, H for the other player's. See Trying a fight |
+| Development aid: lift the fog of war from your screen, and lay it back | F, alone, or the button in the orange panel "Development aid: fog of war". See The fog of war |
 | Quit | Close the window |
 
 ## What you will see
 
 - The host's workers are blue and the other player's are red. Alone, yours are blue. Which side of the map each player starts on is chosen at random each time.
 - Selected units have a green ring under them. A right-click leaves a yellow ring that closes on the place you clicked.
-- The small map in the bottom right corner shows the whole map: forest in dark green, cliffs in grey, deposits as orange squares, and every unit as a dot in its player's color. The white outline is the part of the map on your screen. Your selected units have a white rim.
+- The small map in the bottom right corner shows what you know of the whole map: forest in dark green, cliffs in grey, deposits as orange squares, and every unit you can see as a dot in its player's color. The white outline is the part of the map on your screen. Your selected units have a white rim.
 - Click the small map and the view jumps there; hold the button and drag, and the view follows. A right-click on it sends the selected units to that place, and a yellow ring closes on the place for a moment. The mouse wheel still zooms while the pointer is on it.
-- The small map shows everything, the other player's units too. Nothing is hidden yet.
+- You see the map through your own units, in the world and on the small map alike: see The fog of war below.
 - Units find their own way round the cliffs and the forest. A unit that needs a way round stands still for a moment while it works one out.
 - Nobody can stand on cliffs or among trees. If you send units there, they go to the nearest place they can reach. The yellow ring stays where you clicked.
 - Units sent to the same place end up standing inside each other, on one point. They do not make room for each other yet.
@@ -105,7 +106,20 @@ If joining fails, the menu says why in orange:
 - In a shared match, both players see the same workers in the same places. An order takes a moment longer to start than it does alone, because it travels to the host first.
 - If the other player leaves or closes the game, the bar at the top says so and your match goes on without them. If the host leaves, the match ends for both.
 - There is no Capitol and nothing to build.
-- You still see the whole map and all of the other player's workers. The game now works out what each player's units can see, but does not draw it yet.
+
+## The fog of war
+
+You are shown only what your own units see. Each unit sees a circle round itself: six tiles for a worker, eight for most fighting units, ten for cavalry. Nothing blocks sight, not forest and not cliffs.
+
+- **Ground you have never seen is dark and empty.** Its forest and cliffs are not drawn, and the small map is black there. At the start that is nearly the whole map.
+- **Ground you have seen and do not see now is dimmed.** You see its forest and cliffs as they are, and none of the other player's units on it.
+- **Ground you see now is bright.** The other player's units are drawn only there. So are their shots and everything that happens to them: bars, flashes, deaths. A unit that walks out of what you see is gone from your screen at once.
+- **Your own units are always shown.** When one of them is shot at from ground you do not see, you see the shots arrive over the ground you do see, and your unit being hit, and not who fired.
+- **You cannot give an attack order on a unit you do not see**, since it is not on your screen to click. When a unit you ordered attacked walks out of sight, your units walk to where it was last seen and stop there.
+- The edge of what you see moves in steps of a tile a few times a second, and the screen smooths that.
+- In a shared match each player has their own picture. What you see is not what the other player sees.
+
+**The development switch.** A tester alone has to see the other player's units, so this build has a second development aid, in an orange panel under the first: "Development aid: fog of war". Its button, or the F key, lifts the fog from your screen: the whole map and every unit on it are shown. Press it again to lay the fog back. It is not part of the game, and it changes only what is drawn. Your units still see only what they see: they do not shoot at a unit outside their sight, and a right-click on such a unit sends them walking there, with a line of text that says so. In a shared match the switch is not offered, and the panel says so.
 
 ## What to know about multiplayer
 
@@ -126,6 +140,7 @@ No match can train a fighting unit yet. Until one can, this build has a developm
 1. In the panel, choose a unit and how many to make at a time. There are four lines of units, each in four epochs. Line infantry shoots. Guards fight hand to hand. Cavalry fights hand to hand and is larger. Artillery shoots far and cannot shoot at what stands close to it. Its shells do not yet hit what stands round the target.
 2. Point at open ground and press G. Your units appear there.
 3. Alone, point somewhere else and press H. Units of the other player appear there, and nothing but their own reflexes controls them. In a shared match H makes nothing: each player makes their own units with G.
+4. Units of the other player made on ground you do not see are there and are not shown: see The fog of war. Make them close to your own units, or press F to lift the fog from your screen first.
 
 What you will see:
 
