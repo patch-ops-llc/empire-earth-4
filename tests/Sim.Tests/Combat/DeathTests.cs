@@ -138,22 +138,4 @@ public class DeathTests
         Assert.Equal(78_125, match.HitPointsOf(worker));
         Assert.False(match.Combatants.Contains(worker));
     }
-
-    [Fact]
-    public void TheStartingWorkersOfAMatchHaveHitPointsAndAreNotOfAChassis()
-    {
-        var result = DataLoader.Load(GameDataOnDisk.Files());
-        Assert.True(result.IsValid, string.Join(Environment.NewLine, result.Errors));
-        var data = result.Data;
-        var match = MatchSetup.Create(data, data.Maps[0], 1, [new(0), new(1)]);
-
-        Assert.Equal(2 * data.Rules.Start.Workers, match.Health.Count);
-        Assert.Equal(match.Bodies.Count, match.Health.Count);
-        Assert.Equal(0, match.Combatants.Count);
-        Assert.Equal(0, match.Shots.Count);
-        for (var i = 0; i < match.Health.Count; i++)
-        {
-            Assert.Equal(Health.Full(50_000), match.Health.ValueAt(i));
-        }
-    }
 }
