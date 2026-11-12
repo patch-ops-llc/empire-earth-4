@@ -68,6 +68,26 @@ public class SpacingAtDepositsTests
     }
 
     /// <summary>
+    /// Only a worker at its place holds its ground. Two workers without work that stand on one
+    /// point step apart like any two units of one side, each by its half.
+    /// </summary>
+    [Fact]
+    public void WorkersWithoutAPlaceStepApartLikeAnyUnits()
+    {
+        var match = WithOneDeposit(out _);
+        var first = match.WorkerAt(0, 4, 10);
+        var second = match.WorkerAt(0, 4, 10);
+        var start = match.PositionOf(first);
+        Assert.Equal(start, match.PositionOf(second));
+
+        Assert.True(match.RunUntilAtRest(100, first, second) > 1);
+
+        Assert.NotEqual(start, match.PositionOf(first));
+        Assert.NotEqual(start, match.PositionOf(second));
+        match.AssertKeepTheirSpacing(first, second);
+    }
+
+    /// <summary>
     /// Design 2.4: workers block and are blocked like any ground unit. An enemy unit on a
     /// worker's place keeps it off: the worker waits beside it with its place still held, never
     /// closer than their spacing, and goes to work when the enemy has left.
