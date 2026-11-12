@@ -66,6 +66,16 @@ internal static class RulesReader
             epochCapValue.Error($"must not be below start_epoch ({startEpoch}), found {epochCap}");
         }
 
+        var matchLines = ReadPlayedWith(match.Optional("lines"), lines, "line");
+        var matchStructuresValue = match.Optional("structures");
+        var matchStructures = ReadPlayedWith(matchStructuresValue, structures, "structure");
+        if (matchStructures is not null
+            && structures.Contains(DataRules.StartStructure)
+            && !matchStructures.Contains(structures.IndexOf(DataRules.StartStructure)))
+        {
+            matchStructuresValue!.Value.Error($"must list '{DataRules.StartStructure}': every player starts with it");
+        }
+
         match.End();
 
         var start = file.Required("start").Object();
@@ -76,6 +86,22 @@ internal static class RulesReader
         start.End();
 
         var mapRules = ReadMapRules(file.Required("map"));
+
+        var combat = file.Required("combat").Object();
+        var combatConstants = new CombatConstants(
+            combat.Required("look_interval_ticks").Integer(1, 1_000),
+            combat.Required("unit_reach_margin").Number(DataRules.Zero, DataRules.MaxDistance),
+            combat.Required("structure_reach").Number(DataRules.Zero, DataRules.MaxDistance, aboveMin: true),
+            combat.Required("fortification").Share());
+        combat.End();
+
+        var vision = file.Required("vision").Object();
+        var visionRules = new VisionRules(vision.Required("refresh_ticks").Integer(1, 1_000));
+        vision.End();
+
+        var debug = file.Required("debug").Object();
+        var debugRules = new DebugRules(debug.Required("spawn").Boolean());
+        debug.End();
 
         file.End();
         return new RuleSet(
@@ -89,9 +115,12 @@ internal static class RulesReader
             accentSlots,
             supplyCap,
             wallCrossingCost,
-            new MatchRules(startEpoch, epochCap),
+            new MatchRules(startEpoch, epochCap) { Lines = matchLines, Structures = matchStructures },
             startRules,
-            mapRules);
+            mapRules,
+            combatConstants,
+            debugRules,
+            visionRules);
     }
 
     private static List<string> ReadRoster(JsonValue value, string what)
@@ -118,6 +147,37 @@ internal static class RulesReader
         return [.. ids];
     }
 
+    /// <summary>
+    /// Reads the lines or the structures a match is played with: IDs of the roster, each once.
+    /// Null when the key is not there.
+    /// </summary>
+    private static List<int>? ReadPlayedWith(JsonValue? value, List<string> roster, string what)
+    {
+        if (value is not { } list)
+        {
+            return null;
+        }
+
+        var indexes = new SortedSet<int>();
+        foreach (var item in list.Array(1))
+        {
+            var id = item.Id();
+            if (id.Length == 0)
+            {
+                continue;
+            }
+
+            var errorsBefore = item.ErrorCount;
+            var index = item.IndexIn(id, roster, what, "the roster in rules.jsonc");
+            if (item.ErrorCount == errorsBefore && !indexes.Add(index))
+            {
+                item.Error($"{what} '{id}' is listed twice");
+            }
+        }
+
+        return [.. indexes];
+    }
+
     private static PriceMultiplier ReadPriceMultiplier(JsonValue value)
     {
         var multiplier = value.Object();
@@ -129,11 +189,6 @@ internal static class RulesReader
     private static MapRules ReadMapRules(JsonValue value)
     {
         var map = value.Object();
-
-        var territory = map.Required("start_territory").Object();
-        var footprint = territory.Required("footprint").Integer(1, 16);
-        var radius = territory.Required("radius").Integer(1, DataRules.MaxMapSize);
-        territory.End();
 
         var depositSize = map.Required("deposit_size").Integer(1, 8);
 
@@ -164,8 +219,6 @@ internal static class RulesReader
 
         map.End();
         return new MapRules(
-            footprint,
-            radius,
             depositSize,
             mainPerPlayer,
             naturalPerPlayer,

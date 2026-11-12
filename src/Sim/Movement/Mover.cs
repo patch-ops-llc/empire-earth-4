@@ -20,8 +20,8 @@ public enum MoveState
 }
 
 /// <summary>
-/// What lets an entity move: its speed, the way it faces, and the move order it is carrying out.
-/// Its position is in its <see cref="Map.Body"/>.
+/// What lets an entity move: its speed, the way it faces, the distance it keeps from other units,
+/// and the move order it is carrying out. Its position is in its <see cref="Map.Body"/>.
 /// </summary>
 public struct Mover : IStateValue
 {
@@ -42,7 +42,18 @@ public struct Mover : IStateValue
     /// </summary>
     public static Fixed StandOff => Fixed.FromRaw(7 * Fixed.RawOne / 16);
 
-    /// <summary>The distance covered in one tick, in tiles. Zero for a mover that cannot move now.</summary>
+    /// <summary>
+    /// The spacing of a unit whose line gives none: one tile, the spacing of a worker and of every
+    /// line but Cavalry/Armor (design 2.4).
+    /// </summary>
+    public static Fixed DefaultSpacing => Fixed.One;
+
+    /// <summary>
+    /// The distance covered in one tick, in tiles. Zero for a mover that cannot move now. Whoever
+    /// places the mover sets it, and movement only reads it. For a unit of a chassis it is the
+    /// speed of its owner's blueprint, and <see cref="Research.UnitRefresh"/> sets it again when a
+    /// research of the owner finishes; an order under way goes on at the new speed.
+    /// </summary>
     public Fixed Speed { get; set; }
 
     /// <summary>
@@ -74,6 +85,29 @@ public struct Mover : IStateValue
     public int RouteNode { get; set; }
 
     /// <summary>
+    /// The least distance this unit keeps between its center and another unit's, in tiles (design
+    /// 2.4). It comes from the unit's line and does not change. Between two units the larger of
+    /// their two values applies: ask <see cref="SpacingRule"/>, never this value alone. Zero for a
+    /// mover that keeps no distance.
+    /// </summary>
+    public Fixed Spacing { get; set; }
+
+    /// <summary>
+    /// Where this unit walks beside its route: the offset from the center of a route tile to the
+    /// point it aims for there. It is the unit's place in the group that got the order, so that the
+    /// group walks as it stood. It shrinks where the ground leaves too little room, and is zero for
+    /// a unit that walks alone or has no route.
+    /// </summary>
+    public FixedVector2 Spread { get; set; }
+
+    /// <summary>
+    /// True while the unit has an order and stands still because an enemy unit is in its way and
+    /// it found no step round it (design 2.4). It keeps its order and tries again every tick.
+    /// Movement sets this for every walking unit, every tick.
+    /// </summary>
+    public bool Waiting { get; set; }
+
+    /// <summary>
     /// A speed in tiles per second as the distance per tick, rounded once, half up, to the distance
     /// unit, as design 2.3 rules.
     /// </summary>
@@ -87,16 +121,24 @@ public struct Mover : IStateValue
         RouteStart = 0;
         RouteGoal = 0;
         RouteNode = 0;
+        Spread = FixedVector2.Zero;
+        Waiting = false;
     }
 
     /// <summary>Starts a walk to a point along the route between two tiles, replacing any order. The route is yet to be found.</summary>
-    public void WalkRouteTo(FixedVector2 destination, int routeStart, int routeGoal)
+    /// <param name="destination">Where the walk ends. The walk from the center of the route's last tile to it must be clear.</param>
+    /// <param name="routeStart">The first tile of the route.</param>
+    /// <param name="routeGoal">The last tile of the route.</param>
+    /// <param name="spread">How far beside the route the unit walks: see <see cref="Spread"/>.</param>
+    public void WalkRouteTo(FixedVector2 destination, int routeStart, int routeGoal, FixedVector2 spread = default)
     {
         State = MoveState.Planning;
         Destination = destination;
         RouteStart = routeStart;
         RouteGoal = routeGoal;
         RouteNode = 0;
+        Spread = spread;
+        Waiting = false;
     }
 
     /// <summary>Ends the order, if there is one. The mover stands where it is.</summary>
@@ -106,6 +148,8 @@ public struct Mover : IStateValue
         RouteStart = 0;
         RouteGoal = 0;
         RouteNode = 0;
+        Spread = FixedVector2.Zero;
+        Waiting = false;
     }
 
     public void Walk(IStateWalker walker)
@@ -117,5 +161,8 @@ public struct Mover : IStateValue
         RouteStart = walker.Field(RouteStart);
         RouteGoal = walker.Field(RouteGoal);
         RouteNode = walker.Field(RouteNode);
+        Spacing = walker.Field(Spacing);
+        Spread = new FixedVector2(walker.Field(Spread.X), walker.Field(Spread.Y));
+        Waiting = walker.Field(Waiting);
     }
 }

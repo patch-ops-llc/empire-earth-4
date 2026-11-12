@@ -16,7 +16,10 @@
     "wall_crossing_cost",
     "match",
     "start",
-    "map"
+    "map",
+    "combat",
+    "vision",
+    "debug"
   ],
   "properties": {
     "$schema": { "type": "string" },
@@ -103,13 +106,21 @@
       "maximum": 1000
     },
     "match": {
-      "description": "Design 5.2. All tracks start at start_epoch and none may pass epoch_cap.",
+      "description": "Design 5.2 and 6. All tracks start at start_epoch and none may pass epoch_cap. \"lines\" and \"structures\" say what a match is played with.",
       "type": "object",
       "additionalProperties": false,
       "required": ["start_epoch", "epoch_cap"],
       "properties": {
         "start_epoch": { "type": "integer", "minimum": 1, "maximum": 20 },
-        "epoch_cap": { "type": "integer", "minimum": 1, "maximum": 20 }
+        "epoch_cap": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "lines": {
+          "description": "Optional. The lines of the roster a match is played with. Each needs its data file, a chassis for every epoch up to epoch_cap, and a structure listed here that trains it.",
+          "$ref": "#/definitions/idList"
+        },
+        "structures": {
+          "description": "Optional. The structures of the roster a match is played with, the one every player starts with among them. Each needs its data file and must unlock no later than epoch_cap.",
+          "$ref": "#/definitions/idList"
+        }
       }
     },
     "start": {
@@ -127,18 +138,8 @@
       "description": "Design 5.3 and 5.4. What every map must satisfy; datacheck enforces it on maps/*.jsonc.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["start_territory", "deposit_size", "deposits", "chokepoint_width", "open_field_min_width"],
+      "required": ["deposit_size", "deposits", "chokepoint_width", "open_field_min_width"],
       "properties": {
-        "start_territory": {
-          "description": "The starting Capitol: the side of its square footprint and its territory radius, in tiles.",
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["footprint", "radius"],
-          "properties": {
-            "footprint": { "type": "integer", "minimum": 1, "maximum": 16 },
-            "radius": { "type": "integer", "minimum": 1, "maximum": 256 }
-          }
-        },
         "deposit_size": {
           "description": "The side of a deposit's square footprint, in tiles.",
           "type": "integer",
@@ -171,6 +172,58 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 256
+        }
+      }
+    },
+    "combat": {
+      "description": "The numbers of combat that belong to no line and no structure.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["look_interval_ticks", "unit_reach_margin", "structure_reach", "fortification"],
+      "properties": {
+        "look_interval_ticks": {
+          "description": "A unit or a Tower without a target looks for one every this many ticks.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "unit_reach_margin": {
+          "description": "Melee reach against a unit is the spacing between the two units plus this, in tiles. Text such as \"0.25\", or a whole number. Not negative.",
+          "$ref": "#/definitions/number"
+        },
+        "structure_reach": {
+          "description": "Melee reach against a structure, in tiles, from the attacker's center to the nearest edge of the footprint. Above zero.",
+          "$ref": "#/definitions/number"
+        },
+        "fortification": {
+          "description": "The fortification rule: what multiplies the damage a structure takes from an attacker whose effective Firepower is below the Protection tier of the structure's owner. Above zero and at most 1.",
+          "$ref": "#/definitions/number"
+        }
+      }
+    },
+    "vision": {
+      "description": "The fog of war (design 5.3).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["refresh_ticks"],
+      "properties": {
+        "refresh_ticks": {
+          "description": "What each player sees is worked out again in every tick whose number is a multiple of this.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      }
+    },
+    "debug": {
+      "description": "Switches for development. They are not in the design. Both players of a match have the same data, so they have the same switches.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spawn"],
+      "properties": {
+        "spawn": {
+          "description": "Whether a match carries out the development spawn, a command that makes units from nothing, and the development placement, which lays a finished structure the same way.",
+          "type": "boolean"
         }
       }
     }

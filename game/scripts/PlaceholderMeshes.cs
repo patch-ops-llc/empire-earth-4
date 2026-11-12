@@ -11,6 +11,12 @@ public static class PlaceholderMeshes
     public const float TreeHeight = 1.3f;
     public const float RockHeight = 0.8f;
 
+    /// <summary>The color of a forest tile's tree.</summary>
+    public static readonly Color TreeColor = new(0.11f, 0.27f, 0.13f);
+
+    /// <summary>The color of a cliff tile's rock.</summary>
+    public static readonly Color RockColor = new(0.42f, 0.40f, 0.38f);
+
     /// <summary>How tall the unit shape is.</summary>
     public const float UnitHeight = 0.75f;
 
@@ -91,7 +97,7 @@ public static class PlaceholderMeshes
         Height = TreeHeight,
         RadialSegments = 7,
         Rings = 1,
-        Material = Flat(new Color(0.11f, 0.27f, 0.13f)),
+        Material = Flat(TreeColor),
     };
 
     /// <summary>
@@ -101,6 +107,6 @@ public static class PlaceholderMeshes
     public static BoxMesh Rock() => new()
     {
         Size = new Vector3(1f, RockHeight, 1f),
-        Material = Flat(new Color(0.42f, 0.40f, 0.38f)),
+        Material = Flat(RockColor),
     };
 }

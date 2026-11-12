@@ -26,10 +26,17 @@ public enum StartKind
 /// <param name="Address">The host to join: a name or an address.</param>
 /// <param name="Port">The port to host on or to join at.</param>
 /// <param name="NetTestTicks">Above 0, the game plays the network test for this many ticks and quits. See <see cref="NetTest"/>.</param>
-public sealed record StartRequest(StartKind Kind, string Address, int Port, int NetTestTicks)
+/// <param name="Computer">The ID of the personality of the computer opponent of a match alone, or empty when nobody sits at the other seat.</param>
+public sealed record StartRequest(StartKind Kind, string Address, int Port, int NetTestTicks, string Computer = "")
 {
     /// <summary>This starts a match alone at once, with no network.</summary>
     public const string AloneArgument = "--alone";
+
+    /// <summary>
+    /// Followed by the ID of a personality, this starts a match alone against the computer at
+    /// once, as the menu's button does: <c>--computer swarm</c>.
+    /// </summary>
+    public const string ComputerArgument = "--computer";
 
     /// <summary>Followed by an optional port, this hosts a match at once.</summary>
     public const string HostArgument = "--host";
@@ -56,6 +63,16 @@ public sealed record StartRequest(StartKind Kind, string Address, int Port, int 
             {
                 case AloneArgument:
                     request = request with { Kind = StartKind.Alone };
+                    break;
+
+                case ComputerArgument:
+                    if (!hasValue)
+                    {
+                        problem = $"{ComputerArgument} needs the ID of a personality after it, as in {ComputerArgument} swarm.";
+                        return false;
+                    }
+
+                    request = request with { Computer = arguments[++i] };
                     break;
 
                 case HostArgument:
@@ -103,6 +120,17 @@ public sealed record StartRequest(StartKind Kind, string Address, int Port, int 
                     problem = $"'{arguments[i]}' is not an argument the game knows.";
                     return false;
             }
+        }
+
+        if (request.Computer.Length > 0)
+        {
+            if (request.Kind is StartKind.Host or StartKind.Join)
+            {
+                problem = $"{ComputerArgument} starts a match alone, and cannot go with {HostArgument} or {JoinArgument}.";
+                return false;
+            }
+
+            request = request with { Kind = StartKind.Alone };
         }
 
         if (request.NetTestTicks > 0 && request.Kind is not (StartKind.Host or StartKind.Join))

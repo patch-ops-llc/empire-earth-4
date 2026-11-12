@@ -23,18 +23,19 @@ public sealed class ReplayTool : ITool
     /// <summary>The game version in the replays that <c>record</c> writes: no build played them.</summary>
     public const string ScriptedGameVersion = "scripted";
 
-    private const string Usage =
-        """
+    private static string Usage =>
+        $"""
         Usage:
           replay verify <file or folder>... [--data <folder>]
           replay update <file or folder>... [--data <folder>]
-          replay record <file> --map <id> [--data <folder>] [--starts <list>] [--seed <number>] [--ticks <number>] [--orders <number>]
+          replay record <file> --map <id> [--data <folder>] [--starts <list>] [--seed <number>] [--ticks <number>] [--orders <number>] [--script <list>]
 
         verify  Runs each replay and compares the state with every hash it recorded.
         update  Runs the commands of each replay with the rules and the data as they are now and
                 writes the file again with the hashes of that run.
         record  Plays a match with scripted orders and writes its replay. --starts lists the start
-                of each player, default 0,1. --orders is the seed of the orders.
+                of each player, default 0,1. --orders is the seed of the orders. --script lists
+                the kinds of order to give, default all of them: {string.Join(',', ScriptedOrders.ScriptNames())}.
         --data  The data folder, default game/data.
         """;
 
@@ -42,7 +43,7 @@ public sealed class ReplayTool : ITool
 
     public string Summary =>
         "Run recorded matches again and check their state hashes; update or record a replay. "
-        + $"Arguments: verify|update <file or folder>... | record <file> --map <id> [--starts <list>] [--seed <n>] [--ticks <n>] [--orders <n>]; all take [--data <folder>, default {DefaultFolder}].";
+        + $"Arguments: verify|update <file or folder>... | record <file> --map <id> [--starts <list>] [--seed <n>] [--ticks <n>] [--orders <n>] [--script <list>]; all take [--data <folder>, default {DefaultFolder}].";
 
     public int Run(IReadOnlyList<string> arguments, TextWriter output, TextWriter errors)
     {
@@ -187,7 +188,7 @@ public sealed class ReplayTool : ITool
 
         var writer = new ByteWriter();
         var recorder = new ReplayRecorder(writer, description, match.World);
-        var orders = new ScriptedOrders(match, arguments.OrdersSeed);
+        var orders = new ScriptedOrders(match, arguments.OrdersSeed, arguments.Scripts);
         var commands = new List<Command>();
         var commandCount = 0;
         for (var tick = 0; tick < arguments.Ticks; tick++)
@@ -278,6 +279,8 @@ public sealed class ReplayTool : ITool
 
         public ulong OrdersSeed { get; private set; } = 1;
 
+        public IReadOnlyList<string> Scripts { get; private set; } = ScriptedOrders.ScriptNames();
+
         public static bool TryParse(IReadOnlyList<string> arguments, out Arguments parsed, out string problem)
         {
             parsed = new Arguments();
@@ -299,7 +302,7 @@ public sealed class ReplayTool : ITool
                     continue;
                 }
 
-                if (argument is not "--data" && !(recording && argument is ("--map" or "--starts" or "--seed" or "--ticks" or "--orders")))
+                if (argument is not "--data" && !(recording && argument is ("--map" or "--starts" or "--seed" or "--ticks" or "--orders" or "--script")))
                 {
                     problem = $"unknown option '{argument}'.";
                     return false;
@@ -357,6 +360,9 @@ public sealed class ReplayTool : ITool
                 case "--starts" when TryParseStarts(value, out var starts):
                     Starts = starts;
                     return true;
+                case "--script" when TryParseScripts(value, out var scripts):
+                    Scripts = scripts;
+                    return true;
                 default:
                     return false;
             }
@@ -383,6 +389,14 @@ public sealed class ReplayTool : ITool
             }
 
             return true;
+        }
+
+        /// <summary>A list such as <c>gather,movement</c>: scripts that there are, each once, in any order.</summary>
+        private static bool TryParseScripts(string text, out List<string> scripts)
+        {
+            scripts = [.. text.Split(',')];
+            var known = ScriptedOrders.ScriptNames();
+            return scripts.All(known.Contains) && scripts.Distinct(StringComparer.Ordinal).Count() == scripts.Count;
         }
     }
 }

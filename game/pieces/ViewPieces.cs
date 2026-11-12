@@ -20,15 +20,38 @@ public static class ViewPieces
         // Units: selection, the move order and its mark.
         new UnitsPiece(),
 
+        // Control groups: the numbered groups and the other keys that select.
+        new ControlGroupsPiece(),
+
         // 11v. Combat: health bars, shots and hits, the fighting orders.
+        new CombatPiece(),
 
         // 13v. Economy: resources and supply, deposits, the work order.
+        new EconomyPiece(),
 
         // 14v. Research: the grid.
+        new ResearchPiece(),
 
         // 15v. Construction and production: structures, the build menu, the production panel.
+        new StructuresPiece(),
+        new BuildPiece(),
+
+        // 15v, second half. Production: the panel, the queue, the rally point.
+        new ProductionPiece(),
+
+        // Structure looks, of M20: the tier a structure shows, and the banner of the track in research.
+        new LooksPiece(),
+        // 16bv. Structures in combat: damage shown on structures, Towers shooting, the attack order on a structure.
+        new SiegePiece(),
 
         // 17v. Fog of war.
+        new FogPiece(),
+
+        // 24v. Minimap.
+        new MinimapPiece(),
+
+        // Inspection: what the selected units are, accent badges, the epoch announcement.
+        new InspectionPiece(),
 
         // Later pieces.
     ];

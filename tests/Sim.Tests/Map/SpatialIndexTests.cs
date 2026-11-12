@@ -98,7 +98,7 @@ public class SpatialIndexTests
         match.World.Entities.Destroy(stander);
         match.SpatialIndex.QueryCircle(Point("2.5", "2.5"), Fixed.FromInt(2), found);
         Assert.Empty(found);
-        Assert.Equal(2, match.SpatialIndex.Count);
+        Assert.Equal(1, match.SpatialIndex.Count);
 
         match.Simulation.Tick();
         Assert.Equal(1, match.SpatialIndex.Count);
