@@ -25,10 +25,21 @@ public static class ViewPieces
         // 13v. Economy: resources and supply, deposits, the work order.
 
         // 14v. Research: the grid.
+        new ResearchPiece(),
 
         // 15v. Construction and production: structures, the build menu, the production panel.
+        new StructuresPiece(),
+
+        // 15v, second half. Production: the panel, the queue, the rally point.
+        new ProductionPiece(),
+
+        // Structure looks, of M20: the tier a structure shows, and the banner of the track in research.
+        new LooksPiece(),
 
         // 17v. Fog of war.
+
+        // 24v. Minimap.
+        new MinimapPiece(),
 
         // Later pieces.
     ];

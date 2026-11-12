@@ -34,7 +34,9 @@ godot --headless --path game --import --build-solutions
 godot --headless --path game --quit-after 600 -- --smoke-test
 ```
 
-The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, gives it a fixed script of four move orders through the session, runs it for 600 ticks, prints one line that starts with `SMOKE_TEST_OK` and quits. It takes about a second. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, gives it a fixed script of orders through the session, runs it to the script's end, prints one line that starts with `SMOKE_TEST_OK` and quits. It takes about a second. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+
+The script is made of parts that run one after another, one for each kind of order the view can give: `game/scripts/SmokeTest.cs` lists them, and the line's `tick` and `orders` say how many ticks and orders they came to.
 
 The line carries two hashes. `content_hash` is the hash of the data files as the game read them, and it must equal the one `datacheck` prints. `state_hash` is the hash of the match's state after the script, and it must be the same on every system. `ci.yml` checks the first. `export.yml` checks both for every build it makes, and an exported build takes the same argument:
 
@@ -79,7 +81,7 @@ godot --headless --path game -- --host --net-test 300
 godot --headless --path game -- --join 127.0.0.1 --net-test 300
 ```
 
-Selection works without physics. A click or a box is turned into an area of the ground, the simulation's spatial index names the units there, and each is tested again where it appears on screen. Started with Godot's `--verbose`, the game prints every selection, every order and every message to the player.
+Selection works without physics. A click or a box is turned into an area of the ground, the simulation's spatial index names the units there, and each is tested again where it appears on screen. A structure is found by the line from the camera through the pointer, tested against the box that stands on its tiles. Started with Godot's `--verbose`, the game prints every selection, every order and every message to the player.
 
 What the player sees and does in a match is put together from pieces, each in a folder of its own under `game/pieces/` and named in `game/pieces/ViewPieces.cs`. A piece adds what it has to four things the game gives it:
 
@@ -92,15 +94,26 @@ What the player sees and does in a match is put together from pieces, each in a 
 
 Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own that runs after the parts before it. The smoke test shows its match through every piece, and it fails on the first error the engine logs while it runs: a piece that throws, when it is added or later, fails it. Warnings do not. Three files are shared by all pieces: `ViewPieces.cs`, the list of parts in `game/scripts/SmokeTest.cs`, and the input map in `game/project.godot`. In each, every piece of the plan has a comment line, and a piece adds its lines directly under its own. Pieces built at the same time then never add at the same place, and their pull requests merge in either order.
 
+What a structure shows beyond its shape is read in one place, `game/pieces/looks/StructureLook.cs`: the tier of the track its look shows, and the track in research in the slot it gives, which is its banner. The tier's look and the banner draw from that list and from nothing else. Today the list is every structure of the match as it is now. When structures are under the fog of war it is the local player's view of them, and the two layers need no change. The territories on the minimap are the tiles the world's territory layer keeps, so the minimap shows the territories the world shows.
+
 | Control | Keys and mouse |
 | --- | --- |
 | Pan | W A S D or the arrow keys, or move the pointer to a window edge |
 | Zoom | Mouse wheel, `=` and `-`, or a trackpad pinch or two-finger scroll |
+| Look somewhere else on the map | Left click on the minimap, or hold the button on it and drag |
+| Send the selected units somewhere on the minimap | Right click on the minimap |
 | Select a unit of your own | Left click on it |
+| Select a structure of your own | Left click on it. Structures and units are not selected together |
 | Select several | Drag a box round them with the left button |
 | Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is in |
 | Clear the selection | Left click on the ground |
 | Send the selected units somewhere | Right click on the ground |
+| Train a unit | Select one finished structure of your own that trains. The bottom panel offers its units: click one, or press its key, which the button names: Q, E, F, T, Y, Z, C, V in the order of the buttons |
+| Cancel an order | Click it in the queue. Backspace cancels the last one |
+| Set the rally point | Right click with structures that train selected |
+| Open or close the research panel | R, or the Research button in the top bar. Escape closes it too |
+| Start a research | In the research panel, left click on a bright cell |
+| Cancel a research | In the research panel, the Cancel button beside its progress bar |
 | Show or hide the overlay | F3 |
 
 ## Test builds
@@ -114,17 +127,17 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 | Workflow | Runs on | What it does |
 | --- | --- | --- |
 | `ci.yml` | Every pull request, on Linux | Build with warnings as errors, format check, tests, `datacheck`, the golden replays, Godot import and build, a check that Godot changed or created no file in the working tree, the smoke test, and a network match between two copies of the game on the runner, which must end on the same tick with the same state hash and leave two replays that reproduce. |
-| `determinism.yml` | Every push to `main`, every night, a manual run, and pull requests that change anything it builds, runs or reads: `src/`, `tests/` (with the golden replays), `game/data/`, the workflow, `Directory.Build.props`, `global.json`, the solution file or `.gitattributes` | The tests on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build. The tests hold recorded values, so this is where a result that differs between systems shows up. The transport's tests use real sockets, which also differ between systems. Each of the eight jobs then runs the golden replays, and a last job fails unless all eight report the same final hashes. |
+| `determinism.yml` | Every push to `main`, every night, a manual run, and pull requests that change anything it builds, runs or reads: `src/`, `tests/` (with the golden replays), `game/data/`, the workflow, `Directory.Build.props`, `global.json`, the solution file or `.gitattributes` | The tests on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build. The tests hold recorded values, so this is where a result that differs between systems shows up. The transport's tests use real sockets, which also differ between systems. Each of the eight jobs then runs the golden replays, and a last job fails unless all eight report the same final hashes. The four Release jobs also run `benchmark` and put its table in the run's summary: the times are a record to compare over time and fail nothing, while a scenario that does not do what it is there to show fails the job. |
 | `export.yml` | Every tag that starts with `v`, a manual run, and pull requests that change the workflow, `game/export_presets.cfg` or `Directory.Build.props` | Exports the Windows build on Linux and the macOS build on macOS, and uploads both. Runs the smoke test in a Linux export, in the Windows build on Windows and in the macOS build as an Apple silicon and as an Intel program. Opens the Windows and the macOS build in a window for 300 frames. Fails unless every build reports the game version of the run, the content hash that `datacheck` prints and the same state hash as the others. |
 
 ## Layout
 
 | Path | Contents |
 | --- | --- |
-| `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) `Serialization/` (the byte format, the encoding of a command, and snapshots) and `Economy/` (stockpiles, territories, deposits and Generators, workers and their places, income and supply). |
+| `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) `Serialization/` (the byte format, the encoding of a command, and snapshots), `Economy/` (stockpiles, territories, deposits and Generators, workers and their places, income and supply) `Combat/` (hit points, attacks, shots, target picking, the four orders and death), `Structures/` (structures on the map: the tiles they block, their hit points, the starting Capitol, and what a finished one gives) and `Construction/` (build orders, foundations, structures that build themselves, and the refunds). |
 | `src/Net/` | The lockstep network session. A plain .NET library that references only `Sim`: `Protocol/` (the messages and their bytes), `Session/` (the host, the client, and the two in one process for single-player), `Transport/` (the connection interface, and the loopback used by single-player and tests), `Lobby/` (a hosted match and a joining player: the description of the match, the version and data check, the draw of starts) and `Files/` (the replay a session writes while it runs). |
 | `src/Net.Udp/` | The real network under the session: a connection over UDP, a listener for the host and a connector for a client. A plain .NET library that references `Net` and the LiteNetLib package. Sockets, the package and the thread that keeps connections alive live here and nowhere else. |
-| `src/Tools/` | The console tools, as one program: `dotnet run --project src/Tools -- <tool> [arguments]`. Each tool is a folder. So far: `datacheck` checks a data folder, `balance-report` prints what the tech rules make of tier mixes, `replay` runs recorded matches again and checks their state hashes, and `desync-diff` takes the replays and snapshots two players wrote when their match came apart and names the tick and the values that differ. |
+| `src/Tools/` | The console tools, as one program: `dotnet run --project src/Tools -- <tool> [arguments]`. Each tool is a folder. So far: `datacheck` checks a data folder, `balance-report` prints what the tech rules make of tier mixes, `replay` runs recorded matches again and checks their state hashes, `benchmark` times the simulation on its costliest cases (run it with `-c Release`), and `desync-diff` takes the replays and snapshots two players wrote when their match came apart and names the tick and the values that differ. |
 | `tests/Sim.Tests/` | Tests for `Sim` (xUnit v3 on Microsoft.Testing.Platform), in folders that match those of `src/Sim/`. |
 | `tests/Net.Tests/` | Tests for `Net`: whole matches between a host and several clients in one process, over a loopback with latency and jitter that the test controls. |
 | `tests/Net.Udp.Tests/` | Tests for `Net.Udp` over real sockets on the local address, on ports the system picks: what a connection promises, the orderly close, and whole matches between a host and clients, through a relay that delays, reorders and loses datagrams. |
@@ -132,7 +145,7 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 | `tests/Tools.Tests/` | Tests for the tools, for the data in `game/data/` and for the schemas. |
 | `game/` | The Godot project: `project.godot`, `Game.csproj`, `scenes/`, `scripts/`, `ui/`, `pieces/`. References `Sim` and `Net`. |
 | `game/export_presets.cfg` | The export presets: Windows x86_64, macOS universal, and Linux x86_64, which the export workflow uses for its first smoke test. Each packs the data files with the game. |
-| `game/data/` | The content of the game as JSON-with-comments files: tracks, rules, resources and the worker, unit lines and maps. |
+| `game/data/` | The content of the game as JSON-with-comments files: tracks, rules, resources and the worker, unit lines, structures and maps. |
 | `game/ui/` | What the player does to the match, as scripts: the menu and lobby where a match is started alone, hosted or joined; the frame of the interface round a match; the selection, the box and the rings that show it; the one answer to what is under the pointer; and the table that turns a click into an order, with the mark it leaves on the ground. Orders leave through the session of `Net`. |
 | `game/pieces/` | The pieces of the view, a folder each: what a piece draws in the world, shows in the interface, lets the pointer find and adds to the order table and to the smoke test. `ViewPieces.cs` lists them. |
 | `schemas/` | JSON Schemas for the files in `game/data/`. |

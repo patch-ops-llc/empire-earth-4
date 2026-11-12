@@ -52,12 +52,13 @@ public sealed class SmokeTest
     private readonly SmokeOrders _orders;
     private readonly int _firstTick;
 
-    public SmokeTest(Match match, LocalSession session)
+    public SmokeTest(Match match, LocalSession session, MatchView view)
     {
         _match = match;
         _session = session;
         _orders = new SmokeOrders(match, session.Client);
         _firstTick = match.World.Tick;
+        _orders.View = view;
     }
 
     /// <summary>The number of ticks the smoke test's match runs for: those of every part of the script.</summary>
@@ -80,10 +81,21 @@ public sealed class SmokeTest
         // 13v. Economy: a work order.
 
         // 14v. Research: one research.
+        new ResearchSmoke(),
 
         // 15v. Construction and production.
+        new StructuresSmoke(),
+
+        // 15v, second half. Production: a worker trained to a rally point.
+        new ProductionSmoke(),
+
+        // Structure looks, of M20: tier looks and banners against the match.
+        new LooksSmoke(),
 
         // 17v. Fog of war.
+
+        // 24v. Minimap: an order given on it.
+        new MinimapSmoke(),
 
         // Later pieces.
     ];
