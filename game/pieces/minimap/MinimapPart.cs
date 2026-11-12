@@ -52,6 +52,7 @@ public partial class MinimapPart : InterfacePart
         _box.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomRight, Control.LayoutPresetMode.Minsize, Margin);
         _box.GrowHorizontal = Control.GrowDirection.Begin;
         _box.GrowVertical = Control.GrowDirection.Begin;
+        Frame.TakeBottomRightCorner(_box);
     }
 
     public override void EveryFrame(double delta) => _box.Visible = !Frame.IsPanelOpen;

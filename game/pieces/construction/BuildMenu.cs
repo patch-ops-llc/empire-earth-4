@@ -455,11 +455,12 @@ public partial class BuildMenu : InterfacePart
         _detail.Text = text;
     }
 
-    // Over the bottom panel, in the middle, wherever the bottom panel begins now.
+    // Over the bottom panel, wherever that begins now, in the middle of the width that is free
+    // there: the window's, less the minimap's while a minimap stands in the corner.
     private void PlacePanel()
     {
-        var window = _panel.GetViewportRect().Size;
-        var columns = WidthOf(_entries.Count) + (2f * (PanelPadding + GapBesideWindow)) <= window.X ? Math.Max(_entries.Count, 1) : FewColumns;
+        var free = Frame.FreeWidthAboveBottomPanel;
+        var columns = WidthOf(_entries.Count) + (2f * (PanelPadding + GapBesideWindow)) <= free ? Math.Max(_entries.Count, 1) : FewColumns;
         if (_grid.Columns != columns)
         {
             // What is said about an entry fits one line under a whole row, and two under a short one.
@@ -470,7 +471,7 @@ public partial class BuildMenu : InterfacePart
         var size = _panel.GetCombinedMinimumSize();
         _panel.Size = size;
         _panel.Position = new Vector2(
-            Mathf.Round((window.X - size.X) / 2f),
+            Mathf.Round(Mathf.Max(GapBesideWindow, (free - size.X) / 2f)),
             Mathf.Round(Frame.BottomPanelStart - GapAboveBottomPanel - size.Y));
     }
 

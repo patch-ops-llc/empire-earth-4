@@ -69,6 +69,7 @@ public partial class InterfaceFrame : CanvasLayer
 
     private MatchView? _view;
     private PanelContainer _bottom = null!;
+    private Control? _corner;
     private HBoxContainer _commandArea = null!;
     private PanelContainer _topBar = null!;
     private HBoxContainer _panelButtons = null!;
@@ -207,6 +208,21 @@ public partial class InterfaceFrame : CanvasLayer
     /// ends here, so that neither covers the other.
     /// </summary>
     public float BottomPanelStart => _bottom.Visible ? _bottom.GetGlobalRect().Position.Y : _bottom.GetViewportRect().Size.Y;
+
+    /// <summary>
+    /// The width of the window that is free above the bottom panel, from the left edge: all of
+    /// it, or as far as the part in the bottom right corner begins while that is shown.
+    /// Something a part shows over the world above the bottom panel stays inside this width, so
+    /// that the corner part does not cover it.
+    /// </summary>
+    public float FreeWidthAboveBottomPanel =>
+        _corner is not null && _corner.IsVisibleInTree() ? _corner.GetGlobalRect().Position.X : _bottom.GetViewportRect().Size.X;
+
+    /// <summary>
+    /// Names the control that stands in the bottom right corner of the window, over the world
+    /// and taller than the bottom panel, as the minimap does: see <see cref="FreeWidthAboveBottomPanel"/>.
+    /// </summary>
+    public void TakeBottomRightCorner(Control corner) => _corner = corner;
 
     /// <summary>Shows a sentence to the player in the message line. It goes away by itself.</summary>
     /// <param name="message">The sentence.</param>
