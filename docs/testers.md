@@ -45,7 +45,7 @@ The game opens on a menu with three choices.
 - **Host a match** opens the match for one other player and waits. See the next section.
 - **Join** joins a match someone else hosts. Type their address into the box first.
 
-During a match, the bar across the top of the window says which player you are, and its button, Leave the match, takes you back to the menu. While units are selected, a panel at the bottom of the window says how many.
+During a match, the bar across the top of the window shows on its left what you have: Materials, Energy and supply. On its right it says which player you are, and its button, Leave the match, takes you back to the menu. While units are selected, a panel at the bottom of the window says how many.
 
 ## Playing with someone else
 
@@ -81,9 +81,22 @@ If joining fails, the menu says why in orange:
 | Select several | Hold the left button and drag a box round them |
 | Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is already in |
 | Clear the selection | Click the ground |
+| Send the selected workers to work at a deposit | Right-click the deposit |
 | Send the selected units somewhere | Right-click the ground. On a trackpad that is a click with two fingers, unless you have set it otherwise |
 | Show or hide the readout in the corner | F3 |
 | Quit | Close the window |
+
+## Resources and workers
+
+The brown blocks on the map are deposits. Select workers and right-click a deposit, and they walk to it, stand beside it and earn Materials for you. A yellow ring closes round the deposit you clicked.
+
+- Each worker at a deposit earns 45 Materials a minute, paid a little every second from one second after it arrives. Your six workers at one deposit earn 4.5 a second.
+- A deposit has room for eight workers, so all six of yours fit at one.
+- A deposit pays only inside your territory, which for now is the ground round your start: the two deposits nearest your workers. Workers sent to any other deposit stand there and earn nothing, and a line under the top bar says so. Nothing can claim more territory yet.
+- A worker stops earning when you send it somewhere else. Send it back to a deposit and it starts again.
+- Nobody can walk through a deposit.
+- Materials and Energy are shown as whole numbers. Supply is what you use out of what you may use: each worker uses 1.
+- Nothing earns Energy yet, and nothing spends either resource.
 
 ## What you will see
 
