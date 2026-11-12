@@ -28,7 +28,7 @@ public class StartingResearchTests
         Assert.Equal((Firepower, 2, 100, 100, TicksToTier2), (slot.Track, slot.Tier, slot.Materials, slot.Energy, slot.Ticks));
         Assert.Equal(TicksToTier2 - 1, slot.TicksLeft);
         Assert.Equal(1, match.Research.State.Tier(0, Firepower));
-        Assert.Equal([new ResearchEvent(ResearchEventKind.Started, 0, 0, Firepower, 2, 1)], events);
+        Assert.Equal([new ResearchEvent(SimEventKind.ResearchStarted, 0, 0, Firepower, 2, 1)], events);
         Assert.Equal(0, match.Simulation.DroppedCommandCount);
     }
 
