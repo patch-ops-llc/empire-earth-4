@@ -6,7 +6,7 @@ namespace Game;
 
 /// <summary>
 /// The right of the top bar: which player this is, how the match is played, who has left it, and
-/// the button that leaves it.
+/// the button that leaves it, which opens the <see cref="EndScreen"/>.
 /// </summary>
 /// <remarks>
 /// The sentences give way to everything else in the top bar, a whole sentence at a time and
@@ -27,6 +27,7 @@ public partial class MatchPanel : InterfacePart
     // The first of the forms that has had room, in a window of this width.
     private int _shortest;
     private float _window;
+    private bool _out;
 
     protected override void Attach()
     {
@@ -38,8 +39,20 @@ public partial class MatchPanel : InterfacePart
             // One word, because the bar is short of room. The sentence beside it names the match.
             var button = UiStyle.FrameButton("Leave");
             button.Name = "LeaveButton";
-            button.TooltipText = "Leave the match and go back to the menu";
-            button.Pressed += leave;
+            button.TooltipText = "Leave the match and go back to the menu, or concede it. Leaving concedes, so it asks first";
+            button.Pressed += () =>
+            {
+                // The end screen asks first, since leaving concedes (design 5.1). A match shown
+                // without it is left at once.
+                if (Frame.Parts.OfType<EndScreen>().FirstOrDefault() is { } screen)
+                {
+                    screen.Open();
+                }
+                else
+                {
+                    leave();
+                }
+            };
             Frame.TopRight.AddChild(button);
         }
 
@@ -50,6 +63,17 @@ public partial class MatchPanel : InterfacePart
             Refresh();
         };
         Refresh();
+    }
+
+    public override void AfterTick()
+    {
+        // A player who is out of the match gives no more orders, and the bar says so.
+        var isOut = !View.Match.Standings.IsPlaying(View.Player);
+        if (isOut != _out)
+        {
+            _out = isOut;
+            Refresh();
+        }
     }
 
     public override void EveryFrame(double delta)
@@ -82,7 +106,9 @@ public partial class MatchPanel : InterfacePart
     private void Refresh()
     {
         var seat = View.Player;
-        var who = $"{PlayerName(seat)}, {PlayerColors.NameOf(seat)}.";
+        var who = _out
+            ? $"{PlayerName(seat)}, {PlayerColors.NameOf(seat)}, out of the match."
+            : $"{PlayerName(seat)}, {PlayerColors.NameOf(seat)}.";
         var how = View.Run switch
         {
             HostRun host => string.Create(CultureInfo.InvariantCulture, $"Hosting on port {host.Port}."),
