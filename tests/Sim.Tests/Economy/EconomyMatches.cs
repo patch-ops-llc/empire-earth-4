@@ -3,6 +3,7 @@ using Sim.Data;
 using Sim.Economy;
 using Sim.Map;
 using Sim.Setup;
+using Sim.Structures;
 using Sim.Tests.Data;
 using Sim.Tests.Map;
 using Sim.Tests.Setup;
@@ -21,9 +22,41 @@ internal static class EconomyMatches
     /// <summary>A whole second of one worker's Energy at Extraction 1, in thousandths: 30 a minute.</summary>
     public const long EnergyPayment = 500;
 
-    /// <summary>The sample data with every track starting at this tier.</summary>
+    public const string GeneratorPath = "structures/generator.jsonc";
+
+    /// <summary>A Generator as design 2.5 has it: 2 by 2 tiles, 500 hit points.</summary>
+    public const string Generator = """
+        {
+          "id": "generator",
+          "track": "extraction",
+          "footprint": 2,
+          "hp": 500,
+          "cost": { "materials": 100, "energy": 0 },
+          "build_seconds": 25,
+          "sight": 6,
+          "work_site": "energy"
+        }
+        """;
+
+    private static readonly Lazy<GameData> Loaded = new(() => DataAssert.Valid(Files()));
+
+    /// <summary>The sample data with a Generator in its roster and its file.</summary>
+    public static GameData Data => Loaded.Value;
+
+    public static InMemoryDataFiles Files() => SampleData
+        .With(SampleData.RulesPath, "\"structures\": [\"capitol\", \"barracks\"]", "\"structures\": [\"capitol\", \"barracks\", \"generator\"]")
+        .Set(GeneratorPath, Generator);
+
+    /// <summary>The data of these matches with every track starting at this tier.</summary>
     public static GameData DataStartingAtTier(int tier) =>
-        DataAssert.Valid(SampleData.With(SampleData.RulesPath, "\"start_epoch\": 1", $"\"start_epoch\": {tier}"));
+        DataAssert.Valid(Files().Edit(SampleData.RulesPath, "\"start_epoch\": 1", $"\"start_epoch\": {tier}"));
+
+    /// <summary>
+    /// Places a finished Generator whose lowest tile is (x, y). The match's data must have one,
+    /// as <see cref="Data"/> has.
+    /// </summary>
+    public static EntityId PlaceGenerator(this Match match, int player, int x, int y) =>
+        match.PlaceStructure(player, "generator", x, y);
 
     public static MapDef WithDeposits(this MapDef map, params (int X, int Y)[] deposits) =>
         map with { Deposits = [.. deposits.Select(deposit => new MapDeposit(DepositKind.Contested, deposit.X, deposit.Y))] };
@@ -41,7 +74,7 @@ internal static class EconomyMatches
     }
 
     public static Match Create(MapDef map, GameData? data = null, int players = 2) =>
-        MatchSetup.Create(data ?? TestMatches.Data, map, 1, [.. Enumerable.Repeat(PlayerSetup.WithoutStart, players)]);
+        MatchSetup.Create(data ?? Data, map, 1, [.. Enumerable.Repeat(PlayerSetup.WithoutStart, players)]);
 
     /// <summary>A worker of a player on the center of a tile.</summary>
     public static EntityId WorkerAt(this Match match, int player, int x, int y) => match.SpawnWorker(player, MapGrid.TileCenter(x, y));
