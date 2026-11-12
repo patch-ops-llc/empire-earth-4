@@ -119,6 +119,7 @@ public class BenchmarkToolTests
         Assert.Equal(["march", "fight"], Rows(output).Select(row => row.Name));
 
         var lines = output.ReplaceLineEndings("\n").Split('\n');
+        var attacking = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var (scenario, units) in new[] { ("march", 60), ("fight", 60) })
         {
             var heading = Array.FindIndex(lines, line => line.StartsWith($"{scenario}, {units} units: the worst tick was tick ", StringComparison.Ordinal));
@@ -142,8 +143,13 @@ public class BenchmarkToolTests
             Assert.All(parts, part => Assert.True(part.Average >= 0 && part.Worst >= part.InWorstTick && part.Worst >= part.Average));
             Assert.InRange(parts.Sum(part => part.Share), 99, 101);
             Assert.True(parts.Single(part => part.Name == "MovementSystem").Average > 0);
-            Assert.Equal(scenario == "fight", parts.Single(part => part.Name == "AttackSystem").Average > 0.0005);
+            attacking[scenario] = parts.Single(part => part.Name == "AttackSystem").Average;
         }
+
+        // The time lands on the system that took it: units that fight spend more of it attacking
+        // than units that only march. One time is held against the other and not against a
+        // number of milliseconds, which a slow or busy machine would not keep.
+        Assert.True(attacking["fight"] > attacking["march"], $"AttackSystem took {attacking["fight"]} ms in the fight and {attacking["march"]} ms in the march.");
     }
 
     /// <summary>What the plan asks the benchmark to cover, in the words the scenarios report it.</summary>
