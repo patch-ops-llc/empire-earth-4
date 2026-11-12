@@ -99,7 +99,10 @@ public partial class AccentBadges : WorldLayer
 
     protected override void Attach()
     {
-        _material = new ShaderMaterial { Shader = new Shader { Code = ShaderCode() } };
+        // A shape that is drawn over everything is drawn with the see-through ones, in the order
+        // of their distance. The priority puts the badges after the territories and whatever
+        // else lies on the ground, which would otherwise tint them.
+        _material = new ShaderMaterial { Shader = new Shader { Code = ShaderCode() }, RenderPriority = 10 };
         _mesh = new MultiMesh
         {
             TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,

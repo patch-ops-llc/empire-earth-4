@@ -9,7 +9,8 @@ namespace Game;
 /// <para>
 /// <b>The full badge.</b> A square in the track's color with a dark rim, and one upright white
 /// mark for level I or two for level II. Its side is <see cref="AccentBadges.WorldSize"/> tiles,
-/// kept between <see cref="AccentBadges.MinPixels"/> and <see cref="AccentBadges.MaxPixels"/>.
+/// kept between <see cref="AccentBadges.MinPixels"/> and <see cref="AccentBadges.MaxPixels"/>,
+/// and a pixel less where the marks would otherwise not stand in the middle.
 /// </para>
 /// <para>
 /// <b>The small badge.</b> At the smallest size a mark is one pixel wide, and two badges with
@@ -54,9 +55,9 @@ public readonly record struct BadgeLayout(bool Compact, int Width, int Height, i
         var largest = Math.Max(smallest, Whole(AccentBadges.MaxPixels * scale));
         var gap = Whole(AccentBadges.GapPixels * scale);
         var lift = Whole(AccentBadges.LiftPixels * scale);
-        var side = Math.Clamp(Whole(AccentBadges.WorldSize * pixelsPerTile), smallest, largest);
+        var raw = Math.Clamp(Whole(AccentBadges.WorldSize * pixelsPerTile), smallest, largest);
 
-        if (side == smallest && (2 * smallest) + gap > AccentBadges.Fit * pixelsPerTile)
+        if (raw == smallest && (2 * smallest) + gap > AccentBadges.Fit * pixelsPerTile)
         {
             var thin = Whole(scale);
             var least = Math.Min(smallest, Whole(AccentBadges.PipPixels * scale));
@@ -67,28 +68,17 @@ public readonly record struct BadgeLayout(bool Compact, int Width, int Height, i
             return new BadgeLayout(Compact: true, width, height, thin, width - thin, lift, 0, 0, 0);
         }
 
+        // The marks stand on whole pixels and in the middle of the badge, so the side of the
+        // badge is odd where the mark's width is and even where it is even. The width of a
+        // mark, the room between two and the room above and below them only grow as the camera
+        // comes nearer: a mark that got thinner and wider in turns would flicker while the
+        // player zooms. The height of a mark follows from the room above and below it, and may
+        // lose a pixel where the badge gains one.
+        var markWidth = Math.Max(1, (int)MathF.Ceiling((AccentBadges.MarkWidth * raw) - 0.3f));
+        var side = (raw - markWidth) % 2 == 0 ? raw : raw > smallest ? raw - 1 : raw + 1;
         var rim = Whole(side / 9f);
-        var markWidth = Whole(AccentBadges.MarkWidth * side);
-        var markHeight = Whole(AccentBadges.MarkHeight * side);
-
-        // The marks stand on whole pixels, so their sizes are made to leave the same room on
-        // either side: a mark that is half a pixel off the middle is drawn blurred or lopsided.
-        if ((side - markHeight) % 2 != 0)
-        {
-            markHeight++;
-        }
-
-        if ((side - markWidth) % 2 != 0)
-        {
-            markWidth++;
-        }
-
-        var spacing = Math.Max(markWidth + 1, Whole(AccentBadges.MarkSpacing * side));
-        if ((side - spacing - markWidth) % 2 != 0)
-        {
-            spacing++;
-        }
-
+        var markHeight = side - (2 * (side / 4));
+        var spacing = Math.Max(2 * markWidth, 2 * Whole(AccentBadges.MarkSpacing * side / 2f));
         return new BadgeLayout(Compact: false, side, side, rim, side + gap, lift, markWidth, markHeight, spacing);
     }
 

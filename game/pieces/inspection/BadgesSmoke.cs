@@ -431,15 +431,37 @@ public sealed class BadgesSmoke : SmokePart
         }
 
         // Nowhere between are the two badges of a unit wider than a tile, so the badges of
-        // units that stand a tile apart do not cover each other.
-        for (var distance = rig.MinDistance; distance <= rig.MaxDistance; distance += 0.25f)
+        // units that stand a tile apart do not cover each other. The marks of a full badge
+        // stand in its middle on whole pixels, clear of the rim, and neither the badge nor the
+        // width of its marks shrinks while the camera comes nearer.
+        foreach (var scale in new[] { 1f, 720f / 648f, 1.25f, 1.5f, 1080f / 648f, 2f, 3f })
         {
-            var tile = Tile(distance);
-            var layout = BadgeLayout.For(tile, tile * depth, 1f);
-            if (layout.PairWidth > tile || layout.HeightOf(2) > tile * depth)
+            BadgeLayout? further = null;
+            for (var distance = rig.MaxDistance; distance >= rig.MinDistance; distance -= 0.125f)
             {
-                orders.Fail($"with the camera {distance} tiles away a tile is {tile:0.0} pixels wide and the badges of a unit are {layout.PairWidth} by {layout.HeightOf(2)}: {layout}.");
-                return;
+                var tile = Tile(distance) * scale;
+                var layout = BadgeLayout.For(tile, tile * depth, scale);
+                var fits = layout.PairWidth <= tile && layout.HeightOf(2) <= tile * depth;
+                var marks = layout.Compact
+                    || ((layout.Width - layout.MarkWidth) % 2 == 0
+                        && (layout.Width - layout.MarkSpacing - layout.MarkWidth) % 2 == 0
+                        && (layout.Height - layout.MarkHeight) % 2 == 0
+                        && layout.MarkSpacing > layout.MarkWidth
+                        && (layout.Width - layout.MarkSpacing - layout.MarkWidth) / 2 > layout.Rim
+                        && (layout.Height - layout.MarkHeight) / 2 > layout.Rim);
+                var grows = further is not { } before
+                    || before.Compact != layout.Compact
+                    || (layout.Width >= before.Width && layout.Height >= before.Height && layout.MarkWidth >= before.MarkWidth
+                        && layout.Height - layout.MarkHeight >= before.Height - before.MarkHeight && layout.MarkHeight >= before.MarkHeight - 1 && layout.MarkSpacing >= before.MarkSpacing && layout.Rim >= before.Rim);
+                if (!fits || !marks || !grows || (further is { Compact: false } && layout.Compact))
+                {
+                    orders.Fail(
+                        $"with the camera {distance} tiles away and {scale:0.00} pixels to a unit of the interface, a tile is {tile:0.0} pixels wide and the badges are {layout}" +
+                        $"{(fits ? string.Empty : ", too large for one unit")}{(marks ? string.Empty : ", with marks off the middle or on the rim")}{(grows ? string.Empty : $", smaller than further away: {further}")}.");
+                    return;
+                }
+
+                further = layout;
             }
         }
     }
