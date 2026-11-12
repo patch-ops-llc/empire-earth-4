@@ -213,7 +213,7 @@ Game design 2.5. One file for each structure that is built so far: the eight of 
 | `attack` | Optional. `dps` at Firepower tier 1, `interval_seconds`, `range` and `projectile_speed`. The attack is always ranged. Each Firepower tier of the owner multiplies the damage by `per_tier.damage`. Range is measured from the nearest edge of the footprint. |
 | `attack.cannot_hit` | Optional. Lines the attack cannot hit. |
 | `attack.can_hit_all_from_protection` | Optional, needs `cannot_hit`. The owner's Protection tier from which `cannot_hit` no longer applies. |
-| `wall.gate` | Makes the structure the wall, which is laid tile by tile and needs a `footprint` of 1. The gate is a wall tile with a `cost` and `build_seconds` of its own; it has the wall's hit points and sight. |
+| `wall.gate` | Makes the structure the wall, which is laid tile by tile and needs a `footprint` of 1. The gate is a wall tile with a `cost` and `build_seconds` of its own; it has the wall's hit points and sight, and it is unlocked when the wall is. It needs no file and no line in the roster: the game makes it from this block, with the ID `gate`, which no structure in the roster may have. |
 
 A line's file names the structure that trains it in `built_at`, and that structure's file lists the line in `trains`. Where both files exist the two must say the same. A structure may list a line that has no file yet, as the Works lists `support`.
 

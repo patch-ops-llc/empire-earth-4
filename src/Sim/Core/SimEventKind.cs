@@ -107,7 +107,8 @@ public enum SimEventKind
     /// A structure has built itself and gives what its file says from now on.
     /// <see cref="SimEvent.Player"/> is its owner, <see cref="SimEvent.Entity"/> the structure,
     /// <see cref="SimEvent.Position"/> the center of its footprint, and
-    /// <see cref="SimEvent.Amount"/> its place in the roster of structures.
+    /// <see cref="SimEvent.Amount"/> its place in the roster of structures, or for a gate the
+    /// number after the roster's last. A gate is open to its owner's units from this tick.
     /// </summary>
     StructureFinished,
 
@@ -115,7 +116,8 @@ public enum SimEventKind
     /// A structure was laid on the map and blocks its tiles from now on.
     /// <see cref="SimEvent.Player"/> is its owner, <see cref="SimEvent.Entity"/> the structure,
     /// <see cref="SimEvent.Position"/> the center of its footprint, and
-    /// <see cref="SimEvent.Amount"/> its place in the roster of structures. One laid by a worker
+    /// <see cref="SimEvent.Amount"/> its place in the roster of structures, or for a gate the
+    /// number after the roster's last. One laid by a worker
     /// is not finished yet: it is in the store of foundations until it has built itself.
     /// </summary>
     StructurePlaced,
