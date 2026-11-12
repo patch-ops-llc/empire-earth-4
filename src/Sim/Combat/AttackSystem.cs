@@ -276,11 +276,13 @@ public sealed class AttackSystem : ISystem
                 {
                     Position = position,
                     Target = unit.Target,
+                    Aim = target.Position,
                     Speed = profile.ShotSpeed,
                     Damage = profile.Damage,
                     Owner = turn.Body.Owner,
                     Line = profile.Line,
                     Firepower = profile.Firepower,
+                    Blast = profile.Blast,
                 });
                 _events.Add(SimEventKind.ShotFired, turn.Body.Owner, shot, turn.Entity, position);
             }
