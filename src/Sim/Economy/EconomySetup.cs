@@ -59,8 +59,9 @@ public static class EconomySetup
     }
 
     /// <summary>
-    /// Places a worker: a unit with the speed of the worker profile that can be assigned to work
-    /// sites. Call it before the first tick, or inside a tick from a system or a command handler.
+    /// Places a worker: a unit with the speed and spacing of the worker profile that can be assigned to work
+    /// sites, and with a worker's hit points under its owner's Protection tier, so that it can be
+    /// attacked. Call it before the first tick, or inside a tick from a system or a command handler.
     /// </summary>
     /// <param name="match">The match.</param>
     /// <param name="player">The owner.</param>
@@ -69,8 +70,10 @@ public static class EconomySetup
     {
         ArgumentNullException.ThrowIfNull(match);
 
-        var worker = match.SpawnUnit(player, position, Mover.SpeedPerTick(match.Data.Resources.Worker.Speed.ToFraction()));
+        var profile = match.Data.Resources.Worker;
+        var worker = match.SpawnUnit(player, position, Mover.SpeedPerTick(profile.Speed.ToFraction()), profile.Spacing.ToFraction().ToFixed());
         match.Workers.Add(worker, default);
+        match.Health.Add(worker, match.Combat.WorkerHealth(player));
         return worker;
     }
 

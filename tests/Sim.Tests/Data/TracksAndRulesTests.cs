@@ -133,4 +133,27 @@ public class TracksAndRulesTests
 
         DataAssert.RejectedOnce(files, SampleData.RulesPath, "$.roster.structures", "must have at least 1 entries, found 0");
     }
+
+    [Theory]
+    [InlineData("\"debug\": { \"spawn\": true }", "\"debug\": { \"spawn\": false }")]
+    [InlineData("\"debug\": { \"spawn\": true }", "\"debug\":{\"spawn\":true}")]
+    public void TheDevelopmentSpawnIsSwitchedOnOrOff(string oldText, string newText)
+    {
+        var data = DataAssert.Valid(SampleData.With(SampleData.RulesPath, oldText, newText));
+
+        Assert.Equal(newText.Contains("true", StringComparison.Ordinal), data.Rules.Debug.Spawn);
+    }
+
+    [Theory]
+    [InlineData("\"debug\": { \"spawn\": true }", "\"debug\": { \"spawn\": 1 }", "$.debug.spawn", "expected true or false, found a number")]
+    [InlineData("\"debug\": { \"spawn\": true }", "\"debug\": { \"spawn\": \"true\" }", "$.debug.spawn", "expected true or false, found text")]
+    [InlineData("\"debug\": { \"spawn\": true }", "\"debug\": { }", "$.debug", "missing key \"spawn\"")]
+    [InlineData(",\n  \"debug\": { \"spawn\": true }", "", "$", "missing key \"debug\"")]
+    [InlineData("\"debug\": { \"spawn\": true }", "\"debug\": { \"spawn\": true, \"god_mode\": true }", "$.debug.god_mode", "unknown key \"god_mode\"")]
+    public void TheDebugBlockMustBeThereWithItsSwitchAndNothingElse(string oldText, string newText, string location, string message)
+    {
+        var files = SampleData.With(SampleData.RulesPath, oldText, newText);
+
+        DataAssert.RejectedOnce(files, SampleData.RulesPath, location, message);
+    }
 }
