@@ -12,14 +12,28 @@ internal static class DataRules
     public const string ResearchFile = "research.jsonc";
     public const string ResourcesFile = "resources.jsonc";
     public const string AccentsFile = "accents.jsonc";
+    public const string AiFolder = "ai/";
     public const string LinesFolder = "lines/";
     public const string MapsFolder = "maps/";
+    public const string StructuresFolder = "structures/";
 
     /// <summary>The key editors use to find a file's schema. It is not data and is left out of the hash.</summary>
     public const string SchemaKey = "$schema";
 
     /// <summary>The counter target that means every structure and not a line.</summary>
     public const string StructuresTarget = "structures";
+
+    /// <summary>What a structure's list of what it trains calls the worker, which is not a line.</summary>
+    public const string WorkerUnit = "worker";
+
+    /// <summary>The resource workers earn at a structure that is a work site.</summary>
+    public const string EnergyWorkSite = "energy";
+
+    /// <summary>
+    /// The structure every player starts with (design 5.2). Its file is required: the match setup
+    /// places one for every player, and the map checks read its footprint and territory radius.
+    /// </summary>
+    public const string StartStructure = "capitol";
 
     /// <summary>
     /// The tracks the rules name. The formulas of design 2.3 and section 4 say which track scales
@@ -40,7 +54,14 @@ internal static class DataRules
     public const int MaxPrice = 1_000_000;
     public const int MaxSeconds = 3_600;
     public const int MaxWorkerPlaces = 64;
+    public const int MaxFootprint = 8;
+    public const int MaxSight = 64;
+    public const int MaxTerritoryRadius = 64;
+    public const int MaxResearchSlots = 8;
+    public const int MaxStructuresPerPlayer = 1_000;
     public const int MaxFullRateAmount = 100_000_000;
+    public const int MaxAiWorkers = 200;
+    public const int MaxAiWeight = 1_000;
 
     public static readonly DataNumber Zero = DataNumber.FromInteger(0);
     public static readonly DataNumber One = DataNumber.FromInteger(1);
