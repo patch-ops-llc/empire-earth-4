@@ -18,7 +18,10 @@ public sealed record RuleSet(
     int WallCrossingCost,
     MatchRules Match,
     StartRules Start,
-    MapRules Map);
+    MapRules Map,
+    CombatConstants Combat,
+    DebugRules Debug,
+    VisionRules Vision);
 
 /// <summary>Design 1.4: the epoch is the tier that <see cref="TracksNeeded"/> tracks have reached.</summary>
 public sealed record EpochRules(int TracksNeeded, int Reach);
@@ -43,10 +46,46 @@ public sealed record MatchRules(int StartEpoch, int EpochCap);
 /// <summary>Design 5.2: what every player starts with, besides a Capitol.</summary>
 public sealed record StartRules(int Workers, int Materials, int Energy);
 
-/// <summary>Design 5.3 and 5.4: what every map must satisfy.</summary>
+/// <summary>
+/// Design 2.4 and 2.5: the numbers of combat that belong to no line and no structure. Distances
+/// are in tiles.
+/// </summary>
+/// <param name="LookIntervalTicks">A unit or a Tower without a target looks for one every this many ticks.</param>
+/// <param name="UnitReachMargin">Melee reach against a unit is the spacing between the two units plus this.</param>
+/// <param name="StructureReach">Melee reach against a structure, from the attacker's center to the nearest edge of the footprint.</param>
+/// <param name="Fortification">
+/// The fortification rule: what multiplies the damage a structure takes from an attacker whose
+/// effective Firepower is below the Protection tier of the structure's owner.
+/// </param>
+public sealed record CombatConstants(
+    int LookIntervalTicks,
+    DataNumber UnitReachMargin,
+    DataNumber StructureReach,
+    DataNumber Fortification);
+
+/// <summary>
+/// Switches for development, which the design does not have. Both players of a match have the
+/// same data, so they have the same switches, and a switch is part of the content hash.
+/// </summary>
+/// <param name="Spawn">
+/// Whether a match carries out <see cref="Core.CommandType.DebugSpawn"/>, which makes units from
+/// nothing, and <see cref="Core.CommandType.DebugPlace"/>, which lays a finished structure the same
+/// way. With it off each is dropped like any command without a handler.
+/// </param>
+public sealed record DebugRules(bool Spawn);
+
+/// <summary>Design 5.3: the fog of war.</summary>
+/// <param name="RefreshTicks">
+/// What each player sees is worked out again in every tick whose number is a multiple of this, so
+/// it may be up to one tick less than this old.
+/// </param>
+public sealed record VisionRules(int RefreshTicks);
+
+/// <summary>
+/// Design 5.3 and 5.4: what every map must satisfy. The footprint and territory radius of a start
+/// are not here: they are those of the starting Capitol, in its own file.
+/// </summary>
 public sealed record MapRules(
-    int StartFootprint,
-    int StartTerritoryRadius,
     int DepositSize,
     int MainDepositsPerPlayer,
     int NaturalDepositsPerPlayer,

@@ -14,8 +14,18 @@ public enum CommandType
 {
     /// <summary>Not a command. The default value, which no handler can be registered for.</summary>
     None = 0,
+    Attack = 4,
+    AttackMove = 5,
+    Build = 9,
+    CancelBuild = 10,
     CancelResearch = 2,
+    CancelTrain = 12,
+    DebugPlace = 16,
+    DebugSpawn = 8,
     Gather = 7,
     Move = 1,
+    SetRallyPoint = 13,
     StartResearch = 3,
+    Stop = 6,
+    Train = 11,
 }
