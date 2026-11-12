@@ -226,7 +226,7 @@ A file is named after the time the match started, the map and the player: `2026-
 
 A match has sound: a few short sounds, all of them made by the game itself as it starts. None is a recording.
 
-- A click as an order of yours is taken, and two low notes when one cannot be: a right-click that means nothing for what is selected, or an order the game turns down.
+- A click as an order of yours is taken, on the map, in the build menu, in the production panel or in the research panel. Two low notes when one cannot be: a right-click that means nothing for what is selected, a site the build menu shows in red, a greyed button of the production panel chosen by its key, or an order the game turns down later.
 - A clash when a unit is hit hand to hand, and a thud when a shot lands.
 - A falling note when a unit dies.
 - In builds that have the parts they belong to: two rising notes when a structure of yours is finished, a crash when a structure is destroyed, three bright notes when a research of yours is finished, and a short fanfare when any player reaches a new epoch.

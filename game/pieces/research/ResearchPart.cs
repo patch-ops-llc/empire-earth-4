@@ -182,7 +182,11 @@ public partial class ResearchPart : InterfacePart
         return words;
     }
 
-    private void Start(int track)
+    /// <summary>
+    /// Orders the next tier of a track, as a click on its bright cell does. A research that
+    /// cannot be started now is not ordered.
+    /// </summary>
+    public void Start(int track)
     {
         if (_reading.Check(track) != ResearchStartCheck.Allowed)
         {
@@ -191,13 +195,15 @@ public partial class ResearchPart : InterfacePart
 
         if (View.Client.Submit(new Command(CommandType.StartResearch, View.Player, contentId: track)))
         {
+            SoundPart.Of(Frame)?.Acknowledge();
             _started = (track, _reading.Tick);
             _pointed = track;
             ShowPanel();
         }
     }
 
-    private void Cancel(int track)
+    /// <summary>Cancels the research of a track that is in a slot, as a click on its Cancel button does.</summary>
+    public void Cancel(int track)
     {
         if (!_reading.TryGetSlot(track, out _))
         {
@@ -206,6 +212,7 @@ public partial class ResearchPart : InterfacePart
 
         if (View.Client.Submit(new Command(CommandType.CancelResearch, View.Player, contentId: track)))
         {
+            SoundPart.Of(Frame)?.Acknowledge();
             _cancelled = (track, _reading.Tick);
             ShowPanel();
         }

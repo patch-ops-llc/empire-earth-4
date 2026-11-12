@@ -82,6 +82,11 @@ public sealed class SmokeTest
         // 13v. Economy: a work order.
         new GatherOrdersSmoke(),
 
+        // Sound of the research panel: an order given in it is answered. 2 seconds of play. It
+        // runs before the research below, which spends the Energy a match starts with, and
+        // leaves that Energy as it found it.
+        new ResearchSoundSmoke(),
+
         // 14v. Research: one research.
         new ResearchSmoke(),
 
@@ -99,7 +104,13 @@ public sealed class SmokeTest
 
         // Later pieces.
 
+        // Sound, for the panels that send their orders themselves: an order placed in the build
+        // menu and in the production panel is answered. 2 seconds of play each.
+        new BuildMenuSoundSmoke(),
+        new ProductionSoundSmoke(),
+
         // Sound: what the match so far has played, and an order answered. 1 second of play.
+        // It stops the sounds as it ends, so it stays the last part that makes one.
         new SoundSmoke(),
     ];
 

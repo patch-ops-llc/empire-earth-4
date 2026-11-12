@@ -169,6 +169,7 @@ public partial class BuildMenu : InterfacePart
         if (BuildWords.WhyNot(checks, structure, checks.Structure(structure)) is { } why)
         {
             Frame.Say($"{name}: {why}");
+            SoundPart.Of(Frame)?.Acknowledge(taken: false);
             StopPlacing();
             return false;
         }
@@ -177,6 +178,7 @@ public partial class BuildMenu : InterfacePart
         if (!site.IsAccepted)
         {
             Frame.Say($"The {name} cannot go there: {BuildWords.SiteProblem(site.Problem)}.");
+            SoundPart.Of(Frame)?.Acknowledge(taken: false);
             return false;
         }
 
@@ -193,6 +195,7 @@ public partial class BuildMenu : InterfacePart
             return false;
         }
 
+        SoundPart.Of(Frame)?.Acknowledge();
         if (!more)
         {
             Close();

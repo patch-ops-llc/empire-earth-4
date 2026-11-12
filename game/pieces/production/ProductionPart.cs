@@ -144,11 +144,18 @@ public partial class ProductionPart : InterfacePart
         if (!offer.Allowed)
         {
             Frame.Say(ProductionWords.ReasonSentence(match, View.Player, offer.Unit, offer.Check));
+            SoundPart.Of(Frame)?.Acknowledge(taken: false);
             return;
         }
 
         EntityId[] structure = [Shown];
-        if (View.Client.Submit(new Command(CommandType.Train, View.Player, structure, contentId: offer.Unit)) && OS.IsStdOutVerbose())
+        if (!View.Client.Submit(new Command(CommandType.Train, View.Player, structure, contentId: offer.Unit)))
+        {
+            return;
+        }
+
+        SoundPart.Of(Frame)?.Acknowledge();
+        if (OS.IsStdOutVerbose())
         {
             GD.Print($"Train order for {ProductionWords.Order(match, offer.Unit, offer.Count)} at {Shown} at tick {match.World.Tick}.");
         }
@@ -163,7 +170,13 @@ public partial class ProductionPart : InterfacePart
         }
 
         EntityId[] structure = [Shown];
-        if (View.Client.Submit(new Command(CommandType.CancelTrain, View.Player, structure, contentId: position)) && OS.IsStdOutVerbose())
+        if (!View.Client.Submit(new Command(CommandType.CancelTrain, View.Player, structure, contentId: position)))
+        {
+            return;
+        }
+
+        SoundPart.Of(Frame)?.Acknowledge();
+        if (OS.IsStdOutVerbose())
         {
             GD.Print($"Cancel order {position + 1} at {Shown} at tick {View.Match.World.Tick}.");
         }

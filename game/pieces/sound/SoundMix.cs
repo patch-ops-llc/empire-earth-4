@@ -136,6 +136,13 @@ public sealed class SoundMix
     }
 
     /// <summary>
+    /// True when a cue asked for now would start: its gap since its last start has passed. It
+    /// starts nothing and changes nothing.
+    /// </summary>
+    /// <param name="now">The time, in seconds, on the clock <see cref="TryStart"/> is given.</param>
+    public bool IsFree(SoundCue cue, double now) => now - _lastStart[(int)cue] >= _gap[(int)cue];
+
+    /// <summary>
     /// Asks to start a cue now. False when it last started less than its gap ago
     /// (<see cref="GapAfter"/>): the sound is then left out.
     /// </summary>
@@ -143,7 +150,7 @@ public sealed class SoundMix
     public bool TryStart(SoundCue cue, double now)
     {
         var index = (int)cue;
-        if (now - _lastStart[index] < _gap[index])
+        if (!IsFree(cue, now))
         {
             return false;
         }
