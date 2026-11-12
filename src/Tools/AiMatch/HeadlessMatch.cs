@@ -19,6 +19,15 @@ namespace Tools.AiMatch;
 /// <param name="StructuresLost">Its structures that were destroyed.</param>
 /// <param name="Materials">Its stockpile of Materials at the end, in whole resources.</param>
 /// <param name="Energy">Its stockpile of Energy at the end, in whole resources.</param>
+/// <param name="OutTick">The tick after which it had no Capitol and no Outpost left, or -1 while it is in the match.</param>
+/// <param name="FirstAttackOrderTick">The tick in which it first gave an attack-move or an attack order, or -1.</param>
+/// <param name="EveryTrackAtCapTick">The tick after which every one of its tracks stood at the epoch cap, or -1.</param>
+/// <param name="ResearchMaterials">The Materials it paid for research on each track and did not get back, in the order of the data.</param>
+/// <param name="ResearchEnergy">The same for Energy.</param>
+/// <param name="TicksAtSupplyCap">The ticks after which it used all its supply cap or more.</param>
+/// <param name="TicksAboveSupplyCap">The ticks after which it used more supply than its cap.</param>
+/// <param name="MostAboveSupplyCap">The most supply it used above its cap.</param>
+/// <param name="Samples">What it had after every ten seconds of game time, in order.</param>
 public sealed record SeatResult(
     int Player,
     string Personality,
@@ -36,11 +45,33 @@ public sealed record SeatResult(
     int UnitsLost,
     int StructuresLost,
     long Materials,
-    long Energy);
+    long Energy,
+    int OutTick,
+    int FirstAttackOrderTick,
+    int EveryTrackAtCapTick,
+    IReadOnlyList<long> ResearchMaterials,
+    IReadOnlyList<long> ResearchEnergy,
+    int TicksAtSupplyCap,
+    int TicksAboveSupplyCap,
+    int MostAboveSupplyCap,
+    IReadOnlyList<SeatSample> Samples);
+
+/// <summary>How a headless match ended.</summary>
+public enum MatchEnd
+{
+    /// <summary>The time ran out with two or more players still in the match.</summary>
+    TimeLimit,
+
+    /// <summary>By conquest (design 5.1): at most one player still had a Capitol or an Outpost.</summary>
+    Conquest,
+}
 
 /// <summary>A headless match between computer players, when it has ended.</summary>
 /// <param name="Ticks">The length of the match.</param>
-/// <param name="Winner">The one player that still had something on the map when every other had nothing. None at the time limit.</param>
+/// <param name="Ended">How it ended.</param>
+/// <param name="Winner">The one player still in the match when it ended by conquest. None at the time limit, and none when the last players went out in one tick.</param>
+/// <param name="CommandDelay">The ticks between a computer player's thinking and its commands taking effect.</param>
+/// <param name="FirstHitTick">The tick of the first melee hit or shot that landed, or -1.</param>
 /// <param name="StateHash">The hash of the state at the end: the same for the same match on every machine.</param>
 /// <param name="CommandsGiven">The commands the computer players gave.</param>
 /// <param name="CommandsDropped">The commands the simulation dropped as not valid. A computer player should give none.</param>
@@ -49,7 +80,10 @@ public sealed record SeatResult(
 /// <param name="ThinkSeconds">The time the computer players took to think, all together.</param>
 public sealed record HeadlessResult(
     int Ticks,
+    MatchEnd Ended,
     int? Winner,
+    int CommandDelay,
+    int FirstHitTick,
     IReadOnlyList<SeatResult> Seats,
     ulong StateHash,
     int CommandsGiven,
@@ -68,15 +102,19 @@ public sealed record HeadlessResult(
 /// <remarks>
 /// <para>
 /// The match is run as a host runs one: after every tick each computer player thinks, and its
-/// commands are scheduled <see cref="CommandDelay"/> ticks ahead. Nothing in it is random beyond
-/// the seed of the match, so the same arguments give the same match on every machine; only the
-/// times differ.
+/// commands are scheduled the command delay ahead, <see cref="CommandDelay"/> ticks unless the
+/// caller says otherwise. Nothing in a match is random: the simulation rolls nothing (design
+/// 5.2), so the seed changes the state hash and nothing else, and the same arguments give the
+/// same match on every machine; only the times differ. What does change a match is who sits in
+/// which seat, who has which start, the map, and the command delay.
 /// </para>
 /// <para>
-/// <b>When it ends.</b> At the time limit, or as soon as only one player has anything left on
-/// the map: a worker, a fighting unit or a structure. That player is the winner. This is the
-/// tool's own measure, taken from outside; when the rules of a match have an end of their own,
-/// it takes their place.
+/// <b>When it ends.</b> At the time limit, or by conquest (design 5.1): a player with a start who
+/// has no Capitol and no Outpost left on the map, finished or still building itself, is out,
+/// and the match ends when at most one player is still in. That player has won. Players who
+/// lose their last one in the same tick go out together, and then nobody has won. This is the
+/// rule the simulation itself gets with the end of a match (plan M24), counted here from
+/// outside so that the tool needs nothing of that piece.
 /// </para>
 /// </remarks>
 public static class HeadlessMatch
@@ -89,7 +127,16 @@ public static class HeadlessMatch
     /// <param name="personalities">The personality of each player, in the order of the seats. Player i has start i of the map.</param>
     /// <param name="seed">The seed of the match.</param>
     /// <param name="mostTicks">The time limit.</param>
-    public static HeadlessResult Play(GameData data, MapDef map, IReadOnlyList<AiPersonalityDef> personalities, ulong seed, int mostTicks)
+    /// <param name="commandDelay">The ticks between a computer player's thinking and its commands taking effect, 1 or more.</param>
+    /// <param name="starts">The start of each player, in the order of the seats, each start once. Without it, player i has start i.</param>
+    public static HeadlessResult Play(
+        GameData data,
+        MapDef map,
+        IReadOnlyList<AiPersonalityDef> personalities,
+        ulong seed,
+        int mostTicks,
+        int commandDelay = CommandDelay,
+        IReadOnlyList<int>? starts = null)
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(map);
@@ -97,22 +144,32 @@ public static class HeadlessMatch
         ArgumentOutOfRangeException.ThrowIfLessThan(personalities.Count, 2);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(personalities.Count, map.Starts.Count);
         ArgumentOutOfRangeException.ThrowIfLessThan(mostTicks, 1);
+        starts ??= [.. Enumerable.Range(0, personalities.Count)];
+        if (starts.Count != personalities.Count
+            || starts.Distinct().Count() != starts.Count
+            || starts.Any(start => start < 0 || start >= map.Starts.Count))
+        {
+            throw new ArgumentException($"Each of the {personalities.Count} players needs a start of its own among the {map.Starts.Count} of the map.", nameof(starts));
+        }
 
         return Play(
-            MatchSetup.Create(data, map, seed, [.. Enumerable.Range(0, personalities.Count).Select(start => new PlayerSetup(start))]),
+            MatchSetup.Create(data, map, seed, [.. starts.Select(start => new PlayerSetup(start))]),
             personalities,
-            mostTicks);
+            mostTicks,
+            commandDelay);
     }
 
     /// <summary>Plays a match that is already set up, from the tick it is in.</summary>
     /// <param name="match">The match, with a seat for each personality.</param>
     /// <param name="personalities">The personality of each player, in the order of the seats.</param>
     /// <param name="mostTicks">The time limit, as a tick of the match.</param>
-    public static HeadlessResult Play(Match match, IReadOnlyList<AiPersonalityDef> personalities, int mostTicks)
+    /// <param name="commandDelay">The ticks between a computer player's thinking and its commands taking effect, 1 or more.</param>
+    public static HeadlessResult Play(Match match, IReadOnlyList<AiPersonalityDef> personalities, int mostTicks, int commandDelay = CommandDelay)
     {
         ArgumentNullException.ThrowIfNull(match);
         ArgumentNullException.ThrowIfNull(personalities);
         ArgumentOutOfRangeException.ThrowIfNotEqual(personalities.Count, match.Players.Count);
+        ArgumentOutOfRangeException.ThrowIfLessThan(commandDelay, 1);
 
         var seats = personalities.Count;
         var players = personalities.Select((personality, player) => new AiPlayer(match, player, personality)).ToList();
@@ -122,10 +179,13 @@ public static class HeadlessMatch
         var unitsLost = new int[seats];
         var structuresLost = new int[seats];
         var fallen = new HashSet<EntityId>();
-        var (given, tickTime, worstTick, thinkTime) = (0, 0L, 0L, 0L);
-        int? winner = null;
+        var watches = Enumerable.Range(0, seats).Select(player => new SeatWatch(match, player)).ToArray();
+        var outTicks = Enumerable.Repeat(-1, seats).ToArray();
+        var holds = new bool[seats];
+        var (given, tickTime, worstTick, thinkTime, firstHit) = (0, 0L, 0L, 0L, -1);
+        var ended = MatchEnd.TimeLimit;
 
-        while (match.World.Tick < mostTicks && winner is null)
+        while (match.World.Tick < mostTicks && ended == MatchEnd.TimeLimit)
         {
             var before = Stopwatch.GetTimestamp();
             match.Simulation.Tick();
@@ -134,14 +194,20 @@ public static class HeadlessMatch
             worstTick = Math.Max(worstTick, elapsed);
 
             before = Stopwatch.GetTimestamp();
-            foreach (var player in players)
+            for (var player = 0; player < seats; player++)
             {
+                if (outTicks[player] >= 0)
+                {
+                    continue;
+                }
+
                 commands.Clear();
-                player.Think(commands);
+                players[player].Think(commands);
                 given += commands.Count;
                 foreach (var command in commands)
                 {
-                    match.Simulation.Commands.Enqueue(match.World.Tick + CommandDelay - 1, command);
+                    watches[player].Given(command, match.World.Tick);
+                    match.Simulation.Commands.Enqueue(match.World.Tick + commandDelay - 1, command);
                 }
             }
 
@@ -161,6 +227,15 @@ public static class HeadlessMatch
                     unitsLost[simEvent.Player]--;
                     structuresLost[simEvent.Player]++;
                 }
+                else if (firstHit < 0 && simEvent.Kind is SimEventKind.MeleeHit or SimEventKind.ShotHit)
+                {
+                    firstHit = match.World.Tick;
+                }
+            }
+
+            foreach (var watch in watches)
+            {
+                watch.AfterTick();
             }
 
             for (var player = 0; player < seats; player++)
@@ -172,17 +247,22 @@ public static class HeadlessMatch
                 }
             }
 
-            if (fallen.Count > 0)
+            if (StillIn(match, holds, outTicks) <= 1)
             {
-                winner = LastOneStanding(match, seats);
+                ended = MatchEnd.Conquest;
             }
         }
+
+        int? winner = ended == MatchEnd.Conquest && Array.IndexOf(outTicks, -1) is var last and >= 0 ? last : null;
 
         var toSeconds = 1.0 / Stopwatch.Frequency;
         return new HeadlessResult(
             match.World.Tick,
+            ended,
             winner,
-            [.. Enumerable.Range(0, seats).Select(player => Seat(match, player, personalities[player], epochTicks[player], unitsLost[player], structuresLost[player]))],
+            commandDelay,
+            firstHit,
+            [.. Enumerable.Range(0, seats).Select(player => Seat(match, player, personalities[player], epochTicks[player], unitsLost[player], structuresLost[player], outTicks[player], watches[player]))],
             match.World.ComputeHash(),
             given,
             match.Simulation.DroppedCommandCount,
@@ -191,23 +271,43 @@ public static class HeadlessMatch
             thinkTime * toSeconds);
     }
 
-    /// <summary>The one player with something left on the map, or none while two or more have, or nobody has.</summary>
-    private static int? LastOneStanding(Match match, int seats)
+    /// <summary>
+    /// Takes out every player with a start who holds no Capitol and no Outpost on the map as the
+    /// tick left it, and says how many are still in. A player without a start has none to lose
+    /// and stays in.
+    /// </summary>
+    private static int StillIn(Match match, bool[] holds, int[] outTicks)
     {
-        var has = new bool[seats];
-        for (var i = 0; i < match.Bodies.Count; i++)
+        Array.Clear(holds);
+        for (var i = 0; i < match.Structures.Count; i++)
         {
-            var entity = match.Bodies.EntityAt(i);
-            if (match.Workers.Contains(entity) || match.Combatants.Contains(entity) || match.Structures.Contains(entity))
+            var entity = match.Structures.EntityAt(i);
+            if (match.World.Entities.IsAlive(entity)
+                && match.Data.StructureOf(match.Structures.ValueAt(i).Type)?.TerritoryRadius is not null
+                && match.Bodies.TryGet(entity, out var body)
+                && body.Owner >= 0
+                && body.Owner < holds.Length)
             {
-                has[match.Bodies.ValueAt(i).Owner] = true;
+                holds[body.Owner] = true;
             }
         }
 
-        return has.Count(one => one) == 1 ? Array.IndexOf(has, true) : null;
+        var stillIn = 0;
+        for (var player = 0; player < holds.Length; player++)
+        {
+            if (outTicks[player] < 0 && match.Players[player].HasStart && !holds[player])
+            {
+                outTicks[player] = match.World.Tick;
+            }
+
+            stillIn += outTicks[player] < 0 ? 1 : 0;
+        }
+
+        return stillIn;
     }
 
-    private static SeatResult Seat(Match match, int player, AiPersonalityDef personality, List<int> epochTicks, int unitsLost, int structuresLost)
+    private static SeatResult Seat(
+        Match match, int player, AiPersonalityDef personality, List<int> epochTicks, int unitsLost, int structuresLost, int outTick, SeatWatch watch)
     {
         var data = match.Data;
         var tech = match.Research.Tech(player);
@@ -258,6 +358,15 @@ public static class HeadlessMatch
             unitsLost,
             structuresLost,
             match.Stockpiles.Materials(player) / Sim.Economy.Stockpiles.PerResource,
-            match.Stockpiles.Energy(player) / Sim.Economy.Stockpiles.PerResource);
+            match.Stockpiles.Energy(player) / Sim.Economy.Stockpiles.PerResource,
+            outTick,
+            watch.FirstAttackOrderTick,
+            watch.EveryTrackAtCapTick,
+            [.. watch.ResearchMaterials],
+            [.. watch.ResearchEnergy],
+            watch.TicksAtSupplyCap,
+            watch.TicksAboveSupplyCap,
+            watch.MostAboveSupplyCap,
+            [.. watch.Samples]);
     }
 }

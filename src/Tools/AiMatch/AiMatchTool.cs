@@ -9,7 +9,8 @@ namespace Tools.AiMatch;
 /// <summary>
 /// The headless match (technical plan, M23; design 5.5, item 7): computer players against each
 /// other with nobody watching, as fast as the machine allows. It reports the winner, the length
-/// of the match, the time of a tick, and what each player had built by the end. Every match is
+/// of the match, the time of a tick, when each player first ordered an attack, what it paid for
+/// research on each track, and what it had built by the end. Every match is
 /// played twice, with the seats and starts swapped, as the design asks of the tests that guard
 /// against one side of a map being favored (design 5.3).
 /// </summary>
@@ -28,7 +29,7 @@ public sealed class AiMatchTool : ITool
     private const string Usage =
         """
         Usage:
-          ai-match [--data <folder>] [--map <id>] [--players <list>] [--minutes <number>] [--seed <number>]
+          ai-match [--data <folder>] [--map <id>] [--players <list>] [--minutes <number>] [--delay <ticks>] [--seed <number>]
 
         --data     The data folder, default game/data.
         --map      The map, by its ID in the data, default ridge.
@@ -36,14 +37,17 @@ public sealed class AiMatchTool : ITool
                    commas, in the order of the seats: player i takes start i of the map. Default:
                    the first two personalities of the data.
         --minutes  The longest a match may take, in minutes of game time, default 20.
-        --seed     The seed of the match, default 1.
+        --delay    The ticks between a computer player's thinking and its commands taking
+                   effect, 1 to 20, default 2.
+        --seed     The seed of the match, default 1. Nothing in a match is random, so it changes
+                   the state hash and nothing else.
         """;
 
     public string Name => "ai-match";
 
     public string Summary =>
         "Play a match between computer players headless, as fast as the machine allows, both ways round, and report winner, length, time per tick and what each built. "
-        + $"Arguments: [--data <folder>, default {DefaultFolder}] [--map <id>, default {DefaultMap}] [--players <list>] [--minutes <number>, default {DefaultMinutes}] [--seed <number>].";
+        + $"Arguments: [--data <folder>, default {DefaultFolder}] [--map <id>, default {DefaultMap}] [--players <list>] [--minutes <number>, default {DefaultMinutes}] [--delay <ticks>, default 2] [--seed <number>].";
 
     public int Run(IReadOnlyList<string> arguments, TextWriter output, TextWriter errors)
     {
@@ -54,6 +58,7 @@ public sealed class AiMatchTool : ITool
         var folder = DefaultFolder;
         var mapId = DefaultMap;
         var minutes = DefaultMinutes;
+        var delay = HeadlessMatch.CommandDelay;
         ulong seed = 1;
         string[]? wanted = null;
         for (var i = 0; i < arguments.Count; i++)
@@ -73,6 +78,12 @@ public sealed class AiMatchTool : ITool
                     && int.TryParse(arguments[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var number)
                     && number is >= 1 and <= 24 * 60:
                     minutes = number;
+                    i++;
+                    break;
+                case "--delay" when i + 1 < arguments.Count
+                    && int.TryParse(arguments[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var number)
+                    && number is >= 1 and <= 20:
+                    delay = number;
                     i++;
                     break;
                 case "--seed" when i + 1 < arguments.Count
@@ -124,7 +135,7 @@ public sealed class AiMatchTool : ITool
 
         var optimized = typeof(SimInfo).Assembly.GetCustomAttribute<DebuggableAttribute>() is not { IsJITOptimizerDisabled: true };
         output.WriteLine(
-            $"ai-match: computer players on '{mapId}' with the data in {folder}, seed {seed}, at most {minutes} minutes of game time. "
+            $"ai-match: computer players on '{mapId}' with the data in {folder}, seed {seed}, command delay {delay}, at most {minutes} minutes of game time. "
             + "Each match is played twice, with the seats and starts swapped. "
             + (optimized ? "Optimized build." : "NOT an optimized build: run with -c Release for times that mean something."));
 
@@ -138,10 +149,11 @@ public sealed class AiMatchTool : ITool
         var winners = new List<string?>();
         foreach (var order in orders)
         {
-            var result = HeadlessMatch.Play(data, map, order, seed, minutes * 60 * SimInfo.TicksPerSecond);
+            var result = HeadlessMatch.Play(data, map, order, seed, minutes * 60 * SimInfo.TicksPerSecond, delay);
+            var tracks = data.Tracks;
             winners.Add(result.Winner is { } winner ? order[winner].Id : null);
             output.WriteLine();
-            Write(output, result);
+            Write(output, result, tracks);
         }
 
         output.WriteLine();
@@ -149,14 +161,17 @@ public sealed class AiMatchTool : ITool
         return ExitCodes.Ok;
     }
 
-    private static void Write(TextWriter output, HeadlessResult result)
+    private static void Write(TextWriter output, HeadlessResult result, IReadOnlyList<TrackDef> tracks)
     {
         output.WriteLine(string.Join(" against ", result.Seats.Select(seat => $"{seat.Personality} (player {seat.Player}, start {seat.Start})")));
         output.WriteLine(
             $"  ended after {Clock(result.Ticks)} of game time, "
-            + (result.Winner is { } winner
-                ? $"when only {result.Seats[winner].Personality} (player {winner}) had anything left on the map"
-                : "at the time limit, with no winner"));
+            + (result.Ended == MatchEnd.TimeLimit
+                ? "at the time limit, with no winner"
+                : result.Winner is { } winner
+                    ? $"by conquest: only {result.Seats[winner].Personality} (player {winner}) had a Capitol or an Outpost left"
+                    : "by conquest, with no winner: the last players lost their last Capitol or Outpost in the same tick")
+            + (result.FirstHitTick < 0 ? "; nothing was hit" : $"; the first hit landed at {Clock(result.FirstHitTick)}"));
         var perTick = 1000 * result.TickSeconds / result.Ticks;
         var wall = result.TickSeconds + result.ThinkSeconds;
         output.WriteLine(Invariant(
@@ -170,6 +185,15 @@ public sealed class AiMatchTool : ITool
             var units = seat.UnitsByChassis.Count == 0 ? "" : $" ({string.Join(", ", seat.UnitsByChassis.Select(entry => $"{entry.Count} {entry.Chassis}"))})";
             output.WriteLine(Invariant($"  {seat.Personality}, player {seat.Player}:"));
             output.WriteLine(Invariant($"    epoch {seat.Epoch}{epochs}; tiers {string.Join(", ", seat.Tiers)}"));
+            var paid = Enumerable.Range(0, tracks.Count).Select(track => seat.ResearchMaterials[track] + seat.ResearchEnergy[track]).ToList();
+            output.WriteLine(
+                Invariant($"    research paid for: {paid.Sum():N0} ({string.Join(", ", paid.Select((amount, track) => Invariant($"{tracks[track].Id} {amount:N0}")))})")
+                + (seat.EveryTrackAtCapTick < 0 ? "" : $"; every track at the epoch cap at {Clock(seat.EveryTrackAtCapTick)}"));
+            output.WriteLine(
+                $"    first attack order: {(seat.FirstAttackOrderTick < 0 ? "none" : Clock(seat.FirstAttackOrderTick))}"
+                + (seat.TicksAtSupplyCap == 0 ? "" : $"; at its supply cap for {Clock(seat.TicksAtSupplyCap)}")
+                + (seat.TicksAboveSupplyCap == 0 ? "" : Invariant($"; above its supply cap for {Clock(seat.TicksAboveSupplyCap)}, by {seat.MostAboveSupplyCap} at most"))
+                + (seat.OutTick < 0 ? "" : $"; out at {Clock(seat.OutTick)}"));
             output.WriteLine(Invariant($"    supply {seat.SupplyUsed} of {seat.SupplyCap}; {seat.Workers} workers; {seat.Units} fighting units worth {seat.ArmyValue:N0}{units}"));
             output.WriteLine(Invariant($"    structures: {string.Join(", ", seat.Structures.Select(entry => $"{entry.Count} {entry.Structure}"))}"));
             output.WriteLine(Invariant($"    lost {seat.UnitsLost} units and {seat.StructuresLost} structures; stockpile {seat.Materials:N0} Materials and {seat.Energy:N0} Energy"));
