@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Sim.Core;
 using Sim.Data;
 using Sim.Map;
@@ -39,9 +40,14 @@ internal static class ResearchMatches
     public static GameData CappedData { get; } =
         DataAssert.Valid(DesignData.Files().Edit(DesignData.RulesPath, "\"epoch_cap\": 9", "\"epoch_cap\": 4"));
 
+    private static readonly ConditionalWeakTable<Match, List<ResearchEvent>> Reports = [];
+
     public static Match Create(int players = 2, GameData? data = null)
     {
         var match = MatchSetup.Create(data ?? DesignData.Data, TestMaps.Open(24, 24), 1, [.. Enumerable.Repeat(PlayerSetup.WithoutStart, players)]);
+        var reports = new List<ResearchEvent>();
+        Reports.Add(match, reports);
+        match.Simulation.AddSystem(new Reporter(match.Simulation.Events, reports));
         for (var player = 0; player < players; player++)
         {
             match.Research.OpenPlayerSlot(player);
@@ -59,12 +65,25 @@ internal static class ResearchMatches
     public static void OrderCancel(this Match match, int player, int track) =>
         match.Simulation.Commands.Enqueue(match.World.Tick, new Command(CommandType.CancelResearch, player, contentId: track));
 
-    /// <summary>Everything the match reports about research from now on, in order.</summary>
+    /// <summary>
+    /// Everything a match made by <see cref="Create"/> reports about research in the ticks that
+    /// run from now on, in order. The event list holds one tick; this keeps them all.
+    /// </summary>
     public static List<ResearchEvent> Events(this Match match)
     {
-        var events = new List<ResearchEvent>();
-        match.Research.Reported += events.Add;
-        return events;
+        Assert.True(Reports.TryGetValue(match, out var reports), "The match was not made by ResearchMatches.Create.");
+        reports!.Clear();
+        return reports;
+    }
+
+    /// <summary>What the event list holds about research now: the reports of the last tick and of what was done since.</summary>
+    public static ResearchEvent[] EventsOnTheList(this Match match) =>
+        [.. match.Simulation.Events.Where(listed => ResearchEvent.IsResearch(listed.Kind)).Select(Read)];
+
+    public static ResearchEvent Read(SimEvent listed)
+    {
+        Assert.True(ResearchEvent.TryRead(listed, out var research), $"An event of kind {listed.Kind} is not one of research.");
+        return research;
     }
 
     /// <summary>A player's stockpile in whole resources.</summary>
@@ -80,6 +99,24 @@ internal static class ResearchMatches
         match.SpawnUnit(player, MapGrid.TileCenter(tileX, tileY), Fixed.Zero);
 
     public static ResearchSlot Slot(this Match match, int player, int slot = 0) => match.Research.State.Slot(player, slot);
+}
+
+/// <summary>
+/// Copies the research events of each tick off the event list, as a view would after the tick.
+/// It stands outside the rules: it is the last system, reads the list and changes nothing.
+/// </summary>
+internal sealed class Reporter(SimEventList events, List<ResearchEvent> reports) : ISystem
+{
+    public void Run(World world)
+    {
+        foreach (var listed in events)
+        {
+            if (ResearchEvent.TryRead(listed, out var research))
+            {
+                reports.Add(research);
+            }
+        }
+    }
 }
 
 /// <summary>Compares what follows from two players' tiers, value by value.</summary>

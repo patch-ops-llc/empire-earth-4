@@ -1,4 +1,5 @@
 using Sim.Core;
+using Sim.Research;
 
 namespace Sim.Combat;
 
@@ -9,9 +10,10 @@ namespace Sim.Combat;
 /// <remarks>
 /// <see cref="HitPoints"/> is always from 0 to <see cref="Maximum"/>. That is the shape the rule
 /// for a maximum that changes needs (design 2.3, "Hit points on update": a unit keeps the same
-/// fraction of its maximum): whatever raises a player's tiers walks this store, gives each of the
-/// player's entities its new maximum, and scales its hit points with it. The new maximum of a unit
-/// of a chassis is its owner's blueprint's; a worker's follows its owner's Protection tier.
+/// fraction of its maximum). When a research finishes, <see cref="UnitRefresh"/> walks this store,
+/// gives each of the player's units and workers its new maximum with <see cref="ChangeMaximum"/>,
+/// and so scales its hit points with it. The new maximum of a unit of a chassis is its owner's
+/// blueprint's; a worker's follows its owner's Protection tier.
 /// </remarks>
 public struct Health : IStateValue
 {
@@ -29,6 +31,16 @@ public struct Health : IStateValue
 
     /// <summary>Full hit points.</summary>
     public static Health Full(long maximum) => new() { HitPoints = maximum, Maximum = maximum };
+
+    /// <summary>
+    /// Gives it another maximum, with the same fraction of it as hit points (design 2.3, "Hit
+    /// points on update"), as <see cref="HitPointRules.KeepFraction"/> rounds it.
+    /// </summary>
+    public void ChangeMaximum(long maximum)
+    {
+        HitPoints = HitPointRules.KeepFraction(HitPoints, Maximum, maximum);
+        Maximum = maximum;
+    }
 
     public void Walk(IStateWalker walker)
     {
