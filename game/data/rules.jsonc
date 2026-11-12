@@ -52,7 +52,14 @@
   "wall_crossing_cost": 20,
 
   // Design 5.2, first playable.
-  "match": { "start_epoch": 1, "epoch_cap": 4 },
+  "match": {
+    "start_epoch": 1,
+    "epoch_cap": 4,
+    // Design 6, first playable: the lines and structures a match is played with. datacheck requires
+    // a data file for each, with a chassis of every line for each epoch up to the cap.
+    "lines": ["line_infantry", "guard", "cavalry_armor", "artillery"],
+    "structures": ["capitol", "outpost", "generator", "barracks", "works", "academy", "wall", "tower"]
+  },
 
   // Design 5.2. Every player starts with a Capitol and this.
   "start": { "workers": 6, "materials": 400, "energy": 100 },
