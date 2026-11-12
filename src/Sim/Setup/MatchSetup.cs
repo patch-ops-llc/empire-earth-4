@@ -57,6 +57,7 @@ public static class MatchSetup
         var spatialIndex = new SpatialIndex(grid, world.Entities, bodies);
 
         var supply = new SupplyAccount(data, research, world.Entities, bodies, workers);
+        supply.AddUser(new CombatSupply(research, world.Entities, bodies, combatants));
 
         // The combat numbers are worked out from the data and from each player's tech as research has it.
         var combat = new CombatRules(data, players.Count, research.Tech);
@@ -73,7 +74,7 @@ public static class MatchSetup
         // elsewhere takes it off its work: a move, and an attack-move, which is a move to a worker.
         var move = new MoveCommandHandler(grid, bodies, movers, players.Count);
         var work = new WorkAssignments(data.Resources, grid, bodies, workers, workSites, move);
-        var orders = new OrderCommandHandler(move, grid, bodies, movers, combatants, targeting, approach, players.Count);
+        var orders = new OrderCommandHandler(move, grid, bodies, movers, combatants, targeting, approach, simulation.Events, players.Count);
         var walkOrders = new LeaveWorkHandler(orders, bodies, work);
         simulation.SetCommandHandler(CommandType.Attack, orders);
         simulation.SetCommandHandler(CommandType.AttackMove, walkOrders);
@@ -103,9 +104,9 @@ public static class MatchSetup
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
-        simulation.AddSystem(new ShotSystem(bodies, shots, targeting));
-        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach));
-        simulation.AddSystem(new DeathSystem(health));
+        simulation.AddSystem(new ShotSystem(bodies, shots, targeting, simulation.Events));
+        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, simulation.Events));
+        simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
         simulation.AddSystem(new IncomeSystem(data, grid, bodies, movers, workers, workSites, territories, stockpiles, work, research));
         simulation.AddSystem(new ResearchSystem(research));
 
@@ -133,6 +134,13 @@ public static class MatchSetup
             Workers = workers,
             WorkSites = workSites,
         };
+
+        // The development spawn places its units through the match, so its handler comes after
+        // it. Only while the rules switch it on: otherwise the command has no handler and is dropped.
+        if (data.Rules.Debug.Spawn)
+        {
+            simulation.SetCommandHandler(CommandType.DebugSpawn, new DebugSpawnHandler(match, simulation.Events));
+        }
 
         for (var player = 0; player < players.Count; player++)
         {

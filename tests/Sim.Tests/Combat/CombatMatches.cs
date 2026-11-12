@@ -59,6 +59,17 @@ internal static class CombatMatches
     public static void OrderAttackMove(this Match match, int player, FixedVector2 target, params EntityId[] entities) =>
         match.Simulation.Commands.Enqueue(match.World.Tick, AttackMoveCommand(player, target, entities));
 
+    /// <summary>Queues a development spawn of one unit for the next tick to run.</summary>
+    public static void OrderSpawn(this Match match, int player, string chassis, string x, string y) =>
+        match.Simulation.Commands.Enqueue(match.World.Tick, SpawnCommand(player, Chassis(chassis), TestMatches.Point(x, y)));
+
+    public static Command SpawnCommand(int player, int chassis, FixedVector2 point) =>
+        new(CommandType.DebugSpawn, player, targetX: point.X, targetY: point.Y, contentId: chassis);
+
+    /// <summary>The events of the tick that ran last, of one kind, in their order.</summary>
+    public static SimEvent[] EventsOf(this Match match, SimEventKind kind) =>
+        [.. match.Simulation.Events.Where(simEvent => simEvent.Kind == kind)];
+
     /// <summary>Queues a stop order for the next tick to run.</summary>
     public static void OrderStop(this Match match, int player, params EntityId[] entities) =>
         match.Simulation.Commands.Enqueue(match.World.Tick, new Command(CommandType.Stop, player, entities));
