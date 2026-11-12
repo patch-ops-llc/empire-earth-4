@@ -58,17 +58,23 @@ public class RegenerationUnderFireTests
     }
 
     /// <summary>
-    /// Two Hoplites stand a tile apart, and an enemy that splashes is ordered onto the first. The
-    /// second is never hit itself: the splash alone keeps it from regenerating, and its first
-    /// regeneration comes five seconds after the last splash reached it.
+    /// A Hoplite and a Ballista stand a tile apart, and an enemy that splashes is ordered onto the
+    /// Hoplite. The Ballista is never hit itself: the splash alone keeps it from regenerating, and
+    /// its first regeneration comes five seconds after the last splash reached it.
     /// </summary>
+    /// <remarks>
+    /// The second unit is a Ballista so that it stays where the splash reaches it: the enemy is
+    /// inside its minimum range, so it picks no target and stands. A second Hoplite would go round
+    /// to a place of its own by the enemy (<see cref="Sim.Combat.MeleePlaces"/>), which is at
+    /// least its spacing from the first, and so out of a splash of one tile.
+    /// </remarks>
     [Fact]
     public void ASplashStartsTheFiveSecondsAgain()
     {
         var match = Field();
         match.SetTiers(1, Overgunned);
         var first = match.Unit(0, SiegeMatches.Hoplite, "6.5", "5.5");
-        var second = match.Unit(0, SiegeMatches.Hoplite, "5.5", "5.5");
+        var second = match.Unit(0, SiegeMatches.Ballista, "5.5", "5.5");
         match.SetHitPoints(second, 60_000);
         var enemy = match.Unit(1, SiegeMatches.Hoplite, "7.5", "5.5");
 
@@ -79,7 +85,9 @@ public class RegenerationUnderFireTests
         var events = RunAndCheckTheCounts(match, 500);
 
         Assert.DoesNotContain(events, reported => (reported.Kind is SimEventKind.MeleeHit or SimEventKind.ShotHit) && reported.Entity == second);
+        Assert.DoesNotContain(events, reported => reported.Kind == SimEventKind.ShotFired);
         Assert.True(match.IsAlive(first));
+        Assert.True(match.IsAlive(second));
         var splashes = events.Where(reported => reported.Kind == SimEventKind.SplashHit && reported.Entity == second).ToArray();
 
         // The enemy lives long enough to splash past the tick in which the first regeneration would have come.

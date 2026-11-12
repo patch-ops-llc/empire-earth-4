@@ -19,11 +19,19 @@ namespace Tools.Replay.Scripts;
 /// The players take three parts in turn, by their numbers. A <b>gunner</b> researches Firepower
 /// to tier 3 and then Mobility to tier 2: its units of the first epoch come to attack faster or
 /// further, then to splash or to fire shells with a wider blast, then to see further. An
-/// <b>armored</b> player researches Protection to tier 3 and then Mobility to tier 2: its units
-/// come to take less from blasts and splash, then less from every attacker below their
-/// Protection. A <b>plain</b> player researches nothing, so that its units and its Tower stay
-/// such attackers. A player without a base, which a recording may have, can research nothing
-/// whatever its part and fights all the same.
+/// <b>armored</b> player researches Protection to tier 2, then Mobility to tier 2, then
+/// Protection to tier 3: its units come to take less from blasts and splash, then less from
+/// every attacker below their Protection. A <b>plain</b> player researches nothing, so that its
+/// units and its Tower stay such attackers. A player without a base, which a recording may have,
+/// can research nothing whatever its part and fights all the same.
+/// </para>
+/// <para>
+/// The armored player does not start its third Protection while a gunner with a base has yet
+/// to reach Firepower 3. A splash on a unit that takes a quarter less and has no plating needs
+/// a gunner that splashes and an armored player still at Protection 2 at the same time. Left
+/// to when each can pay, the two researches end within a few ticks of each other, in either
+/// order; held back, the armored player's units stand without plating under the gunner's
+/// splash for as long as that third research takes.
 /// </para>
 /// <para>
 /// A player with a base places Generators beside its first structure and sends its workers to
@@ -168,7 +176,7 @@ internal sealed class CombatPerkOrders : OrderScript
         ReadOnlySpan<(int Track, int Tier)> wishes = PartOf(player) switch
         {
             0 => [(roles.Firepower, 2), (roles.Firepower, 3), (roles.Mobility, 2)],
-            1 => [(roles.Protection, 2), (roles.Protection, 3), (roles.Mobility, 2)],
+            1 => [(roles.Protection, 2), (roles.Mobility, 2), (roles.Protection, 3)],
             _ => [],
         };
         foreach (var (track, tier) in wishes)
@@ -178,7 +186,9 @@ internal sealed class CombatPerkOrders : OrderScript
                 continue;
             }
 
-            if (Match.Research.State.SlotResearching(player, track) < 0
+            var held = PartOf(player) == 1 && track == roles.Protection && tier == 3 && AGunnerHasYetToSplash();
+            if (!held
+                && Match.Research.State.SlotResearching(player, track) < 0
                 && Match.Research.CheckStart(player, track) == ResearchStartCheck.Allowed)
             {
                 commands.Add(new Command(CommandType.StartResearch, player, contentId: track));
@@ -186,6 +196,21 @@ internal sealed class CombatPerkOrders : OrderScript
 
             return;
         }
+    }
+
+    /// <summary>True while a gunner that can research, one with a base, is below the Firepower that splashes.</summary>
+    private bool AGunnerHasYetToSplash()
+    {
+        var firepower = Match.Data.TrackRoles.Firepower;
+        for (var player = 0; player < Match.Players.Count; player++)
+        {
+            if (PartOf(player) == 0 && Match.Research.State.Tier(player, firepower) < 3 && TryFindBase(player, out _))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
