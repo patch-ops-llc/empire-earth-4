@@ -125,8 +125,8 @@ jobs:
       # on purpose: one unit is the smallest step from where it should be. Both games must stop
       # because they no longer agree, say so in the words a player sees, and each write its desync
       # bundle and name it. The desync-diff tool, given the two bundles, must then find the store
-      # the fault was put in, say which game did not repeat its own run, and name the one field
-      # of the one unit that differs in the first tick that differs. This is the only test of the
+      # the fault was put in, say which game did not repeat its own run, and name the field of
+      # the unit that was moved, in the first tick that differs. This is the only test of the
       # desync files as the game wires them.
       - name: Run a desync made on purpose between two copies of the game
         shell: bash
@@ -171,7 +171,7 @@ jobs:
             "^A's machine ran ticks [0-9]+ to [0-9]+ a second time from the agreed state and got the same states: it repeats itself\.$" \
             "^B's machine ran the match a second time .* in: bodies\. It does not repeat itself\.$" \
             '^This machine agrees with A\.$' \
-            '^1 difference after [0-9]+ ticks, the first tick that differs, A \| B:$' \
+            '^[0-9]+ differences? after [0-9]+ ticks, the first tick that differs, A \| B:$' \
             '^  bodies entity [0-9]+ +Position\.X: '; do
             if ! grep -Eq "$expected" "$files/report.txt"; then
               echo "::error::The report of desync-diff has no line like: $expected"

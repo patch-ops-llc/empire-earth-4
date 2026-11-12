@@ -107,11 +107,15 @@ public class DesyncBundleDiffTests
         Assert.Contains(lines, line => line.StartsWith("Reading: B's machine does not repeat its own run.", StringComparison.Ordinal));
         Assert.Contains("This machine agrees with A.", lines);
 
-        // The bundle has the state B's match really had in that tick, so the one field is all that differs.
-        Assert.Equal(
-            [$"1 difference after {tick} ticks, the first tick that differs, A | B:", $"  bodies entity {unit.Value}  Position.X: "],
-            [lines[^2], lines[^1][..lines[^1].IndexOf(": ", StringComparison.Ordinal)] + ": "]);
-        Assert.Matches("Position\\.X: [0-9.]+ \\(raw [0-9]+\\) \\| [0-9.]+ \\(raw [0-9]+\\)$", lines[^1]);
+        // The bundle has the state B's match really had in that tick, so what differs is the field
+        // that was changed and whatever the one tick since made of it: a rule that keeps units
+        // apart may have moved its neighbors. Nothing outside the store has changed yet.
+        var heading = Array.FindIndex(lines, line => line.Contains(" the first tick that differs, A | B:", StringComparison.Ordinal));
+        Assert.Matches($"^[0-9]+ differences? after {tick} ticks, the first tick that differs, A \\| B:$", lines[heading]);
+        var fields = lines[(heading + 1)..];
+        Assert.Contains(fields, line => Regex.IsMatch(line, $"^  bodies entity {unit.Value} +Position\\.X: [0-9.]+ \\(raw [0-9]+\\) \\| [0-9.]+ \\(raw [0-9]+\\)$"));
+        Assert.All(fields, line => Assert.StartsWith("  bodies entity ", line));
+        Assert.InRange(fields.Length, 1, 8);
     }
 
     [Fact]
@@ -175,8 +179,11 @@ public class DesyncBundleDiffTests
         var lines = Lines(output);
         var tick = pair.FaultAfter + 1;
         Assert.Contains(lines, line => line.EndsWith($"give another state than that machine had, first after {tick} ticks, in: bodies.", StringComparison.Ordinal));
-        Assert.Equal($"1 difference after {tick} ticks, the first tick that differs, the bundle | here:", lines[^2]);
-        Assert.Matches($"^  bodies entity {unit.Value}  Position\\.Y: [0-9.]+ \\(raw [0-9]+\\) \\| [0-9.]+ \\(raw [0-9]+\\)$", lines[^1]);
+        var heading = Array.FindIndex(lines, line => line.Contains(" the first tick that differs, the bundle | here:", StringComparison.Ordinal));
+        Assert.Matches($"^[0-9]+ differences? after {tick} ticks, the first tick that differs, the bundle \\| here:$", lines[heading]);
+        var fields = lines[(heading + 1)..];
+        Assert.Contains(fields, line => Regex.IsMatch(line, $"^  bodies entity {unit.Value} +Position\\.Y: [0-9.]+ \\(raw [0-9]+\\) \\| [0-9.]+ \\(raw [0-9]+\\)$"));
+        Assert.All(fields, line => Assert.StartsWith("  bodies entity ", line));
     }
 
     /// <summary>
