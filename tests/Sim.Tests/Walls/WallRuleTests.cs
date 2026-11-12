@@ -110,6 +110,48 @@ public class WallRuleTests
         Assert.Equal(0, match.Breaching.SearchCount);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AnOpenLineOfWallIsWalkedRoundHoweverFarAndNeverBroken(bool attackMove)
+    {
+        // A line of player 1's wall from the north edge down to y = 21, open at the south. The
+        // place is 20 tiles east of the unit; round the open end it is some 40 tiles further,
+        // twice what crossing a wall tile costs in the second search. The place can be reached,
+        // so the wall rule does not apply (design 2.5) and that cost is never asked.
+        var match = Field();
+        for (var y = 0; y <= 21; y++)
+        {
+            match.WallTile(1, 14, y);
+        }
+
+        var unit = match.Spawn(0, Hoplite, "5.5", "2.5");
+        var walls = match.WallHitPoints();
+        Assert.False(match.Breaching.IsCutOff(0, match.PositionOf(unit), Center(25, 2)));
+        if (attackMove)
+        {
+            match.OrderAttackMove(0, Center(25, 2), unit);
+        }
+        else
+        {
+            match.OrderMove(0, Center(25, 2), unit);
+        }
+
+        var south = 0;
+        for (var tick = 0; tick < 900; tick++)
+        {
+            match.Run(1);
+            Assert.Equal(EntityId.None, match.UnitOf(unit).WallInWay);
+            south = Math.Max(south, match.PositionOf(unit).Y.FloorToInt());
+        }
+
+        Assert.Equal(Center(25, 2), match.PositionOf(unit));
+        Assert.True(match.Stands(unit));
+        Assert.True(south >= 22, $"The unit came no further south than y = {south}.");
+        Assert.Empty(match.Damaged(walls));
+        Assert.Equal(0, match.Breaching.SearchCount);
+    }
+
     [Fact]
     public void AnOrderOntoABuildingInsideTheWallsLeadsThroughThem()
     {
