@@ -1,0 +1,24 @@
+// Eques: cavalry, epoch 2 (Romans). A long horse, and a rider with steel shoulders, a tall
+// pale oval shield at each side and a level spear. The rider's steel helmet has a dark
+// crest that runs side to side.
+{
+  "parts": [
+    // The horse, in the darker shade of its owner's color, with a dark tail.
+    { "shape": "box", "size": [0.32, 0.28, 0.84], "at": [0, 0.33, 0.1], "tone": "owner_dark" },
+    { "shape": "box", "size": [0.17, 0.36, 0.19], "at": [0, 0.54, -0.34], "turn": [-28, 0, 0], "tone": "owner_dark" },
+    { "shape": "box", "size": [0.15, 0.15, 0.32], "at": [0, 0.67, -0.53], "turn": [-25, 0, 0], "tone": "owner_dark" },
+    { "shape": "box", "size": [0.09, 0.22, 0.1], "at": [0.11, 0.11, -0.22], "mirror": true, "tone": "owner_dark" },
+    { "shape": "box", "size": [0.09, 0.22, 0.1], "at": [0.11, 0.11, 0.44], "mirror": true, "tone": "owner_dark" },
+    { "shape": "box", "size": [0.08, 0.28, 0.08], "at": [0, 0.32, 0.58], "turn": [28, 0, 0], "tone": "dark" },
+
+    // The rider.
+    { "shape": "box", "size": [0.1, 0.22, 0.13], "at": [0.21, 0.39, 0.12], "mirror": true, "tone": "owner" },
+    { "shape": "box", "size": [0.3, 0.26, 0.2], "at": [0, 0.6, 0.12], "tone": "owner" },
+    { "shape": "box", "size": [0.38, 0.07, 0.24], "at": [0, 0.72, 0.12], "tone": "steel" },
+    { "shape": "ball", "size": [0.29, 0.29, 0.29], "at": [0, 0.855, 0.12], "sides": 8, "tone": "steel" },
+    { "shape": "box", "size": [0.49, 0.15, 0.1], "at": [0, 1.03, 0.12], "tone": "dark" },
+    { "shape": "cylinder", "size": [0.38, 0.05, 0.56], "at": [-0.27, 0.54, 0.1], "turn": [100, 90, 0], "mirror": true, "tone": "pale" },
+    { "shape": "box", "size": [0.05, 0.05, 0.94], "at": [0.24, 0.64, -0.14], "tone": "wood" },
+    { "shape": "box", "size": [0.07, 0.07, 0.14], "at": [0.24, 0.64, -0.66], "tone": "steel" }
+  ]
+}

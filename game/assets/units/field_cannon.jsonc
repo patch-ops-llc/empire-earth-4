@@ -1,0 +1,16 @@
+// Field cannon: artillery, epoch 4 (Industrial). A dark barrel between two large dark wheels
+// with pale hubs, on a carriage in the owner's color whose trail rests on the ground behind,
+// with a pale box of charges on it.
+{
+  "parts": [
+    // The wheels and the carriage.
+    { "shape": "cylinder", "size": [0.7, 0.1, 0.7], "at": [0.39, 0.35, -0.04], "turn": [0, 0, 90], "sides": 14, "mirror": true, "tone": "dark" },
+    { "shape": "cylinder", "size": [0.22, 0.12, 0.22], "at": [0.39, 0.35, -0.04], "turn": [0, 0, 90], "sides": 8, "mirror": true, "tone": "pale" },
+    { "shape": "box", "size": [0.7, 0.18, 0.26], "at": [0, 0.37, -0.04], "tone": "owner" },
+    { "shape": "box", "size": [0.2, 0.12, 0.84], "at": [0, 0.22, 0.42], "turn": [16, 0, 0], "tone": "owner" },
+
+    // The barrel, narrower at the muzzle, and the box of charges.
+    { "shape": "cylinder", "size": [0.24, 0.98, 0.24], "at": [0, 0.56, -0.28], "turn": [-90, 0, 0], "top": 0.72, "sides": 10, "tone": "dark" },
+    { "shape": "box", "size": [0.28, 0.15, 0.2], "at": [0, 0.28, 0.6], "tone": "pale" }
+  ]
+}

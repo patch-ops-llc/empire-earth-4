@@ -1,0 +1,16 @@
+// Auxiliary: line infantry, epoch 2 (Romans). A slim figure with steel shoulders, a tall pale
+// oval shield and a level spear. The steel helmet has a dark crest that runs side to side.
+{
+  "parts": [
+    { "shape": "cylinder", "size": [0.3, 0.24, 0.22], "at": [0, 0.12, 0], "top": 0.85, "sides": 8, "tone": "owner_dark" },
+    { "shape": "box", "size": [0.36, 0.28, 0.23], "at": [0, 0.38, 0], "tone": "owner" },
+    { "shape": "box", "size": [0.44, 0.07, 0.27], "at": [0, 0.51, 0], "tone": "steel" },
+    { "shape": "ball", "size": [0.33, 0.33, 0.33], "at": [0, 0.665, 0], "sides": 8, "tone": "steel" },
+    { "shape": "box", "size": [0.53, 0.15, 0.1], "at": [0, 0.86, 0], "tone": "dark" },
+
+    // The shield on the left arm, and the spear in the right hand with its steel head.
+    { "shape": "cylinder", "size": [0.34, 0.05, 0.58], "at": [-0.25, 0.36, -0.14], "turn": [105, 20, 0], "tone": "pale" },
+    { "shape": "box", "size": [0.05, 0.05, 0.7], "at": [0.25, 0.46, -0.12], "tone": "wood" },
+    { "shape": "box", "size": [0.07, 0.07, 0.14], "at": [0.25, 0.46, -0.52], "tone": "steel" }
+  ]
+}

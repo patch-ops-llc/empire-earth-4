@@ -1,0 +1,56 @@
+// What each chassis looks like on the map (game design 3.2, "which chassis you field").
+// Presentation only: the simulation never reads this file and the content hash does not cover it.
+//
+// A chassis named here is drawn with the shape in its file under game/assets/units/. A chassis
+// that is not named keeps the stand-in shape and its mark.
+//
+// How the looks are meant to be read:
+//   The line is the build of the shape, which holds at the widest zoom.
+//     line_infantry   a slim figure with a long weapon
+//     guard           a broad figure, twice as wide, behind a large shield or under a huge cap
+//     cavalry_armor   a long horse in the darker shade of the owner's color, with a rider
+//     artillery       a wide machine on wheels with no figure
+//   The epoch is the metal on the figure's head and what it carries, the same across the lines.
+//     1 Greeks        a bronze helmet with a dark crest that runs front to back; bronze shields
+//     2 Romans        a steel helmet with a dark crest that runs side to side, steel shoulders;
+//                     pale shields
+//     3 Medieval      a dark, flat-topped helm or hat, steel shoulders; pointed steel shields
+//                     and, on horseback, a pale cloth over the horse
+//     4 Industrial    a tall dark hat with a pale plume, pale breeches, and crossed pale belts
+//                     or a steel breastplate; a firearm or a sabre
+//   Artillery shows its epoch by the machine: a bow on a stand, a throwing arm in a frame, a
+//   tall trestle with a long beam, a dark barrel between two large wheels.
+{
+  // A tone is a color, or a share of the owner's color: 1 is that color, less is darker.
+  "tones": {
+    "owner": { "owner": 1 },
+    "owner_dark": { "owner": 0.28 },
+    "pale": "#efe9d6",
+    "bronze": "#d9a63a",
+    "steel": "#aab1bb",
+    "wood": "#93703f",
+    "dark": "#23252b"
+  },
+
+  "looks": [
+    { "chassis": "peltast", "shape": "peltast.jsonc" },
+    { "chassis": "auxiliary", "shape": "auxiliary.jsonc" },
+    { "chassis": "crossbowman", "shape": "crossbowman.jsonc" },
+    { "chassis": "musketeer", "shape": "musketeer.jsonc" },
+
+    { "chassis": "hoplite", "shape": "hoplite.jsonc" },
+    { "chassis": "legionary", "shape": "legionary.jsonc" },
+    { "chassis": "man_at_arms", "shape": "man_at_arms.jsonc" },
+    { "chassis": "grenadier", "shape": "grenadier.jsonc" },
+
+    { "chassis": "hippeus", "shape": "hippeus.jsonc" },
+    { "chassis": "eques", "shape": "eques.jsonc" },
+    { "chassis": "knight", "shape": "knight.jsonc" },
+    { "chassis": "cuirassier", "shape": "cuirassier.jsonc" },
+
+    { "chassis": "ballista", "shape": "ballista.jsonc" },
+    { "chassis": "onager", "shape": "onager.jsonc" },
+    { "chassis": "trebuchet", "shape": "trebuchet.jsonc" },
+    { "chassis": "field_cannon", "shape": "field_cannon.jsonc" }
+  ]
+}

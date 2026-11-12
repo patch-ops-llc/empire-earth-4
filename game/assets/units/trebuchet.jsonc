@@ -1,0 +1,20 @@
+// Trebuchet: artillery, epoch 3 (Medieval). A tall trestle in the owner's color on a base with
+// four dark wheels, with a long wooden beam that points up and back and a dark counterweight
+// in front.
+{
+  "parts": [
+    // The base and its wheels.
+    { "shape": "box", "size": [0.62, 0.11, 1], "at": [0, 0.155, 0], "tone": "owner" },
+    { "shape": "cylinder", "size": [0.26, 0.09, 0.26], "at": [0.36, 0.13, -0.34], "turn": [0, 0, 90], "mirror": true, "tone": "dark" },
+    { "shape": "cylinder", "size": [0.26, 0.09, 0.26], "at": [0.36, 0.13, 0.34], "turn": [0, 0, 90], "mirror": true, "tone": "dark" },
+
+    // The trestle: two legs on each side that meet at the axle.
+    { "shape": "box", "size": [0.1, 0.76, 0.1], "at": [0.24, 0.55, -0.12], "turn": [18, 0, 0], "mirror": true, "tone": "owner" },
+    { "shape": "box", "size": [0.1, 0.76, 0.1], "at": [0.24, 0.55, 0.12], "turn": [-18, 0, 0], "mirror": true, "tone": "owner" },
+    { "shape": "box", "size": [0.6, 0.08, 0.08], "at": [0, 0.9, 0], "tone": "steel" },
+
+    // The beam and its counterweight.
+    { "shape": "box", "size": [0.1, 0.1, 1.2], "at": [0, 0.95, 0.14], "turn": [-25, 0, 0], "tone": "wood" },
+    { "shape": "box", "size": [0.36, 0.32, 0.3], "at": [0, 0.56, -0.42], "tone": "dark" }
+  ]
+}

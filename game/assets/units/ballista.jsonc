@@ -1,0 +1,17 @@
+// Ballista: artillery, epoch 1 (Greeks). A great bow on a stand: a beam in the owner's color
+// with two pale arms swept back from its front, a pale bolt on it, two bronze springs, and two
+// wooden wheels.
+{
+  "parts": [
+    // The stand and its wheels.
+    { "shape": "box", "size": [0.52, 0.09, 0.8], "at": [0, 0.045, 0.08], "tone": "wood" },
+    { "shape": "cylinder", "size": [0.4, 0.09, 0.4], "at": [0.34, 0.2, 0.26], "turn": [0, 0, 90], "mirror": true, "tone": "wood" },
+    { "shape": "box", "size": [0.14, 0.34, 0.14], "at": [0, 0.24, 0.02], "tone": "wood" },
+
+    // The beam, the two springs, the arms of the bow and the bolt.
+    { "shape": "box", "size": [0.2, 0.14, 1.04], "at": [0, 0.45, 0.04], "tone": "owner" },
+    { "shape": "cylinder", "size": [0.15, 0.32, 0.15], "at": [0.17, 0.49, -0.36], "sides": 8, "mirror": true, "tone": "bronze" },
+    { "shape": "box", "size": [0.54, 0.08, 0.11], "at": [0.41, 0.51, -0.25], "turn": [0, -26, 0], "mirror": true, "tone": "pale" },
+    { "shape": "box", "size": [0.05, 0.05, 0.7], "at": [0, 0.55, -0.28], "tone": "pale" }
+  ]
+}
