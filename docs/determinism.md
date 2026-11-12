@@ -60,10 +60,11 @@ Do not add a value to a store, or remove one directly, while walking that store,
 
 `Simulation.Tick()` runs one tick, in this order:
 
-1. The commands scheduled for this tick, in the order they were queued.
-2. Each system, in the order it was added.
-3. Destroyed entities are removed from the entity list and from every store.
-4. The tick number goes up by one.
+1. The event list is emptied (see "Events").
+2. The commands scheduled for this tick, in the order they were queued.
+3. Each system, in the order it was added.
+4. Destroyed entities are removed from the entity list and from every store.
+5. The tick number goes up by one.
 
 Nothing reads a clock. The caller decides when a tick runs; there are `SimInfo.TicksPerSecond` (20) per second of game time. Single-player, network play, replays and tests all go through `Simulation.Tick()`.
 
@@ -77,6 +78,7 @@ Nothing reads a clock. The caller decides when a tick runs; there are `SimInfo.T
 | 2 | `MovementSystem` | Moves every mover one step. | |
 | 3 | `SpatialIndexSystem` | Rebuilds the spatial index from the positions as they are now. | Right after movement, so that every system after it sees where things stand. A system that moves bodies goes before it. |
 | 4 | `IncomeSystem` | Notes which workers have reached their places, counts each working worker's ticks and pays those that are due, oldest worker first, and then gives free places to waiting workers in the order they began to wait. | After movement, so that a worker that reaches its place in this tick has arrived in this tick. It moves nobody, and it reads tiers and territories as they are when it runs. A system that destroys units goes before it, so that a place freed by a death is given out in the same tick; one that changes tiers goes after it, so that a new tier pays from the next tick on. |
+| 5 | `ResearchSystem` | Closes every research slot whose holder is no longer alive, with a refund, and takes every other research one tick further. A research that reaches its last tick raises its track. | Last, after everything that can destroy an entity, so that a research cannot finish in the tick its building falls. A system that destroys entities goes before it. A new tier is therefore in effect from the next tick on. |
 
 The order is a rule of the game: moving a system changes results, on every machine alike, and so changes every recorded hash. A pull request that adds a system adds a row here, says where the system goes and why, and updates the golden replays.
 
@@ -87,6 +89,17 @@ A `Command` is the only way anything outside the simulation changes it. It is im
 - Whoever orders commands (the host, the local session, a replay) schedules each for a tick with `Simulation.Commands.Enqueue(tick, command)`. Commands for one tick run in the order they were queued, so that order must be the same on every machine. Scheduling a command for a tick that has already run throws.
 - Each command type has one `ICommandHandler`. It checks the command against the world as it is when the command runs (ownership, affordability, placement) and returns `false`, having changed nothing, if the command is not valid. The command is then dropped, on every machine alike. A type with no handler is dropped too.
 - The queue is input, not state. It is not in the state hash, because peers may hold different amounts of the future when they compare hashes.
+
+## Events
+
+Commands go in; events come out. `Simulation.Events` is the list of what happened in the last tick that the state alone does not show afterwards: a hit, a shot fired, a death. The view, sound and tools read it after every tick.
+
+- A `SimEvent` is immutable data: a kind (`SimEventKind`), the tick, a player, up to two entities, a point and a number. Which of those a kind fills is written at the kind. An event carries the place it happened at, because an entity it names may be gone when it is read: destroyed entities leave the stores at the end of the tick.
+- A command handler or a system is handed the list when the match is set up (`simulation.Events`) and calls `Add`, which stamps the tick. The events of a tick stand in the order they were added: those of the commands, then those of each system.
+- The tick empties the list before it runs its commands. So after `Tick()` the list holds that tick's events, and a reader that skips a tick has missed them. A handler that refuses its command changes no state, but it may add an event that says why.
+- **The list is output, not state.** It is not walked, so it is in neither the state hash nor a snapshot, and restoring a snapshot empties it. A match runs to the same state whether or not anything is reported: `SimEventTests` runs the toy match with and without a system that reports, and compares every hash and the snapshots.
+- **Nothing in the simulation reads the list.** What a rule needs to know goes in a store. Adding an event draws nothing from the random generator and changes nothing in the world. Enforced by review.
+- A piece that reports something adds its kinds to `SimEventKind`, in alphabetical order and without numbers. The number of a kind is recorded nowhere, unlike that of a command type, so it may change from one build to the next and nothing may store one.
 
 ## The state hash
 
@@ -175,13 +188,13 @@ SnapshotAssert.RestoresAndContinues(BuildTheMatch, script, snapshotTick: 40, las
 
 - The run continued from the restored world has the state hash of the uninterrupted run after every tick. This catches a missing field that the rules read, and state kept outside the stores.
 - Every value in every `ComponentStore<T>` of the restored world equals, field for field, the value in the world the snapshot was taken from. This catches a missing field that no rule reads yet, such as the way a unit faces before anything turns to shoot. Nothing else would: the hash leaves the field out too.
-- For a match, the spatial index of the restored match lists the same entities as that of the match the snapshot was taken from, for every square of the map. This catches a restore that does not refresh derived data.
+- For a match, the spatial index of the restored match lists the same entities as that of the match the snapshot was taken from, for every square of the map, and every player has the same table of blueprints. This catches a restore that does not refresh derived data.
 
-Every system adds this test for a run in which its own stores change before and after the snapshot, with the snapshot taken in each state its values can be in. `MatchSnapshotTests` in the same folder does so for movement: units standing, waiting for a route, walking a route, walking straight and arrived. `EconomySnapshotTests` does so for the economy: workers walking to their places, at work and waiting, a place freed and taken, and a deposit before and after it goes to the depleted rate.
+Every system adds this test for a run in which its own stores change before and after the snapshot, with the snapshot taken in each state its values can be in. `MatchSnapshotTests` in the same folder does so for movement: units standing, waiting for a route, walking a route, walking straight and arrived. `ResearchStateTests` does so for research: before any, with researches under way in three slots, after a cancel, before and after a slot is lost with its holder, and after researches finish. `EconomySnapshotTests` does so for the economy: workers walking to their places, at work and waiting, a place freed and taken, and a deposit before and after it goes to the depleted rate.
 
 ## Derived data
 
-Some of what a match holds is worked out from the state and is not state: the spatial index and the route cache. Such data is not walked, so it is in neither the state hash nor a snapshot. That is safe only under one rule:
+Some of what a match holds is worked out from the state and is not state: the spatial index, the route cache and each player's table of blueprints (`MatchResearch.Tech`, which is what the tech resolver makes of the player's tiers; the tiers are state). Such data is not walked, so it is in neither the state hash nor a snapshot. That is safe only under one rule:
 
 **Derived data is a function of the state and of the match's fixed data, and of nothing else.** The same state gives the same answers, in the same order, whatever happened before.
 
@@ -281,7 +294,7 @@ dotnet run --project src/Tools -- replay verify tests/golden/replays --data test
 `determinism.yml` does the same on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build, and a last job fails unless all eight reports are the same. So the final hash of every golden replay must match the value stored in the file and must be the same on every system.
 
 - **The data is frozen.** `tests/golden/data/` is a copy of `game/data/` from when the replays were last updated, plus the map `switchback`, which was made for these tests: long routes whose searches use up the route budget of a tick. Balance changes in `game/data/` do not touch it, so they do not change the golden replays. The folder must satisfy the loader like any data folder; when the loader comes to need a new file or a new value, add it there in the same pull request, and update the replays if their hashes change.
-- **The matches are scripted.** `replay record` plays a match with orders from a seeded generator (`ScriptedOrders` in `src/Tools/Replay/`): groups and single units sent across the map, every unit ordered separately in one tick, short hops, targets on blocked ground and off the map, workers sent to deposits, and commands the simulation must drop. Nobody needs to play a match to record one. A test in `ReplayToolTests` lists what the golden replays must reach between them, such as a unit that waits more than a tick for its route, and fails when they no longer do.
+- **The matches are scripted.** `replay record` plays a match with orders from a seeded generator (`ScriptedOrders` in `src/Tools/Replay/`): groups and single units sent across the map, every unit ordered separately in one tick, short hops, targets on blocked ground and off the map, research started and cancelled, workers sent to deposits, and commands the simulation must drop. Nobody needs to play a match to record one. A test in `ReplayToolTests` lists what the golden replays must reach between them, such as a unit that waits more than a tick for its route, and fails when they no longer do.
 - **When a golden replay fails and the change was not meant to change the rules,** the change has broken determinism with earlier builds: fix the change. `verify` names the first tick whose hash differs, within one second of game time of the cause.
 - **When the change was meant to change the rules** (a system added or moved, a rule or a number in the frozen data changed, a field added to the state), update the stored hashes in the same pull request and say so in its description:
 
@@ -296,10 +309,11 @@ dotnet run --project src/Tools -- replay verify tests/golden/replays --data test
   replay record tests/golden/replays/ridge-skirmish.replay --data tests/golden/data --map ridge --starts 0,1 --seed 1 --orders 1 --ticks 3600
   replay record tests/golden/replays/switchback-crossing.replay --data tests/golden/data --map switchback --starts 1,0 --seed 2 --orders 3 --ticks 6000
   replay record tests/golden/replays/switchback-three-players.replay --data tests/golden/data --map switchback --starts 0,-,1 --seed 3 --orders 5 --ticks 2410
+  replay record tests/golden/replays/switchback-research.replay --data tests/golden/data --map switchback --starts 1,-,0 --seed 4 --orders 8 --ticks 4800
   replay record tests/golden/replays/switchback-workers.replay --data tests/golden/data --map switchback --starts 0,1 --seed 5 --orders 13 --ticks 4800
   ```
 
-  Recording again with the same arguments gives the same file only while `ScriptedOrders` and the rules are unchanged. The first three were recorded before `ScriptedOrders` gave gather orders, so recording them again gives other matches; the fourth is the one with workers at deposits in it.
+  Recording again with the same arguments gives the same file only while `ScriptedOrders` and the rules are unchanged. Each was recorded before `ScriptedOrders` gave the orders of the pieces that came after it, so recording any of them again gives another match: the first three have neither research nor gather orders, the fourth has research, and the fifth has workers at deposits and no research. An existing replay is therefore only ever updated.
 
 ## Adding a system
 
@@ -311,11 +325,12 @@ dotnet run --project src/Tools -- replay verify tests/golden/replays --data test
 6. Add the snapshot test for it: one line with `SnapshotAssert.RestoresAndContinues`, described above.
 7. Data it works out from the state follows the rule in "Derived data".
 8. Update the golden replays, whose hashes it changes, and add a replay that reaches its rules: see "Golden replays".
+9. What the view should show of it and cannot see in the state, it adds to the event list: see "Events".
 
 ## What the tests pin
 
 Some tests hold recorded values: the reference output of the random generator, the hash of known input, the final state hash of a 600-tick toy match (`DeterminismTests`), and the bytes of an encoded command, of a small snapshot and of a match description. They fail when the behaviour of the kernel changes in any way: rounding, the sine table, the order of a tick, the hash, the byte format. If the change is intended, update the recorded value in the same pull request and say so. If it is not, the change has broken determinism with earlier builds.
 
-CI runs these tests on Linux for every pull request. The workflow `determinism.yml` runs them on Linux, Windows and macOS, on x86_64 and on Apple silicon, as a Debug and as a Release build: on every push to `main`, every night, and for a pull request that changes the workflow or the build settings. A recorded value that one system computes differently fails there.
+CI runs these tests on Linux for every pull request. The workflow `determinism.yml` runs them on Linux, Windows and macOS, on x86_64 and on Apple silicon, as a Debug and as a Release build: on every push to `main`, every night, and for a pull request that changes anything the workflow builds, runs or reads: a project under `src/`, anything under `tests/` (the golden replays and their data among it), `game/data/`, the workflow, the build settings (`Directory.Build.props`, `global.json`, the solution file) or `.gitattributes`. A recorded value that one system computes differently fails there, before the pull request merges. A pull request that changes only the game's scenes and scripts, the schemas or the docs does not start it.
 
 The golden replays add whole recorded matches to both checks. The pinned values above guard the kernel; the golden replays guard the rules of a match built by `MatchSetup`, and they are the values that a deliberate change to those rules updates.

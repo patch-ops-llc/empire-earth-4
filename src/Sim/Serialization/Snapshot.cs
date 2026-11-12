@@ -75,7 +75,8 @@ public static class Snapshot
     /// Replaces the state of the simulation's world with the snapshot the reader is at, and leaves
     /// the reader after it. The simulation must have been set up as the one the snapshot came from
     /// was: the same stores, systems and handlers. Commands waiting in its queue are discarded, and
-    /// the next tick to run is the snapshot's; queue again what should run from there. For a
+    /// the next tick to run is the snapshot's; queue again what should run from there. The event
+    /// list is emptied: its events were of a tick that the restored state did not come from. For a
     /// <see cref="Match"/>, call the overload that takes one.
     /// </summary>
     /// <exception cref="InvalidDataException">
@@ -129,5 +130,6 @@ public static class Snapshot
         }
 
         simulation.Commands.Restart(world.Tick);
+        simulation.Events.Clear();
     }
 }

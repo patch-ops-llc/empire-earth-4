@@ -4,6 +4,7 @@ using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
+using Sim.Research;
 
 namespace Sim.Setup;
 
@@ -41,6 +42,12 @@ public sealed class Match
     /// <summary>Speed, facing and move order of everything that can move.</summary>
     public required ComponentStore<Mover> Movers { get; init; }
 
+    /// <summary>
+    /// Every player's tiers and research slots, and what follows from the tiers: the table of
+    /// blueprints per player. The table is not state: see <see cref="MatchResearch"/>.
+    /// </summary>
+    public required MatchResearch Research { get; init; }
+
     /// <summary>The routes found so far. Not state: see <see cref="RouteCache"/>.</summary>
     public required RouteCache Routes { get; init; }
 
@@ -70,7 +77,11 @@ public sealed class Match
     /// the world as it is now. Call it after the world has been changed from outside a tick: after
     /// restoring a snapshot, and after a fixture has placed things.
     /// </summary>
-    public void RefreshDerivedState() => SpatialIndex.Rebuild();
+    public void RefreshDerivedState()
+    {
+        Research.RefreshTech();
+        SpatialIndex.Rebuild();
+    }
 
     /// <summary>
     /// Places a unit that can move: an entity with a <see cref="Body"/> and a <see cref="Mover"/>.

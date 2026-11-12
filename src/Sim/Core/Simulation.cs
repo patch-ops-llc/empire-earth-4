@@ -20,8 +20,9 @@ public interface ICommandHandler
 
 /// <summary>
 /// The tick loop. It owns the order in which everything happens, which is the same on every
-/// machine: the commands scheduled for the tick in the order they were queued, then each system in
-/// the order it was added, then the removal of destroyed entities, then the tick number goes up.
+/// machine: the event list is emptied, then the commands scheduled for the tick in the order they
+/// were queued, then each system in the order it was added, then the removal of destroyed
+/// entities, then the tick number goes up.
 /// </summary>
 /// <remarks>
 /// Single-player, network play, replays and tests all drive the simulation through this class and
@@ -39,12 +40,20 @@ public sealed class Simulation
         ArgumentNullException.ThrowIfNull(world);
         World = world;
         Commands = new CommandQueue(world.Tick);
+        Events = new SimEventList(world);
     }
 
     public World World { get; }
 
     /// <summary>The commands waiting for their tick.</summary>
     public CommandQueue Commands { get; }
+
+    /// <summary>
+    /// What happened in the last tick that ran, for whatever shows the match. Command handlers and
+    /// systems are handed this list when the match is set up and add to it; nothing in the
+    /// simulation reads it. It is not part of the state hash or of a snapshot.
+    /// </summary>
+    public SimEventList Events { get; }
 
     /// <summary>
     /// How many commands have been dropped, because their type had no handler or their handler
@@ -88,6 +97,7 @@ public sealed class Simulation
         _started = true;
         var world = World;
 
+        Events.Clear();
         _due.Clear();
         Commands.TakeDue(world.Tick, _due);
         foreach (var command in _due)

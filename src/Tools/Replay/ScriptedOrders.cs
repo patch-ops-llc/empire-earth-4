@@ -1,6 +1,7 @@
 using Sim.Core;
 using Sim.Economy;
 using Sim.Numerics;
+using Sim.Research;
 using Sim.Setup;
 
 namespace Tools.Replay;
@@ -19,6 +20,12 @@ namespace Tools.Replay;
 /// it to the mix, after the ones that are here, and records a new replay; replays recorded before
 /// keep their commands.
 /// <para>
+/// Research (M14) is one order in three: mostly a research on some track, which the simulation
+/// starts when the player has a free slot and the price and drops otherwise; sometimes a cancel,
+/// usually of the research the player has under way; and research on tracks that do not exist
+/// and from players who are not in the match. Research orders need no units.
+/// </para>
+/// <para>
 /// Gather orders (M13) come on a clock of their own, from a generator of their own, so the orders
 /// above are the ones they were before: workers sent to the deposit their owner holds, to any
 /// deposit, every player's to one deposit in the same tick, which is more than it has places for,
@@ -32,6 +39,10 @@ internal sealed class ScriptedOrders
 
     /// <summary>What the seed of the gather orders differs by from the seed of the others.</summary>
     private const ulong GatherSeed = 0x4D13_0000_0000_0000;
+
+    /// <summary>The kinds of order from M2 to M5 are drawn below this number, and those of research from it.</summary>
+    private const int FirstResearchKind = 100;
+    private const int KindCount = 150;
 
     private readonly Match _match;
     private readonly DeterministicRandom _random;
@@ -151,7 +162,13 @@ internal sealed class ScriptedOrders
 
         _nextTick = tick + 1 + _random.NextInt(LongestPause);
         var player = _random.NextInt(_match.Players.Count);
-        var kind = _random.NextInt(100);
+        var kind = _random.NextInt(KindCount);
+        if (kind >= FirstResearchKind)
+        {
+            commands.Add(ResearchOrder(player, kind - FirstResearchKind));
+            return;
+        }
+
         CollectUnitsOf(player);
         if (_own.Count == 0)
         {
@@ -220,6 +237,34 @@ internal sealed class ScriptedOrders
         {
             commands.Add(new Command((CommandType)(60_000 + _random.NextInt(1000)), player, [.. _own], Coordinate(_match.Grid.Width), Coordinate(_match.Grid.Height), _own[0], _random.NextInt(100)));
         }
+    }
+
+    private Command ResearchOrder(int player, int kind)
+    {
+        var tracks = _match.Data.Tracks.Count;
+        if (kind < 30)
+        {
+            return new Command(CommandType.StartResearch, player, contentId: _random.NextInt(tracks));
+        }
+
+        if (kind < 42)
+        {
+            // The research under way three times in four, so that cancels are not nearly all dropped.
+            var track = _random.NextInt(tracks);
+            var slot = _match.Research.State.Slot(player, ResearchState.PlayerSlot);
+            return new Command(CommandType.CancelResearch, player, contentId: slot.IsBusy && _random.NextInt(4) != 0 ? slot.Track : track);
+        }
+
+        if (kind < 47)
+        {
+            var noTrack = _random.NextInt(2) == 0 ? tracks + _random.NextInt(1000) : -1 - _random.NextInt(1000);
+            return new Command(_random.NextInt(2) == 0 ? CommandType.StartResearch : CommandType.CancelResearch, player, contentId: noTrack);
+        }
+
+        // From nobody in the match, with fields that research does not read.
+        var nobody = _match.Players.Count + _random.NextInt(5);
+        var point = AnyPoint();
+        return new Command(CommandType.StartResearch, nobody, [new EntityId(1)], point.X, point.Y, new EntityId(2), _random.NextInt(tracks));
     }
 
     private static Command Move(int player, List<EntityId> units, FixedVector2 target) =>
