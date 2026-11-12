@@ -38,10 +38,12 @@ public class MatchSnapshotTests
         SnapshotAssert.RestoresAndContinues(BuildWorkers, WorkersScript(), snapshotTick, WorkersLastTick);
 
     /// <summary>
-    /// Units that need routes through a maze. Snapshots: before any order, with the orders
-    /// waiting, twice with some units waiting for a route while others walk theirs, with every
-    /// unit on its route, just after eight were sent elsewhere, with units on routes, on their
-    /// last straight line and arrived all at once, and with all at rest.
+    /// Units that need routes through a maze, where the two players' units meet. Snapshots: before
+    /// any order, with the orders waiting, twice with some units waiting for a route while others
+    /// walk theirs, with every unit on its route, just after eight were sent elsewhere, with units
+    /// on routes and on their last straight line, with some arrived as well and one held up by
+    /// enemy units, and two with player 1's units waiting where player 0's close the way, the
+    /// last with everyone else at rest.
     /// </summary>
     [Theory]
     [InlineData(0)]
@@ -50,8 +52,8 @@ public class MatchSnapshotTests
     [InlineData(3)]
     [InlineData(4)]
     [InlineData(61)]
-    [InlineData(175)]
-    [InlineData(225)]
+    [InlineData(200)]
+    [InlineData(240)]
     [InlineData(465)]
     [InlineData(MazeLastTick)]
     public void AMatchWithUnitsWaitingForAndWalkingRoutesRestoresAndContinues(int snapshotTick) =>
@@ -75,16 +77,25 @@ public class MatchSnapshotTests
         Assert.Equal((10, 12), (Count(maze, MoveState.Planning), Count(maze, MoveState.Following)));
         maze.Simulation.Tick();
         Assert.Equal(22, Count(maze, MoveState.Following));
-        maze.Simulation.Run(171);
+        maze.Simulation.Run(196);
         Assert.InRange(Count(maze, MoveState.Moving), 1, 21);
         Assert.InRange(Count(maze, MoveState.Following), 1, 21);
-        maze.Simulation.Run(50);
+        maze.Simulation.Run(40);
         Assert.InRange(Count(maze, MoveState.Idle), 1, 20);
         Assert.InRange(Count(maze, MoveState.Moving), 1, 20);
         Assert.InRange(Count(maze, MoveState.Following), 1, 20);
-        maze.Simulation.Run(MazeLastTick - 225);
-        Assert.Equal(22, Count(maze, MoveState.Idle));
-        Assert.Equal(MapGrid.TileCenter(16, MazeSize - 1), maze.PositionOf(maze.World.Entities[15]));
+        Assert.InRange(Waiting(maze), 1, 20);
+        maze.Simulation.Run(465 - 240);
+        Assert.InRange(Count(maze, MoveState.Moving), 1, 15);
+        Assert.Equal(6, Waiting(maze));
+
+        // Player 0's units end in the bottom row and in a row above the gap in the fourth wall.
+        // That row closes the gap to player 1's six, who wait below it with their order.
+        maze.Simulation.Run(MazeLastTick - 465);
+        Assert.Equal(16, Count(maze, MoveState.Idle));
+        Assert.Equal(6, Waiting(maze));
+        Assert.Equal(MazeSize - 1, maze.PositionOf(maze.World.Entities[15]).Y.FloorToInt());
+        Assert.All(Enumerable.Range(16, 6), index => Assert.Equal(15, maze.PositionOf(maze.World.Entities[index]).Y.FloorToInt()));
     }
 
     /// <summary>
@@ -176,6 +187,9 @@ public class MatchSnapshotTests
 
     private static int Count(Match match, MoveState state) =>
         Enumerable.Range(0, match.Movers.Count).Count(index => match.Movers.ValueAt(index).State == state);
+
+    private static int Waiting(Match match) =>
+        Enumerable.Range(0, match.Movers.Count).Count(index => match.Movers.ValueAt(index).Waiting);
 
     private static EntityId[] UnitsOf(Match match) =>
         [.. Enumerable.Range(0, match.World.Entities.Count).Select(index => match.World.Entities[index])];

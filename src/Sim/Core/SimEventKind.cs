@@ -16,6 +16,25 @@ public enum SimEventKind
     None = 0,
 
     /// <summary>
+    /// A build order ended before its foundation was laid, and its whole price was given back.
+    /// <see cref="SimEvent.Player"/> is the owner, for whom alone the event is meant,
+    /// <see cref="SimEvent.Entity"/> the worker that had the order,
+    /// <see cref="SimEvent.Position"/> the center of the site, and <see cref="SimEvent.Amount"/>
+    /// why it ended, as a <see cref="Construction.BuildProblem"/>.
+    /// </summary>
+    BuildOrderEnded,
+
+    /// <summary>
+    /// A build order was refused when it was given: nothing was paid and no worker went.
+    /// <see cref="SimEvent.Player"/> is the player who gave it, for whom alone the event is
+    /// meant, <see cref="SimEvent.Entity"/> the first entity the command lists, if any,
+    /// <see cref="SimEvent.Position"/> the center of the site, or the command's point when the
+    /// site is no place on the map, and <see cref="SimEvent.Amount"/> why it was refused, as a
+    /// <see cref="Construction.BuildProblem"/>.
+    /// </summary>
+    BuildRefused,
+
+    /// <summary>
     /// Something was destroyed because its hit points were at zero when the attacks of the tick
     /// had been made. <see cref="SimEvent.Player"/> is its owner, <see cref="SimEvent.Entity"/>
     /// is what died, and <see cref="SimEvent.Position"/> is where it stood. Nothing says who
@@ -33,8 +52,9 @@ public enum SimEventKind
     MeleeHit,
 
     /// <summary>
-    /// One of the orders a unit takes, the development spawn, an order to cancel training or one
-    /// to set a rally point was not carried out and changed nothing. <see cref="SimEvent.Player"/> is the player the command names,
+    /// One of the orders a unit takes, the development spawn, or an order to cancel a build, to
+    /// cancel training or to set a rally point was not carried out and changed nothing.
+    /// <see cref="SimEvent.Player"/> is the player the command names,
     /// <see cref="SimEvent.Amount"/> the number of its <see cref="CommandType"/>,
     /// <see cref="SimEvent.Entity"/> the first entity it lists, if any,
     /// <see cref="SimEvent.Other"/> its target entity, if any, and
@@ -74,10 +94,19 @@ public enum SimEventKind
     ShotLost,
 
     /// <summary>
-    /// A structure was laid on the map and blocks its tiles from now on.
+    /// A structure has built itself and gives what its file says from now on.
     /// <see cref="SimEvent.Player"/> is its owner, <see cref="SimEvent.Entity"/> the structure,
     /// <see cref="SimEvent.Position"/> the center of its footprint, and
     /// <see cref="SimEvent.Amount"/> its place in the roster of structures.
+    /// </summary>
+    StructureFinished,
+
+    /// <summary>
+    /// A structure was laid on the map and blocks its tiles from now on.
+    /// <see cref="SimEvent.Player"/> is its owner, <see cref="SimEvent.Entity"/> the structure,
+    /// <see cref="SimEvent.Position"/> the center of its footprint, and
+    /// <see cref="SimEvent.Amount"/> its place in the roster of structures. One laid by a worker
+    /// is not finished yet: it is in the store of foundations until it has built itself.
     /// </summary>
     StructurePlaced,
 
@@ -85,7 +114,8 @@ public enum SimEventKind
     /// A structure is gone and its tiles are free again. <see cref="SimEvent.Player"/> is its
     /// owner, <see cref="SimEvent.Entity"/> the structure, <see cref="SimEvent.Position"/> the
     /// center of its footprint, and <see cref="SimEvent.Amount"/> its place in the roster of
-    /// structures. One whose hit points ran out is reported as a <see cref="Death"/> as well.
+    /// structures. One whose hit points ran out is reported as a <see cref="Death"/> as well;
+    /// one that its owner cancelled while it was building itself is not.
     /// </summary>
     StructureRemoved,
 
