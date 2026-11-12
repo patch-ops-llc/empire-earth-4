@@ -8,50 +8,71 @@ namespace Game;
 /// The right of the top bar: which player this is, how the match is played, who has left it, and
 /// the button that leaves it.
 /// </summary>
+/// <remarks>
+/// The sentences give way to everything else in the top bar, a whole sentence at a time and
+/// never in the middle of one, so that the buttons of the bar stay in the window however many
+/// parts fill it. What is said first, with the room there is: everything; then without how the
+/// match is played; then who has left alone, in full and then in short; then who the player is;
+/// then nothing. Having given way they do not come back until the window is wider or a player
+/// leaves.
+/// </remarks>
 public partial class MatchPanel : InterfacePart
 {
-    private readonly List<string> _left = [];
+    private readonly List<(int Player, SessionEndReason Reason)> _left = [];
+
+    // What the bar can say, from the longest to the shortest, each with its width.
+    private readonly List<(string Text, float Width)> _forms = [];
     private Label _text = null!;
-    private float _textWidth;
+
+    // The first of the forms that has had room, in a window of this width.
+    private int _shortest;
+    private float _window;
 
     protected override void Attach()
     {
-        // The sentence is cut short with an ellipsis when it is given less than its width.
-        _text = new Label
-        {
-            Name = "MatchText",
-            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
-            HorizontalAlignment = HorizontalAlignment.Right,
-        };
+        _text = new Label { Name = "MatchText" };
         Frame.TopRight.AddChild(_text);
 
         if (View.Leave is { } leave)
         {
-            var button = UiStyle.FrameButton("Leave the match");
+            // One word, because the bar is short of room. The sentence beside it names the match.
+            var button = UiStyle.FrameButton("Leave");
             button.Name = "LeaveButton";
+            button.TooltipText = "Leave the match and go back to the menu";
             button.Pressed += leave;
             Frame.TopRight.AddChild(button);
         }
 
         View.Client.PlayerLeft += (player, reason) =>
         {
-            var sentence = $"{PlayerName(player)} {HowLeft(reason)}.";
-            _left.Add(sentence);
-            Frame.Say(sentence, seconds: 12.0);
+            _left.Add((player, reason));
+            Frame.Say(LeftSentence(player, reason), seconds: 12.0);
             Refresh();
         };
         Refresh();
     }
 
-    // The sentence gives way to everything else in the top bar: it has its whole width while
-    // the bar has the room, and what is left when the other parts need it, so that the button
-    // beside it never leaves the window.
     public override void EveryFrame(double delta)
     {
-        var width = Mathf.Min(_textWidth, Mathf.Floor(Frame.TopBarRoomFor(_text)));
-        if (!Mathf.IsEqualApprox(width, _text.CustomMinimumSize.X))
+        // Having given way, the sentences stay as short for as long as the window is as wide,
+        // so that they do not come and go with what the other parts of the bar show.
+        var window = _text.GetViewportRect().Size.X;
+        if (!Mathf.IsEqualApprox(window, _window))
         {
-            _text.CustomMinimumSize = new Vector2(width, 0f);
+            _window = window;
+            _shortest = 0;
+        }
+
+        var room = Frame.TopBarRoomFor(_text);
+        while (_shortest < _forms.Count && _forms[_shortest].Width > room)
+        {
+            _shortest++;
+        }
+
+        var text = _shortest < _forms.Count ? _forms[_shortest].Text : string.Empty;
+        if (_text.Text != text)
+        {
+            _text.Text = text;
         }
     }
 
@@ -69,9 +90,33 @@ public partial class MatchPanel : InterfacePart
             _ => "Playing alone.",
         };
 
-        _text.Text = string.Join(' ', [who, how, .. _left]);
-        _textWidth = Mathf.Ceil(_text.GetThemeFont("font").GetStringSize(_text.Text, fontSize: _text.GetThemeFontSize("font_size")).X);
+        _forms.Clear();
+        _shortest = 0;
+        if (_left.Count == 0)
+        {
+            AddForm($"{who} {how}");
+        }
+        else
+        {
+            var left = string.Join(' ', _left.Select(one => LeftSentence(one.Player, one.Reason)));
+            AddForm($"{who} {how} {left}");
+            AddForm($"{who} {left}");
+            AddForm(left);
+            AddForm(_left.Count == 1
+                ? $"{PlayerName(_left[0].Player)} is out."
+                : string.Create(CultureInfo.InvariantCulture, $"{_left.Count} players are out."));
+        }
+
+        AddForm(who);
     }
+
+    private void AddForm(string text)
+    {
+        var size = _text.GetThemeFont("font").GetStringSize(text, fontSize: _text.GetThemeFontSize("font_size"));
+        _forms.Add((text, Mathf.Ceil(size.X)));
+    }
+
+    private static string LeftSentence(int player, SessionEndReason reason) => $"{PlayerName(player)} {HowLeft(reason)}.";
 
     private static string HowLeft(SessionEndReason reason) => reason switch
     {

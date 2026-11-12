@@ -27,6 +27,7 @@ public partial class ResearchPart : InterfacePart
 
     private const float DetailWidth = 300f;
     private const float TopRowHeight = 38f;
+    private const float BarProgressWidth = 64f;
 
 
     private ResearchReading _reading = null!;
@@ -40,6 +41,7 @@ public partial class ResearchPart : InterfacePart
     private Label _barEpoch = null!;
     private Label _barText = null!;
     private ProgressBar _barProgress = null!;
+    private Label _barLeft = null!;
 
     // The track the detail is about: the one the pointer was on last.
     private int _pointed;
@@ -86,7 +88,9 @@ public partial class ResearchPart : InterfacePart
         return label;
     }
 
-    // The top bar: the player's epoch, and what is in research with how far it is.
+    // The top bar: the player's epoch, and what is in research with how far it is. A research
+    // is its name, a bar and the time left, in as few words as say it: the bar is shared with
+    // the other pieces and is short of room.
     private void BuildBarLine()
     {
         var row = UiStyle.Row(8);
@@ -103,12 +107,14 @@ public partial class ResearchPart : InterfacePart
             MaxValue = 1.0,
             Step = 0.0,
             ShowPercentage = false,
-            CustomMinimumSize = new Vector2(90f, 10f),
+            CustomMinimumSize = new Vector2(BarProgressWidth, 10f),
             SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
             Visible = false,
         };
         _barProgress.AddThemeStyleboxOverride("background", ResearchColors.Bar(ResearchColors.Trough));
         row.AddChild(_barProgress);
+        _barLeft = new Label { Name = "TimeLeft", Visible = false };
+        row.AddChild(_barLeft);
     }
 
     private VBoxContainer BuildPanel()
@@ -287,6 +293,7 @@ public partial class ResearchPart : InterfacePart
         }
 
         _barProgress.Visible = first >= 0;
+        _barLeft.Visible = first >= 0;
         if (first < 0)
         {
             var free = false;
@@ -305,7 +312,8 @@ public partial class ResearchPart : InterfacePart
         var leading = _reading.Slot(first);
         var name = data.Tracks[leading.Track].Name;
         var more = busy > 1 ? string.Create(CultureInfo.InvariantCulture, $", and {busy - 1} more") : string.Empty;
-        _barText.Text = string.Create(CultureInfo.InvariantCulture, $"Researching {name} {leading.Tier}: {ResearchWords.Duration(leading.TicksLeft)} left{more}");
+        _barText.Text = string.Create(CultureInfo.InvariantCulture, $"{name} {leading.Tier}");
+        _barLeft.Text = $"{ResearchWords.Duration(leading.TicksLeft)}{more}";
         if (_barTrack != leading.Track)
         {
             _barTrack = leading.Track;

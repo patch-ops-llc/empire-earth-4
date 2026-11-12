@@ -11,7 +11,10 @@ namespace Game;
 /// <item>
 /// <b>The top bar</b>, across the top of the window: <see cref="TopLeft"/> for what the player
 /// has, as resources and supply, and <see cref="TopRight"/> for the match itself. Between them
-/// stand the buttons of the full-screen panels.
+/// stand the buttons of the full-screen panels. The interface is scaled with the window, so
+/// the bar is 1,152 units wide in a window of 16 to 9 or narrower, whatever its size, and
+/// wider only in a wider one. Everything in the bar has to fit in that: a readout is a word
+/// and a number, and what can say less when the bar is full asks <see cref="TopBarRoomFor"/>.
 /// </item>
 /// <item>
 /// <b>The bottom panel</b>, for the selection and its commands: <see cref="SelectionArea"/> for
@@ -158,7 +161,7 @@ public partial class InterfaceFrame : CanvasLayer
     /// <summary>
     /// The width a control in the top bar can have before the bar is wider than the window, with
     /// everything else in the bar at the least width it needs. A part whose control can give
-    /// way, as a sentence that can be cut short, sizes it by this, so that the bar's buttons
+    /// way, as one that can say less, fits what it shows to this, so that the bar's buttons
     /// stay in the window when many parts fill it.
     /// </summary>
     public float TopBarRoomFor(Control control)
