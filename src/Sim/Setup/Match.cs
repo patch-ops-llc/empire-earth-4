@@ -64,7 +64,7 @@ public sealed class Match
     /// <summary>Hit points of everything that can be damaged.</summary>
     public required ComponentStore<Health> Health { get; init; }
 
-    /// <summary>Speed, facing and move order of everything that can move.</summary>
+    /// <summary>Speed, facing, spacing and move order of everything that can move.</summary>
     public required ComponentStore<Mover> Movers { get; init; }
 
     /// <summary>
@@ -136,11 +136,20 @@ public sealed class Match
     /// <param name="player">The owner, a position in <see cref="Players"/>.</param>
     /// <param name="position">Where its center goes. The tile there must be passable.</param>
     /// <param name="speedPerTick">The distance it covers in one tick, in tiles.</param>
-    public EntityId SpawnUnit(int player, FixedVector2 position, Fixed speedPerTick)
+    public EntityId SpawnUnit(int player, FixedVector2 position, Fixed speedPerTick) =>
+        SpawnUnit(player, position, speedPerTick, Mover.DefaultSpacing);
+
+    /// <summary>Places a unit that can move, with the spacing of its line (design 2.4).</summary>
+    /// <param name="player">The owner, a position in <see cref="Players"/>.</param>
+    /// <param name="position">Where its center goes. The tile there must be passable.</param>
+    /// <param name="speedPerTick">The distance it covers in one tick, in tiles.</param>
+    /// <param name="spacing">The least distance it keeps between its center and another unit's, in tiles.</param>
+    public EntityId SpawnUnit(int player, FixedVector2 position, Fixed speedPerTick, Fixed spacing)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(player);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(player, Players.Count);
         ArgumentOutOfRangeException.ThrowIfNegative(speedPerTick.Raw, nameof(speedPerTick));
+        ArgumentOutOfRangeException.ThrowIfNegative(spacing.Raw, nameof(spacing));
         if (!Grid.IsPassable(position))
         {
             throw new ArgumentException($"A unit cannot stand at {position}.", nameof(position));
@@ -148,7 +157,7 @@ public sealed class Match
 
         var entity = World.Entities.Create();
         Bodies.Add(entity, new Body { Owner = player, Position = position });
-        Movers.Add(entity, new Mover { Speed = speedPerTick });
+        Movers.Add(entity, new Mover { Speed = speedPerTick, Spacing = spacing });
         return entity;
     }
 }

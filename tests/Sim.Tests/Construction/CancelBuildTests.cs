@@ -3,6 +3,7 @@ using Sim.Core;
 using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
+using Sim.Numerics;
 using Sim.Setup;
 using Sim.Structures;
 using Sim.Tests.Economy;
@@ -225,7 +226,9 @@ public class CancelBuildTests
         Assert.Equal(EntityId.None, match.StructureAt(10, 10));
         if (type is CommandType.Move or CommandType.AttackMove)
         {
-            Assert.Equal(point, match.PositionOf(worker));
+            // The two walk as a group, so each stands beside the point and not on it.
+            Assert.Equal(MoveState.Idle, match.MoveStateOf(worker));
+            Assert.InRange(FixedVector2.DistanceSquaredRaw(point, match.PositionOf(worker)), 0, FixedVector2.SquareRaw(Fixed.FromInt(4)));
         }
     }
 

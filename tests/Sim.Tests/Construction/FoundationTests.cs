@@ -364,18 +364,16 @@ public class FoundationTests
         var worker = match.WorkerAt(0, 10, 9);
         var standing = match.SpawnChassis(0, 0, TestMatches.Point("10.4", "10.6"));
         var walking = match.SpawnUnit(0, MapGrid.TileCenter(11, 11), StructureMatches.QuarterTile);
-        var corner = match.SpawnUnit(0, MapGrid.TileCenter(10, 11), StructureMatches.QuarterTile);
         var destination = MapGrid.TileCenter(11, 15);
 
         match.OrderBuild(0, "generator", 10, 10, worker);
         match.OrderMove(0, destination, walking);
         match.Simulation.Tick();
 
-        // Each went to the tile outside whose center was nearest: to the left, below, and, of two equally near, the one with the lower y.
+        // Each went to the tile outside whose center was nearest: to the left, and below.
         Assert.NotEqual(EntityId.None, match.StructureAt(10, 10));
         Assert.Equal(MapGrid.TileCenter(9, 10), match.PositionOf(standing));
         Assert.Equal(MapGrid.TileCenter(11, 12), match.PositionOf(walking));
-        Assert.Equal(MapGrid.TileCenter(9, 11), match.PositionOf(corner));
 
         // The one that stood has its post where it stands now, and the one on its way goes on.
         Assert.Equal(MapGrid.TileCenter(9, 10), match.Combatants.Get(standing).Anchor);
@@ -383,7 +381,26 @@ public class FoundationTests
         match.RunUntilIdle(walking);
         Assert.Equal(destination, match.PositionOf(walking));
         Assert.Equal(MapGrid.TileCenter(9, 10), match.PositionOf(standing));
-        Assert.Equal(MapGrid.TileCenter(9, 11), match.PositionOf(corner));
+    }
+
+    /// <summary>Of tiles equally near, the one with the lower y takes the unit, and then the one with the lower x.</summary>
+    [Theory]
+    [InlineData(10, 10, 10, 9)]
+    [InlineData(11, 10, 11, 9)]
+    [InlineData(10, 11, 9, 11)]
+    [InlineData(11, 11, 12, 11)]
+    public void AUnitInTheMiddleOfATileOfTheSiteGoesToTheTileWithTheLowerY(int x, int y, int toX, int toY)
+    {
+        var match = WithACapitol();
+        var worker = match.WorkerAt(0, 13, 13);
+        var unit = match.SpawnUnit(0, MapGrid.TileCenter(x, y), StructureMatches.QuarterTile);
+        match.Bodies.Get(worker).Position = TestMatches.Point("12.5", "12.5");
+
+        match.OrderBuild(0, "generator", 10, 10, worker);
+        match.Simulation.Tick();
+
+        Assert.NotEqual(EntityId.None, match.StructureAt(10, 10));
+        Assert.Equal(MapGrid.TileCenter(toX, toY), match.PositionOf(unit));
     }
 
     /// <summary>The worker that builds is one of the owner's units: on the site, it is moved off it too.</summary>
