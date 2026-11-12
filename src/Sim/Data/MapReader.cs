@@ -152,7 +152,7 @@ internal static class MapReader
         }
     }
 
-    private static MarkerKind ReadMarkerKind(JsonValue value)
+    internal static MarkerKind ReadMarkerKind(JsonValue value)
     {
         var text = value.String();
         switch (text)

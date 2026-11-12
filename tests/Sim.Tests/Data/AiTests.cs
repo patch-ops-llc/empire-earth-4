@@ -24,6 +24,15 @@ internal static class SamplePersonality
           "research": {
             "weights": { "firepower": 2, "protection": 1, "mobility": 6, "manufacturing": 3, "logistics": 4, "extraction": 5 }
           },
+          "fight": {
+            "attack_ratio": "1.25",
+            "assumed_enemy_value": 300,
+            "retreat_losses": "0.5",
+            "reinforce_units": 4,
+            "passage": "open_field",
+            "raid": { "line": "cavalry_armor", "party": 3 },
+            "reaction_seconds": "0.5"
+          },
           "army": {
             "lines": [
               { "line": "cavalry_armor", "share": 3 },
@@ -69,6 +78,47 @@ public class AiTests
 
         // The lines keep the order of the file and are named by their place in the roster.
         Assert.Equal([new AiLineShare(CavalryArmor, 3), new AiLineShare(Guard, 1)], raider.Lines);
+    }
+
+    [Fact]
+    public void HowItFightsIsReadWithEveryValueOfItsFile()
+    {
+        var fight = DataAssert.Valid(SamplePersonality.Files()).PersonalityOf("raider")!.Fight;
+
+        Assert.Equal((125, 2), (fight.AttackRatio.Unscaled, fight.AttackRatio.Scale));
+        Assert.Equal(300, fight.AssumedEnemyValue);
+        Assert.Equal((5, 1), (fight.RetreatLosses.Unscaled, fight.RetreatLosses.Scale));
+        Assert.Equal(4, fight.ReinforceUnits);
+        Assert.Equal(MarkerKind.OpenField, fight.Passage);
+        Assert.Equal((CavalryArmor, 3), (fight.RaidLine, fight.RaidParty));
+        Assert.Equal(SimInfo.TicksPerSecond / 2, fight.ReactionTicks);
+    }
+
+    /// <summary>Both rules are worked out in whole numbers, and reaching the number of the file is enough.</summary>
+    [Theory]
+    [InlineData(499, 400, false)]
+    [InlineData(500, 400, true)]
+    [InlineData(501, 400, true)]
+    [InlineData(0, 0, true)]
+    [InlineData(1, 0, true)]
+    public void AnArmyIsEnoughToAttackFromTheRatioOfTheFile(int own, int enemy, bool enough)
+    {
+        var fight = DataAssert.Valid(SamplePersonality.Files()).PersonalityOf("raider")!.Fight;
+
+        Assert.Equal(enough, fight.IsEnoughToAttack(own, enemy));
+    }
+
+    [Theory]
+    [InlineData(49, 100, false)]
+    [InlineData(50, 100, true)]
+    [InlineData(2, 5, false)]
+    [InlineData(3, 5, true)]
+    [InlineData(0, 0, false)]
+    public void TooMuchIsLostFromTheShareOfTheFile(int lost, int whole, bool tooMuch)
+    {
+        var fight = DataAssert.Valid(SamplePersonality.Files()).PersonalityOf("raider")!.Fight;
+
+        Assert.Equal(tooMuch, fight.IsTooMuchLost(lost, whole));
     }
 
     [Fact]
@@ -119,6 +169,18 @@ public class AiTests
     [InlineData("\"line\": \"guard\"", "\"line\": \"cavalry_armor\"", "$.army.lines[1].line", "line 'cavalry_armor' is listed twice")]
     [InlineData("\"share\": 3", "\"share\": 0", "$.army.lines[0].share", "must be between 1 and 1000, found 0")]
     [InlineData("\"share\": 3", "\"part\": 3", "$.army.lines[0]", "missing key \"share\"")]
+    [InlineData("\"attack_ratio\": \"1.25\"", "\"attack_ratio\": \"0.9\"", "$.fight.attack_ratio", "must be between 1 and 100, found 0.9")]
+    [InlineData("\"attack_ratio\": \"1.25\"", "\"attack_ratio\": \"101\"", "$.fight.attack_ratio", "must be between 1 and 100, found 101")]
+    [InlineData("\"assumed_enemy_value\": 300", "\"assumed_enemy_value\": -1", "$.fight.assumed_enemy_value", "must be between 0 and 1000000, found -1")]
+    [InlineData("\"retreat_losses\": \"0.5\"", "\"retreat_losses\": \"1.5\"", "$.fight.retreat_losses", "must be above 0 and at most 1, found 1.5")]
+    [InlineData("\"reinforce_units\": 4", "\"reinforce_units\": 0", "$.fight.reinforce_units", "must be between 1 and 200, found 0")]
+    [InlineData("\"passage\": \"open_field\"", "\"passage\": \"bridge\"", "$.fight.passage", "unknown marker kind 'bridge'; use chokepoint or open_field")]
+    [InlineData("\"passage\": \"open_field\",", "", "$.fight", "missing key \"passage\"")]
+    [InlineData("\"line\": \"cavalry_armor\", \"party\": 3", "\"line\": \"navy\", \"party\": 3", "$.fight.raid.line", "unknown line 'navy'; the roster in rules.jsonc has: air, cavalry_armor, guard")]
+    [InlineData("\"party\": 3", "\"party\": 201", "$.fight.raid.party", "must be between 1 and 200, found 201")]
+    [InlineData("\"party\": 3", "\"party\": 3, \"every\": 2", "$.fight.raid.every", "unknown key \"every\"")]
+    [InlineData("\"reaction_seconds\": \"0.5\"", "\"reaction_seconds\": \"0.51\"", "$.fight.reaction_seconds", "0.51 s is not a whole number of ticks; there are 20 ticks per second")]
+    [InlineData("\"reaction_seconds\": \"0.5\"", "\"reaction_second\": \"0.5\"", "$.fight", "missing key \"reaction_seconds\"")]
     public void AMistakeInAPersonalityIsReportedWhereItIs(string oldText, string newText, string location, string message)
     {
         DataAssert.Rejected(SamplePersonality.With(oldText, newText), SamplePersonality.RaiderPath, location, message);

@@ -46,6 +46,9 @@ public sealed class AiPlayer
     private readonly AiEconomy _economy;
     private readonly AiConstruction _construction;
     private readonly AiArmy _army;
+    private readonly AiSearch _search;
+    private readonly AiExplorer _explorer;
+    private readonly AiFight _fight;
     private readonly StructureDef? _generator;
     private readonly StructureDef? _academy;
     private readonly StructureDef? _outpost;
@@ -73,6 +76,9 @@ public sealed class AiPlayer
         _economy = new AiEconomy(_sight, personality);
         _construction = new AiConstruction(_sight);
         _army = new AiArmy(_sight, personality);
+        _search = new AiSearch(_sight);
+        _explorer = new AiExplorer(_sight, _search);
+        _fight = new AiFight(_sight, _search, personality.Fight);
 
         // What each structure is for is in its file, so none is named here.
         var start = match.Data.StartStructure;
@@ -103,6 +109,9 @@ public sealed class AiPlayer
 
     public AiPersonalityDef Personality { get; }
 
+    /// <summary>How its army stands, for the tests of this project and the tools that report on a match.</summary>
+    internal AiFight Fight => _fight;
+
     /// <summary>
     /// Adds the orders it gives now to the end of <paramref name="commands"/>, which may be none.
     /// Call it after a tick has run, never during one.
@@ -111,6 +120,8 @@ public sealed class AiPlayer
     {
         ArgumentNullException.ThrowIfNull(commands);
 
+        // What it saw happen is read after every tick: the events of a tick are gone after the next.
+        _fight.Watch();
         if (_sight.Tick < _nextThink)
         {
             return;
@@ -118,6 +129,7 @@ public sealed class AiPlayer
 
         _nextThink = _sight.Tick + ThinkInterval;
         _sight.Refresh();
+        _search.Update();
         if (!TryFindHome(out var homeX, out var homeY, out var homeRadius))
         {
             // Without a Capitol or an Outpost it holds no ground to build or work on.
@@ -133,7 +145,13 @@ public sealed class AiPlayer
         BuildStructures(homeX, homeY, homeRadius, commands);
         _army.Think(Math.Max(0, _sight.SupplyFree - _economy.SupplyKeptForWorkers), _budget, commands);
         _economy.FillSupply(_army.SmallestUnitSupply, _budget, commands);
-        SetRallyPoints(homeX, homeY, homeRadius, commands);
+        var hasMuster = TryFindMusterTile(homeX, homeY, homeRadius, out var musterX, out var musterY);
+        if (hasMuster)
+        {
+            SetRallyPoints(musterX, musterY, commands);
+        }
+
+        _fight.Think(hasMuster, musterX, musterY, _army.IsAtSupplyCap, commands);
 
         // The workers are divided last, when the budget knows every purchase of the round, and
         // their orders go first. An order to build is taken by the nearest of the workers, which
@@ -206,7 +224,7 @@ public sealed class AiPlayer
         }
 
         // Expansion: an Outpost beside the nearest deposit it does not hold.
-        if (_outpost is not null && _economy.WantsToExpand && _construction.UnderWayCount(_outpost.Index) == 0)
+        if (_outpost is not null)
         {
             Expand(_outpost, homeX, homeY, commands);
         }
@@ -263,41 +281,59 @@ public sealed class AiPlayer
         }
     }
 
+    /// <summary>
+    /// Orders an Outpost at the nearest deposit it could claim when it wants to expand and knows
+    /// a place for one. When it knows none, a worker goes to look: an Outpost stands on ground
+    /// its player has explored.
+    /// </summary>
     private void Expand(StructureDef outpost, int homeX, int homeY, List<Command> commands)
     {
-        // The deposits it could claim, nearest to home first.
-        _deposits.Clear();
-        for (var i = 0; i < _sight.Sites.Count; i++)
+        var wants = _economy.WantsToExpand && _construction.UnderWayCount(outpost.Index) == 0;
+        var knowsAPlace = false;
+        KnownSite? toLookAt = null;
+        if (wants)
         {
-            var site = _sight.Sites[i];
-            if (site.Kind == WorkSiteKind.Deposit
-                && !site.IsHeld
-                && !_sight.IsClaimedByAnother(site.X, site.Y, site.Size)
-                && !_construction.Sites.WasRefusedNear(outpost.Index, site.X, site.Y, outpost.TerritoryRadius ?? 0))
+            // The deposits it could claim, nearest to home first.
+            _deposits.Clear();
+            for (var i = 0; i < _sight.Sites.Count; i++)
             {
-                _deposits.Add(i);
+                var site = _sight.Sites[i];
+                if (site.Kind == WorkSiteKind.Deposit
+                    && !site.IsHeld
+                    && !_sight.IsClaimedByAnother(site.X, site.Y, site.Size)
+                    && !_construction.Sites.WasRefusedNear(outpost.Index, site.X, site.Y, outpost.TerritoryRadius ?? 0))
+                {
+                    _deposits.Add(i);
+                }
+            }
+
+            _deposits.Sort((left, right) =>
+            {
+                var byDistance = DistanceFromHome(_sight.Sites[left]).CompareTo(DistanceFromHome(_sight.Sites[right]));
+                return byDistance != 0 ? byDistance : left.CompareTo(right);
+            });
+
+            foreach (var index in _deposits)
+            {
+                if (_construction.TryFindSiteAt(_sight.Sites[index], outpost, homeX, homeY, out var x, out var y))
+                {
+                    knowsAPlace = true;
+                    if (_construction.CanOrder(outpost, _budget))
+                    {
+                        _construction.Order(outpost, x, y, _budget, commands);
+                    }
+
+                    break;
+                }
+
+                if (toLookAt is null && !_explorer.HasLookedAt(_sight.Sites[index].Entity))
+                {
+                    toLookAt = _sight.Sites[index];
+                }
             }
         }
 
-        if (_deposits.Count == 0 || !_construction.CanOrder(outpost, _budget))
-        {
-            return;
-        }
-
-        _deposits.Sort((left, right) =>
-        {
-            var byDistance = DistanceFromHome(_sight.Sites[left]).CompareTo(DistanceFromHome(_sight.Sites[right]));
-            return byDistance != 0 ? byDistance : left.CompareTo(right);
-        });
-
-        foreach (var index in _deposits)
-        {
-            if (_construction.TryFindSiteAt(_sight.Sites[index], outpost, homeX, homeY, out var x, out var y))
-            {
-                _construction.Order(outpost, x, y, _budget, commands);
-                return;
-            }
-        }
+        _explorer.Think(wants, knowsAPlace, toLookAt, homeX, homeY, commands);
 
         long DistanceFromHome(KnownSite site) => AiSites.DistanceSquared(site.X, site.Y, site.Size, homeX, homeY);
     }
@@ -307,7 +343,7 @@ public sealed class AiPlayer
     /// territory, on the side of the middle of the map, so that new units do not stand in the
     /// way of the next ones.
     /// </summary>
-    private void SetRallyPoints(int homeX, int homeY, int homeRadius, List<Command> commands)
+    private void SetRallyPoints(int x, int y, List<Command> commands)
     {
         _withoutRallyPoint.Clear();
         foreach (var structure in _sight.Structures)
@@ -321,7 +357,7 @@ public sealed class AiPlayer
             }
         }
 
-        if (_withoutRallyPoint.Count == 0 || !TryFindMusterTile(homeX, homeY, homeRadius, out var x, out var y))
+        if (_withoutRallyPoint.Count == 0)
         {
             return;
         }
