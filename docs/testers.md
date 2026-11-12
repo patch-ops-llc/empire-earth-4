@@ -81,6 +81,7 @@ If joining fails, the menu says why in orange:
 | Select several | Hold the left button and drag a box round them |
 | Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is already in |
 | Clear the selection | Click the ground |
+| See what another player's unit is | Click it. A pale ring marks it and the panel at the bottom describes it. It cannot be given orders |
 | Send the selected workers to work at a deposit | Right-click the deposit |
 | Send the selected units somewhere | Right-click the ground. On a trackpad that is a click with two fingers, unless you have set it otherwise |
 | Open or close the research panel | R, or the Research button in the bar at the top. Escape closes it too |
@@ -112,6 +113,21 @@ The brown blocks on the map are deposits. Select workers and right-click a depos
 - In a shared match, both players see the same workers in the same places. An order takes a moment longer to start than it does alone, because it travels to the host first.
 - If the other player leaves or closes the game, a line under the top bar says why, the bar says from then on that they are out, and your match goes on without them. If the host leaves, the match ends for both.
 - There is no Capitol and nothing to build.
+
+## What your units are
+
+Select units and the panel at the bottom of the window says what they are.
+
+- **One unit** is shown in detail: its name, its line and epoch, its hit points as a bar and as numbers, and a card for each thing your research changes. A card names the track behind it in the track's color, the tier the unit fights with, and how far that tier is from the unit's own epoch: `Firepower 2 +1` is one tier ahead. Damage is given for a second of fighting, speed in tiles a second. Under the cards are its range or reach, how often it strikes and how far it sees.
+- **Accents** are listed under that with what each does. A track one tier ahead of a unit's epoch gives the unit that track's accent at level I, two tiers ahead at level II. A unit carries two at most, from its two tracks furthest ahead, and the panel says so when a third track is ahead.
+- **Several units** are summed up, one row for each kind: how many, their hit points together, the Firepower (FP), Protection (PR) and Mobility (MO) tiers they fight with, and their accents. Point at an accent to read what it does.
+- **A worker** shows its hit points, what it is doing, its speed and sight. A worker has no tiers and no accents.
+- **Another player's unit**, when you click it, shows its hit points, its Firepower, Protection and Mobility tiers and its accents. Its price and supply are the owner's to know.
+- Units with accents carry small square badges over their heads, in the color of the track, with one white mark for level I and two for level II. Every player's units show them.
+- When a player's epoch rises, a banner under the top bar says which epoch they reached. Your own is larger and says how high your tracks may now go.
+- Only workers start a match and nothing in the game makes fighting units yet, so for now the panel has workers to show. The cards, tiers, accents and badges appear once fighting units can be placed or built.
+- A unit made before a Protection or Mobility research keeps the hit points and speed it was made with for now, though its card already shows the new tier. Damage, range and accents follow the research at once.
+- No match can raise an epoch yet: it takes three tracks at a tier, and the Energy you start with pays for one research.
 
 ## Research
 

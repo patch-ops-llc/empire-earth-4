@@ -32,6 +32,9 @@ public static class ViewPieces
 
         // 17v. Fog of war.
 
+        // Inspection: what the selected units are, accent badges, the epoch announcement.
+        new InspectionPiece(),
+
         // Later pieces.
     ];
 }

@@ -171,6 +171,13 @@ public partial class InterfaceFrame : CanvasLayer
         return Mathf.Max(0f, _topBar.GetViewportRect().Size.X - others);
     }
 
+    /// <summary>
+    /// How far down the window the message line reaches now, in the interface's units: the top
+    /// bar's lower edge when it says nothing. Something a part shows under the bar, over the
+    /// world, begins here so that it does not cover a message.
+    /// </summary>
+    public float MessagesEnd => _messageLines.GetGlobalRect().End.Y;
+
     /// <summary>Shows a sentence to the player in the message line. It goes away by itself.</summary>
     /// <param name="message">The sentence.</param>
     /// <param name="seconds">How long it stays.</param>
