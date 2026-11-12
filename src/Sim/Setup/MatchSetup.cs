@@ -49,8 +49,10 @@ public static class MatchSetup
         var workers = world.AddStore(new ComponentStore<Worker>(Worker.StoreName));
         var workSites = world.AddStore(new ComponentStore<WorkSite>(WorkSite.StoreName));
 
+        var simulation = new Simulation(world);
+
         // Worked out from the state and not state itself. Match.RefreshDerivedState renews it.
-        var research = new MatchResearch(data, world, researchState, stockpiles, data.Rules.Match.EpochCap);
+        var research = new MatchResearch(data, world, researchState, stockpiles, data.Rules.Match.EpochCap, simulation.Events);
         var routes = new RouteCache(grid);
         var spatialIndex = new SpatialIndex(grid, world.Entities, bodies);
 
@@ -61,7 +63,9 @@ public static class MatchSetup
         var targeting = new Targeting(grid, bodies, combatants, health, spatialIndex, combat);
         var approach = new Approach(grid);
 
-        var simulation = new Simulation(world);
+        // What a research that finishes brings up to date in the state of what stands on the map,
+        // in this order: the hit points and the speed of the player's units and workers.
+        research.AddTechChangeHandler(new UnitRefresh(combat, bodies, combatants, health, movers, workers));
 
         // Command handlers, in alphabetical order of their types. The order here changes nothing.
         // The four orders of a unit share one handler, which walks a move through the move order's
