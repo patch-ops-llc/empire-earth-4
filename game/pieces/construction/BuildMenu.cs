@@ -445,16 +445,13 @@ public partial class BuildMenu : InterfacePart
             return;
         }
 
+        // What is in the way of ordering it takes the place of where it may stand, which does
+        // not matter until it can be ordered, so that the line stays as short as its room.
         var structure = entry.Structure;
         var where = structure.TerritoryRadius is { } radius
             ? $"It can stand outside your territory and claims the ground {radius} tiles round it."
             : "It stands inside your territory.";
-        var text = $"{StructureWords.NameOf(structure)}: {BuildWords.Facts(structure)}. {where}";
-        if (BuildWords.WhyNot(BuildChecks.For(View), structure, entry.Problem) is { } why)
-        {
-            text += $" {why}";
-        }
-
+        var text = $"{StructureWords.NameOf(structure)}: {BuildWords.Facts(structure)}. {BuildWords.WhyNot(BuildChecks.For(View), structure, entry.Problem) ?? where}";
         _detail.Text = text;
     }
 
