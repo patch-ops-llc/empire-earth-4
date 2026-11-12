@@ -251,8 +251,9 @@ public class TowerTests
     [Fact]
     public void ATowerKeepsItsTargetWhileItIsInRangeAndPicksAgainOnceItHasLeft()
     {
+        // The first stands 6.5 tiles from the Tower's edge and 7.5 from its center: in range by the edge alone.
         var match = WithTower(out var tower);
-        var first = match.SpawnWorker(0, "17.5", "11");
+        var first = match.SpawnWorker(0, "18.5", "11");
         match.Run(4);
         Assert.Equal(first, match.Turrets.Get(tower).Target);
 
