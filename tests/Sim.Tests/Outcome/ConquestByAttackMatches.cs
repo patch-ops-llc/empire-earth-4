@@ -43,7 +43,25 @@ internal static class ConquestByAttackMatches
         var index = match.Data.Chassis.Single(candidate => candidate.Id == chassis).Index;
         var y = Fixed.FromInt(tiles.Y) - Fraction.Parse(distance).ToFixed();
         var first = Fixed.FromInt(tiles.X) + (Fixed.FromInt(tiles.Size - count) / 2) + (Fixed.One / 2);
-        return [.. Enumerable.Range(0, count).Select(i => match.SpawnChassis(player, index, new FixedVector2(first + Fixed.FromInt(i), y)))];
+        EntityId[] units = [.. Enumerable.Range(0, count).Select(i => match.SpawnChassis(player, index, new FixedVector2(first + Fixed.FromInt(i), y)))];
+        LookAgain(match);
+        return units;
+    }
+
+    /// <summary>
+    /// Works out again what the players see, in a match that has the fog of war, so that an
+    /// order for the next tick may name what the units just placed see. The fog is another piece
+    /// (17b) and a match has no <c>Vision</c> without it, so it is found by name: with the fog
+    /// in, this is <c>match.Vision.Refresh()</c>, and without it nothing.
+    /// </summary>
+    private static void LookAgain(Match match)
+    {
+        if (typeof(Match).GetProperty("Vision")?.GetValue(match) is { } vision)
+        {
+            var refresh = vision.GetType().GetMethod("Refresh", Type.EmptyTypes)
+                ?? throw new Xunit.Sdk.XunitException("The match has a Vision without a Refresh().");
+            refresh.Invoke(vision, null);
+        }
     }
 
     /// <summary>

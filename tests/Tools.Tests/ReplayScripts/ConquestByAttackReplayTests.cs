@@ -8,15 +8,44 @@ namespace Tools.Tests.ReplayScripts;
 /// Conquest by attack (design 5.1) in a golden replay. No script was written for it and no match
 /// recorded: <c>switchback-siege.replay</c>, the recorded match of structures in combat, is
 /// decided by conquest since a match can be lost. The units of its second player bring down the
-/// only Capitol of the first in tick 850 of 8,000, and what the first player orders in the
-/// 7,150 ticks after that is dropped.
+/// only Capitol of the first early in its 8,000 ticks, and what the first player orders in the
+/// ticks after that is dropped.
 /// </summary>
+/// <remarks>
+/// The tick of the fall is not pinned: it is found in the replay, as the tick in which the
+/// Capitol is reported destroyed, and the tests then ask that everything else agrees with it.
+/// It is tick 850 with the rules the replay was last updated under, and other pieces move it by
+/// a few ticks, as any rule does that changes where a unit stands.
+/// </remarks>
 public class ConquestByAttackReplayTests
 {
     private const string GoldenReplay = "switchback-siege.replay";
     private const int Loser = 0;
     private const int Winner = 1;
-    private const int TickOfTheFall = 850;
+
+    private static readonly Lazy<int> Fall = new(FindTheFall);
+
+    private static int TickOfTheFall => Fall.Value;
+
+    /// <summary>Plays the replay until the loser's Capitol is reported destroyed, and returns that tick.</summary>
+    private static int FindTheFall()
+    {
+        var replay = ReplayRuns.ReadGolden(GoldenReplay);
+        var match = ReplayRuns.Start(replay);
+        var capitol = CapitolOf(match, Loser);
+
+        // In the first quarter of the match, so that most of the loser's orders come after it.
+        for (var tick = 0; tick < replay.TickCount / 4; tick++)
+        {
+            match.Simulation.Tick();
+            if (match.Simulation.Events.Any(reported => reported.Kind == SimEventKind.Death && reported.Entity == capitol))
+            {
+                return tick;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"The Capitol of player {Loser} still stands after a quarter of the match.");
+    }
 
     [Fact]
     public void TheCapitolFallsToHitsAndItsOwnerIsOutInThatTick()
