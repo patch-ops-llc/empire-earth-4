@@ -23,8 +23,10 @@ public static class ViewPieces
         // 11v. Combat: health bars, shots and hits, the fighting orders.
 
         // 13v. Economy: resources and supply, deposits, the work order.
+        new EconomyPiece(),
 
         // 14v. Research: the grid.
+        new ResearchPiece(),
 
         // 15v. Construction and production: structures, the build menu, the production panel.
 

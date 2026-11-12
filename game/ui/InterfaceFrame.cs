@@ -11,7 +11,10 @@ namespace Game;
 /// <item>
 /// <b>The top bar</b>, across the top of the window: <see cref="TopLeft"/> for what the player
 /// has, as resources and supply, and <see cref="TopRight"/> for the match itself. Between them
-/// stand the buttons of the full-screen panels.
+/// stand the buttons of the full-screen panels. The interface is scaled with the window, so
+/// the bar is 1,152 units wide in a window of 16 to 9 or narrower, whatever its size, and
+/// wider only in a wider one. Everything in the bar has to fit in that: a readout is a word
+/// and a number, and what can say less when the bar is full asks <see cref="TopBarRoomFor"/>.
 /// </item>
 /// <item>
 /// <b>The bottom panel</b>, for the selection and its commands: <see cref="SelectionArea"/> for
@@ -58,6 +61,7 @@ public partial class InterfaceFrame : CanvasLayer
     private MatchView? _view;
     private PanelContainer _bottom = null!;
     private HBoxContainer _commandArea = null!;
+    private PanelContainer _topBar = null!;
     private HBoxContainer _panelButtons = null!;
     private VBoxContainer _messageLines = null!;
     private Label _messageRoom = null!;
@@ -152,6 +156,19 @@ public partial class InterfaceFrame : CanvasLayer
             KeepMessageRoom();
             GivePartsTheKeys(true);
         }
+    }
+
+    /// <summary>
+    /// The width a control in the top bar can have before the bar is wider than the window, with
+    /// everything else in the bar at the least width it needs. A part whose control can give
+    /// way, as one that can say less, fits what it shows to this, so that the bar's buttons
+    /// stay in the window when many parts fill it.
+    /// </summary>
+    public float TopBarRoomFor(Control control)
+    {
+        // The bar itself is never narrower than what is in it, so the window is what is measured.
+        var others = _topBar.GetCombinedMinimumSize().X - control.GetCombinedMinimumSize().X;
+        return Mathf.Max(0f, _topBar.GetViewportRect().Size.X - others);
     }
 
     /// <summary>Shows a sentence to the player in the message line. It goes away by itself.</summary>
@@ -382,13 +399,13 @@ public partial class InterfaceFrame : CanvasLayer
 
     private void BuildTopBar(Control root)
     {
-        var bar = new PanelContainer { Name = "TopBar", CustomMinimumSize = new Vector2(0f, BarHeight) };
-        bar.AddThemeStyleboxOverride("panel", UiStyle.PanelStyle(5f, cornerRadius: 0));
-        root.AddChild(bar);
-        bar.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopWide);
+        _topBar = new PanelContainer { Name = "TopBar", CustomMinimumSize = new Vector2(0f, BarHeight) };
+        _topBar.AddThemeStyleboxOverride("panel", UiStyle.PanelStyle(5f, cornerRadius: 0));
+        root.AddChild(_topBar);
+        _topBar.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopWide);
 
         var barRow = UiStyle.Row(16);
-        bar.AddChild(barRow);
+        _topBar.AddChild(barRow);
         TopLeft = UiStyle.Row(16);
         TopLeft.Name = "TopLeft";
         barRow.AddChild(TopLeft);
