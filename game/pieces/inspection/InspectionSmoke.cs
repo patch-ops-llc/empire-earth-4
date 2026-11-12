@@ -1,6 +1,10 @@
+using System.Globalization;
+using Sim;
+using Sim.Combat;
 using Sim.Core;
 using Sim.Data;
 using Sim.Numerics;
+using Sim.Perks;
 using Sim.Setup;
 using Sim.Tech;
 
@@ -13,10 +17,18 @@ namespace Game;
 /// another player and for nothing.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The piece gives no order of its own. The spawn is here because no match has a fighting unit
 /// until units can be trained, and a panel that has only workers to show is not tested. Before
 /// the first tick the part also words every chassis under a range of tiers, since a match of the
 /// smoke test reaches one tier above the start and so shows no accent.
+/// </para>
+/// <para>
+/// For the same reason no unit of the match carries a perk. So the part also asks the panel
+/// what it would show for a unit of every chassis under each of those tiers, with the counts of
+/// its perks at each stage: charged and not, damaged a moment ago and regaining, paid for and
+/// not. It asks the same of a unit of another player, which must show none of that.
+/// </para>
 /// </remarks>
 public sealed class InspectionSmoke : SmokePart
 {
@@ -163,7 +175,19 @@ public sealed class InspectionSmoke : SmokePart
             {
                 view.Selection.Set([fighting[0]]);
                 UnitFacts.TryRead(match, fighting[0], out var one);
-                Expect(orders, panel, InspectionMode.One, rows: 1, InspectionWords.Name(one), "Firepower", "Protection", "Mobility", "Manufacturing", "Logistics");
+                Expect(
+                    orders,
+                    panel,
+                    InspectionMode.One,
+                    rows: 1,
+                    InspectionWords.Name(one),
+                    "Firepower",
+                    "Protection",
+                    "Mobility",
+                    "Manufacturing",
+                    "Logistics",
+                    "An order makes",
+                    one.Armor is { } armor ? InspectionWords.Armor(armor) : "Armor");
             }
 
             if (fighting.Count > 1)
@@ -207,10 +231,9 @@ public sealed class InspectionSmoke : SmokePart
                 Expect(orders, panel, InspectionMode.Enemy, rows: 1, InspectionWords.Name(theirs), InspectionWords.Owner(theirs.Owner));
 
                 // What an opponent may not know of a unit is not in the panel (design 3.2).
-                var shown = panel.ShownText();
-                if (shown.Contains("Price", StringComparison.Ordinal) || shown.Contains("Supply", StringComparison.Ordinal))
+                if (Hidden(panel.ShownText()) is { } hidden)
                 {
-                    orders.Fail("the panel shows the price or the supply of another player's unit.");
+                    orders.Fail($"the panel shows '{hidden}' of another player's unit.");
                 }
 
                 panel.Inspect(EntityId.None);
@@ -218,6 +241,8 @@ public sealed class InspectionSmoke : SmokePart
             }
 
             CheckBadges(orders);
+            ShowPerks(orders, panel);
+            Expect(orders, panel, InspectionMode.Nothing, rows: 0);
         }
         finally
         {
@@ -246,6 +271,163 @@ public sealed class InspectionSmoke : SmokePart
             {
                 orders.Fail($"the inspection panel, showing {mode}, does not say '{word}'. It says: {shown.ReplaceLineEndings(" / ")}");
             }
+        }
+    }
+
+    // What the panel must not say of another player's unit: its price and supply, how long an
+    // order for it takes, and where it stands with its perks. Returns the first of them it says.
+    // What an accent does is not among them: an opponent may know a unit's accents (design 3.2).
+    private static string? Hidden(string shown)
+    {
+        foreach (var word in new[] { "Price", "Supply", "· An order makes", "Now:" })
+        {
+            if (shown.Contains(word, StringComparison.Ordinal))
+            {
+                return word;
+            }
+        }
+
+        return null;
+    }
+
+    // Asks the panel what it would show for a unit of every chassis under each of the tier
+    // mixes, at each stage of its perks, as the player's own and as another player's.
+    private static void ShowPerks(SmokeOrders orders, InspectionPart panel)
+    {
+        var data = orders.Match.Data;
+        var protection = data.TrackRoles.Protection;
+        var shown = new HashSet<PerkKind>();
+        var hardened = 0;
+        foreach (var mix in TierMixes)
+        {
+            if (mix.Length != data.Tracks.Count || mix.Any(tier => tier > data.TierCount))
+            {
+                continue;
+            }
+
+            var tech = TechResolver.Resolve(data, mix);
+            var combat = new CombatRules(data, 1, _ => tech);
+            foreach (var blueprint in tech.Blueprints)
+            {
+                var perks = blueprint.Perks;
+                var who = $"{blueprint.Chassis.Id} under tiers {string.Join(',', mix)}";
+                var stages = Stages(blueprint, combat);
+
+                // Every unit: its armor, and what an order makes.
+                var fresh = panel.ShownFor(UnitGroup.OfOne(stages.Ready), enemy: false);
+                Says(orders, who, fresh, perks.AreaDamageReduction is null ? "full area damage" : "less area damage");
+                Says(orders, who, fresh, perks.Plating is null ? "no plating" : $"from attackers below Firepower {blueprint.EffectiveTiers[protection]}");
+                Says(orders, who, fresh, blueprint.BatchSize == 2 ? "An order makes a pair in" : "An order makes one in");
+                hardened += perks.AreaDamageReduction is null ? 0 : 1;
+
+                var spent = panel.ShownFor(UnitGroup.OfOne(stages.Spent), enemy: false);
+                var regaining = panel.ShownFor(UnitGroup.OfOne(stages.Regaining), enemy: false);
+                var three = panel.ShownFor(UnitGroup.Of([stages.Ready, stages.Spent, stages.Regaining])[0], enemy: false);
+
+                if (perks.Charge is not null)
+                {
+                    shown.Add(PerkKind.Charge);
+                    Says(orders, who, fresh, "Now: charged. Its next attack deals +");
+                    Says(orders, who, spent, "Now: not charged. It has walked ");
+                    Says(orders, who, three, "Now: 1 of 3 charged for their next attack.");
+                    if (stages.Spent.IsCharged || !stages.Ready.IsCharged)
+                    {
+                        orders.Fail($"{who}: a unit a step short of the distance of Charge reads as charged, or one that has walked it does not.");
+                    }
+                }
+
+                if (perks.Regeneration is { } regeneration)
+                {
+                    shown.Add(PerkKind.Regeneration);
+                    Says(orders, who, fresh, "Now: at full hit points.");
+                    Says(orders, who, spent, $"Now: damaged {Seconds(regeneration.DelayTicks - 1)} s ago. It regains hit points in 0.1 s.");
+                    var rate = (regeneration.SharePerSecond.ToFraction() * blueprint.HitPoints).RoundHalfUp() / 1000d;
+                    Says(orders, who, regaining, $"Now: damaged {Seconds(regeneration.DelayTicks)} s ago. It regains {rate.ToString("0.#", CultureInfo.InvariantCulture)} hit points a second.");
+                    Says(orders, who, three, "Now: 1 regaining hit points and 1 damaged too lately to regain any.");
+                }
+
+                if (perks.DeathRefund is { } refund)
+                {
+                    shown.Add(PerkKind.DeathRefund);
+                    var back = (refund.Share.ToFraction() * blueprint.Materials).RoundHalfUp();
+                    Says(orders, who, fresh, back > 0
+                        ? $"Now: {back} M would come back if it died, of the {blueprint.Materials} M paid for it."
+                        : $"Now: nothing would come back, of the {blueprint.Materials} M paid for it.");
+                    Says(orders, who, spent, "Now: nothing would come back, because nothing was paid for it.");
+                }
+
+                if (perks.Charge is null && perks.Regeneration is null && perks.DeathRefund is null
+                    && (fresh + spent + regaining).Contains("Now:", StringComparison.Ordinal))
+                {
+                    orders.Fail($"{who}: the panel says where a unit stands with a perk it does not carry. It says: {fresh.ReplaceLineEndings(" / ")}");
+                }
+
+                // Another player's unit: its armor, which follows from what an opponent may see,
+                // and nothing of what its owner alone knows.
+                foreach (var stage in new[] { stages.Ready, stages.Spent, stages.Regaining })
+                {
+                    var theirs = panel.ShownFor(UnitGroup.OfOne(stage), enemy: true);
+                    Says(orders, who, theirs, InspectionWords.Armor(stage.Armor!));
+                    if (Hidden(theirs) is { } hidden)
+                    {
+                        orders.Fail($"{who}: the panel shows '{hidden}' of another player's unit. It says: {theirs.ReplaceLineEndings(" / ")}");
+                    }
+                }
+            }
+        }
+
+        // The mixes are there to reach every perk the panel says something live about.
+        foreach (var kind in new[] { PerkKind.Charge, PerkKind.Regeneration, PerkKind.DeathRefund })
+        {
+            if (!shown.Contains(kind) && data.Accents.Any(accent => accent.PerksAt(2).Kinds.Contains(kind)))
+            {
+                orders.Fail($"none of the tier mixes gives a chassis {kind}, so the panel was not asked about it.");
+            }
+        }
+
+        if (hardened == 0 && data.Accents.Any(accent => accent.PerksAt(2).AreaDamageReduction is not null))
+        {
+            orders.Fail("none of the tier mixes gives a chassis less area damage, so the panel was not asked about that armor.");
+        }
+    }
+
+    // A unit of a chassis at three stages of its perks. Ready: it has walked the distance of
+    // Charge, is undamaged and was paid for at today's price. Spent: one step short of that
+    // distance, damaged one tick too lately to regain anything, and not paid for. Regaining:
+    // damaged, and exactly the wait of Regeneration ago.
+    private static (UnitFacts Ready, UnitFacts Spent, UnitFacts Regaining) Stages(ChassisBlueprint blueprint, CombatRules combat)
+    {
+        const int Tick = 100_000;
+        var distance = combat.ProfileOf(0, blueprint.Chassis.Index).Charge?.Distance ?? Fixed.One;
+        var delay = blueprint.Perks.Regeneration?.DelayTicks ?? SimInfo.TicksPerSecond;
+        var maximum = blueprint.HitPoints;
+        var damaged = Math.Max(1, maximum - 1000);
+
+        UnitFacts Unit(long hitPoints, Fixed walked, int since, int paid) => UnitFacts.OfChassis(
+            EntityId.None,
+            owner: 0,
+            blueprint,
+            combat,
+            hitPoints,
+            maximum,
+            blueprint.SpeedPerTick,
+            new PerkCounts { DamagedAt = Tick - since, Walked = walked, Paid = paid },
+            Tick);
+
+        return (
+            Unit(maximum, distance, since: 0, blueprint.Materials),
+            Unit(damaged, Fixed.FromRaw(distance.Raw - 1), delay - 1, paid: 0),
+            Unit(damaged, Fixed.Zero, delay, blueprint.Materials));
+    }
+
+    private static string Seconds(int ticks) =>
+        (ticks / (double)SimInfo.TicksPerSecond).ToString("0.0", CultureInfo.InvariantCulture);
+
+    private static void Says(SmokeOrders orders, string who, string shown, string words)
+    {
+        if (!shown.Contains(words, StringComparison.Ordinal))
+        {
+            orders.Fail($"{who}: the inspection panel does not say '{words}'. It says: {shown.ReplaceLineEndings(" / ")}");
         }
     }
 

@@ -30,15 +30,18 @@ public enum InspectionMode
 /// <summary>
 /// The inspection panel (design 3.2), in the bottom panel: what the selected units are. One unit,
 /// or several of one kind, is shown in detail: its chassis, its hit points, each stat with the
-/// track tier the chassis uses for it, and its accents with their level and what they do. Units
-/// of several kinds are a row each, with hit points, the three tiers behind the stats and the
-/// accents. A click on a unit of another player shows that unit, with what the design lets an
-/// opponent know: its effective Firepower, Protection and Mobility tiers and its accents.
+/// track tier the chassis uses for it, its armor, what an order for it makes, and its accents
+/// with their level, what they do and where the unit stands with them now: whether its next
+/// attack is charged, when it regains hit points, what would come back if it died (design 2.3).
+/// Units of several kinds are a row each, with hit points, the three tiers behind the stats and
+/// the accents. A click on a unit of another player shows that unit, with what the design lets
+/// an opponent know: its effective Firepower, Protection and Mobility tiers and its accents,
+/// and the armor that follows from them.
 /// </summary>
 /// <remarks>
 /// It reads the match after every tick and gives no command. A research that finishes changes
 /// the owner's blueprints, and the panel is built again in the tick it does. Between such
-/// changes only the hit points are written anew.
+/// changes only the hit points and the lines that begin with "Now" are written anew.
 /// </remarks>
 public partial class InspectionPart : InterfacePart
 {
@@ -58,6 +61,7 @@ public partial class InspectionPart : InterfacePart
 
     private readonly InspectedMark? _mark;
     private readonly List<HealthLine> _health = [];
+    private readonly List<NowLine> _now = [];
     private List<UnitGroup> _groups = [];
     private VBoxContainer _root = null!;
     private string _signature = string.Empty;
@@ -86,6 +90,27 @@ public partial class InspectionPart : InterfacePart
             Collect(_root, text);
         }
 
+        return text.ToString();
+    }
+
+    /// <summary>
+    /// Every line of text the panel would show for units of one kind in detail, the player's own
+    /// or one of another player, whether they are in the match or not. The smoke test asks it
+    /// what a unit with accents shows, which no match of the test reaches. The panel then shows
+    /// again what it was showing.
+    /// </summary>
+    public string ShownFor(UnitGroup group, bool enemy)
+    {
+        _groups = [group];
+        Mode = enemy ? InspectionMode.Enemy : group.Count == 1 ? InspectionMode.One : InspectionMode.Group;
+        Build();
+        Present();
+        var text = new StringBuilder();
+        Collect(_root, text);
+
+        // What is built now is not what the signature stands for, so the panel builds again.
+        _signature = string.Empty;
+        Refresh();
         return text.ToString();
     }
 
@@ -167,15 +192,30 @@ public partial class InspectionPart : InterfacePart
             Build();
         }
 
+        Present();
+        _root.Visible = Mode != InspectionMode.Nothing;
+    }
+
+    // Writes what changes from tick to tick: the hit points, and where the units stand with their perks.
+    private void Present()
+    {
         for (var i = 0; i < _health.Count && i < _groups.Count; i++)
         {
             _health[i].Present(_groups[i]);
         }
 
-        _root.Visible = Mode != InspectionMode.Nothing;
+        // The lines of a detail are about its one group.
+        if (_groups.Count > 0)
+        {
+            foreach (var line in _now)
+            {
+                line.Present(_groups[0]);
+            }
+        }
     }
 
-    // Everything the panel is built from but the hit points: when this changes, it is built again.
+    // Everything the panel is built from but the hit points and where the units stand with
+    // their perks: when this changes, it is built again.
     private string Signature()
     {
         var text = new StringBuilder();
@@ -206,6 +246,7 @@ public partial class InspectionPart : InterfacePart
         }
 
         _health.Clear();
+        _now.Clear();
         switch (Mode)
         {
             case InspectionMode.One:
@@ -274,11 +315,25 @@ public partial class InspectionPart : InterfacePart
             cards.AddChild(InspectionUi.StatCard(data, "Supply", ResearchWords.Number(blueprint.Supply), blueprint, roles.Logistics, OwnTier(first, roles.Logistics, enemy)));
         }
 
-        var attack = InspectionWords.Attack(blueprint);
-        _root.AddChild(InspectionUi.Text(
-            string.Create(CultureInfo.InvariantCulture, $"{attack} · Sight {blueprint.Sight}"),
-            ResearchColors.Faint,
-            13));
+        // What an order makes is the owner's to know: it follows from the build time and the price.
+        var facts = string.Create(CultureInfo.InvariantCulture, $"{InspectionWords.Attack(blueprint)} · Sight {blueprint.Sight}");
+        var line = InspectionUi.Text(enemy ? facts : $"{facts} · {InspectionWords.Order(blueprint)}", ResearchColors.Faint, 13);
+        line.Name = "Facts";
+        if (!enemy)
+        {
+            line.TooltipText = InspectionWords.OrderInFull(blueprint);
+            line.MouseFilter = Control.MouseFilterEnum.Pass;
+        }
+
+        _root.AddChild(line);
+
+        // The armor follows from the Protection tier and the accents, which an opponent may see.
+        if (first.Armor is { } armor)
+        {
+            var protects = InspectionUi.Text(InspectionWords.Armor(armor), ResearchColors.Faint, 13);
+            protects.Name = "Armor";
+            _root.AddChild(protects);
+        }
 
         BuildAccents(data, blueprint, enemy);
     }
@@ -302,10 +357,19 @@ public partial class InspectionPart : InterfacePart
             var name = InspectionUi.AccentName(data, accent, 14);
             name.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
             row.AddChild(name);
+            var lines = UiStyle.Column(0);
+            lines.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            row.AddChild(lines);
             var does = InspectionUi.Text(Sentence(InspectionWords.AccentPerks(data, blueprint, accent)), ResearchColors.Ink, 13);
             does.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-            does.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-            row.AddChild(does);
+            lines.AddChild(does);
+
+            // Where a unit stands with a perk is in counts no opponent sees: how far it has
+            // walked, when it was last damaged, what was paid for it.
+            if (!enemy && data.AccentOf(accent.Track) is { } definition)
+            {
+                AddNowLines(lines, definition.PerksAt(accent.Level), blueprint.Perks);
+            }
         }
 
         // A track that is ahead and gives no accent would look like a mistake without the rule
@@ -320,6 +384,33 @@ public partial class InspectionPart : InterfacePart
             also.Name = "AheadToo";
             _root.AddChild(also);
         }
+    }
+
+    // A line under an accent for each of its perks that the unit keeps a count for.
+    private void AddNowLines(Container lines, PerkSet ofAccent, PerkSet onUnit)
+    {
+        if (ofAccent.Charge is not null && onUnit.Charge is not null)
+        {
+            AddNowLine(lines, "Charge", InspectionWords.ChargeNow, group => group.Charged > 0);
+        }
+
+        if (ofAccent.Regeneration is not null && onUnit.Regeneration is not null)
+        {
+            AddNowLine(lines, "Regeneration", InspectionWords.RegenerationNow, group => group.Regaining > 0);
+        }
+
+        if (ofAccent.DeathRefund is not null && onUnit.DeathRefund is not null)
+        {
+            AddNowLine(lines, "Reserves", InspectionWords.RefundNow, group => group.Refund > 0);
+        }
+    }
+
+    private void AddNowLine(Container lines, string perk, Func<UnitGroup, string> words, Func<UnitGroup, bool> lit)
+    {
+        var label = InspectionUi.Text(string.Empty, ResearchColors.Faint, 13);
+        label.Name = $"Now{perk}";
+        lines.AddChild(label);
+        _now.Add(new NowLine(label, words, lit));
     }
 
     // The tracks ahead of the chassis's epoch that give this unit no accent, of those the viewer may see.
@@ -489,6 +580,17 @@ public partial class InspectionPart : InterfacePart
             {
                 Collect(child, text);
             }
+        }
+    }
+
+    // Where the units stand with one perk now, written anew after every tick: lit while the perk
+    // is at work or ready, faint otherwise.
+    private readonly record struct NowLine(Label Label, Func<UnitGroup, string> Words, Func<UnitGroup, bool> Lit)
+    {
+        public void Present(UnitGroup group)
+        {
+            Label.Text = Words(group);
+            Label.AddThemeColorOverride("font_color", Lit(group) ? ResearchColors.Good : ResearchColors.Faint);
         }
     }
 
