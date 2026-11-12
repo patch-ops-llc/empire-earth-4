@@ -174,12 +174,28 @@ internal static class SnapshotAssert
     }
 
     /// <summary>
-    /// What a match works out from its state must be the same in both matches: the spatial index
-    /// must list the same entities for every square of two tiles on the map, and every player
-    /// must have the table of blueprints of their tiers.
+    /// What a match works out from its state must be the same in both matches: every tile must
+    /// be passable or not in both and have the same region, the spatial index must list the same
+    /// entities for every square of two tiles on the map, and every player must have the table
+    /// of blueprints of their tiers.
     /// </summary>
-    private static void AssertSameDerivedState(Match expected, Match actual, string what)
+    public static void AssertSameDerivedState(Match expected, Match actual, string what)
     {
+        Assert.Equal(expected.Grid.RegionCount, actual.Grid.RegionCount);
+        for (var y = 0; y < expected.Grid.Height; y++)
+        {
+            for (var x = 0; x < expected.Grid.Width; x++)
+            {
+                if (expected.Grid.IsPassable(x, y) != actual.Grid.IsPassable(x, y)
+                    || expected.Grid.RegionOf(x, y) != actual.Grid.RegionOf(x, y))
+                {
+                    Assert.Fail(
+                        $"{what} has tile ({x}, {y}) {(actual.Grid.IsPassable(x, y) ? "passable" : "blocked")} in region {actual.Grid.RegionOf(x, y)}, " +
+                        $"and the match the snapshot was taken from has it {(expected.Grid.IsPassable(x, y) ? "passable" : "blocked")} in region {expected.Grid.RegionOf(x, y)}.");
+                }
+            }
+        }
+
         for (var player = 0; player < expected.Players.Count; player++)
         {
             Research.TechAssert.Same(expected.Research.Tech(player), actual.Research.Tech(player));

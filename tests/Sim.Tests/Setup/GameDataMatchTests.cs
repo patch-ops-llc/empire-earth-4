@@ -27,16 +27,16 @@ public class GameDataMatchTests
         {
             var match = MatchSetup.Create(data, map, 1, [new(0), new(1)]);
             var workers = data.Rules.Start.Workers;
-            var footprint = data.Rules.Map.StartFootprint;
+            var footprint = data.StartStructure.Footprint;
 
             Assert.Equal(map.Width, match.Grid.Width);
             Assert.Equal(map.Height, match.Grid.Height);
-            Assert.Equal(2 * workers, match.Bodies.Count);
             Assert.Equal(2 * workers, match.Movers.Count);
+            Assert.Equal(2, match.Structures.Count);
 
-            for (var i = 0; i < match.Bodies.Count; i++)
+            for (var i = 0; i < match.Movers.Count; i++)
             {
-                var body = match.Bodies.ValueAt(i);
+                var body = match.Bodies.Get(match.Movers.EntityAt(i));
                 var start = map.Starts[body.Owner];
                 var tileX = body.Position.X.FloorToInt();
                 var tileY = body.Position.Y.FloorToInt();
