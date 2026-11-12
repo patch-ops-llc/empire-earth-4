@@ -1,7 +1,5 @@
-using System.Runtime.InteropServices;
 using Sim.Core;
 using Sim.Map;
-using Sim.Numerics;
 
 namespace Sim.Movement;
 
@@ -21,11 +19,13 @@ namespace Sim.Movement;
 /// not.
 /// </para>
 /// <para>
-/// Sending again is the move order's own work, so that a unit rerouted here ends up exactly as if
-/// its player had repeated the order: the same destination when it can still be reached, the
-/// nearest tile it can reach when not, one shared route for units going to the same place. Units
-/// are taken in ascending order of their IDs. Only the mover changes: an attack order or a
-/// worker's assignment that made the unit walk stays as it is.
+/// Sending again is the move order's own work, one order for each unit, so that a unit rerouted
+/// here ends up exactly as if its player had sent it, alone, to the place it was already going
+/// to: the same destination when it can still be reached, the nearest tile it can reach when not.
+/// Units are taken in ascending order of their IDs. Each gets a route of its own, because an
+/// order for several units places them by their shape as a group, which would move their
+/// destinations. Only the mover changes: an attack order or a worker's assignment that made the
+/// unit walk stays as it is.
 /// </para>
 /// <para>
 /// A unit standing on a tile that has become blocked has no region to plan in. It stops; whatever
@@ -38,10 +38,6 @@ public sealed class Rerouting
     private readonly ComponentStore<Body> _bodies;
     private readonly ComponentStore<Mover> _movers;
     private readonly MoveCommandHandler _move;
-
-    // Scratch for one call. Not state.
-    private readonly List<Walk> _walks = [];
-    private readonly List<EntityId> _group = [];
 
     public Rerouting(MapGrid grid, ComponentStore<Body> bodies, ComponentStore<Mover> movers, MoveCommandHandler move)
     {
@@ -60,7 +56,6 @@ public sealed class Rerouting
     {
         ArgumentNullException.ThrowIfNull(world);
 
-        _walks.Clear();
         for (var i = 0; i < _movers.Count; i++)
         {
             ref var mover = ref _movers.ValueAt(i);
@@ -84,35 +79,10 @@ public sealed class Rerouting
                 continue;
             }
 
-            _walks.Add(new Walk(entity, body.Owner, mover.Destination));
-        }
-
-        // One order for the units of a player that go to the same point, so that they share
-        // routes as they did when the player sent them.
-        for (var first = 0; first < _walks.Count; first++)
-        {
-            var walk = _walks[first];
-            if (walk.Entity == EntityId.None)
-            {
-                continue;
-            }
-
-            _group.Clear();
-            _group.Add(walk.Entity);
-            for (var other = first + 1; other < _walks.Count; other++)
-            {
-                if (_walks[other].Owner == walk.Owner && _walks[other].Destination == walk.Destination)
-                {
-                    _group.Add(_walks[other].Entity);
-                    _walks[other] = default;
-                }
-            }
-
-            _move.Execute(
-                world,
-                new Command(CommandType.Move, walk.Owner, CollectionsMarshal.AsSpan(_group), walk.Destination.X, walk.Destination.Y));
+            // The order changes this mover and no other, so walking the store on is safe.
+            var destination = mover.Destination;
+            ReadOnlySpan<EntityId> one = [entity];
+            _move.Execute(world, new Command(CommandType.Move, body.Owner, one, destination.X, destination.Y));
         }
     }
-
-    private readonly record struct Walk(EntityId Entity, int Owner, FixedVector2 Destination);
 }

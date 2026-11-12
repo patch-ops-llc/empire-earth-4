@@ -1,3 +1,4 @@
+using Sim.Core;
 using Sim.Data;
 using Sim.Map;
 using Sim.Movement;
@@ -101,7 +102,7 @@ public class ReroutingTests
     }
 
     [Fact]
-    public void UnitsGoingToTheSamePlaceShareARouteAgainAndTheOthersKeepTheirOwnDestinations()
+    public void EveryUnitOnItsWayKeepsTheDestinationItHad()
     {
         var match = Create(TwoGaps);
         var first = match.SpawnUnit(0, MapGrid.TileCenter(1, 0), QuarterTile);
@@ -110,22 +111,28 @@ public class ReroutingTests
         match.OrderMove(0, MapGrid.TileCenter(1, 5), first, second);
         match.OrderMove(1, MapGrid.TileCenter(8, 5), other);
         match.Simulation.Run(4);
+        EntityId[] units = [first, second, other];
+        var destinations = units.Select(unit => match.Movers.Get(unit).Destination).ToArray();
         var searches = match.Routes.SearchCount;
 
         match.PlaceStructure(1, "generator", 4, 2);
+
+        Assert.All(units, unit => Assert.Equal(MoveState.Planning, match.MoveStateOf(unit)));
+        Assert.Equal(destinations, units.Select(unit => match.Movers.Get(unit).Destination));
+        Assert.Equal(0, match.Simulation.DroppedCommandCount);
+
+        // The cache was emptied with the tiles, so every route is searched for again.
         match.Simulation.Tick();
+        Assert.InRange(match.Routes.SearchCount, searches + 2, searches + 3);
 
-        // The cache was emptied, so both routes are searched again: one for the two units of
-        // player 0, who walk to the same point, and one for the unit of player 1.
-        Assert.Equal(searches + 2, match.Routes.SearchCount);
-        Assert.Equal(match.Movers.Get(first).RouteStart, match.Movers.Get(second).RouteStart);
+        foreach (var unit in units)
+        {
+            match.RunUntilIdle(unit);
+        }
 
-        match.RunUntilIdle(first);
-        match.RunUntilIdle(other);
-        match.Simulation.Run(40);
-        Assert.Equal(MapGrid.TileCenter(8, 5), match.PositionOf(other));
-        Assert.Equal((1, 5), match.TileOf(first));
-        Assert.Equal(MoveState.Idle, match.MoveStateOf(second));
+        Assert.Equal(destinations[2], match.PositionOf(other));
+        Assert.Equal(destinations[0], match.PositionOf(first));
+        Assert.Equal(destinations[1], match.PositionOf(second));
     }
 
     /// <summary>What lays a structure where units stand moves them off first; one left there stops.</summary>
