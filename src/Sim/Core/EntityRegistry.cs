@@ -61,6 +61,25 @@ public sealed class EntityRegistry
     }
 
     /// <summary>
+    /// <see cref="IsAlive(EntityId)"/> for a caller that knows where the entity was in the list a
+    /// moment ago, from <see cref="PositionOf"/>: while it is still there, nothing is searched.
+    /// The answer is the same whatever the hint, so a hint that is out of date, or was never
+    /// right, is safe.
+    /// </summary>
+    public bool IsAlive(EntityId id, int hint) =>
+        hint >= 0 && hint < _count && _ids[hint] == id ? !_destroyed[hint] : IsAlive(id);
+
+    /// <summary>
+    /// The position of an entity in the list, or -1 when it is not in it. An entity destroyed
+    /// during the current tick keeps its position until the end of the tick.
+    /// </summary>
+    public int PositionOf(EntityId id)
+    {
+        var index = IndexOf(id);
+        return index < 0 ? -1 : index;
+    }
+
+    /// <summary>
     /// Marks an entity as destroyed. Returns false, and changes nothing, if it does not exist or
     /// was already destroyed.
     /// </summary>
@@ -170,5 +189,5 @@ public sealed class EntityRegistry
         }
     }
 
-    private int IndexOf(EntityId id) => Array.BinarySearch(_ids, 0, _count, id);
+    private int IndexOf(EntityId id) => EntitySearch.Find(_ids, _count, id);
 }

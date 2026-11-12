@@ -49,9 +49,17 @@ public sealed class ComponentStore<T> : IStateStore
     /// <summary>The position of an entity's value, or -1 if it has none.</summary>
     public int IndexOf(EntityId entity)
     {
-        var index = Array.BinarySearch(_entities, 0, _count, entity);
+        var index = EntitySearch.Find(_entities, _count, entity);
         return index < 0 ? -1 : index;
     }
+
+    /// <summary>
+    /// <see cref="IndexOf(EntityId)"/> for a caller that knows where the value was a moment ago:
+    /// while the entity is still at <paramref name="hint"/>, nothing is searched. The answer is
+    /// the same whatever the hint, so a hint that is out of date, or was never right, is safe.
+    /// </summary>
+    public int IndexOf(EntityId entity, int hint) =>
+        hint >= 0 && hint < _count && _entities[hint] == entity ? hint : IndexOf(entity);
 
     /// <summary>The entity's value, by reference. Throws if it has none.</summary>
     public ref T Get(EntityId entity)
@@ -80,7 +88,7 @@ public sealed class ComponentStore<T> : IStateStore
             throw new ArgumentException("EntityId.None cannot hold a value.", nameof(entity));
         }
 
-        var index = Array.BinarySearch(_entities, 0, _count, entity);
+        var index = EntitySearch.Find(_entities, _count, entity);
         if (index >= 0)
         {
             throw new ArgumentException($"Entity {entity} already has a value in store '{Name}'.", nameof(entity));
