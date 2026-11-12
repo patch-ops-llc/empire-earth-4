@@ -3,6 +3,7 @@ using Sim.Core;
 using Sim.Data;
 using Sim.Economy;
 using Sim.Map;
+using Sim.Production;
 using Sim.Research;
 
 namespace Sim.Structures;
@@ -30,6 +31,7 @@ public sealed class StructureFactory
     private readonly ComponentStore<WorkSite> _workSites;
     private readonly StructureTiles _tiles;
     private readonly MatchResearch _research;
+    private readonly MatchProduction _production;
     private readonly SimEventList _events;
     private readonly int _playerCount;
 
@@ -44,6 +46,7 @@ public sealed class StructureFactory
         ComponentStore<WorkSite> workSites,
         StructureTiles tiles,
         MatchResearch research,
+        MatchProduction production,
         SimEventList events,
         int playerCount)
     {
@@ -57,6 +60,7 @@ public sealed class StructureFactory
         ArgumentNullException.ThrowIfNull(workSites);
         ArgumentNullException.ThrowIfNull(tiles);
         ArgumentNullException.ThrowIfNull(research);
+        ArgumentNullException.ThrowIfNull(production);
         ArgumentNullException.ThrowIfNull(events);
         _data = data;
         _world = world;
@@ -68,6 +72,7 @@ public sealed class StructureFactory
         _workSites = workSites;
         _tiles = tiles;
         _research = research;
+        _production = production;
         _events = events;
         _playerCount = playerCount;
     }
@@ -126,7 +131,8 @@ public sealed class StructureFactory
 
     /// <summary>
     /// Gives a laid structure what comes with completion (design 2.5): the territory of a Capitol
-    /// or an Outpost, a research slot, the work site of a Generator. Call it once for a structure.
+    /// or an Outpost, a research slot, the work site of a Generator, the queue of a structure that
+    /// trains. Call it once for a structure.
     /// </summary>
     /// <exception cref="ArgumentException">The entity is no living structure.</exception>
     /// <exception cref="InvalidOperationException">
@@ -160,6 +166,8 @@ public sealed class StructureFactory
             // A Tower's attack comes with completion (design 2.5): ready, and with no target yet.
             _turrets.Add(entity, default);
         }
+
+        _production.Open(entity);
 
         if (def.ResearchSlots > 0)
         {

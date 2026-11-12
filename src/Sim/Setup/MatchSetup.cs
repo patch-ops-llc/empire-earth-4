@@ -5,6 +5,7 @@ using Sim.Data;
 using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
+using Sim.Production;
 using Sim.Research;
 using Sim.Structures;
 
@@ -46,6 +47,7 @@ public static class MatchSetup
         var foundations = world.AddStore(new ComponentStore<Foundation>(Foundation.StoreName));
         var health = world.AddStore(new ComponentStore<Health>(Health.StoreName));
         var movers = world.AddStore(new ComponentStore<Mover>(Mover.StoreName));
+        var producers = world.AddStore(new ComponentStore<Producer>(Producer.StoreName));
         var researchState = world.AddStore(new ResearchState(players.Count, data.Tracks.Count, data.TierCount, data.Rules.Match.StartEpoch));
         var shots = world.AddStore(new ComponentStore<Shot>(Shot.StoreName));
         var stockpiles = world.AddStore(new Stockpiles(players.Count));
@@ -71,6 +73,10 @@ public static class MatchSetup
 
         var simulation = new Simulation(world);
 
+        // The orders in the queues hold supply from the moment they are placed.
+        var production = new MatchProduction(data, world.Entities, bodies, producers, structures, stockpiles, supply, research, simulation.Events, players.Count);
+        supply.AddUser(production);
+
         // Command handlers, in alphabetical order of their types. The order here changes nothing.
         // The four orders of a unit share one handler, which walks a move through the move order's
         // own. A worker walks to its work by the move order, and an order that makes it walk
@@ -86,7 +92,7 @@ public static class MatchSetup
         // order it is given ends the build order: the handlers of those orders are wrapped once
         // more. An attack order is not, because a worker never takes one.
         var structureFactory = new StructureFactory(
-            data, world, bodies, health, structures, territories, turrets, workSites, structureTiles, research, simulation.Events, players.Count);
+            data, world, bodies, health, structures, territories, turrets, workSites, structureTiles, research, production, simulation.Events, players.Count);
         var construction = new ConstructionRules(
             data, world, grid, bodies, buildOrders, combatants, foundations, movers, structures, territories, workers,
             stockpiles, research, work, structureFactory, spatialIndex, move, simulation.Events, players.Count);
@@ -95,16 +101,21 @@ public static class MatchSetup
         simulation.SetCommandHandler(CommandType.Build, new BuildCommandHandler(construction));
         simulation.SetCommandHandler(CommandType.CancelBuild, new CancelBuildCommandHandler(construction));
         simulation.SetCommandHandler(CommandType.CancelResearch, new CancelResearchHandler(research));
+        simulation.SetCommandHandler(CommandType.CancelTrain, new CancelTrainHandler(production, simulation.Events));
         simulation.SetCommandHandler(
             CommandType.Gather,
             new OtherOrderHandler(new GatherCommandHandler(bodies, workSites, work, players.Count), construction));
         simulation.SetCommandHandler(CommandType.Move, new OtherOrderHandler(walkOrders, construction));
+        simulation.SetCommandHandler(CommandType.SetRallyPoint, new SetRallyPointHandler(production, grid, simulation.Events));
         simulation.SetCommandHandler(CommandType.StartResearch, new StartResearchHandler(research));
         simulation.SetCommandHandler(CommandType.Stop, new OtherOrderHandler(orders, construction));
+        simulation.SetCommandHandler(CommandType.Train, new TrainHandler(production));
 
         // Systems. Their order is a rule of the game: a pull request that adds one says where it
         // goes and why.
         //
+        // Production comes first, before routes are found, so that a unit that appears in this
+        // tick takes its rally order and its first step in this tick.
         // Routes are found before anyone moves, so that a unit ordered in this tick can take its
         // first step in this tick. Units step apart right after they have walked, from where the
         // walk left them, except a worker that holds a place and a unit that is fighting, which
@@ -123,12 +134,16 @@ public static class MatchSetup
         // lays its foundation in the tick it arrives, on the tiles as they are in this tick, and
         // the order of a worker killed in this tick ends in it. It comes before income and
         // research, which see what a structure finished in this tick gives.
+        // The orders of a production structure destroyed in this tick are given back after that,
+        // before income and research, so the stockpile has them when the tick ends.
         // Income comes after movement, so that a worker that reaches its place in this tick has
         // arrived in this tick; after the deaths, so that a worker killed in this tick earns
         // nothing in it and its place is given out in it; and before research, so that a tier
         // raised in this tick pays from the next. It moves nobody.
         // Research goes last: after everything that can destroy the holder of a research slot, so
         // that a research cannot finish in the tick in which its building falls.
+        var producing = new ProductionSystem(production, walkOrders, simulation.Events);
+        simulation.AddSystem(producing);
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
         simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, new PlaceHolders(workers), fighters));
@@ -139,6 +154,7 @@ public static class MatchSetup
         simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
         simulation.AddSystem(new StructureSystem(data, bodies, structures, foundations, structureTiles, research, simulation.Events));
         simulation.AddSystem(new ConstructionSystem(construction, data));
+        simulation.AddSystem(new ProductionRefundSystem(production, bodies));
         simulation.AddSystem(new IncomeSystem(data, grid, bodies, movers, workers, workSites, territories, stockpiles, work, research));
         simulation.AddSystem(new ResearchSystem(research));
 
@@ -158,6 +174,7 @@ public static class MatchSetup
             Foundations = foundations,
             Health = health,
             Movers = movers,
+            Production = production,
             Research = research,
             Routes = routes,
             Shots = shots,
@@ -173,6 +190,9 @@ public static class MatchSetup
             Workers = workers,
             WorkSites = workSites,
         };
+
+        // Production places its units through the match, which exists only now.
+        producing.Attach(match);
 
         // The development spawn and placement put their units and structures on the map through
         // the match, so their handlers come after it. Only while the rules switch them on:
