@@ -48,6 +48,10 @@ public sealed record StartRules(int Workers, int Materials, int Energy);
 /// Switches for development, which the design does not have. Both players of a match have the
 /// same data, so they have the same switches, and a switch is part of the content hash.
 /// </summary>
+/// <remarks>
+/// <see cref="Core.CommandType.DebugSetTier"/>, which raises a track of a player to a tier at once
+/// and for nothing, is behind <paramref name="Spawn"/> too.
+/// </remarks>
 /// <param name="Spawn">
 /// Whether a match carries out <see cref="Core.CommandType.DebugSpawn"/>, which makes units from
 /// nothing. With it off the command is dropped like any command without a handler.
