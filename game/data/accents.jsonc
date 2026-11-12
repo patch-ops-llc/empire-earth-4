@@ -20,7 +20,7 @@
       },
       "level_2": {
         // Every attack also deals 30% of its damage to enemies within 1 tile of the target.
-        "splash": { "share": "0.3", "radius": 1 },
+        "splash": { "share": "0.3", "radius": "1.1" },
         // A chassis whose attack has a blast, such as Artillery, gets +50% blast radius instead.
         "blast_radius_bonus": { "multiplier": "1.5" }
       }
