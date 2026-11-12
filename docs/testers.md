@@ -100,8 +100,8 @@ If joining fails, the menu says why in orange:
 - Selected units have a green ring under them. A right-click leaves a yellow ring that closes on the place you clicked.
 - The small map in the bottom right corner shows the whole map: forest in dark green, cliffs in grey, deposits as orange squares, and every unit as a dot in its player's color. The white outline is the part of the map on your screen. Your selected units have a white rim.
 - Click the small map and the view jumps there; hold the button and drag, and the view follows. A right-click on it sends the selected units to that place, and a yellow ring closes on the place for a moment. The mouse wheel still zooms while the pointer is on it.
-- The small map also shows the ground each player holds, tinted in the player's color with a brighter line along its edge, and every structure as a square in its owner's color with a dark rim.
-- The small map shows everything, the other player's units and structures too. Nothing is hidden yet.
+- The small map also shows the ground each player holds, tinted in the player's color with a brighter line along its edge.
+- The small map shows everything, the other player's units and territory too. Nothing is hidden yet.
 - Units find their own way round the cliffs and the forest. A unit that needs a way round stands still for a moment while it works one out.
 - Nobody can stand on cliffs or among trees. If you send units there, they go to the nearest place they can reach. The yellow ring stays where you clicked.
 - Units sent to the same place end up standing inside each other, on one point. They do not make room for each other yet.
