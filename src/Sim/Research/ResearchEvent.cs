@@ -61,6 +61,14 @@ public readonly record struct ResearchEvent(SimEventKind Kind, int Tick, int Pla
         return true;
     }
 
+    /// <summary>
+    /// A change of epoch as every other player is told of it (design 1.4): the player and the
+    /// epoch, without the track and the tier of the research that raised it. Those say where
+    /// that player's research is, which is learned by scouting alone.
+    /// </summary>
+    public static SimEvent AsAnnounced(in SimEvent epochChanged) =>
+        epochChanged with { Amount = epochChanged.Amount & (PartMask << (2 * BitsPerPart)) };
+
     /// <summary>Adds an event of research to the list.</summary>
     internal static void Add(SimEventList events, SimEventKind kind, int player, int track, int tier, int epoch, EntityId holder) =>
         events.Add(kind, player, holder, amount: track + ((long)tier << BitsPerPart) + ((long)epoch << (2 * BitsPerPart)));
