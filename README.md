@@ -42,6 +42,8 @@ The line carries two hashes. `content_hash` is the hash of the data files as the
 ./Game.x86_64 --headless --quit-after 600 -- --smoke-test
 ```
 
+The line also reports `tier_delay_ms`. The .NET runtime compiles a method poorly at first and properly once it has run often, and waits before it starts counting. `game/Game.csproj` sets that wait to 0, because with it the first large fight after the game starts ran on the poor code. An exported game gets the setting from its `Game.runtimeconfig.json`, reports `tier_delay_ms=0`, and fails the smoke test without it. The editor starts the runtime its own way, never reads the setting and reports `unset`.
+
 ## Run the game
 
 After the import command above has run once:

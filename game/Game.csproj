@@ -10,6 +10,26 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
   </PropertyGroup>
 
+  <!--
+    The .NET runtime compiles a method quickly and poorly the first time it runs, counts its calls,
+    and compiles it again properly, in the background, once it has run thirty times. It does not
+    begin to count while it still meets new code: it waits until no new method has turned up for
+    this many milliseconds, 100 if nothing is set. The opening of a large fight meets new code in
+    every tick, so the count began late, and the ticks in which the armies first met ran on the
+    poor code and took four times as long as the same ticks do later. With 0 the count begins at
+    once and the proper code is there within a tick or two.
+
+    The setting changes how soon code runs fast and never what it computes. It reaches an exported
+    game through Game.runtimeconfig.json. The editor starts the runtime its own way and does not
+    read it. The smoke test reports it as tier_delay_ms, and fails in an exported game that lacks
+    it. The name is the runtime's own (its TC_CallCountingDelayMs); Microsoft's page of runtime
+    settings does not list it. Should a later runtime drop it, the first fight is slow again and
+    nothing else changes.
+  -->
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.Runtime.TieredCompilation.CallCountingDelayMs" Value="0" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="../src/Net/Net.csproj" />
     <ProjectReference Include="../src/Net.Udp/Net.Udp.csproj" />
