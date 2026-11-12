@@ -92,7 +92,7 @@ public class DebugSpawnTests
 
         // It is made by a command, so it is there when the attacks of the same tick are made, and
         // it looks for a target on its own turn to look, within four ticks.
-        match.Run(1 + CombatRules.LookInterval);
+        match.Run(1 + match.Combat.LookInterval);
 
         Assert.Equal(50_000 - 8_000, match.HitPointsOf(worker));
     }

@@ -96,7 +96,7 @@ internal static class CombatMatches
     public static Combatant UnitOf(this Match match, EntityId entity) => match.Combatants.Get(entity);
 
     public static Targeting Targeting(this Match match) =>
-        new(match.Grid, match.Bodies, match.Combatants, match.Health, match.SpatialIndex, match.Combat);
+        new(match.Grid, match.Bodies, match.Combatants, match.Health, match.SpatialIndex, match.Combat) { Structures = match.Structures };
 
     /// <summary>The exact distance between two entities, squared, in the unit of <see cref="FixedVector2.DistanceSquaredRaw"/>.</summary>
     public static long DistanceSquared(this Match match, EntityId a, EntityId b) =>

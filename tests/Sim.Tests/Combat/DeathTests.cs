@@ -74,9 +74,9 @@ public class DeathTests
     {
         var match = Field();
         var worker = match.SpawnWorker(1, "6.5", "5.5");
-        match.Targeting().Hit(worker, 49, Line("guard"));
+        match.Targeting().Hit(worker, 49, Line("guard"), attackerFirepower: 1);
         Assert.Equal(1_000, match.HitPointsOf(worker));
-        match.Targeting().Hit(worker, 49, Line("guard"));
+        match.Targeting().Hit(worker, 49, Line("guard"), attackerFirepower: 1);
         Assert.Equal(0, match.HitPointsOf(worker));
         Assert.Equal(50_000, match.Health.Get(worker).Maximum);
     }
