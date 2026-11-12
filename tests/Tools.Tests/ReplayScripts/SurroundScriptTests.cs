@@ -44,6 +44,13 @@ public class SurroundScriptTests
     /// that a change could break. The match has the orders of <c>gather</c> as well, so that
     /// workers stand at their deposits when a band comes for them.
     /// </summary>
+    /// <remarks>
+    /// The match was recorded without the fog of war, when the script sent a band at any target
+    /// by attack order. With the fog an attack order may name only what its player sees (design
+    /// 5.3), most of the attack orders of this match are refused, and no band of seven comes to
+    /// stand by one target. That one rule is not counted here; <c>MeleePlacesTests</c> has the
+    /// number of units that fight one target at once.
+    /// </remarks>
     [Fact]
     public void ItsGoldenReplayReachesTheRulesItGuards()
     {
@@ -75,9 +82,9 @@ public class SurroundScriptTests
             "a unit that waits out of reach because every place is taken",
             "a unit that waited and then had a place",
             "a unit with a place by a worker",
-            "seven units on their places by one target",
             "units of two players with places by each other",
         ];
+        seen.Remove("seven units on their places by one target");
         Assert.Equal(expected.Order(StringComparer.Ordinal), seen.Order(StringComparer.Ordinal));
     }
 
