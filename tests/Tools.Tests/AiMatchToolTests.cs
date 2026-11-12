@@ -108,6 +108,9 @@ public class AiMatchToolTests
         // Elite trains Artillery, and its shells are counted with what they caught.
         Assert.True(result.Seats[1].Shells.Landed > 0);
         Assert.InRange(result.Seats[1].Shells.MostCaught, 1, result.Seats[1].Shells.Caught);
+
+        // Each seat has its own count: the two would be the same if the shells of both players were counted for both.
+        Assert.NotEqual(result.Seats[0].Shells, result.Seats[1].Shells);
         Assert.StartsWith($"{result.Seats[1].Shells.Landed} shells landed and caught ", AiMatchTool.AreaDamage(result.Seats[1]), StringComparison.Ordinal);
     }
 

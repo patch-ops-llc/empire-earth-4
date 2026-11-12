@@ -420,6 +420,41 @@ public class BattlesToolTests
     }
 
     /// <summary>
+    /// A counter made for one player counts the shells that player fired and the hits of that
+    /// player that splash, as a headless match needs them for each seat: all of them for the
+    /// elite army, which alone has Onagers and Legionaries, and none for the mass army.
+    /// </summary>
+    [Theory]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void ACounterForOnePlayerCountsThatPlayersShellsAndSplashesAlone(int number)
+    {
+        var battle = number == AcceptanceBattles.SplashMeasure.Number ? AcceptanceBattles.SplashMeasure : Number(number);
+        var fight = Battle.Start(Data, battle, massWest: true);
+        var (mass, elite) = (fight.Player(Side.Mass), fight.Player(Side.Elite));
+        var (allShells, massShells, eliteShells) = (new ShellCounter(), new ShellCounter(mass), new ShellCounter(elite));
+        var (allSplashes, massSplashes, eliteSplashes) = (new SplashCounter(), new SplashCounter(mass), new SplashCounter(elite));
+
+        for (var tick = 0; tick < 20 * Sim.SimInfo.TicksPerSecond; tick++)
+        {
+            fight.Match.Simulation.Tick();
+            foreach (var counter in new[] { allShells, massShells, eliteShells })
+            {
+                counter.AfterTick(fight.Match);
+            }
+
+            foreach (var counter in new[] { allSplashes, massSplashes, eliteSplashes })
+            {
+                counter.AfterTick(fight.Match);
+            }
+        }
+
+        Assert.True(allShells.Count.Landed + allSplashes.Count.Made > 0);
+        Assert.Equal((allShells.Count, ShellCount.None), (eliteShells.Count, massShells.Count));
+        Assert.Equal((allSplashes.Count, SplashCount.None), (eliteSplashes.Count, massSplashes.Count));
+    }
+
+    /// <summary>
     /// What a splash reaches is every hit that names its shot or attacker in the tick it
     /// landed: a splash that reaches nobody is counted too, and a hit that names no splash of
     /// the tick is not.
