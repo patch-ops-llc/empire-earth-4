@@ -109,6 +109,7 @@ public sealed class AttackSystem : ISystem
     private readonly Targeting _targeting;
     private readonly Approach _approach;
     private readonly Fighters _fighters;
+    private readonly WalkMarks _walks;
     private readonly MeleePlaces _places;
     private readonly PerkCounters _counters;
     private readonly SimEventList _events;
@@ -124,6 +125,7 @@ public sealed class AttackSystem : ISystem
         Targeting targeting,
         Approach approach,
         Fighters fighters,
+        WalkMarks walks,
         MeleePlaces places,
         PerkCounters counters,
         SimEventList events)
@@ -145,6 +147,7 @@ public sealed class AttackSystem : ISystem
         _targeting = targeting;
         _approach = approach;
         _fighters = fighters;
+        _walks = walks ?? throw new ArgumentNullException(nameof(walks));
         _places = places;
         _counters = counters;
         _events = events;
@@ -170,7 +173,7 @@ public sealed class AttackSystem : ISystem
                 body,
                 profile,
                 _movers.IndexOf(entity),
-                Moved: body.Position != unit.Stood,
+                Moved: _walks.Walked(entity),
                 TurnToLook: (world.Tick + entity.Value) % _targeting.Rules.LookInterval == 0);
 
             unit.Stood = body.Position;

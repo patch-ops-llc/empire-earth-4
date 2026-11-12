@@ -187,11 +187,13 @@ public static class MatchSetup
         simulation.AddSystem(producing);
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes) { WalkCounter = perkCounters });
+        var walks = new WalkMarks(bodies, combatants);
+        simulation.AddSystem(walks);
         simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, placeHolders, fighters));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
         simulation.AddSystem(new VisionSystem(vision));
         simulation.AddSystem(new ShotSystem(bodies, shots, targeting, simulation.Events));
-        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, places, perkCounters, simulation.Events));
+        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, walks, places, perkCounters, simulation.Events));
         simulation.AddSystem(new TurretSystem(bodies, structures, turrets, shots, targeting, simulation.Events));
         simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
         simulation.AddSystem(new UpkeepSystem(research, bodies, combatants, health, perkCounts, stockpiles, simulation.Events));
