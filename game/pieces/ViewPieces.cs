@@ -29,6 +29,9 @@ public static class ViewPieces
         // 15v. Construction and production: structures, the build menu, the production panel.
         new StructuresPiece(),
 
+        // 15v, second half. Production: the panel, the queue, the rally point.
+        new ProductionPiece(),
+
         // 17v. Fog of war.
 
         // Later pieces.
