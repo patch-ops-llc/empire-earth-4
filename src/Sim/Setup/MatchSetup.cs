@@ -62,6 +62,8 @@ public static class MatchSetup
         var targeting = new Targeting(grid, bodies, combatants, health, spatialIndex, combat);
         var approach = new Approach(grid);
         var fighters = new Fighters(data, combat, combatants, bodies, movers, spatialIndex);
+        var placeHolders = new PlaceHolders(workers);
+        var places = new MeleePlaces(grid, bodies, movers, combatants, spatialIndex, targeting, fighters, placeHolders);
 
         var simulation = new Simulation(world);
 
@@ -102,10 +104,10 @@ public static class MatchSetup
         // that a research cannot finish in the tick in which its building falls.
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
-        simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, new PlaceHolders(workers), fighters));
+        simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, placeHolders, fighters));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
         simulation.AddSystem(new ShotSystem(bodies, shots, targeting, simulation.Events));
-        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, simulation.Events));
+        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, places, simulation.Events));
         simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
         simulation.AddSystem(new IncomeSystem(data, grid, bodies, movers, workers, workSites, territories, stockpiles, work, research));
         simulation.AddSystem(new ResearchSystem(research));
