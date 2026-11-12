@@ -36,6 +36,10 @@ public sealed class WorkAssignments
 
     private readonly ResourceRules _rules;
     private readonly MapGrid _grid;
+
+    // The grid of the player whose worker is being given a place: the ground as that player's
+    // units walk it. Scratch, set before a region is asked for.
+    private MapGrid _walked;
     private readonly ComponentStore<Body> _bodies;
     private readonly ComponentStore<Worker> _workers;
     private readonly ComponentStore<WorkSite> _sites;
@@ -70,6 +74,7 @@ public sealed class WorkAssignments
         ArgumentNullException.ThrowIfNull(walk);
         _rules = rules;
         _grid = grid;
+        _walked = grid;
         _bodies = bodies;
         _workers = workers;
         _sites = sites;
@@ -129,7 +134,8 @@ public sealed class WorkAssignments
         }
 
         var target = _sites.ValueAt(siteIndex);
-        var region = _grid.RegionOf(body.Position);
+        _walked = _grid.For(body.Owner);
+        var region = _walked.RegionOf(body.Position);
         if (region == 0 || !HasPlaceIn(world, target, region))
         {
             return false;
@@ -195,6 +201,34 @@ public sealed class WorkAssignments
     }
 
     /// <summary>
+    /// Call it inside a tick, after a structure was laid on a square of tiles. Every worker whose
+    /// place, or the tile it waits on, is now under the structure takes a place anew at its
+    /// site, as a worker newly assigned does, in the order of the workers' IDs. A worker that can
+    /// no longer walk to any place of its site is left without an assignment.
+    /// </summary>
+    public void LeaveTiles(World world, TileSquare square)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+
+        for (var i = 0; i < _workers.Count; i++)
+        {
+            var worker = _workers.ValueAt(i);
+            var entity = _workers.EntityAt(i);
+            if (worker.State is WorkerState.Idle or WorkerState.Away
+                || !square.Covers(worker.Tile % _grid.Width, worker.Tile / _grid.Width)
+                || !world.Entities.IsAlive(entity))
+            {
+                continue;
+            }
+
+            if (!Assign(world, entity, worker.Site))
+            {
+                _workers.ValueAt(i) = default;
+            }
+        }
+    }
+
+    /// <summary>
     /// Gives free places to the waiting workers, in the order they began to wait.
     /// </summary>
     /// <param name="world">The world.</param>
@@ -227,7 +261,8 @@ public sealed class WorkAssignments
             var entity = _workers.EntityAt(index);
             if (_sites.TryGet(worker.Site, out var target) && world.Entities.IsAlive(worker.Site) && _bodies.TryGet(entity, out var body))
             {
-                TakePlace(world, entity, ref worker, target, body, _grid.RegionOf(body.Position));
+                _walked = _grid.For(body.Owner);
+                TakePlace(world, entity, ref worker, target, body, _walked.RegionOf(body.Position));
             }
         }
     }
@@ -331,7 +366,7 @@ public sealed class WorkAssignments
     /// <summary>True when a worker in this region can walk to the tile and stand on it: no site covers it.</summary>
     private bool CanStandOn(World world, int x, int y, int region)
     {
-        if (_grid.RegionOf(x, y) != region)
+        if (_walked.RegionOf(x, y) != region)
         {
             return false;
         }

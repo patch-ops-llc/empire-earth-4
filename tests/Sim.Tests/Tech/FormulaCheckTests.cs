@@ -17,9 +17,10 @@ public class FormulaCheckTests
 
         var result = DataLoader.Load(files);
 
-        // 1.123456789 to the fourth power no longer fits, and every chassis from epoch 3 up can reach it.
+        // 1.123456789 to the fourth power no longer fits, and every chassis from epoch 3 up can
+        // reach it. So can the hit points of the Capitol, the one structure of this data.
         Assert.False(result.IsValid);
-        Assert.Equal(33, result.Errors.Count);
+        Assert.Equal(34, result.Errors.Count);
         Assert.Equal(
             "lines/air.jsonc: $.chassis[0]: a stat or price of chassis 'biplane' is too large to compute exactly at some tier mix; "
             + "lower the values involved or write the multipliers in rules.jsonc with fewer decimal places",
