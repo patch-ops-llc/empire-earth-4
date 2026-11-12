@@ -1,3 +1,4 @@
+using Sim.Construction;
 using Sim.Core;
 using Sim.Economy;
 using Sim.Movement;
@@ -28,6 +29,7 @@ public class ProductionScriptTests
         "a rally point on other ground",
         "a rally point off the map",
         "a rally order that lists what is not the player's",
+        "an order to build a structure that trains",
     ];
 
     /// <summary>What the golden replay must reach.</summary>
@@ -35,7 +37,9 @@ public class ProductionScriptTests
     [
         .. EveryKindOfOrder,
         "an order placed",
+        "an order placed at a structure that a worker built",
         "an order refused because the queue is full",
+        "an order refused because the unit is locked",
         "an order refused because the stockpile does not cover it",
         "an order refused because the structure does not train it",
         "an order refused at what is no structure of the player's",
@@ -50,10 +54,17 @@ public class ProductionScriptTests
         "a worker that appears and stays",
         "a worker that appears and is put to work at a deposit",
         "a worker that appears and walks to the rally point",
-        "a worker trained by a player who had spent the Materials of the start",
+        "a unit of a chassis trained",
+        "a unit trained at the structure 'barracks'",
+        "a unit trained at the structure 'works'",
+        "a unit that appears and walks to the rally point",
+        "a unit trained by a player who had spent more than the Materials of the start",
+        "a death at the hands of a unit that was trained",
     ];
 
-    private static readonly CommandType[] ItsCommands = [CommandType.Train, CommandType.CancelTrain, CommandType.SetRallyPoint];
+    private static readonly string[] StructuresThatTrainUnits = ["barracks", "works"];
+
+    private static readonly CommandType[] ItsCommands = [CommandType.Build, CommandType.Train, CommandType.CancelTrain, CommandType.SetRallyPoint];
 
     /// <summary>
     /// The script gives every kind of order it is meant to: here in one long match on each map.
@@ -79,7 +90,7 @@ public class ProductionScriptTests
         Assert.True(replay.Run(ReplayRuns.GoldenData).Reproduced);
     }
 
-    /// <summary>A match without a structure that trains has nothing for the script to order at, and it gives no orders.</summary>
+    /// <summary>A match without a structure that trains and without workers has nothing for the script to order, and it gives no orders.</summary>
     [Fact]
     public void TheScriptGivesNothingInAMatchWithoutAStructureThatTrains()
     {
@@ -90,15 +101,15 @@ public class ProductionScriptTests
 
     /// <summary>
     /// What this recorded match is for: it must reach the rules of production that a change could
-    /// break. It began with workers alone and trains more, who earn what the next cost.
+    /// break. It began with workers alone: they build a Barracks and a Works, and the match
+    /// trains workers and units, paid for by what the workers earn.
     /// </summary>
     /// <remarks>
     /// Throughout it no queue holds more than five orders, no player uses more supply than the
     /// cap, and the supply the queues hold is what their orders add up to. What it does not
-    /// reach, because the frozen data has no structure but the Capitol and nothing in a scripted
-    /// match destroys one: a unit of a chassis, a pair, an order refused as locked or for want of
-    /// supply, and the refund of a destroyed structure. The scenario tests of the simulation
-    /// cover those.
+    /// reach, because nothing in it researches and nothing destroys a structure: a pair, an order
+    /// refused for want of supply, and the refund of a destroyed structure. The scenario tests of
+    /// the simulation cover those.
     /// </remarks>
     [Fact]
     public void ItsGoldenReplayReachesTheRulesItGuards()
@@ -114,21 +125,45 @@ public class ProductionScriptTests
         var match = ReplayRuns.Start(replay);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var workersAtTheStart = match.Workers.Count;
-        var trained = 0;
+        var structuresAtTheStart = Enumerable.Range(0, match.Structures.Count).Select(match.Structures.EntityAt).ToHashSet();
+        var workers = 0;
+        var units = 0;
+        var deadWorkers = 0;
+        var deadUnits = 0;
         Assert.Equal(0, match.Combatants.Count);
+        Assert.Equal(match.Players.Count, structuresAtTheStart.Count);
         for (var tick = 0; tick < replay.TickCount; tick++)
         {
             seen.UnionWith(KindsOfOrders(replay, match, tick));
             var cancels = replay.Commands.Where(entry => entry.Tick == tick && entry.Command.Type == CommandType.CancelTrain).Select(entry => entry.Command).ToArray();
             var rallies = replay.Commands.Count(entry => entry.Tick == tick && entry.Command.Type == CommandType.SetRallyPoint);
+            var workersBefore = Enumerable.Range(0, match.Workers.Count).Select(match.Workers.EntityAt).ToHashSet();
             match.Simulation.Tick();
-            seen.UnionWith(WhatProductionDid(match, cancels, rallies));
-            trained += match.Simulation.Events.Count(simEvent => simEvent.Kind == SimEventKind.UnitTrained);
+            Assert.DoesNotContain(match.Simulation.Events, simEvent => simEvent.Kind == SimEventKind.BuildRefused);
+            seen.UnionWith(WhatProductionDid(match, cancels, rallies, structuresAtTheStart));
+            foreach (var simEvent in match.Simulation.Events)
+            {
+                if (TrainEvent.TryRead(simEvent, out var train) && train.Kind == SimEventKind.UnitTrained)
+                {
+                    workers += train.Unit == TrainOrder.Worker ? 1 : 0;
+                    units += train.Unit == TrainOrder.Worker ? 0 : 1;
+                }
+                else if (simEvent.Kind == SimEventKind.Death)
+                {
+                    // The units the match trained fight like any others: they are all it has.
+                    deadWorkers += workersBefore.Contains(simEvent.Entity) ? 1 : 0;
+                    deadUnits += workersBefore.Contains(simEvent.Entity) ? 0 : 1;
+                    seen.Add("a death at the hands of a unit that was trained");
+                }
+            }
+
             AssertTheQueuesAreSound(match, tick);
         }
 
-        Assert.True(trained >= 10, $"Only {trained} workers were trained.");
-        Assert.Equal(workersAtTheStart + trained, match.Workers.Count);
+        Assert.True(workers >= 8, $"Only {workers} workers were trained.");
+        Assert.True(units >= 3, $"Only {units} units were trained.");
+        Assert.Equal(workersAtTheStart + workers - deadWorkers, match.Workers.Count);
+        Assert.Equal(units - deadUnits, match.Combatants.Count);
         return seen;
     }
 
@@ -149,6 +184,18 @@ public class ProductionScriptTests
                 && match.Bodies.Get(command.Entities[0]).Owner == command.Player;
             switch (command.Type)
             {
+                case CommandType.Build:
+                    // The script orders a structure only where the order is accepted.
+                    var def = match.Data.StructureOf(command.ContentId);
+                    Assert.NotNull(def);
+                    Assert.Contains(def.Id, StructuresThatTrainUnits);
+                    Assert.Equal(0, match.Construction.CountOf(command.Player, def.Index));
+                    Assert.Equal(BuildProblem.None, match.Construction.CheckStructure(command.Player, def.Index));
+                    Assert.Equal(BuildProblem.None, match.Construction.CheckSite(command.Player, def, command.TargetX.FloorToInt(), command.TargetY.FloorToInt()));
+                    var builder = Assert.Single(command.Entities.ToArray());
+                    Assert.True(match.Workers.Contains(builder) && match.Bodies.Get(builder).Owner == command.Player);
+                    seen.Add("an order to build a structure that trains");
+                    break;
                 case CommandType.Train when command.Player >= match.Players.Count:
                     seen.Add("an order to train from nobody in the match");
                     break;
@@ -207,7 +254,7 @@ public class ProductionScriptTests
     /// What the tick that has just run did in production, in the words of the list of
     /// <see cref="ItsGoldenReplayReachesTheRulesItGuards"/>, from its events and the state after it.
     /// </summary>
-    private static HashSet<string> WhatProductionDid(Match match, Command[] cancels, int rallies)
+    private static HashSet<string> WhatProductionDid(Match match, Command[] cancels, int rallies, HashSet<EntityId> structuresAtTheStart)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var producers = match.Production.Producers;
@@ -228,13 +275,21 @@ public class ProductionScriptTests
             switch (train.Kind)
             {
                 case SimEventKind.TrainOrdered:
-                    Assert.Equal((TrainOrder.Worker, 1), (train.Unit, train.Count));
+                    // Nothing in the match researches, so no chassis is trained in pairs.
+                    Assert.Equal(1, train.Count);
+                    Assert.Contains(train.Unit, match.Production.TrainedAt(match.Structures.Get(train.Structure).Type));
                     seen.Add("an order placed");
+                    if (!structuresAtTheStart.Contains(train.Structure))
+                    {
+                        seen.Add("an order placed at a structure that a worker built");
+                    }
+
                     break;
                 case SimEventKind.TrainRefused:
                     seen.Add(train.Reason switch
                     {
                         TrainCheck.QueueFull => "an order refused because the queue is full",
+                        TrainCheck.Locked => "an order refused because the unit is locked",
                         TrainCheck.TooExpensive => "an order refused because the stockpile does not cover it",
                         TrainCheck.NotTrainedHere => "an order refused because the structure does not train it",
                         TrainCheck.NoProducer => "an order refused at what is no structure of the player's",
@@ -247,9 +302,13 @@ public class ProductionScriptTests
                 case SimEventKind.RallyPointSet:
                     seen.Add("a rally point set");
                     break;
-                case SimEventKind.UnitTrained:
+                case SimEventKind.UnitTrained when train.Unit == TrainOrder.Worker:
                     seen.Add("a worker trained");
                     seen.UnionWith(WhatTheNewWorkerDoes(match, train));
+                    break;
+                case SimEventKind.UnitTrained:
+                    seen.Add("a unit of a chassis trained");
+                    seen.UnionWith(WhatTheNewUnitDoes(match, train, structuresAtTheStart));
                     break;
                 default:
                     seen.Add($"an event of kind {train.Kind}");
@@ -273,21 +332,11 @@ public class ProductionScriptTests
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var worker = match.Workers.Get(train.Trained);
         var producer = match.Production.Producers.Get(train.Structure);
-        var health = match.Health.Get(train.Trained);
-        Assert.Equal(health.Maximum, health.HitPoints);
-        Assert.True(match.Grid.IsPassable(train.Position), "A worker appeared on ground it cannot stand on.");
-        Assert.Equal(train.Player, match.Bodies.Get(train.Trained).Owner);
+        AssertItAppearedWhole(match, train);
 
         if (producer.Count > 0)
         {
             seen.Add("a queue that goes on to its next order");
-        }
-
-        // What income has added since the start is what paid for this worker, when the start's 400 Materials buy 8.
-        var owned = Enumerable.Range(0, match.Workers.Count).Count(index => match.Bodies.Get(match.Workers.EntityAt(index)).Owner == train.Player);
-        if (owned > 6 + 8)
-        {
-            seen.Add("a worker trained by a player who had spent the Materials of the start");
         }
 
         if (worker.State != WorkerState.Idle)
@@ -308,6 +357,60 @@ public class ProductionScriptTests
         }
 
         return seen;
+    }
+
+    private static HashSet<string> WhatTheNewUnitDoes(Match match, TrainEvent train, HashSet<EntityId> structuresAtTheStart)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var producer = match.Production.Producers.Get(train.Structure);
+        AssertItAppearedWhole(match, train);
+        Assert.Equal(train.Unit, match.Combatants.Get(train.Trained).Chassis);
+        Assert.False(match.Workers.Contains(train.Trained));
+        Assert.DoesNotContain(train.Structure, structuresAtTheStart);
+        seen.Add($"a unit trained at the structure '{match.Data.StructureOf(match.Structures.Get(train.Structure).Type)!.Id}'");
+
+        if (match.Movers.Get(train.Trained).State != MoveState.Idle)
+        {
+            Assert.True(producer.RallySet);
+            seen.Add("a unit that appears and walks to the rally point");
+        }
+        else
+        {
+            seen.Add("a unit that appears and stays");
+        }
+
+        // What the player has trained and built is worth more than the 400 Materials of the start: income paid for the rest.
+        var player = train.Player;
+        var spent = 0;
+        for (var i = 0; i < match.Bodies.Count; i++)
+        {
+            var entity = match.Bodies.EntityAt(i);
+            if (match.Bodies.ValueAt(i).Owner != player || !match.World.Entities.IsAlive(entity))
+            {
+                continue;
+            }
+
+            spent += match.Workers.Contains(entity) ? match.Production.PriceOf(player, TrainOrder.Worker).Materials
+                : match.Combatants.TryGet(entity, out var combatant) ? match.Production.PriceOf(player, combatant.Chassis).Materials
+                : match.Structures.TryGet(entity, out var structure) && !structuresAtTheStart.Contains(entity) ? match.Data.StructureOf(structure.Type)!.Materials
+                : 0;
+        }
+
+        var start = match.Data.Rules.Start;
+        if (spent - (start.Workers * match.Production.PriceOf(player, TrainOrder.Worker).Materials) > start.Materials)
+        {
+            seen.Add("a unit trained by a player who had spent more than the Materials of the start");
+        }
+
+        return seen;
+    }
+
+    private static void AssertItAppearedWhole(Match match, TrainEvent train)
+    {
+        var health = match.Health.Get(train.Trained);
+        Assert.Equal(health.Maximum, health.HitPoints);
+        Assert.True(match.Grid.IsPassable(train.Position), "A unit appeared on ground it cannot stand on.");
+        Assert.Equal(train.Player, match.Bodies.Get(train.Trained).Owner);
     }
 
     private static void AssertTheQueuesAreSound(Match match, int tick)
