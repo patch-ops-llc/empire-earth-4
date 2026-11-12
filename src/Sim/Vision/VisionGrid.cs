@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Numerics;
 using Sim.Core;
 using Sim.Numerics;
@@ -18,7 +19,9 @@ namespace Sim.Vision;
 /// <para>
 /// Each player has two bits for a tile, kept as two rows of 64-bit words, tile (x, y) at bit
 /// <c>y * Width + x</c>. A tile that is visible is always explored. The walk hands over whole
-/// words, so the grid of a 96 by 96 map is 288 fields for each player.
+/// words, so the grid of a 96 by 96 map is 288 fields for each player. For the tools that show
+/// or compare states, a word is named for its player and its tiles: <c>visible[1][128..191]</c>
+/// holds, for player 1, the tiles numbered 128 to 191.
 /// </para>
 /// </remarks>
 public sealed class VisionGrid : IStateStore
@@ -37,6 +40,10 @@ public sealed class VisionGrid : IStateStore
     // What was visible before the grid was last worked out again, to tell whether that changed anything. Not state.
     private readonly ulong[] _visibleBefore;
 
+    // What the walk calls each word. Made once, so that the walk, which the state hash runs, makes no text.
+    private readonly string[] _exploredNames;
+    private readonly string[] _visibleNames;
+
     public VisionGrid(int players, int width, int height)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(players);
@@ -53,6 +60,16 @@ public sealed class VisionGrid : IStateStore
         _explored = new ulong[checked(players * _wordsPerPlane)];
         _visible = new ulong[_explored.Length];
         _visibleBefore = new ulong[_explored.Length];
+        _exploredNames = new string[_explored.Length];
+        _visibleNames = new string[_explored.Length];
+        for (var word = 0; word < _explored.Length; word++)
+        {
+            var first = (word % _wordsPerPlane) * BitsPerWord;
+            var tilesOfWord = string.Create(
+                CultureInfo.InvariantCulture, $"[{word / _wordsPerPlane}][{first}..{Math.Min(first + BitsPerWord, tiles) - 1}]");
+            _exploredNames[word] = "explored" + tilesOfWord;
+            _visibleNames[word] = "visible" + tilesOfWord;
+        }
     }
 
     public string Name => StoreName;
@@ -126,12 +143,12 @@ public sealed class VisionGrid : IStateStore
         ArgumentNullException.ThrowIfNull(walker);
         for (var word = 0; word < _explored.Length; word++)
         {
-            _explored[word] = walker.Field(_explored[word]);
+            _explored[word] = walker.Field(_explored[word], _exploredNames[word]);
         }
 
         for (var word = 0; word < _visible.Length; word++)
         {
-            _visible[word] = walker.Field(_visible[word]);
+            _visible[word] = walker.Field(_visible[word], _visibleNames[word]);
         }
 
         if (!walker.IsRestoring)

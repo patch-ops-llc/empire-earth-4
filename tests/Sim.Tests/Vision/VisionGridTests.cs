@@ -316,6 +316,60 @@ public class VisionGridTests
         Assert.Equal("vision", new VisionGrid(1, 1, 1).Name);
     }
 
+    /// <summary>The desync tool names a word that differs by its player and its tiles.</summary>
+    [Fact]
+    public void TheWalkNamesEachWordForItsPlayerAndItsTiles()
+    {
+        var walker = new NamingWalker();
+
+        new VisionGrid(2, 10, 10).Walk(walker);
+
+        Assert.Equal(
+            [
+                "explored[0][0..63]", "explored[0][64..99]", "explored[1][0..63]", "explored[1][64..99]",
+                "visible[0][0..63]", "visible[0][64..99]", "visible[1][0..63]", "visible[1][64..99]",
+            ],
+            walker.Names);
+
+        // A map whose tiles fill its last word.
+        walker.Names.Clear();
+        new VisionGrid(1, 16, 8).Walk(walker);
+        Assert.Equal(["explored[0][0..63]", "explored[0][64..127]", "visible[0][0..63]", "visible[0][64..127]"], walker.Names);
+    }
+
+    private sealed class NamingWalker : IStateWalker
+    {
+        public List<string> Names { get; } = [];
+
+        public bool IsRestoring => false;
+
+        public ulong Field(ulong value, string name = "")
+        {
+            Names.Add(name);
+            return value;
+        }
+
+        public bool Field(bool value, string name = "") => throw new NotSupportedException();
+
+        public int Field(int value, string name = "") => throw new NotSupportedException();
+
+        public uint Field(uint value, string name = "") => throw new NotSupportedException();
+
+        public long Field(long value, string name = "") => throw new NotSupportedException();
+
+        public Int128 Field(Int128 value, string name = "") => throw new NotSupportedException();
+
+        public EntityId Field(EntityId value, string name = "") => throw new NotSupportedException();
+
+        public Fixed Field(Fixed value, string name = "") => throw new NotSupportedException();
+
+        public Angle Field(Angle value, string name = "") => throw new NotSupportedException();
+
+        public Fraction Field(Fraction value, string name = "") => throw new NotSupportedException();
+
+        public int Count(int count, int minimumBytesPerItem = 1, string name = "") => throw new NotSupportedException();
+    }
+
     private static byte[] SnapshotOf(VisionGrid grid)
     {
         var world = new World(1);
