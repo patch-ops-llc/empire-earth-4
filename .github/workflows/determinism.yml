@@ -52,7 +52,10 @@ jobs:
   tests:
     name: Tests on ${{ matrix.system.name }}, ${{ matrix.configuration }}
     runs-on: ${{ matrix.system.runner }}
-    timeout-minutes: 15
+    # Stops a job that hangs, and must never stop one that is only slow: a job that is cancelled
+    # leaves no report, and the comparison below then has seven. The Debug jobs on macOS x64 are
+    # the slowest, at about twice the time of Linux and on a bad day three times.
+    timeout-minutes: 45
     strategy:
       # One system failing is the finding. The others still have to report.
       fail-fast: false
