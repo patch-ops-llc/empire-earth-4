@@ -31,7 +31,8 @@ namespace Game;
 /// asks the <see cref="OrderTable"/>, and a command for the selection, as Stop, are answered
 /// with <see cref="SoundCue.OrderGiven"/>. A click that no row of the table had an order for is
 /// answered with <see cref="SoundCue.OrderRefused"/>, as is an order the match refuses a tick or
-/// more later.
+/// more later. A panel that sends its orders itself, past the table and the frame, says so
+/// with <see cref="Acknowledge"/>.
 /// </para>
 /// </remarks>
 public partial class SoundPart : InterfacePart
@@ -59,6 +60,24 @@ public partial class SoundPart : InterfacePart
     /// </summary>
     internal static SoundPart? Latest { get; private set; }
 
+    /// <summary>
+    /// The sound part of a frame, or null for a view that has no sound. It is how another piece
+    /// reaches the sound: <c>SoundPart.Of(Frame)?.Acknowledge();</c>
+    /// </summary>
+    public static SoundPart? Of(InterfaceFrame frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        foreach (var part in frame.Parts)
+        {
+            if (part is SoundPart sound)
+            {
+                return sound;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>The view of the match this part plays for, for the smoke test.</summary>
     internal MatchView MatchView => View;
 
@@ -73,6 +92,13 @@ public partial class SoundPart : InterfacePart
 
     /// <summary>The number of times a cue was started since the match began. Never more than <see cref="Asked"/>.</summary>
     public int Played(SoundCue cue) => _played[(int)cue];
+
+    /// <summary>
+    /// True when a cue asked for now would be started, and false while its gap since its last
+    /// start has not passed. The clock is the engine's, so a test that counts what was played
+    /// asks this first.
+    /// </summary>
+    public bool WouldStart(SoundCue cue) => _mix.IsFree(cue, _clock);
 
     /// <summary>How long a cue's sound is, in seconds.</summary>
     public double LengthOf(SoundCue cue) => _streams[(int)cue].GetLength();
@@ -170,9 +196,13 @@ public partial class SoundPart : InterfacePart
     /// <summary>
     /// Answers an order of the local player's that a piece sent to the match itself, past the
     /// order table and the frame's commands, as a panel with buttons of its own does. The piece
-    /// finds this part among <see cref="InterfaceFrame.Parts"/> and calls it as the order goes.
+    /// finds this part with <see cref="Of"/> and calls it as the order goes:
+    /// <c>SoundPart.Of(Frame)?.Acknowledge();</c>
     /// </summary>
-    /// <param name="taken">False when the order could not be sent.</param>
+    /// <param name="taken">
+    /// False for an order the piece turned down itself, with a sentence to the player, before
+    /// anything was sent.
+    /// </param>
     public void Acknowledge(bool taken = true) => Notice(taken ? SoundCue.OrderGiven : SoundCue.OrderRefused);
 
     // A sound for the local player alone, called for outside the events of a tick.

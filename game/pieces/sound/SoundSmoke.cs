@@ -116,6 +116,10 @@ public sealed class SoundSmoke : SmokePart
         var asked = sound.Asked(SoundCue.OrderGiven);
         var played = sound.Played(SoundCue.OrderGiven);
 
+        // A part before this one may have had an order answered a moment ago. The sound of this
+        // one is then left out, as it would be for a player: it is called for and not started.
+        var starts = sound.WouldStart(SoundCue.OrderGiven) ? 1 : 0;
+
         view.Selection.Set([units[0]]);
         var row = view.Orders.Give(view, new PointerTarget(PointerTargets.Ground, EntityId.None, where));
         view.Selection.Clear();
@@ -124,11 +128,12 @@ public sealed class SoundSmoke : SmokePart
         {
             orders.Fail("the order table had no order for one unit and a point of the ground.");
         }
-        else if (sound.Asked(SoundCue.OrderGiven) != asked + 1 || sound.Played(SoundCue.OrderGiven) != played + 1)
+        else if (sound.Asked(SoundCue.OrderGiven) != asked + 1 || sound.Played(SoundCue.OrderGiven) != played + starts)
         {
             orders.Fail(
                 $"the order table gave a {row.Name} order, and the sound of an order given was called for " +
-                $"{sound.Asked(SoundCue.OrderGiven) - asked} times and started {sound.Played(SoundCue.OrderGiven) - played} times. Each should be 1.");
+                $"{sound.Asked(SoundCue.OrderGiven) - asked} times and started {sound.Played(SoundCue.OrderGiven) - played} times. " +
+                $"It should be called for once and started {(starts == 1 ? "once" : "not at all, so soon after the last")}.");
         }
     }
 

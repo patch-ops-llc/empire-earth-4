@@ -104,6 +104,32 @@ public class SoundMixTests
     }
 
     [Fact]
+    public void WhetherACueWouldStartCanBeAskedWithoutStartingIt()
+    {
+        var mix = new SoundMix();
+        var gap = SoundCues.Gap(SoundCue.OrderGiven);
+
+        // Asking any number of times starts nothing.
+        Assert.True(mix.IsFree(SoundCue.OrderGiven, 0.0));
+        Assert.True(mix.IsFree(SoundCue.OrderGiven, 0.0));
+        Assert.True(mix.TryStart(SoundCue.OrderGiven, 0.0));
+
+        Assert.False(mix.IsFree(SoundCue.OrderGiven, gap * 0.5));
+        Assert.False(mix.TryStart(SoundCue.OrderGiven, gap * 0.5));
+        Assert.True(mix.IsFree(SoundCue.OrderGiven, gap));
+        Assert.True(mix.IsFree(SoundCue.OrderRefused, gap * 0.5));
+
+        // What it says is what a start then does, for a sound of the world too.
+        var now = 0.0;
+        for (var step = 0; step < 200; step++)
+        {
+            now += 0.03;
+            var free = mix.IsFree(SoundCue.MeleeHit, now);
+            Assert.Equal(free, mix.TryStart(SoundCue.MeleeHit, now));
+        }
+    }
+
+    [Fact]
     public void ASoundOfTheWorldKeepsTheGapThatFollowsEachOfItsStarts()
     {
         var mix = new SoundMix();
