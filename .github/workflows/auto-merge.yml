@@ -48,6 +48,13 @@ on:
       - ready_for_review
   # By hand from the Actions tab, to look again. With the box ticked it merges nothing and only
   # says, in the summary of the run, what it would do with each open pull request.
+  # TEMPORARY, removed before this pull request is done: a dry run with a token that can only
+  # read, so that the script runs once on GitHub before it is on main.
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - edited
   workflow_dispatch:
     inputs:
       dry_run:
@@ -68,6 +75,7 @@ jobs:
     name: Merge the pull requests that are ready
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
       (github.event_name == 'pull_request_target' &&
        github.event.pull_request.head.repo.full_name == github.repository) ||
       (github.event_name == 'workflow_run' &&
@@ -78,14 +86,14 @@ jobs:
     timeout-minutes: 10
     permissions:
       # To merge.
-      contents: write
-      pull-requests: write
+      contents: read
+      pull-requests: read
       # To start the workflows of START_ON_MAIN after a merge, and to read the runs of a commit.
-      actions: write
+      actions: read
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      MARKER: "Auto-merge: yes"
+      MARKER: "Auto-merge: dry run on GitHub"
       # The workflow that must have passed on the head commit, and this one, which is not counted.
       REQUIRED: .github/workflows/ci.yml
       THIS: .github/workflows/auto-merge.yml
@@ -93,7 +101,7 @@ jobs:
       # So the workflows that do are started here, after each merge. Each needs a
       # workflow_dispatch trigger. A workflow that gains a push trigger for main belongs here.
       START_ON_MAIN: determinism.yml
-      DRY_RUN: ${{ inputs.dry_run && 'yes' || '' }}
+      DRY_RUN: yes
     steps:
       - name: Merge every pull request that is ready
         shell: bash
