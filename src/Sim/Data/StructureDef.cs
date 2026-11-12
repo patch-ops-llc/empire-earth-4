@@ -22,7 +22,7 @@ namespace Sim.Data;
 /// <param name="Trains">The lines it trains, in the order of the file, which is the order they are offered in.</param>
 /// <param name="IsEnergyWorkSite">Whether workers stand at it and earn Energy, as <see cref="EnergyRules"/> says.</param>
 /// <param name="Attack">How it attacks when finished, or null for a structure that does not.</param>
-/// <param name="Wall">Set for the structure walls are made of, tile by tile.</param>
+/// <param name="Wall">Set for the structure walls are made of, tile by tile, and for the gate made from it.</param>
 public sealed record StructureDef(
     string Id,
     int Index,
@@ -41,7 +41,14 @@ public sealed record StructureDef(
     IReadOnlyList<int> Trains,
     bool IsEnergyWorkSite,
     StructureAttackDef? Attack,
-    WallDef? Wall);
+    WallDef? Wall)
+{
+    /// <summary>
+    /// True for the gate (design 2.5): a wall tile that its owner's units walk through once it is
+    /// finished. It has no file: <see cref="GameData.Gate"/> makes it from the wall's.
+    /// </summary>
+    public bool IsGate { get; init; }
+}
 
 /// <summary>
 /// The attack of a structure (design 2.5, the Tower). It is always ranged.

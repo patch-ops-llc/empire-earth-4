@@ -14,6 +14,10 @@ namespace Sim.Movement;
 /// search takes the one nearest the straight line from start to goal, which keeps routes over open
 /// ground straight; the tile's index breaks what is left, so two routes of the same cost on a
 /// mirrored map need not be mirror images.
+/// <para>
+/// A search runs on the grid the finder was made for or on the grid of one player
+/// (<see cref="MapGrid.For"/>), which has the same tiles with that player's gates open.
+/// </para>
 /// </remarks>
 public sealed class RouteFinder
 {
@@ -44,16 +48,24 @@ public sealed class RouteFinder
     /// <c>y * width + x</c>. Both tiles must be in the same region, so a walk exists.
     /// </summary>
     /// <param name="expansions">The number of tiles the search expanded: the unit work budgets are counted in.</param>
-    public int[] Find(int startX, int startY, int goalX, int goalY, out int expansions)
+    public int[] Find(int startX, int startY, int goalX, int goalY, out int expansions) =>
+        Find(_grid, startX, startY, goalX, goalY, out expansions);
+
+    /// <summary>
+    /// <see cref="Find(int, int, int, int, out int)"/> on the grid of one player, which has the
+    /// size of the finder's own.
+    /// </summary>
+    public int[] Find(MapGrid grid, int startX, int startY, int goalX, int goalY, out int expansions)
     {
-        var region = _grid.RegionOf(startX, startY);
-        if (region == 0 || region != _grid.RegionOf(goalX, goalY))
+        CheckSize(grid);
+        var region = grid.RegionOf(startX, startY);
+        if (region == 0 || region != grid.RegionOf(goalX, goalY))
         {
             throw new ArgumentException(
                 $"No walk leads from tile ({startX}, {startY}) to tile ({goalX}, {goalY}).", nameof(goalX));
         }
 
-        return Search(startX, startY, goalX, goalY, null, 1, out expansions) ?? throw new InvalidOperationException(
+        return Search(grid, startX, startY, goalX, goalY, null, 1, out expansions) ?? throw new InvalidOperationException(
             $"The search found no walk from tile ({startX}, {startY}) to tile ({goalX}, {goalY}) of one region.");
     }
 
@@ -76,14 +88,22 @@ public sealed class RouteFinder
     /// <param name="crossable">For each tile of the grid, as <c>y * width + x</c>, whether the walker may cross it though it is blocked.</param>
     /// <param name="crossingCost">How many steps one step into a marked tile costs, at least 1.</param>
     /// <param name="expansions">The number of tiles the search expanded.</param>
-    public int[]? FindAcross(int startX, int startY, int goalX, int goalY, bool[] crossable, int crossingCost, out int expansions)
+    public int[]? FindAcross(int startX, int startY, int goalX, int goalY, bool[] crossable, int crossingCost, out int expansions) =>
+        FindAcross(_grid, startX, startY, goalX, goalY, crossable, crossingCost, out expansions);
+
+    /// <summary>
+    /// <see cref="FindAcross(int, int, int, int, bool[], int, out int)"/> on the grid of one
+    /// player, which has the size of the finder's own.
+    /// </summary>
+    public int[]? FindAcross(MapGrid grid, int startX, int startY, int goalX, int goalY, bool[] crossable, int crossingCost, out int expansions)
     {
+        CheckSize(grid);
         ArgumentNullException.ThrowIfNull(crossable);
         ArgumentOutOfRangeException.ThrowIfLessThan(crossingCost, 1);
-        if (crossable.Length != _grid.Width * _grid.Height)
+        if (crossable.Length != grid.Width * grid.Height)
         {
             throw new ArgumentException(
-                $"The marks are for {crossable.Length} tiles and the grid has {_grid.Width * _grid.Height}.", nameof(crossable));
+                $"The marks are for {crossable.Length} tiles and the grid has {grid.Width * grid.Height}.", nameof(crossable));
         }
 
         if (!CanStandOrCross(startX, startY) || !CanStandOrCross(goalX, goalY))
@@ -92,17 +112,27 @@ public sealed class RouteFinder
                 $"The walker can be on neither tile ({startX}, {startY}) nor tile ({goalX}, {goalY}), or on only one of them.", nameof(goalX));
         }
 
-        return Search(startX, startY, goalX, goalY, crossable, crossingCost, out expansions);
+        return Search(grid, startX, startY, goalX, goalY, crossable, crossingCost, out expansions);
 
-        bool CanStandOrCross(int x, int y) => _grid.Contains(x, y) && (_grid.IsPassable(x, y) || crossable[(y * _grid.Width) + x]);
+        bool CanStandOrCross(int x, int y) => grid.Contains(x, y) && (grid.IsPassable(x, y) || crossable[(y * grid.Width) + x]);
     }
 
-    private int[]? Search(int startX, int startY, int goalX, int goalY, bool[]? crossable, int crossingCost, out int expansions)
+    private void CheckSize(MapGrid grid)
     {
-        var width = _grid.Width;
+        ArgumentNullException.ThrowIfNull(grid);
+        if (grid.Width != _grid.Width || grid.Height != _grid.Height)
+        {
+            throw new ArgumentException(
+                $"The grid is {grid.Width} by {grid.Height} and the finder's is {_grid.Width} by {_grid.Height}.", nameof(grid));
+        }
+    }
+
+    private int[]? Search(MapGrid grid, int startX, int startY, int goalX, int goalY, bool[]? crossable, int crossingCost, out int expansions)
+    {
+        var width = grid.Width;
         if (_cost.Length == 0)
         {
-            var tiles = width * _grid.Height;
+            var tiles = width * grid.Height;
             _cost = new int[tiles];
             _cameFrom = new int[tiles];
             _seenIn = new int[tiles];
@@ -144,9 +174,9 @@ public sealed class RouteFinder
                 var nextX = x + StepX[direction];
                 var nextY = y + StepY[direction];
                 var steps = 1;
-                if (!_grid.IsPassable(nextX, nextY))
+                if (!grid.IsPassable(nextX, nextY))
                 {
-                    if (crossable is null || !_grid.Contains(nextX, nextY) || !crossable[(nextY * width) + nextX])
+                    if (crossable is null || !grid.Contains(nextX, nextY) || !crossable[(nextY * width) + nextX])
                     {
                         continue;
                     }
@@ -155,7 +185,7 @@ public sealed class RouteFinder
                 }
 
                 var diagonal = direction >= 4;
-                if (diagonal && (!_grid.IsPassable(nextX, y) || !_grid.IsPassable(x, nextY)))
+                if (diagonal && (!grid.IsPassable(nextX, y) || !grid.IsPassable(x, nextY)))
                 {
                     continue;
                 }

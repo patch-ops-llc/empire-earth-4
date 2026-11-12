@@ -35,6 +35,12 @@ internal static class DataRules
     public const string StartStructure = "capitol";
 
     /// <summary>
+    /// The ID of the gate (design 2.5), which the wall's file describes: a structure with no
+    /// file and no entry of its own in the roster, so the roster may not use the name.
+    /// </summary>
+    public const string Gate = "gate";
+
+    /// <summary>
     /// The tracks the rules name. The formulas of design 2.3 and section 4 say which track scales
     /// what, so <c>tracks.jsonc</c> must define each of these IDs. Their order there is free.
     /// </summary>

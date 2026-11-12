@@ -15,6 +15,10 @@ namespace Sim.Combat;
 /// with a clear way walks straight; any other unit takes a route, and keeps the route it has when
 /// that already ends in the right tile, so that following a target does not search again each time
 /// the target takes a step.
+/// <para>
+/// Every walk is placed on the ground as the unit's owner walks it (<see cref="MapGrid.For"/>):
+/// a unit goes through the finished gates of its own player and round those of the others.
+/// </para>
 /// </remarks>
 public sealed class Approach
 {
@@ -37,9 +41,10 @@ public sealed class Approach
     /// can walk to no tile beside the footprint, it goes toward the nearest point of the
     /// footprint as toward any place it cannot reach (design 2.4).
     /// </remarks>
-    public void WalkToStructure(ref Mover mover, FixedVector2 position, TileSquare tiles)
+    public void WalkToStructure(int owner, ref Mover mover, FixedVector2 position, TileSquare tiles)
     {
-        var region = _grid.RegionOf(position);
+        var grid = _grid.For(owner);
+        var region = grid.RegionOf(position);
         var found = false;
         var nearest = long.MaxValue;
         var beside = default(FixedVector2);
@@ -47,7 +52,7 @@ public sealed class Approach
         {
             for (var x = tiles.X - 1; x <= tiles.X + tiles.Size; x++)
             {
-                if (tiles.Covers(x, y) || _grid.RegionOf(x, y) != region)
+                if (tiles.Covers(x, y) || grid.RegionOf(x, y) != region)
                 {
                     continue;
                 }
@@ -63,13 +68,18 @@ public sealed class Approach
             }
         }
 
-        WalkTo(ref mover, position, found ? beside : tiles.NearestPointTo(position));
+        WalkTo(owner, ref mover, position, found ? beside : tiles.NearestPointTo(position));
     }
 
     /// <summary>Starts or redirects a walk from <paramref name="position"/> toward <paramref name="target"/>, a point on the map.</summary>
-    public void WalkTo(ref Mover mover, FixedVector2 position, FixedVector2 target)
+    /// <param name="owner">The player the unit belongs to.</param>
+    /// <param name="mover">The unit's mover.</param>
+    /// <param name="position">Where the unit stands.</param>
+    /// <param name="target">The point to walk toward.</param>
+    public void WalkTo(int owner, ref Mover mover, FixedVector2 position, FixedVector2 target)
     {
-        var region = _grid.RegionOf(position);
+        var grid = _grid.For(owner);
+        var region = grid.RegionOf(position);
         if (region == 0)
         {
             mover.Stop();
@@ -79,14 +89,14 @@ public sealed class Approach
         var tileX = target.X.FloorToInt();
         var tileY = target.Y.FloorToInt();
         FixedVector2 destination;
-        if (_grid.RegionOf(tileX, tileY) == region)
+        if (grid.RegionOf(tileX, tileY) == region)
         {
-            destination = _grid.KeepClear(target, Mover.StandOff);
+            destination = grid.KeepClear(target, Mover.StandOff);
         }
         else
         {
             // Every region has a tile, so this finds one.
-            _grid.TryFindNearestTile(target, region, position, out tileX, out tileY);
+            grid.TryFindNearestTile(target, region, position, out tileX, out tileY);
             destination = MapGrid.TileCenter(tileX, tileY);
         }
 
@@ -97,9 +107,9 @@ public sealed class Approach
             return;
         }
 
-        var goal = (tileY * _grid.Width) + tileX;
-        var tile = (position.Y.FloorToInt() * _grid.Width) + position.X.FloorToInt();
-        if (tile == goal || _grid.IsCorridorClear(position, destination, Mover.Clearance))
+        var goal = (tileY * grid.Width) + tileX;
+        var tile = (position.Y.FloorToInt() * grid.Width) + position.X.FloorToInt();
+        if (tile == goal || grid.IsCorridorClear(position, destination, Mover.Clearance))
         {
             mover.WalkStraightTo(destination);
         }

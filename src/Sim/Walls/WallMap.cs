@@ -15,7 +15,9 @@ namespace Sim.Walls;
 /// Worked out from the structures that stand, like the tiles of the <see cref="MapGrid"/>, and
 /// not state: <see cref="StructureTiles"/> has it rebuilt whenever it rebuilds the tiles, so the
 /// two always agree. A wall tile counts from the moment it is laid, while it still builds
-/// itself.
+/// itself. A gate is a wall tile here: to its owner's enemies it is one, and to its owner it is
+/// a wall tile of its own, which the owner's units walk through once it is finished because the
+/// owner's <see cref="MapGrid.For"/> has it open.
 /// </para>
 /// <para>
 /// <b>The ground past the walls.</b> For a player, every tile a unit can stand on has a number,
@@ -58,10 +60,15 @@ public sealed class WallMap : ITileFollower
         _entities = entities;
         _bodies = bodies;
         _structures = structures;
-        _isWall = new bool[data.Rules.Structures.Count];
+        _isWall = new bool[data.StructureKinds];
         foreach (var structure in data.Structures)
         {
             _isWall[structure.Index] = structure.Wall is not null;
+        }
+
+        if (data.Gate is { } gate)
+        {
+            _isWall[gate.Index] = true;
         }
 
         var tiles = grid.Width * grid.Height;
@@ -73,7 +80,10 @@ public sealed class WallMap : ITileFollower
         _fresh = new bool[playerCount];
     }
 
-    /// <summary>True for a structure of the roster that is a wall tile to everyone.</summary>
+    /// <summary>
+    /// True for a kind of structure that is a wall tile: the wall, and the gate, which is one to
+    /// everyone but its owner.
+    /// </summary>
     public bool IsWall(int structure) => structure >= 0 && structure < _isWall.Length && _isWall[structure];
 
     /// <summary>The wall tile that stands on a tile, or none.</summary>
@@ -137,7 +147,9 @@ public sealed class WallMap : ITileFollower
             return;
         }
 
-        var width = _grid.Width;
+        // The ground as the player's units walk it: with the player's own finished gates open.
+        var grid = _grid.For(player);
+        var width = grid.Width;
         var enemyWalls = _enemyWalls[player] ??= new bool[_ownerAt.Length];
         var past = _past[player] ??= new int[_ownerAt.Length];
         for (var tile = 0; tile < enemyWalls.Length; tile++)
@@ -206,6 +218,6 @@ public sealed class WallMap : ITileFollower
 
         _fresh[player] = true;
 
-        bool CanCross(int tile) => enemyWalls[tile] || _grid.IsPassable(tile % width, tile / width);
+        bool CanCross(int tile) => enemyWalls[tile] || grid.IsPassable(tile % width, tile / width);
     }
 }

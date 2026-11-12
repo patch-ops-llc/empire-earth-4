@@ -31,6 +31,11 @@ namespace Sim.Movement;
 /// A unit standing on a tile that has become blocked has no region to plan in. It stops; whatever
 /// lays a structure where units stand moves them off first.
 /// </para>
+/// <para>
+/// A unit walks the grid of its owner (<see cref="MapGrid.For"/>), and only the units whose grid
+/// changed are sent again (<see cref="MapGrid.ChangedFor"/>): a gate that is finished opens a
+/// way for its owner's units and leaves everyone else's walks as they are.
+/// </para>
 /// </remarks>
 public sealed class Rerouting
 {
@@ -67,14 +72,21 @@ public sealed class Rerouting
                 continue;
             }
 
-            if (_grid.RegionOf(body.Position) == 0)
+            // A gate that is finished changes the ground of its owner and of nobody else.
+            if (!_grid.ChangedFor(body.Owner))
+            {
+                continue;
+            }
+
+            var grid = _grid.For(body.Owner);
+            if (grid.RegionOf(body.Position) == 0)
             {
                 mover.Stop();
                 continue;
             }
 
             if (mover.State == MoveState.Moving
-                && _grid.IsCorridorClear(body.Position, mover.Destination, Mover.Clearance))
+                && grid.IsCorridorClear(body.Position, mover.Destination, Mover.Clearance))
             {
                 continue;
             }

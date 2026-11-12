@@ -1,4 +1,5 @@
 using Sim.Core;
+using Sim.Map;
 
 namespace Sim.Movement;
 
@@ -19,20 +20,28 @@ namespace Sim.Movement;
 /// costs the same when the route is already in the cache: what is in the cache is not state, and
 /// the tick in which a mover starts walking is.
 /// </para>
+/// <para>
+/// A route is found on the grid of the mover's owner (<see cref="MapGrid.For"/>). Movers
+/// share a route when they walk the same grid between the same ends: all players with no gate
+/// to walk through walk the same one.
+/// </para>
 /// </remarks>
 public sealed class RoutePlanningSystem : ISystem
 {
     /// <summary>The tiles that route searches may expand in one tick before the rest wait. A search across the 96 by 96 map `ridge` expands a few thousand.</summary>
     public const int ExpansionsPerTick = 4096;
 
+    private readonly ComponentStore<Body> _bodies;
     private readonly ComponentStore<Mover> _movers;
     private readonly RouteCache _routes;
-    private readonly List<(int Start, int Goal)> _found = [];
+    private readonly List<(int View, int Start, int Goal)> _found = [];
 
-    public RoutePlanningSystem(ComponentStore<Mover> movers, RouteCache routes)
+    public RoutePlanningSystem(ComponentStore<Body> bodies, ComponentStore<Mover> movers, RouteCache routes)
     {
+        ArgumentNullException.ThrowIfNull(bodies);
         ArgumentNullException.ThrowIfNull(movers);
         ArgumentNullException.ThrowIfNull(routes);
+        _bodies = bodies;
         _movers = movers;
         _routes = routes;
     }
@@ -46,12 +55,14 @@ public sealed class RoutePlanningSystem : ISystem
         for (var i = 0; i < _movers.Count; i++)
         {
             ref var mover = ref _movers.ValueAt(i);
-            if (mover.State != MoveState.Planning || !world.Entities.IsAlive(_movers.EntityAt(i)))
+            var entity = _movers.EntityAt(i);
+            if (mover.State != MoveState.Planning || !world.Entities.IsAlive(entity))
             {
                 continue;
             }
 
-            var ends = (mover.RouteStart, mover.RouteGoal);
+            var owner = _bodies.Get(entity).Owner;
+            var ends = (_routes.Grid.For(owner).View, mover.RouteStart, mover.RouteGoal);
             if (!_found.Contains(ends))
             {
                 if (spent >= ExpansionsPerTick)
@@ -59,7 +70,7 @@ public sealed class RoutePlanningSystem : ISystem
                     continue;
                 }
 
-                spent = checked(spent + _routes.Get(mover.RouteStart, mover.RouteGoal).Expansions);
+                spent = checked(spent + _routes.Get(owner, mover.RouteStart, mover.RouteGoal).Expansions);
                 _found.Add(ends);
             }
 

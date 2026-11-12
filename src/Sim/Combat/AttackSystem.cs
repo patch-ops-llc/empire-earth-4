@@ -352,7 +352,7 @@ public sealed class AttackSystem : ISystem
             }
         }
 
-        _approach.WalkTo(ref mover, position, unit.Goal);
+        _approach.WalkTo(turn.Body.Owner, ref mover, position, unit.Goal);
         unit.Anchor = mover.State == MoveState.Idle ? position : mover.Destination;
     }
 
@@ -505,7 +505,7 @@ public sealed class AttackSystem : ISystem
         }
         else
         {
-            _approach.WalkTo(ref mover, turn.Body.Position, unit.Anchor);
+            _approach.WalkTo(turn.Body.Owner, ref mover, turn.Body.Position, unit.Anchor);
         }
     }
 
@@ -696,11 +696,11 @@ public sealed class AttackSystem : ISystem
         }
         else if (mark.IsStructure)
         {
-            _approach.WalkToStructure(ref mover, position, mark.Tiles);
+            _approach.WalkToStructure(turn.Body.Owner, ref mover, position, mark.Tiles);
         }
         else
         {
-            _approach.WalkTo(ref mover, position, target.Position);
+            _approach.WalkTo(turn.Body.Owner, ref mover, position, target.Position);
         }
 
         unit.Engaged = true;
@@ -776,7 +776,7 @@ public sealed class AttackSystem : ISystem
         }
         else
         {
-            _approach.WalkTo(ref mover, position, place);
+            _approach.WalkTo(turn.Body.Owner, ref mover, position, place);
         }
 
         return true;

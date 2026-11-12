@@ -122,7 +122,7 @@ public sealed class OrderCommandHandler : ICommandHandler
         {
             // The units the move order sent: it skips one that stands where no unit can.
             var mover = _movers.IndexOf(entity);
-            if (mover < 0 || !IsOwn(world, entity, command.Player, out var body) || _grid.RegionOf(body.Position) == 0)
+            if (mover < 0 || !IsOwn(world, entity, command.Player, out var body) || _grid.For(command.Player).RegionOf(body.Position) == 0)
             {
                 continue;
             }
@@ -208,11 +208,11 @@ public sealed class OrderCommandHandler : ICommandHandler
             }
             else if (mark.IsStructure)
             {
-                _approach.WalkToStructure(ref _movers.ValueAt(mover), body.Position, mark.Tiles);
+                _approach.WalkToStructure(body.Owner, ref _movers.ValueAt(mover), body.Position, mark.Tiles);
             }
             else
             {
-                _approach.WalkTo(ref _movers.ValueAt(mover), body.Position, target.Position);
+                _approach.WalkTo(body.Owner, ref _movers.ValueAt(mover), body.Position, target.Position);
             }
         }
 

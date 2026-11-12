@@ -80,7 +80,8 @@ public static class MatchSetup
         // own. A worker walks to its work by the move order, and an order that makes it walk
         // elsewhere takes it off its work: a move, and an attack-move, which is a move to a worker.
         var move = new MoveCommandHandler(grid, bodies, movers, players.Count);
-        var structureTiles = new StructureTiles(grid, world.Entities, structures, routes, new Rerouting(grid, bodies, movers, move));
+        var structureTiles = new StructureTiles(
+            data, grid, world.Entities, bodies, structures, foundations, routes, new Rerouting(grid, bodies, movers, move));
         research.AddTechChangeHandler(new StructureHealth(bodies, health, structures));
 
         // The wall rule: where the walls stand follows the tiles, and the orders and the attacks
@@ -98,7 +99,7 @@ public static class MatchSetup
         // more. An attack order is not, because a worker never takes one. A wall order is a
         // worker's order in place of a build order, and ends as one does.
         var structureFactory = new StructureFactory(
-            data, world, bodies, health, structures, territories, turrets, workSites, structureTiles, research, simulation.Events, players.Count);
+            data, world, bodies, health, structures, foundations, territories, turrets, workSites, structureTiles, research, simulation.Events, players.Count);
         var construction = new ConstructionRules(
             data, world, grid, bodies, buildOrders, combatants, foundations, movers, structures, territories, workers,
             stockpiles, research, work, structureFactory, spatialIndex, move, simulation.Events, players.Count);
@@ -146,7 +147,7 @@ public static class MatchSetup
         // raised in this tick pays from the next. It moves nobody.
         // Research goes last: after everything that can destroy the holder of a research slot, so
         // that a research cannot finish in the tick in which its building falls.
-        simulation.AddSystem(new RoutePlanningSystem(movers, routes));
+        simulation.AddSystem(new RoutePlanningSystem(bodies, movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
         simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, placeHolders, fighters));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));

@@ -21,6 +21,23 @@ public sealed record GameData(
     IReadOnlyList<MapDef> Maps,
     string ContentHash)
 {
+    /// <summary>
+    /// The gate (design 2.5), or null when the data has no wall. It is the wall with the gate's
+    /// price and build time, under the ID <see cref="DataRules.Gate"/> and the number that follows
+    /// the last of the roster: the number a command names it by, and the type a placed gate has.
+    /// </summary>
+    /// <remarks>
+    /// It is no entry of <see cref="Structures"/>, which holds what the roster lists and the files
+    /// describe. Both <c>StructureOf</c> lookups find it.
+    /// </remarks>
+    public StructureDef? Gate { get; } = GateOf(Structures, Rules);
+
+    /// <summary>
+    /// How many numbers name a structure: those of the roster and the gate's. A table with one
+    /// entry for each kind of structure, indexed by <see cref="StructureDef.Index"/>, has this size.
+    /// </summary>
+    public int StructureKinds => Rules.Structures.Count + 1;
+
     /// <summary>Tiers per track, which is also the number of epochs.</summary>
     public int TierCount => EpochNames.Count;
 
@@ -52,6 +69,7 @@ public sealed record GameData(
     /// <summary>
     /// The structure with this roster index, as in <see cref="StructureDef.Index"/> and
     /// <see cref="LineDef.BuiltAt"/>, or null for a structure of the roster that has no data file yet.
+    /// The number after the roster's last is the <see cref="Gate"/>'s.
     /// </summary>
     public StructureDef? StructureOf(int structure)
     {
@@ -63,7 +81,7 @@ public sealed record GameData(
             }
         }
 
-        return null;
+        return Gate is { } gate && gate.Index == structure ? gate : null;
     }
 
     /// <summary>
@@ -83,7 +101,33 @@ public sealed record GameData(
             }
         }
 
+        if (Gate is { } gate && gate.Id == id)
+        {
+            return gate;
+        }
+
         throw new ArgumentException($"The data has no structure '{id}'.", nameof(id));
+    }
+
+    private static StructureDef? GateOf(IReadOnlyList<StructureDef> structures, RuleSet rules)
+    {
+        foreach (var structure in structures)
+        {
+            if (structure.Wall is { } wall)
+            {
+                return structure with
+                {
+                    Id = DataRules.Gate,
+                    Index = rules.Structures.Count,
+                    Materials = wall.Gate.Materials,
+                    Energy = wall.Gate.Energy,
+                    BuildTicks = wall.Gate.BuildTicks,
+                    IsGate = true,
+                };
+            }
+        }
+
+        return null;
     }
 
     /// <summary>The accent a track gives, or null for a track that gives none.</summary>

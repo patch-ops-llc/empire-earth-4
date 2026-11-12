@@ -87,10 +87,12 @@ public sealed class WallRule
             return EntityId.None;
         }
 
-        var region = _grid.RegionOf(position);
+        // One order is one player's, so the regions of its units are numbered on one grid.
+        var grid = _grid.For(player);
+        var region = grid.RegionOf(position);
         foreach (var found in _found)
         {
-            if (found.Region == region && _grid.IsCorridorClear(position, found.Position, Mover.Clearance))
+            if (found.Region == region && grid.IsCorridorClear(position, found.Position, Mover.Clearance))
             {
                 return found.Wall;
             }
@@ -142,7 +144,8 @@ public sealed class WallRule
     {
         ArgumentNullException.ThrowIfNull(profile);
         stand = default;
-        var region = _grid.RegionOf(position);
+        var grid = _grid.For(player);
+        var region = grid.RegionOf(position);
         var past = _breaching.Walls.PastWalls(player);
         var own = region == 0 ? 0 : past[TileOf(position)];
         if (own == 0)
@@ -153,7 +156,7 @@ public sealed class WallRule
         FixedVector2 toward;
         if (!mark.IsStructure)
         {
-            if (_grid.RegionOf(mark.Center) == region || past[TileOf(mark.Center)] != own)
+            if (grid.RegionOf(mark.Center) == region || past[TileOf(mark.Center)] != own)
             {
                 return false;
             }
@@ -176,7 +179,7 @@ public sealed class WallRule
                         continue;
                     }
 
-                    if (_grid.RegionOf(x, y) == region)
+                    if (grid.RegionOf(x, y) == region)
                     {
                         return false;
                     }
@@ -199,7 +202,7 @@ public sealed class WallRule
             toward = tiles.NearestPointTo(position);
         }
 
-        if (!profile.Melee && _grid.TryFindNearestTile(toward, region, position, out var tileX, out var tileY))
+        if (!profile.Melee && grid.TryFindNearestTile(toward, region, position, out var tileX, out var tileY))
         {
             // A wall it can shoot over does not keep it from its target.
             return !_targeting.Reaches(profile, MapGrid.TileCenter(tileX, tileY), in mark);
@@ -227,7 +230,7 @@ public sealed class WallRule
         }
         else
         {
-            _approach.WalkToStructure(ref mover, body.Position, mark.Tiles);
+            _approach.WalkToStructure(body.Owner, ref mover, body.Position, mark.Tiles);
         }
 
         unit.Engaged = true;

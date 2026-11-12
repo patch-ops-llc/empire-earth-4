@@ -1,4 +1,5 @@
 using Sim.Combat;
+using Sim.Construction;
 using Sim.Core;
 using Sim.Data;
 using Sim.Economy;
@@ -25,6 +26,7 @@ public sealed class StructureFactory
     private readonly ComponentStore<Body> _bodies;
     private readonly ComponentStore<Health> _health;
     private readonly ComponentStore<PlacedStructure> _structures;
+    private readonly ComponentStore<Foundation> _foundations;
     private readonly ComponentStore<Territory> _territories;
     private readonly ComponentStore<Turret> _turrets;
     private readonly ComponentStore<WorkSite> _workSites;
@@ -39,6 +41,7 @@ public sealed class StructureFactory
         ComponentStore<Body> bodies,
         ComponentStore<Health> health,
         ComponentStore<PlacedStructure> structures,
+        ComponentStore<Foundation> foundations,
         ComponentStore<Territory> territories,
         ComponentStore<Turret> turrets,
         ComponentStore<WorkSite> workSites,
@@ -52,6 +55,7 @@ public sealed class StructureFactory
         ArgumentNullException.ThrowIfNull(bodies);
         ArgumentNullException.ThrowIfNull(health);
         ArgumentNullException.ThrowIfNull(structures);
+        ArgumentNullException.ThrowIfNull(foundations);
         ArgumentNullException.ThrowIfNull(territories);
         ArgumentNullException.ThrowIfNull(turrets);
         ArgumentNullException.ThrowIfNull(workSites);
@@ -63,6 +67,7 @@ public sealed class StructureFactory
         _bodies = bodies;
         _health = health;
         _structures = structures;
+        _foundations = foundations;
         _territories = territories;
         _turrets = turrets;
         _workSites = workSites;
@@ -90,12 +95,17 @@ public sealed class StructureFactory
     /// and its place in the store of structures. Its tiles are blocked at once, and units on
     /// their way through them find another. Reported as a <see cref="SimEventKind.StructurePlaced"/>.
     /// </summary>
+    /// <remarks>
+    /// A structure that builds itself is laid with its <see cref="Foundation"/>, so that the
+    /// tiles see it as unfinished from the start: a gate without one is open to its owner at once.
+    /// </remarks>
     /// <param name="player">The owner.</param>
-    /// <param name="structure">One of the structures of the match's data.</param>
+    /// <param name="structure">One of the structures of the match's data, or its gate.</param>
     /// <param name="x">The x of the lowest tile of the footprint.</param>
     /// <param name="y">The y of the lowest tile of the footprint.</param>
+    /// <param name="foundation">What it has while it builds itself, or null for a structure that does not.</param>
     /// <exception cref="ArgumentException">The structure has no room there: see <see cref="HasRoomFor"/>.</exception>
-    public EntityId Lay(int player, StructureDef structure, int x, int y)
+    public EntityId Lay(int player, StructureDef structure, int x, int y, Foundation? foundation = null)
     {
         ArgumentNullException.ThrowIfNull(structure);
         ArgumentOutOfRangeException.ThrowIfNegative(player);
@@ -118,6 +128,10 @@ public sealed class StructureFactory
         _bodies.Add(entity, new Body { Owner = player, Position = center });
         _health.Add(entity, Health.Full(blueprint.HitPoints));
         _structures.Add(entity, new PlacedStructure { Type = structure.Index, X = x, Y = y, Size = structure.Footprint });
+        if (foundation is { } unfinished)
+        {
+            _foundations.Add(entity, unfinished);
+        }
 
         _tiles.Changed(_world);
         _events.Add(SimEventKind.StructurePlaced, player, entity, position: center, amount: structure.Index);
@@ -126,7 +140,8 @@ public sealed class StructureFactory
 
     /// <summary>
     /// Gives a laid structure what comes with completion (design 2.5): the territory of a Capitol
-    /// or an Outpost, a research slot, the work site of a Generator. Call it once for a structure.
+    /// or an Outpost, a research slot, the work site of a Generator, and for a gate its owner's
+    /// way through it. Call it once for a structure, after its <see cref="Foundation"/> is gone.
     /// </summary>
     /// <exception cref="ArgumentException">The entity is no living structure.</exception>
     /// <exception cref="InvalidOperationException">
@@ -141,6 +156,12 @@ public sealed class StructureFactory
             || _data.StructureOf(structure.Type) is not { } def)
         {
             throw new ArgumentException($"Entity {entity} is no living structure.", nameof(entity));
+        }
+
+        if (def.IsGate)
+        {
+            // The gate opens to its owner, whose units on their way may now have a shorter one.
+            _tiles.Changed(_world);
         }
 
         if (def.TerritoryRadius is { } radius)

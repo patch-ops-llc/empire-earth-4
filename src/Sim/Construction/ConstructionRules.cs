@@ -162,11 +162,12 @@ public sealed class ConstructionRules
     public bool HasPlayer(int player) => player >= 0 && player < _playerCount;
 
     /// <summary>
-    /// The structure a build order may name by this roster index, or null: one that has no file,
-    /// or the wall, which is placed in runs by an order of its own.
+    /// The structure a build order may name by this number, or null: one that has no file, or
+    /// the wall, which is placed in runs by an order of its own. The gate is built like any
+    /// structure (design 2.5), under the number of <see cref="GameData.Gate"/>.
     /// </summary>
     public StructureDef? Buildable(int structure) =>
-        _data.StructureOf(structure) is { Wall: null } def ? def : null;
+        _data.StructureOf(structure) is { } def && (def.Wall is null || def.IsGate) ? def : null;
 
     /// <summary>True for a structure that stands and is finished: it gives what its file says.</summary>
     public bool IsFinished(EntityId structure) =>
@@ -386,8 +387,7 @@ public sealed class ConstructionRules
         var site = new TileSquare(x, y, structure.Footprint);
         MoveOwnUnitsOff(world, site, owner);
 
-        var entity = Factory.Lay(owner, structure, x, y);
-        Foundations.Add(entity, new Foundation { Materials = materials, Energy = energy });
+        var entity = Factory.Lay(owner, structure, x, y, new Foundation { Materials = materials, Energy = energy });
         Work.LeaveTiles(world, site);
         return entity;
     }
@@ -427,7 +427,7 @@ public sealed class ConstructionRules
             }
 
             ref var body = ref Bodies.ValueAt(bodyIndex);
-            if (body.Owner != owner || !site.Covers(body.Position) || !TryFindTileOutside(site, body.Position, out var x, out var y))
+            if (body.Owner != owner || !site.Covers(body.Position) || !TryFindTileOutside(Grid.For(owner), site, body.Position, out var x, out var y))
             {
                 continue;
             }
@@ -446,16 +446,15 @@ public sealed class ConstructionRules
     /// ground the point is in, or, when that ground has none outside the site, any tile a unit can
     /// stand on. Ties go to the lower y and then the lower x.
     /// </summary>
-    private bool TryFindTileOutside(TileSquare site, FixedVector2 point, out int tileX, out int tileY)
+    private static bool TryFindTileOutside(MapGrid grid, TileSquare site, FixedVector2 point, out int tileX, out int tileY)
     {
-        var region = Grid.RegionOf(point);
-        return (region != 0 && TryFindTileOutside(site, point, region, out tileX, out tileY))
-            || TryFindTileOutside(site, point, 0, out tileX, out tileY);
+        var region = grid.RegionOf(point);
+        return (region != 0 && TryFindTileOutside(grid, site, point, region, out tileX, out tileY))
+            || TryFindTileOutside(grid, site, point, 0, out tileX, out tileY);
     }
 
-    private bool TryFindTileOutside(TileSquare site, FixedVector2 point, int region, out int tileX, out int tileY)
+    private static bool TryFindTileOutside(MapGrid grid, TileSquare site, FixedVector2 point, int region, out int tileX, out int tileY)
     {
-        var grid = Grid;
         tileX = -1;
         tileY = -1;
         var best = long.MaxValue;

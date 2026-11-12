@@ -123,6 +123,10 @@ internal static class RulesReader
             {
                 item.Error($"'{id}' is reserved: in a line's counters it means every structure");
             }
+            else if (id == DataRules.Gate)
+            {
+                item.Error($"'{id}' is reserved: the gate is described in the wall's file and has no entry of its own");
+            }
             else if (!ids.Add(id))
             {
                 item.Error($"{what} '{id}' is listed twice");
