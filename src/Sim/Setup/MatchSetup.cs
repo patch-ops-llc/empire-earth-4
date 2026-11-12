@@ -48,6 +48,7 @@ public static class MatchSetup
         var health = world.AddStore(new ComponentStore<Health>(Health.StoreName));
         var movers = world.AddStore(new ComponentStore<Mover>(Mover.StoreName));
         var researchState = world.AddStore(new ResearchState(players.Count, data.Tracks.Count, data.TierCount, data.Rules.Match.StartEpoch));
+        var structureMemory = world.AddStore(new StructureMemory(players.Count, map.Width, map.Height));
         var shots = world.AddStore(new ComponentStore<Shot>(Shot.StoreName));
         var stockpiles = world.AddStore(new Stockpiles(players.Count));
         var structures = world.AddStore(new ComponentStore<PlacedStructure>(PlacedStructure.StoreName));
@@ -64,8 +65,11 @@ public static class MatchSetup
         var supply = new SupplyAccount(data, research, world.Entities, bodies, workers);
         supply.AddUser(new CombatSupply(research, world.Entities, bodies, combatants));
 
-        // What each player sees. The grid is state; this works it out and answers who sees whom.
-        var vision = new MatchVision(data, visionGrid, world.Entities, bodies, combatants, workers, research.Tech);
+        // What each player sees and remembers. The grid and the memories are state; this works
+        // them out and answers who sees whom.
+        var vision = new MatchVision(
+            data, world, grid, visionGrid, structureMemory, bodies, combatants, foundations, health, structures, workers,
+            researchState, research.Tech);
 
         // The combat numbers are worked out from the data and from each player's tech as research has it.
         var combat = new CombatRules(data, players.Count, research.Tech);
@@ -92,7 +96,10 @@ public static class MatchSetup
             data, world, bodies, health, structures, territories, workSites, structureTiles, research, simulation.Events, players.Count);
         var construction = new ConstructionRules(
             data, world, grid, bodies, buildOrders, combatants, foundations, movers, structures, territories, workers,
-            stockpiles, research, work, structureFactory, spatialIndex, move, simulation.Events, players.Count);
+            stockpiles, research, work, structureFactory, spatialIndex, move, simulation.Events, players.Count)
+        {
+            Vision = vision,
+        };
         simulation.SetCommandHandler(CommandType.Attack, orders);
         simulation.SetCommandHandler(CommandType.AttackMove, new OtherOrderHandler(walkOrders, construction));
         simulation.SetCommandHandler(CommandType.Build, new BuildCommandHandler(construction));

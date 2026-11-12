@@ -7,6 +7,7 @@ using Sim.Movement;
 using Sim.Numerics;
 using Sim.Research;
 using Sim.Structures;
+using Sim.Vision;
 
 namespace Sim.Construction;
 
@@ -24,10 +25,17 @@ namespace Sim.Construction;
 /// </para>
 /// <para>
 /// <b>Placement is checked twice</b> (design 5.4): when the order is given, by
-/// <see cref="CheckStructure"/> and <see cref="CheckSite"/>, and again when the worker arrives, by
-/// <see cref="CheckArrival"/>, which adds the two rules that are judged only then: territories of
-/// different players never overlap, and no enemy ground unit stands on the site. Until fog
-/// exists, what a player may know when giving an order is everything.
+/// <see cref="CheckStructure"/> and <see cref="CheckSiteAsKnown"/>, against what the player may
+/// know, and again when the worker arrives, by <see cref="CheckArrival"/>, with the true state,
+/// which adds the two rules that are judged only then: territories of different players never
+/// overlap, and no enemy ground unit stands on the site.
+/// </para>
+/// <para>
+/// <b>What a player may know</b> of a site is what <see cref="Vision"/> says: the ground it has
+/// explored, its own structures, and the structures of others that it sees or remembers. An
+/// order onto ground the player has not explored, or onto a structure it has never seen, is
+/// therefore given, and ends with the whole price back when the worker arrives and finds the
+/// site taken. A refusal when the order is given would tell the player what the fog hides.
 /// </para>
 /// <para>
 /// The interface reads the same rules for its build menu and its placement preview, so that what
@@ -114,6 +122,12 @@ public sealed class ConstructionRules
 
     /// <summary>The part of the price that cancelling a laid foundation gives back: 75% (design 2.5).</summary>
     public static Fraction FoundationRefund => new(3, 4);
+
+    /// <summary>
+    /// What each player sees and remembers, which the checks made when an order is given go by.
+    /// Without it a player knows everything, as in a match without fog.
+    /// </summary>
+    public MatchVision? Vision { get; init; }
 
     /// <summary>The build orders under way, each a value of the worker that carries it out.</summary>
     public ComponentStore<BuildOrder> Orders { get; }
@@ -230,12 +244,12 @@ public sealed class ConstructionRules
     }
 
     /// <summary>
-    /// Whether a player may order a structure with its lowest tile at (x, y), as far as the ground
-    /// goes: <see cref="BuildProblem.SiteNotFree"/> when a tile of the footprint is off the map,
-    /// not open ground or under a deposit or a structure, and
+    /// Whether a structure of a player can stand with its lowest tile at (x, y), as far as the
+    /// ground goes and with the true state: <see cref="BuildProblem.SiteNotFree"/> when a tile of
+    /// the footprint is off the map, not open ground or under a deposit or a structure, and
     /// <see cref="BuildProblem.OutsideTerritory"/> when the structure needs territory and a tile
     /// is outside the player's. Units on the site and enemy territory nearby are judged when the
-    /// worker arrives.
+    /// worker arrives. An order, when it is given, is judged by <see cref="CheckSiteAsKnown"/>.
     /// </summary>
     public BuildProblem CheckSite(int player, StructureDef structure, int x, int y)
     {
@@ -246,8 +260,9 @@ public sealed class ConstructionRules
     }
 
     /// <summary>
-    /// True when a structure of a player may cover the tile: what <see cref="CheckSite"/> asks of
-    /// each tile of a footprint. A placement preview marks the tiles for which this is false.
+    /// True when a structure of a player may cover the tile, with the true state: what
+    /// <see cref="CheckSite"/> asks of each tile of a footprint. A placement preview asks
+    /// <see cref="CanBuildOnTileAsKnown"/>.
     /// </summary>
     public bool CanBuildOnTile(int player, StructureDef structure, int x, int y)
     {
@@ -257,15 +272,75 @@ public sealed class ConstructionRules
     }
 
     /// <summary>
+    /// Whether a player may order a structure with its lowest tile at (x, y), as far as the
+    /// player may know (design 5.4): what the order itself is judged by, and what a placement
+    /// preview shows. <see cref="BuildProblem.SiteNotFree"/> when the player knows of something
+    /// in the way on a tile of the footprint (<see cref="MatchVision.KnowsBlocked"/>);
+    /// <see cref="BuildProblem.OutsideTerritory"/> when the structure needs territory and a tile
+    /// is outside the player's; <see cref="BuildProblem.NotExplored"/> when it is a Capitol or an
+    /// Outpost, which need no territory, and the player has not explored every tile.
+    /// </summary>
+    /// <remarks>
+    /// A structure that needs territory may be ordered onto ground of the territory that the
+    /// player has not explored: nothing is known against it. <see cref="CheckArrival"/> judges
+    /// the site as it is when the worker gets there.
+    /// </remarks>
+    public BuildProblem CheckSiteAsKnown(int player, StructureDef structure, int x, int y)
+    {
+        ArgumentNullException.ThrowIfNull(structure);
+        if (Vision is not { } vision)
+        {
+            return CheckSite(player, structure, x, y);
+        }
+
+        var tiles = new TileSquare(x, y, structure.Footprint);
+        return vision.KnowsBlocked(player, tiles) ? BuildProblem.SiteNotFree
+            : NeedsTerritory(structure)
+                ? Territory.Holds(_territories, World.Entities, player, x, y, structure.Footprint) ? BuildProblem.None : BuildProblem.OutsideTerritory
+            : vision.Grid.AreAllExplored(player, tiles) ? BuildProblem.None
+            : BuildProblem.NotExplored;
+    }
+
+    /// <summary>
+    /// True when, as far as the player may know, a structure of the player may cover the tile:
+    /// what <see cref="CheckSiteAsKnown"/> asks of each tile of a footprint. A placement preview
+    /// marks the tiles for which this is false.
+    /// </summary>
+    public bool CanBuildOnTileAsKnown(int player, StructureDef structure, int x, int y)
+    {
+        ArgumentNullException.ThrowIfNull(structure);
+        if (Vision is not { } vision)
+        {
+            return CanBuildOnTile(player, structure, x, y);
+        }
+
+        return !vision.KnowsBlocked(player, new TileSquare(x, y, 1))
+            && (NeedsTerritory(structure)
+                ? Territory.Holds(_territories, World.Entities, player, x, y, 1)
+                : vision.Grid.IsExplored(player, x, y));
+    }
+
+    /// <summary>
+    /// <see cref="IsTooCloseToEnemyTerritory"/>, counting only the enemy Capitols and Outposts
+    /// the player sees at this moment: what a placement preview may mark (design 5.4). The order
+    /// is given all the same, and judged with the true state when the worker arrives.
+    /// </summary>
+    public bool IsTooCloseToSeenEnemyTerritory(int player, StructureDef structure, int x, int y) =>
+        IsTooCloseToEnemyTerritory(player, structure, x, y, seenOnly: true);
+
+    /// <summary>
     /// True when a Capitol or Outpost with its lowest tile at (x, y) would give a territory that
     /// overlaps an enemy's (design 5.4): its center is nearer the center of an enemy Capitol or
     /// Outpost, finished or not, than the sum of the two radii. Always false for other structures.
     /// </summary>
     /// <remarks>
     /// This reads the true state. An order is judged by it only when its worker arrives; a
-    /// placement preview may show it only for what its player sees.
+    /// placement preview shows <see cref="IsTooCloseToSeenEnemyTerritory"/>.
     /// </remarks>
-    public bool IsTooCloseToEnemyTerritory(int player, StructureDef structure, int x, int y)
+    public bool IsTooCloseToEnemyTerritory(int player, StructureDef structure, int x, int y) =>
+        IsTooCloseToEnemyTerritory(player, structure, x, y, seenOnly: false);
+
+    private bool IsTooCloseToEnemyTerritory(int player, StructureDef structure, int x, int y, bool seenOnly)
     {
         ArgumentNullException.ThrowIfNull(structure);
         if (structure.TerritoryRadius is not { } radius)
@@ -283,7 +358,8 @@ public sealed class ConstructionRules
             if (_data.StructureOf(other.Type)?.TerritoryRadius is not { } otherRadius
                 || !World.Entities.IsAlive(entity)
                 || !Bodies.TryGet(entity, out var body)
-                || body.Owner == player)
+                || body.Owner == player
+                || (seenOnly && Vision is { } vision && !vision.SeesStructure(player, body.Owner, other.Tiles)))
             {
                 continue;
             }

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using Sim.Core;
+using Sim.Map;
 using Sim.Numerics;
 
 namespace Sim.Vision;
@@ -97,6 +98,43 @@ public sealed class VisionGrid : IStateStore
 
     /// <summary>True when the player has seen the tile at least once, whether or not it sees it now.</summary>
     public bool IsExplored(int player, int x, int y) => Has(_explored, player, x, y);
+
+    /// <summary>
+    /// True when the player sees at least one tile of the square now: how a structure is seen,
+    /// by any tile of its footprint (design 5.3).
+    /// </summary>
+    public bool IsAnyVisible(int player, TileSquare tiles)
+    {
+        for (var y = tiles.Y; y < tiles.Y + tiles.Size; y++)
+        {
+            for (var x = tiles.X; x < tiles.X + tiles.Size; x++)
+            {
+                if (IsVisible(player, x, y))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>True when the player has seen every tile of the square at least once. False for a square with a tile off the map.</summary>
+    public bool AreAllExplored(int player, TileSquare tiles)
+    {
+        for (var y = tiles.Y; y < tiles.Y + tiles.Size; y++)
+        {
+            for (var x = tiles.X; x < tiles.X + tiles.Size; x++)
+            {
+                if (!IsExplored(player, x, y))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return tiles.Size > 0;
+    }
 
     /// <summary>What the player knows of a tile. A tile off the map is <see cref="FogState.Unexplored"/>.</summary>
     public FogState StateOf(int player, int x, int y) =>
@@ -234,6 +272,28 @@ public sealed class VisionGrid : IStateStore
             {
                 SetBits(plane, (y * Width) + firstTile, (y * Width) + lastTile);
             }
+        }
+    }
+
+    /// <summary>
+    /// Makes visible, and so explored, the tiles of a square that are on the map: what a
+    /// structure that is not finished sees, its own footprint (design 2.5).
+    /// </summary>
+    public void RevealTiles(int player, TileSquare tiles)
+    {
+        CheckPlayer(player);
+        var firstTile = Math.Max(0, tiles.X);
+        var lastTile = Math.Min(Width - 1, tiles.X + tiles.Size - 1);
+        if (firstTile > lastTile)
+        {
+            return;
+        }
+
+        var plane = player * _wordsPerPlane;
+        var lastRow = Math.Min(Height - 1, tiles.Y + tiles.Size - 1);
+        for (var y = Math.Max(0, tiles.Y); y <= lastRow; y++)
+        {
+            SetBits(plane, (y * Width) + firstTile, (y * Width) + lastTile);
         }
     }
 

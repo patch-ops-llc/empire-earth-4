@@ -120,6 +120,9 @@ public class DesyncDiffToolTests
                 unit = UnitsOf(match, 1)[2];
                 ref var body = ref match.Bodies.Get(unit);
                 body.Position = new FixedVector2(body.Position.X + Fixed.Half, body.Position.Y);
+
+                // And a corner of the map that its owner has seen on one machine and not on the other.
+                match.Vision.Grid.Reveal(1, new FixedVector2(Fixed.Half, Fixed.Half), Fixed.One);
             }
         });
 
@@ -132,15 +135,15 @@ public class DesyncDiffToolTests
 
         // The field that was changed is there, under its store and its entity, as a number and as
         // its raw value. What else differs by the end is up to the game: a rule that reacts to
-        // where a unit stands moves it, or its neighbors, differently on the two machines, and
-        // what its owner sees from there is another picture, in a store that is not kept by entity.
+        // where a unit stands moves it, or its neighbors, differently on the two machines. The
+        // corner is there too, in a store that is not kept by entity.
         var differences = lines[6..];
         Assert.Equal(differences.Length == 1 ? "1 difference between the snapshots, A | B:" : $"{differences.Length} differences between the snapshots, A | B:", lines[5]);
         Assert.Contains(differences, line => System.Text.RegularExpressions.Regex.IsMatch(
             line, $"^  bodies entity {unit.Value} +Position\\.X: [0-9.]+ \\(raw [0-9]+\\) \\| [0-9.]+ \\(raw [0-9]+\\)$"));
         Assert.All(differences, line => Assert.Matches("^  [a-z]+ (entity [0-9]+)? +\\S+: .+ \\| .+$", line));
         Assert.Contains(differences, line => System.Text.RegularExpressions.Regex.IsMatch(
-            line, "^  vision +visible\\[1\\]\\[[0-9]+\\.\\.[0-9]+\\]: [0-9]+ \\| [0-9]+$"));
+            line, "^  vision +explored\\[1\\]\\[0\\.\\.63\\]: [0-9]+ \\| [0-9]+$"));
     }
 
     [Fact]

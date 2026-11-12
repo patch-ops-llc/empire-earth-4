@@ -1,7 +1,9 @@
 using Sim.Combat;
+using Sim.Construction;
 using Sim.Core;
 using Sim.Data;
 using Sim.Economy;
+using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
 using Sim.Research;
@@ -11,8 +13,9 @@ using Sim.Tech;
 namespace Sim.Vision;
 
 /// <summary>
-/// A match as one player may know it (design 5.3): the player's own things, the units of other
-/// players that the player sees, and the ground and deposits the player has explored. Whatever
+/// A match as one player may know it (design 5.3): the player's own things, the units and
+/// structures of other players that the player sees, the structures it remembers, and the ground
+/// and deposits the player has explored. Whatever
 /// shows a match to a player or plays it for one, the interface, the minimap, the AI, asks here
 /// and not the match, and so cannot show or use what the fog hides.
 /// </summary>
@@ -34,8 +37,17 @@ namespace Sim.Vision;
 /// <see cref="CollectUnitsIn"/> list the player's own and the others it sees;
 /// <see cref="TryGetUnit"/> and <see cref="Sees"/> ask about one; <see cref="Inspect"/> gives what
 /// inspecting a unit shows.</item>
+/// <item>Structures: <see cref="CollectStructures"/> lists the player's own, the others it sees and
+/// the others it remembers, each of the last as it was when last seen;
+/// <see cref="TryGetStructure"/> and <see cref="TryGetStructureAt"/> ask about one;
+/// <see cref="KnowsStructure"/> says whether an attack order may name it;
+/// <see cref="CollectTerritories"/> gives the territories that follow from them.</item>
+/// <item>Building: <see cref="CheckStructure"/> and <see cref="CountOf"/> for a build menu;
+/// <see cref="CheckSite"/>, <see cref="CanBuildOnTile"/> and
+/// <see cref="IsTooCloseToSeenEnemyTerritory"/> for a placement preview. They answer what the
+/// order itself will be judged by when it is given.</item>
 /// <item>What only the owner knows of its own units: <see cref="TryGetOwnOrder"/>,
-/// <see cref="TryGetOwnWalk"/> and <see cref="TryGetOwnWork"/>.</item>
+/// <see cref="TryGetOwnWalk"/>, <see cref="TryGetOwnWork"/> and <see cref="TryGetOwnBuildOrder"/>.</item>
 /// <item>Shots in flight: <see cref="CollectShots"/>.</item>
 /// <item>The events of the last tick that the player may know of: <see cref="CollectEvents"/>.</item>
 /// <item>The player's account: <see cref="Materials"/>, <see cref="Energy"/>,
@@ -45,7 +57,7 @@ namespace Sim.Vision;
 /// <para>
 /// <b>What it is not.</b> It is not a guard against a changed program: every machine of a match
 /// holds the whole match, and a program that reads the match itself sees everything. It keeps an
-/// honest interface honest. Structures, and those remembered as last seen, arrive with them.
+/// honest interface honest.
 /// </para>
 /// </remarks>
 public sealed class PlayerView
@@ -55,6 +67,7 @@ public sealed class PlayerView
 
     // Scratch for one question, emptied at its start.
     private readonly List<EntityId> _found = [];
+    private readonly List<SeenStructure> _known = [];
 
     /// <param name="match">The match.</param>
     /// <param name="player">The player whose view this is, a position in <see cref="Match.Players"/>.</param>
@@ -152,14 +165,21 @@ public sealed class PlayerView
         }
     }
 
-    /// <summary>True when the entity is one of the player's own, or another player's that the player sees now.</summary>
+    /// <summary>
+    /// True when the entity is one of the player's own, or another player's that the player sees
+    /// now: a unit by the tile under its center, a structure by any tile of its footprint.
+    /// </summary>
     public bool Sees(EntityId entity) => _vision.Sees(Player, entity);
 
-    /// <summary>A unit, if it is the player's own or the player sees it. False otherwise, and for an entity that is gone.</summary>
+    /// <summary>
+    /// A unit, if it is the player's own or the player sees it. False otherwise, for an entity
+    /// that is gone, and for a structure, which <see cref="TryGetStructure"/> answers.
+    /// </summary>
     public bool TryGetUnit(EntityId entity, out SeenUnit unit)
     {
         if (_match.World.Entities.IsAlive(entity)
             && _match.Bodies.TryGet(entity, out var body)
+            && !_match.Structures.Contains(entity)
             && _vision.Sees(Player, in body))
         {
             unit = Describe(entity, in body);
@@ -172,7 +192,8 @@ public sealed class PlayerView
 
     /// <summary>
     /// Lists every unit the player may know of: its own, and those of other players that it sees
-    /// now, in ascending ID order. The list is emptied first.
+    /// now, in ascending ID order. The list is emptied first. Structures are not units:
+    /// <see cref="CollectStructures"/> lists them.
     /// </summary>
     public void CollectUnits(List<SeenUnit> units)
     {
@@ -183,7 +204,7 @@ public sealed class PlayerView
         {
             var entity = bodies.EntityAt(i);
             ref var body = ref bodies.ValueAt(i);
-            if (_match.World.Entities.IsAlive(entity) && _vision.Sees(Player, in body))
+            if (_match.World.Entities.IsAlive(entity) && !_match.Structures.Contains(entity) && _vision.Sees(Player, in body))
             {
                 units.Add(Describe(entity, in body));
             }
@@ -216,13 +237,178 @@ public sealed class PlayerView
     }
 
     /// <summary>
-    /// What inspecting a unit shows (design 3.2): the effective Firepower, Protection and Mobility
-    /// tiers and the accents of its owner's blueprint of its chassis. False for a unit that is not
-    /// of a chassis, such as a worker, and for a unit the player does not see.
+    /// Lists every structure the player may know of, in ascending ID order: its own, those of
+    /// other players that it sees now, and those of other players that it has seen and does not
+    /// see now, each as it was when last seen (<see cref="SeenStructure.IsRemembered"/>). The
+    /// list is emptied first.
+    /// </summary>
+    /// <remarks>
+    /// A remembered structure may be gone. It leaves the list when the player sees one of its
+    /// tiles and it is not there.
+    /// </remarks>
+    public void CollectStructures(List<SeenStructure> structures)
+    {
+        ArgumentNullException.ThrowIfNull(structures);
+        structures.Clear();
+        var standing = _match.Structures;
+        var memory = _vision.Memory;
+        var remembered = memory.Count(Player);
+        var i = 0;
+        var j = 0;
+        while (i < standing.Count || j < remembered)
+        {
+            // Both lists ascend by ID. A structure in both is listed as it stands when the
+            // player sees it, and as it is remembered when not.
+            var stands = i < standing.Count ? standing.EntityAt(i) : EntityId.None;
+            var past = j < remembered ? memory.At(Player, j).Entity : EntityId.None;
+            var takeStanding = j >= remembered || (i < standing.Count && stands <= past);
+            var takeRemembered = i >= standing.Count || (j < remembered && past <= stands);
+            if ((takeStanding && TryGetSeenStructure(stands, out var structure))
+                || (takeRemembered && TryGetRememberedStructure(past, out structure)))
+            {
+                structures.Add(structure);
+            }
+
+            i += takeStanding ? 1 : 0;
+            j += takeRemembered ? 1 : 0;
+        }
+    }
+
+    /// <summary>
+    /// A structure, if the player may know of it: as it is when it is the player's own or the
+    /// player sees it, and otherwise as the player remembers it. False for a structure the player
+    /// has never seen, and for a remembered one that the player now sees is gone.
+    /// </summary>
+    public bool TryGetStructure(EntityId entity, out SeenStructure structure) =>
+        TryGetSeenStructure(entity, out structure) || TryGetRememberedStructure(entity, out structure);
+
+    /// <summary>
+    /// The structure the player knows of on a tile: one that stands there and is seen, or else
+    /// one remembered there. What a click on the map finds.
+    /// </summary>
+    public bool TryGetStructureAt(int x, int y, out SeenStructure structure)
+    {
+        var standing = _match.Structures;
+        for (var i = 0; i < standing.Count; i++)
+        {
+            if (standing.ValueAt(i).Tiles.Covers(x, y) && TryGetSeenStructure(standing.EntityAt(i), out structure))
+            {
+                return true;
+            }
+        }
+
+        var memory = _vision.Memory;
+        for (var i = 0; i < memory.Count(Player); i++)
+        {
+            ref readonly var seen = ref memory.At(Player, i);
+            if (seen.Tiles.Covers(x, y) && TryGetRememberedStructure(seen.Entity, out structure))
+            {
+                return true;
+            }
+        }
+
+        structure = default;
+        return false;
+    }
+
+    /// <summary>
+    /// True when the player knows of the structure: it is its own, or it sees it, or it remembers
+    /// it. An attack order may name such a structure (design 5.3), and no other.
+    /// </summary>
+    public bool KnowsStructure(EntityId entity) => _vision.KnowsStructure(Player, entity);
+
+    /// <summary>
+    /// Lists the territories the player may know of: its own, and those of the finished Capitols
+    /// and Outposts of other players that it sees or remembers. The list is emptied first.
+    /// </summary>
+    /// <remarks>
+    /// A territory of another player is worked out from the structure as the player knows it, so
+    /// it stays with a remembered structure and is not there for one the player has never seen,
+    /// nor for one that was still building itself when last seen.
+    /// </remarks>
+    public void CollectTerritories(List<Territory> territories)
+    {
+        ArgumentNullException.ThrowIfNull(territories);
+        territories.Clear();
+        var store = _match.Territories;
+        for (var i = 0; i < store.Count; i++)
+        {
+            var territory = store.ValueAt(i);
+            if (territory.Owner == Player && _match.World.Entities.IsAlive(store.EntityAt(i)))
+            {
+                territories.Add(territory);
+            }
+        }
+
+        CollectStructures(_known);
+        foreach (var structure in _known)
+        {
+            if (structure.Owner != Player
+                && structure.IsFinished
+                && _match.Data.StructureOf(structure.Type)?.TerritoryRadius is { } radius)
+            {
+                territories.Add(Territory.Around(structure.Owner, structure.X, structure.Y, structure.Size, radius));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the player may order a structure at all, wherever it goes: what a build menu
+    /// shows. See <see cref="ConstructionRules.CheckStructure"/>.
+    /// </summary>
+    /// <param name="structure">The structure's place in the roster.</param>
+    public BuildProblem CheckStructure(int structure) => _match.Construction.CheckStructure(Player, structure);
+
+    /// <summary>
+    /// How many of a structure the player has, counting those that are building themselves and
+    /// the build orders on their way.
+    /// </summary>
+    /// <param name="structure">The structure's place in the roster.</param>
+    public int CountOf(int structure) => _match.Construction.CountOf(Player, structure);
+
+    /// <summary>
+    /// Whether an order for a structure with its lowest tile at (x, y) would be given, as far as
+    /// the ground goes: the same check the order gets, against what the player may know (design
+    /// 5.4). See <see cref="ConstructionRules.CheckSiteAsKnown"/>.
+    /// </summary>
+    public BuildProblem CheckSite(StructureDef structure, int x, int y) =>
+        _match.Construction.CheckSiteAsKnown(Player, structure, x, y);
+
+    /// <summary>
+    /// True when, as far as the player may know, a structure of the player may cover the tile.
+    /// A placement preview marks the tiles of the footprint for which this is false; the site is
+    /// accepted exactly when it is true for every tile.
+    /// </summary>
+    public bool CanBuildOnTile(StructureDef structure, int x, int y) =>
+        _match.Construction.CanBuildOnTileAsKnown(Player, structure, x, y);
+
+    /// <summary>
+    /// True when a Capitol or Outpost with its lowest tile at (x, y) would stand too close to an
+    /// enemy Capitol or Outpost that the player sees at this moment (design 5.4). It is a warning
+    /// for a placement preview: the order is given all the same, and is judged against every
+    /// enemy territory, seen or not, when the worker arrives.
+    /// </summary>
+    public bool IsTooCloseToSeenEnemyTerritory(StructureDef structure, int x, int y) =>
+        _match.Construction.IsTooCloseToSeenEnemyTerritory(Player, structure, x, y);
+
+    /// <summary>
+    /// What inspecting a unit or a structure shows (design 3.2). For a unit of a chassis: the
+    /// effective Firepower, Protection and Mobility tiers and the accents of its owner's
+    /// blueprint of its chassis. For a structure: its owner's Protection tier, its owner's
+    /// Firepower tier if it attacks and zero if not, zero for Mobility, and no accents. False for
+    /// a unit that is not of a chassis, such as a worker, for a unit or structure the player does
+    /// not see, and for a structure the player only remembers.
     /// </summary>
     public bool Inspect(EntityId entity, out Inspection inspection)
     {
         inspection = default;
+        if (TryGetSeenStructure(entity, out var structure))
+        {
+            var built = _match.Research.Tech(structure.Owner).StructureOf(structure.Type);
+            inspection = new Inspection(built?.Attack?.EffectiveFirepower ?? 0, built?.ProtectionTier ?? 0, 0, []);
+            return true;
+        }
+
         if (!TryGetUnit(entity, out var unit) || unit.Chassis == SeenUnit.NoChassis)
         {
             return false;
@@ -246,6 +432,12 @@ public sealed class PlayerView
 
     /// <summary>What one of the player's own workers is assigned to. False for anything else.</summary>
     public bool TryGetOwnWork(EntityId entity, out Worker work) => TryGetOwn(_match.Workers, entity, out work);
+
+    /// <summary>
+    /// The build order one of the player's own workers is carrying out: the structure and the
+    /// site it is walking to, where nothing stands yet. False for anything else.
+    /// </summary>
+    public bool TryGetOwnBuildOrder(EntityId entity, out BuildOrder order) => TryGetOwn(_match.BuildOrders, entity, out order);
 
     /// <summary>
     /// Lists the shots in flight that the player may know of: those its own units fired, and those
@@ -275,7 +467,10 @@ public sealed class PlayerView
     /// <remarks>
     /// The player knows of every event whose <see cref="SimEvent.Player"/> it is. It knows of a
     /// death, a melee hit, a shot fired, a shot that lands and a shot that is lost also when it is
-    /// another player's and happened on a tile the player sees now. A hit on one of the player's
+    /// another player's and happened on a tile the player sees now, and of a structure that is
+    /// laid, finished or removed when it sees a tile of the structure's footprint now. A
+    /// structure whose hit points ran out is reported by a death as well, which goes by the tile
+    /// under its center like any other. A hit on one of the player's
     /// own is on the tile that unit stands on, which the unit sees itself from the first time
     /// sight is worked out after it appeared. Every other kind is known to its player alone, so a kind
     /// that others should see when it happens in their sight is added to
@@ -299,14 +494,71 @@ public sealed class PlayerView
     /// <summary>True when the player may know of an event: see <see cref="CollectEvents"/>.</summary>
     public bool Knows(in SimEvent happened) =>
         happened.Player == Player
-        || (IsSeenWhereItHappens(happened.Kind) && _vision.Grid.IsVisible(Player, happened.Position));
+        || (IsSeenWhereItHappens(happened.Kind)
+            && (IsOfAStructure(happened.Kind) && _match.Data.StructureOf((int)happened.Amount) is { } structure
+                ? _vision.Grid.IsAnyVisible(Player, TilesAround(happened.Position, structure.Footprint))
+                : _vision.Grid.IsVisible(Player, happened.Position)));
 
     /// <summary>
     /// True for the kinds of event that anyone sees who sees the tile they happen on. Every other
     /// kind is known only to the player it names.
     /// </summary>
     public static bool IsSeenWhereItHappens(SimEventKind kind) =>
-        kind is SimEventKind.Death or SimEventKind.MeleeHit or SimEventKind.ShotFired or SimEventKind.ShotHit or SimEventKind.ShotLost;
+        kind is SimEventKind.Death or SimEventKind.MeleeHit or SimEventKind.ShotFired or SimEventKind.ShotHit or SimEventKind.ShotLost
+        || IsOfAStructure(kind);
+
+    /// <summary>The kinds of event that happen to a structure, which is seen by any tile of its footprint.</summary>
+    private static bool IsOfAStructure(SimEventKind kind) =>
+        kind is SimEventKind.StructurePlaced or SimEventKind.StructureFinished or SimEventKind.StructureRemoved;
+
+    /// <summary>The square of tiles with this middle.</summary>
+    private static TileSquare TilesAround(FixedVector2 center, int size)
+    {
+        var half = Fixed.FromRaw(size * (Fixed.RawOne / 2));
+        return new TileSquare((center.X - half).FloorToInt(), (center.Y - half).FloorToInt(), size);
+    }
+
+    /// <summary>A structure that stands and that the player sees, as it is now.</summary>
+    private bool TryGetSeenStructure(EntityId entity, out SeenStructure structure)
+    {
+        if (_vision.TryDescribeStructure(entity, out var seen) && _vision.SeesStructure(Player, seen.Owner, seen.Tiles))
+        {
+            structure = From(in seen, isRemembered: false);
+            return true;
+        }
+
+        structure = default;
+        return false;
+    }
+
+    /// <summary>A structure of another player that the player does not see now, as the player remembers it.</summary>
+    private bool TryGetRememberedStructure(EntityId entity, out SeenStructure structure)
+    {
+        if (_vision.Remembers(Player, entity, out var seen) && !(_match.Structures.Contains(entity) && _vision.Sees(Player, entity)))
+        {
+            structure = From(in seen, isRemembered: true);
+            return true;
+        }
+
+        structure = default;
+        return false;
+    }
+
+    private static SeenStructure From(in RememberedStructure seen, bool isRemembered) => new(
+        seen.Entity,
+        seen.Owner,
+        seen.Type,
+        seen.X,
+        seen.Y,
+        seen.Size,
+        seen.HitPoints,
+        seen.MaxHitPoints,
+        seen.IsFinished,
+        seen.Built,
+        seen.LookTier,
+        seen.Banner,
+        isRemembered,
+        seen.Tick);
 
     private bool Knows(in WorkSite site)
     {
