@@ -45,6 +45,9 @@ public static class ViewPieces
         // 18v. Walls: laying a run, the wall as one line, what a tile is.
         new WallsPiece(),
 
+        // 18v. Gates: the gate in the build menu, drawn in its wall, open to its owner's units.
+        new GatesPiece(),
+
         // Later pieces.
     ];
 }

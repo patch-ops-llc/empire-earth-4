@@ -105,7 +105,8 @@ public partial class DevelopmentSpawn : InterfacePart
             var x = center.X + (spacing * ((2 * (i % columns)) - (columns - 1)) / 2);
             var y = center.Y + (spacing * ((2 * (i / columns)) - (rows - 1)) / 2);
             var point = new FixedVector2(x, y);
-            if (!match.Grid.IsPassable(point))
+            // Where a unit of this player can stand: its own finished gate is such a place.
+            if (!match.Grid.For(player).IsPassable(point))
             {
                 continue;
             }

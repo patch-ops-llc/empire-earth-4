@@ -58,8 +58,8 @@ public partial class BuildMenu : InterfacePart
     private static readonly string[] EntryOrder = ["capitol", "outpost", "generator", "barracks", "works", "academy", "tower"];
 
     // The entries stand in one row where the window has the width for it, so that the menu
-    // covers as little of the world above the bottom panel as it can, and in rows of four where
-    // it has not.
+    // covers as little of the world above the bottom panel as it can; in two rows where it has
+    // the width for half of them; and in rows of four where it has not.
     private const int FewColumns = 4;
     private const float EntryWidth = 126f;
     private const float EntryHeight = 50f;
@@ -94,8 +94,22 @@ public partial class BuildMenu : InterfacePart
     /// <summary>The tool that is chosen, or null.</summary>
     public BuildTool? Tool => _placing?.Tool;
 
-    /// <summary>The number of structures the menu lists. Its tools are entries too, and are not counted here.</summary>
-    public int EntryCount => _entries.Count - ToolCount;
+    /// <summary>
+    /// The number of structures of the roster the menu lists. Its tools and the structures
+    /// another piece added are entries too, and are not counted here.
+    /// </summary>
+    public int EntryCount => _entries.Count - ToolCount - AddedCount;
+
+    /// <summary>The number of structures another piece added after those of the roster.</summary>
+    public int AddedCount { get; private set; }
+
+    /// <summary>
+    /// DEVELOPMENT ONLY. What places a structure in place of the selected workers' order, or
+    /// null, which is how the game has it. A development aid sets it, to place for a seat
+    /// nobody plays. Asked on every click that places; returns true when it placed the
+    /// structure, and false to leave the click to the order.
+    /// </summary>
+    public Func<StructureDef, int, int, bool>? PlacedInstead { get; set; }
 
     /// <summary>The number of tools the menu lists after its structures.</summary>
     public int ToolCount { get; private set; }
@@ -116,6 +130,29 @@ public partial class BuildMenu : InterfacePart
         _entries.Add(entry);
         _grid.AddChild(entry.Button);
         ToolCount++;
+        if (IsOpen)
+        {
+            Refresh();
+        }
+    }
+
+    /// <summary>
+    /// Lists a structure that is not in the roster, as the gate is not (18b), after the entries
+    /// added before it. It is placed with one click, as the roster's are. Its key is the action
+    /// "build_" and its ID, if the input map has one. Does nothing for a structure a worker
+    /// does not place, and for one that is listed already.
+    /// </summary>
+    public void AddStructure(StructureDef structure)
+    {
+        if (!BuildChecks.For(View).Lists(structure) || EntryOf(structure) is not null)
+        {
+            return;
+        }
+
+        var entry = MakeEntry(structure.Id, StructureWords.NameOf(structure), structure, null);
+        _entries.Add(entry);
+        _grid.AddChild(entry.Button);
+        AddedCount++;
         if (IsOpen)
         {
             Refresh();
@@ -261,6 +298,16 @@ public partial class BuildMenu : InterfacePart
     /// <param name="more">True to go on placing the same structure, false to close the menu.</param>
     public bool Place(StructureDef structure, int x, int y, bool more = false)
     {
+        if (PlacedInstead is { } instead && instead(structure, x, y))
+        {
+            if (!more)
+            {
+                Close();
+            }
+
+            return true;
+        }
+
         var checks = BuildChecks.For(View);
         var name = StructureWords.NameOf(structure);
         if (BuildWords.WhyNot(checks, structure, checks.Structure(structure)) is { } why)
@@ -653,6 +700,7 @@ public partial class BuildMenu : InterfacePart
         var structure = entry.Structure!;
         var where = structure.TerritoryRadius is { } radius
             ? $"It can stand outside your territory and claims the ground {radius} tiles round it."
+            : structure.IsGate ? "In your territory. Open to your units only."
             : "It stands inside your territory.";
         var text = $"{StructureWords.NameOf(structure)}: {BuildWords.Facts(structure)}. {BuildWords.WhyNot(BuildChecks.For(View), structure, entry.Problem) ?? where}";
         _detail.Text = text;
@@ -663,12 +711,19 @@ public partial class BuildMenu : InterfacePart
     private void PlacePanel()
     {
         var free = Frame.FreeWidthAboveBottomPanel;
-        var columns = WidthOf(_entries.Count) + (2f * (PanelPadding + GapBesideWindow)) <= free ? Math.Max(_entries.Count, 1) : FewColumns;
+        var beside = 2f * (PanelPadding + GapBesideWindow);
+        var oneRow = WidthOf(_entries.Count) + beside <= free;
+
+        // Two rows hold whatever the menu lists while the window has the width for half of it.
+        var halved = Math.Max(FewColumns, (_entries.Count + 1) / 2);
+        var columns = oneRow ? Math.Max(_entries.Count, 1)
+            : WidthOf(halved) + beside <= free ? halved
+            : FewColumns;
         if (_grid.Columns != columns)
         {
             // What is said about an entry fits one line under a whole row, and two under a short one.
             _grid.Columns = columns;
-            _detail.CustomMinimumSize = new Vector2(WidthOf(columns), DetailLineHeight * (columns > FewColumns ? 1 : 2));
+            _detail.CustomMinimumSize = new Vector2(WidthOf(columns), DetailLineHeight * (oneRow ? 1 : 2));
         }
 
         var size = _panel.GetCombinedMinimumSize();

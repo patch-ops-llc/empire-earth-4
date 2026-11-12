@@ -24,7 +24,7 @@ public enum WallInspectionMode
 }
 
 /// <summary>
-/// The inspection panel for walls, in the bottom panel: what a selected tile of wall is. One
+/// The inspection panel for walls and gates, in the bottom panel: what a selected tile of wall is. One
 /// tile is shown with its hit points, how far it is built and the wall it is a piece of.
 /// Several are shown together. A click on a tile of another player's wall shows that tile as
 /// the player knows it.
@@ -79,6 +79,9 @@ public partial class WallInspection : InterfacePart
     }
 
     public WallInspectionMode Mode { get; private set; }
+
+    /// <summary>How many of the tiles the panel is about are gates.</summary>
+    public int Gates { get; private set; }
 
     /// <summary>The tiles the panel is about, as the player knows them.</summary>
     public IReadOnlyList<SeenStructure> Tiles => _tiles;
@@ -176,6 +179,7 @@ public partial class WallInspection : InterfacePart
     {
         var match = View.Match;
         _tiles.Clear();
+        Gates = 0;
         Mode = WallInspectionMode.Nothing;
         if (View.Selection.Count > 0)
         {
@@ -238,20 +242,47 @@ public partial class WallInspection : InterfacePart
             damaged += tile.HitPoints < tile.MaxHitPoints ? 1 : 0;
         }
 
-        var name = StructureWords.NameOf(wall);
+        // A gate is a wall tile that its owner's units walk through (18b), and says so.
+        var gate = View.Match.Data.Gate;
+        var gates = 0;
+        foreach (var tile in _tiles)
+        {
+            gates += gate is not null && tile.Type == gate.Index ? 1 : 0;
+        }
+
+        var kind = gates > 0 && _tiles.Count == 1 ? gate! : wall;
+        Gates = gates;
         _swatch.Color = PlayerColors.Of(first.Owner);
-        _title.Text = _tiles.Count == 1 ? name : $"{WallWords.Tiles(_tiles.Count)} of {name.ToLowerInvariant()}";
+        _title.Text = _tiles.Count == 1 ? StructureWords.NameOf(kind) : GateWords.TitleOf(wall, _tiles.Count, gates);
         _owner.Visible = Mode == WallInspectionMode.Other;
         _owner.Text = InspectionWords.Owner(first.Owner);
         _owner.AddThemeColorOverride("font_color", PlayerColors.Of(first.Owner).Lightened(0.25f));
         _bar.Present(hitPoints, maximum);
         _numbers.Text = InspectionWords.Health(hitPoints, maximum);
 
-        _state.Text = StateOf(wall, first, unfinished, damaged);
+        _state.Text = StateOf(kind, first, unfinished, damaged);
         _wall.Visible = _tiles.Count == 1;
-        _wall.Text = PieceOf(first);
-        _facts.Text = Mode == WallInspectionMode.Other
-            ? "No unit of yours walks through it. Units ordered to a place they can only reach through it break it down."
+        _wall.Text = PieceOf(first, kind.IsGate);
+        _facts.Text = FactsOf(wall, kind, first, gates);
+    }
+
+    // Who walks through what is shown, and what it costs its owner.
+    private string FactsOf(StructureDef wall, StructureDef kind, in SeenStructure first, int gates)
+    {
+        if (Mode == WallInspectionMode.Other)
+        {
+            return kind.IsGate
+                ? GateWords.OthersFacts(first)
+                : "No unit of yours walks through it. Units ordered to a place they can only reach through it break it down.";
+        }
+
+        if (kind.IsGate)
+        {
+            return GateWords.OwnFacts(kind, first);
+        }
+
+        return gates > 0
+            ? GateWords.SeveralFacts(_tiles.Count, gates)
             : string.Create(
                 CultureInfo.InvariantCulture,
                 $"No unit walks through {(_tiles.Count == 1 ? "it" : "them")}, yours neither. Sight {wall.Sight} · {ResearchWords.Price(wall.Materials, wall.Energy)} a tile.");
@@ -293,9 +324,14 @@ public partial class WallInspection : InterfacePart
     }
 
     // The wall a tile is a piece of, counted from the pieces the player knows of.
-    private string PieceOf(in SeenStructure tile)
+    private string PieceOf(in SeenStructure tile, bool isGate)
     {
         var length = _structures.Walls.LengthOfWallAt(tile.Owner, tile.X, tile.Y);
+        if (isGate)
+        {
+            return GateWords.PieceOf(length, Mode != WallInspectionMode.Other);
+        }
+
         var whose = Mode == WallInspectionMode.Other ? "that you know of" : "of yours";
         return length <= 1
             ? "It stands alone."

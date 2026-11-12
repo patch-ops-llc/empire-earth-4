@@ -28,9 +28,11 @@ public enum WallRunTile
 /// </summary>
 /// <remarks>
 /// <para>
-/// The tiles that would be laid are those the simulation's own
-/// <see cref="WallOrders.TilesToLay"/> names, and the price is the price of one tile for each
-/// of them, so that the preview shows exactly what the order does. Whether the player can pay
+/// The tiles that would be laid are those the player's own view of the match names
+/// (<see cref="Sim.Vision.PlayerView.WallRun"/>), by the rule the order is judged by, and the
+/// price is the price of one tile for each of them, so that the preview shows exactly what the
+/// order pays. A tile of ground the player has not explored is taken as free: when something
+/// stands there, the worker leaves it out when it comes to it, and its price comes back. Whether the player can pay
 /// is worked out as the order works it out: against the stockpile, counting what the order
 /// that the chosen worker already has would give back.
 /// </para>
@@ -113,7 +115,10 @@ public sealed class WallRunPlan
         var player = view.Player;
         var plan = new WallRunPlan(firstX, firstY, lastX, lastY);
         var toLay = new List<(int X, int Y)>();
-        plan.Problem = match.Walls.TilesToLay(player, firstX, firstY, lastX, lastY, toLay);
+
+        // Judged by what the player may know, as the order is: a tile of ground the player has
+        // not explored is taken as free, whatever stands there.
+        plan.Problem = view.Sight.Seen.WallRun(firstX, firstY, lastX, lastY, toLay);
         plan.Read(toLay, (x, y) => IsWallOf(match, player, x, y));
         if (match.Walls.Wall is not { } wall || plan.Problem != BuildProblem.None)
         {

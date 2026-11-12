@@ -79,9 +79,17 @@ public static class WallShapes
         : 3 * hitPoints >= maximum ? 2
         : Rubble;
 
-    /// <summary>The mesh of a shape, standing on the ground with the middle of its tile at the origin.</summary>
+    /// <summary>
+    /// The mesh of a shape, standing on the ground with the middle of its tile at the origin.
+    /// The shape of a gate is a wall tile's with more said of it, and <see cref="GateShapes"/> has its mesh.
+    /// </summary>
     public static ArrayMesh MeshOf(int shape)
     {
+        if (GateShapes.IsGate(shape))
+        {
+            return GateShapes.MeshOf(shape);
+        }
+
         var joins = JoinsOf(shape);
         var stage = StageOf(shape);
         var look = Looks[stage];
@@ -175,9 +183,11 @@ public static class WallShapes
         }
     }
 
-    // A block with upright sides and a top, lying along a way on the ground. There is no
-    // underside, since nothing sees it. The sides are flat, so that it reads as built.
-    private static void AddBox(SurfaceTool tool, Vector2 middle, Vector2 way, float halfLength, float halfWidth, float from, float to)
+    /// <summary>
+    /// Adds a block with upright sides and a top, lying along a way on the ground. There is no
+    /// underside, since nothing sees it. The sides are flat, so that it reads as built.
+    /// </summary>
+    internal static void AddBox(SurfaceTool tool, Vector2 middle, Vector2 way, float halfLength, float halfWidth, float from, float to)
     {
         var across = new Vector2(-way.Y, way.X);
         Vector2[] corners = [new(-1f, -1f), new(1f, -1f), new(1f, 1f), new(-1f, 1f)];

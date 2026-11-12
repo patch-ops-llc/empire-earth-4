@@ -50,6 +50,16 @@ public partial class PlacementPreview : WorldLayer
     /// <summary>The number of tiles marked as no good in the last frame.</summary>
     public int BlockedTiles { get; private set; }
 
+    /// <summary>
+    /// What gives the shape of a structure whose shape turns on where it stands, as a gate's
+    /// turns on the wall beside it, or null. It returns null for every structure with one
+    /// shape, which is then drawn as <see cref="StructureShapes"/> has it.
+    /// </summary>
+    public Func<StructureDef, Placement, ArrayMesh?>? ShapeAt { get; set; }
+
+    /// <summary>The shape that was drawn in the last frame, or null when none was.</summary>
+    public Mesh? ShapeShown => _shape.Visible ? _shape.Mesh : null;
+
     /// <summary>Shows a structure at a site, in place of what was shown.</summary>
     public void Show(StructureDef structure, in Placement site)
     {
@@ -104,7 +114,7 @@ public partial class PlacementPreview : WorldLayer
         if (_structure is { } structure)
         {
             var color = ColorOf(_site);
-            _shape.Mesh = MeshOf(structure);
+            _shape.Mesh = ShapeAt?.Invoke(structure, _site) ?? MeshOf(structure);
             _shape.Position = new Vector3(_site.X + (structure.Footprint / 2f), 0f, _site.Y + (structure.Footprint / 2f));
             _material.AlbedoColor = _site.IsAccepted ? new Color(color, ShapeAlpha) : new Color(color.Lerp(Colors.White, 0.5f), RefusedShapeAlpha);
             MarkTiles(structure, _site.IsAccepted ? color : Good);

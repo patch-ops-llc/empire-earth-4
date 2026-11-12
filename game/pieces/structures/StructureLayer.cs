@@ -104,7 +104,7 @@ public partial class StructureLayer : WorldLayer
     public override void AfterTick()
     {
         View.Sight.CollectStructures(_known);
-        _walls.Read(View.Match, _known);
+        _walls.Read(View, _known);
         _pass++;
         foreach (var seen in _known)
         {

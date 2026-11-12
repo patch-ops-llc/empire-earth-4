@@ -72,7 +72,7 @@ public sealed class WallTool : BuildTool
         }
 
         // The rules say whether walls are unlocked before they look at any tile.
-        if (match.Walls.TilesToLay(view.Player, 0, 0, 0, 0, []) == BuildProblem.Locked)
+        if (view.Sight.Seen.WallRun(0, 0, 0, 0, []) == BuildProblem.Locked)
         {
             return BuildProblem.Locked;
         }

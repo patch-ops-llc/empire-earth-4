@@ -88,12 +88,13 @@ If joining fails, the menu says why in orange:
 | Send the selected workers to work at a deposit | Right-click the deposit |
 | Send the selected workers to work at a Generator of yours | Right-click the Generator, once it is finished |
 | Open or close the build menu | B, or the Build button in the panel at the bottom, with a worker selected |
-| Choose a structure in the build menu | Click it, or press the key beside its name: C Capitol, O Outpost, E Generator, B Barracks, K Works, Y Academy, T Tower |
+| Choose a structure in the build menu | Click it, or press the key beside its name: C Capitol, O Outpost, E Generator, B Barracks, K Works, Y Academy, T Tower, J Gate |
 | Place the chosen structure | Click the ground. Hold Shift to go on placing the same structure |
 | Lay a wall | Press L in the build menu, or click Wall. Press the left button on the first tile, drag to the last tile and let go. Hold Shift to go on laying walls |
+| Build a gate | Press J in the build menu, or click Gate, and click the tile. To have it in a wall, build the gate and lay the wall across it |
 | Go back from placing to the menu, and from the menu to the match | Right-click or Escape. While you drag a wall, the first right-click or Escape drops the run you have drawn |
 | Cancel a build order, a wall order or a structure that is not finished | Select the worker or the structure and press Delete, or the Cancel build button in the panel at the bottom |
-| See what another player's wall is | Click a tile of it. A pale line marks the tile and the panel at the bottom describes it |
+| See what another player's wall or gate is | Click a tile of it. A pale line marks the tile and the panel at the bottom describes it |
 | Send the selected units somewhere | Right-click the ground. On a trackpad that is a click with two fingers, unless you have set it otherwise |
 | Open or close the research panel | R, or the Research button in the bar at the top. Escape closes it too |
 | Start a research | In the research panel, click a bright cell |
@@ -155,7 +156,7 @@ You are shown only what your own units see. Each unit sees a circle round itself
 
 ## Building
 
-Select one or more workers and press B, or click Build in the panel at the bottom. The build menu opens above that panel and lists the seven structures a worker places, and the wall, which is laid in another way: see [Walls](#walls).
+Select one or more workers and press B, or click Build in the panel at the bottom. The build menu opens above that panel and lists the seven structures a worker places, the wall, which is laid in another way, and the gate that lets your own units through a wall: see [Walls](#walls) and [Gates](#gates).
 
 - Each entry has the structure's name, the key that chooses it and its price: M is Materials and E is Energy. Point at an entry and the line under the entries says what it costs, how many tiles it takes, how long it builds itself and whether it must stand in your territory.
 - An entry is dark when you cannot order the structure now. Its price is orange when you lack the resources, and the line under the entries says how much you lack. An entry says `Limit 2 of 2` when you have as many as you may have: you may have two Academies. A structure that waits for a research says which.
@@ -174,13 +175,13 @@ Select one or more workers and press B, or click Build in the panel at the botto
 
 ## Walls
 
-A wall is a line of tiles that no unit walks through, your own units neither: there are no gates yet. A tile costs 20 Materials and builds itself in 5 seconds.
+A wall is a line of tiles that no unit walks through, your own units neither. A gate in it lets your own units through: see [Gates](#gates). A tile costs 20 Materials and builds itself in 5 seconds.
 
 **Laying a wall.** Select a worker, press B and then L, or click Wall in the build menu. Press the left button on the tile where the wall begins, drag to the tile where it ends, and let go. A wall runs straight from the one tile to the other, also at a slant.
 
 - While you drag, the menu steps out of the way and the run is drawn on the ground. Green pieces are tiles that will be laid. A red tile with a cross is one where no wall can stand: it is outside your territory, not open ground, or under a deposit, a structure or another player's wall. It is left out, and you do not pay for it. A pale tile is one where your wall stands already. A wall stands only inside your territory.
 - A tag beside the pointer says how many tiles will be laid and what they cost together, and what is left out. The run is amber, and the tag says why, when the order would not be taken at all: no tile of it can be laid, or you cannot pay for it.
-- The run goes by the ground as it is, also on a part of your territory you have not seen yet: a red tile there tells you that something is in the way.
+- The run goes by what you know, as the order does. A tile of ground you have never seen is taken as free and paid for, whatever stands there. If something is in the way, the worker finds out when it comes to the tile, leaves it out, and the price of the tile comes back.
 - Let go, and you pay for every tile at once. The nearest selected worker walks to the run and lays it tile by tile. The tiles still to come are drawn as pale pieces of wall in your color. Only you see them. The worker's line in the panel at the bottom says how many tiles are to go.
 - A right-click or Escape while you drag drops the run and keeps the wall in hand. Another goes back to the menu. Hold Shift while you let go to lay another run afterwards. Each order is for one worker, and a new order for a worker that is laying a wall ends the old one, so select another worker for a second run.
 - Each tile builds itself once it is laid, like a structure: it fills from the ground up under a blue bar. It is in the way from the moment it is laid.
@@ -191,11 +192,28 @@ A wall is a line of tiles that no unit walks through, your own units neither: th
 
 **Selecting a wall.** Click a tile of your wall to select it. The panel at the bottom shows its hit points, whether it is finished, and how many tiles the wall it is a piece of has. Hold Shift and click to select more tiles. Click a tile of another player's wall to see the same about it.
 
-**Getting through a wall.** Units do not attack a wall they can walk round. Order units to a place they can only reach through another player's wall, and they attack the tile of it that is in their way, and walk on when it is gone. They never break your own wall: a place that only your own wall closes off cannot be reached.
+**Getting through a wall.** Units do not attack a wall they can walk round, however far round it is. Order units to a place they can only reach through another player's wall, and they attack the tile of it that is in their way, and walk on when it is gone. They break only walls you have seen: behind a wall you have never seen, the place is one they cannot reach, so they go as near as they can, and break in once you have seen the wall that keeps them out. They never break your own wall: a place that only your own wall closes off cannot be reached.
 
 **Walls in the fog of war.** A wall is under the fog like every structure. You see another player's wall while a unit or a structure of yours sees it. Out of sight it stays on your screen and on the minimap as you last saw it, darker, also when it has been broken or built on since. A wall you have never seen is not drawn at all.
 
-**The development aid for walls.** Nobody plays the other seat when you play alone, so this build has a third development aid, in a small orange box under the other two at the left edge: a button that reads "Aid: walls for Player 2: off". Click it, so that it reads ON, and the next runs you lay are laid at once as finished wall of the other player, free of charge and anywhere on open ground. Click it again to lay your own. It is not part of the game. To see units break through a wall, close a place off with such walls, as both ends of the pass on the ridge, make units of your own inside with G, and order them out.
+**The development aid for walls and gates.** Nobody plays the other seat when you play alone, so this build has a third development aid, in a small orange box under the other two at the left edge: a button that reads "Aid: walls and gates for Player 2: off". Click it, so that it reads ON, and the next runs you lay are laid at once as finished wall of the other player, and each click with the Gate entry places a finished gate of the other player, free of charge and anywhere on open ground. You still need the Materials for one tile or one gate to take the entry in hand, though nothing is spent. Click the button again to lay your own. It is not part of the game. To see units break through a wall, close a place off with such walls, as both ends of the pass on the ridge, make units of your own inside with G, and order them out.
+
+## Gates
+
+A gate is one tile of wall that your own units walk through. To every other player it is a wall tile like the rest. It costs 40 Materials, builds itself in 10 seconds, and stands only inside your territory.
+
+**Building a gate.** Select a worker, press B and then J, or click Gate in the build menu, and click the tile. The worker walks there and lays it, as with any structure, and Delete cancels it the same way.
+
+- A gate goes on a free tile, not on a wall tile that stands. To have a gate in a wall, build the gate first and lay the wall across it, or leave a tile out of the wall and put the gate there. A run drawn across a gate leaves the gate's tile out and joins the wall to it on both sides: the tag beside the pointer counts it as a tile of wall already there, with nothing to pay.
+- The shape under the pointer is turned the way the gate will stand: along the wall beside the tile, or along the wall your workers have yet to lay there.
+- While a gate builds itself it is shut to everyone, you too. Once it is finished your units walk through it, workers and fighting units alike, and their routes go through it by themselves.
+
+**What a gate looks like.** Two pillars of bare stone, a little taller than the wall and wider, with a door in its owner's color between them and paving on the ground across the wall. The top of a wall is in its owner's color from end to end, so the stone pillars are what tell a gate from the wall round it. The door is a block between the pillars while the gate is shut. It is drawn open, as two thin leaves back against the pillars, while a unit of the gate's owner that you can see stands in the gate or on a tile beside it. A gate you remember and do not see is always drawn shut. On the minimap a gate is a paler dot in its wall's line. A gate that has been hit loses its crests and stands lower, like a wall.
+
+**Selecting a gate.** Click your gate to select it: the panel at the bottom says whether it is finished, which wall it is the gate of, and who walks through it. Click another player's gate to see the same about it.
+
+**Another player's gate.** It never opens for your units. They walk round the wall it stands in if there is any way round, however far. Order them to a place they can only reach through that wall, and they break the tile of it in their way, which may be the gate. As with walls, your units know only a gate you have seen: one you have never seen is not on your screen, and a unit sent behind it goes as near as it can get until you come to see the gate.
+
 
 ## What your units are
 

@@ -103,6 +103,9 @@ public sealed class SmokeTest
         // 18v. Walls: a run laid through the build menu, a tile left out, a wall not seen.
         new WallsSmoke(),
 
+        // 18v. Gates: a gate built in a wall, open to its owner's units, the other seat's shut.
+        new GatesSmoke(),
+
         // Later pieces.
     ];
 

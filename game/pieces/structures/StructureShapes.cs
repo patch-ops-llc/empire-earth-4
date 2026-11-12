@@ -93,6 +93,14 @@ public static class StructureShapes
             new(0.68f, 0.68f, 0f, 0.66f, Roof: false),
             new(0.76f, 0.76f, 0.66f, WallShapes.Height, Roof: true),
         ],
+
+        // A block as tall as a gate's pillars. A gate is drawn with the shapes of GateShapes,
+        // which turn it the way its wall runs. This is for whatever asks here.
+        ["gate"] =
+        [
+            new(0.94f, 0.68f, 0f, 0.80f, Roof: false),
+            new(0.98f, 0.74f, 0.80f, GateShapes.Height, Roof: true),
+        ],
     };
 
     /// <summary>How tall the structure is drawn, in tiles, which is also how tall it is to the pointer.</summary>

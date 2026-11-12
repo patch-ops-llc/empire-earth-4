@@ -114,9 +114,10 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | Go somewhere and fight what is met on the way | Hold Ctrl and right click on the place |
 | Stop | X, or the Stop button in the selection panel |
 | Lay a wall | With a worker selected, B opens the build menu and L takes the wall in hand. Press the left button on the first tile, drag to the last and let go. A right click or Escape drops the run, and then goes back |
+| Build a gate | With a worker selected, B opens the build menu and J takes the gate in hand. Click the tile. A wall run drawn across a gate joins to it |
 | Development aid, while `debug.spawn` is on in `rules.jsonc`: make units at the pointer | G for your own. Alone, H for the other player's. The orange panel at the left edge chooses which and how many |
 | Development aid, alone and while `debug.spawn` is on: lift the fog of war from the screen, and lay it back | F4, or the button in the orange panel under the first. Only the screen changes: the simulation has no such switch |
-| Development aid, alone and while `debug.spawn` is on: lay a wall for the other player | The button in the small orange box under the second panel, then lay a wall as above. While it is on, the run is laid at once as finished wall of the other player, free of charge |
+| Development aid, alone and while `debug.spawn` is on: lay a wall or place a gate for the other player | The button in the small orange box under the second panel, then lay a wall or place a gate as above. While it is on, the run is laid at once as finished wall of the other player, and the click places a finished gate of the other player, free of charge |
 
 ## Test builds
 

@@ -1,14 +1,16 @@
 using Godot;
 using Sim.Core;
 using Sim.Numerics;
+using Sim.Structures;
 
 namespace Game;
 
 /// <summary>
 /// A development aid, not part of the game: a switch that makes the wall tool lay its run for the
-/// other seat, finished and for nothing, so that a tester who plays alone has an enemy wall to
-/// send units at and to see through the fog. Nobody plays the other seat, and a wall of the
-/// game stands only in its owner's territory.
+/// other seat, finished and for nothing, and the build menu place its gate for that seat, so
+/// that a tester who plays alone has an enemy wall and an enemy gate to send units at and to
+/// see through the fog. Nobody plays the other seat, and a wall of the game stands only in its
+/// owner's territory.
 /// </summary>
 /// <remarks>
 /// It sends the development placement (<see cref="CommandType.DebugPlace"/>), one command for
@@ -42,7 +44,8 @@ public partial class WallDevelopmentAid : InterfacePart
             if (_button is not null)
             {
                 var whose = MatchPanel.PlayerName(OtherSeat);
-                _button.Text = _forOtherSeat ? $"Aid: walls for {whose}: ON" : $"Aid: walls for {whose}: off";
+                var what = View.Match.Data.Gate is null ? "walls" : "walls and gates";
+                _button.Text = _forOtherSeat ? $"Aid: {what} for {whose}: ON" : $"Aid: {what} for {whose}: off";
                 _button.AddThemeColorOverride("font_color", _forOtherSeat ? UiStyle.Warning : ResearchColors.Ink);
             }
         }
@@ -69,6 +72,21 @@ public partial class WallDevelopmentAid : InterfacePart
         return sent;
     }
 
+    /// <summary>
+    /// Places a finished gate for the other seat on a tile, if a gate has room there. Returns
+    /// true when the session took the command.
+    /// </summary>
+    public bool PlaceGate(int x, int y)
+    {
+        if (!IsOffered || View.Run is not LocalRun alone || View.Match.Data.Gate is not { } gate || !View.Match.HasRoomFor(gate, x, y))
+        {
+            return false;
+        }
+
+        var command = new Command(CommandType.DebugPlace, OtherSeat, targetX: Fixed.FromInt(x), targetY: Fixed.FromInt(y), contentId: gate.Index);
+        return alone.Session.Host.Submit(command);
+    }
+
     protected override void Attach()
     {
         if (!IsOffered)
@@ -82,7 +100,7 @@ public partial class WallDevelopmentAid : InterfacePart
         {
             Name = "DevelopmentWalls",
             SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin,
-            TooltipText = "Not part of the game. While this is on, the run you draw with the Wall entry of the build menu\nis laid at once as finished wall of the other seat, free of charge, in or out of any territory.",
+            TooltipText = "Not part of the game. While this is on, the run you draw with the Wall entry of the build menu\nis laid at once as finished wall of the other seat, and a click with the Gate entry places a finished\ngate of the other seat, free of charge, in or out of any territory.",
         };
         var box = UiStyle.PanelStyle(6f);
         box.BorderColor = UiStyle.Warning;
