@@ -11,10 +11,13 @@ using static Sim.Tests.Combat.CombatMatches;
 namespace Sim.Tests.Combat;
 
 /// <summary>
-/// A whole battle of mixed armies round a wall, with every kind of order: what it must come to on
-/// every system, that a snapshot taken anywhere in it continues the same way, and the rules that
-/// must hold in every tick of it.
+/// A whole battle of mixed armies round a wall, with every kind of order: that a snapshot taken
+/// anywhere in it continues the same way, and the rules that must hold in every tick of it.
 /// </summary>
+/// <remarks>
+/// No state hash is pinned here. The fight that every system must bring to the same end is the
+/// golden replay <c>ridge-fight.replay</c>.
+/// </remarks>
 public class BattleTests
 {
     private const int LastTick = 900;
@@ -88,16 +91,6 @@ public class BattleTests
 
         match.Run(ticks);
         return match;
-    }
-
-    [Fact]
-    public void TheBattleComesToTheSameEndOnEverySystem()
-    {
-        var match = Run(LastTick);
-
-        // The hash of the whole state after the last tick. It changes only when the rules do; a
-        // pull request that changes it on purpose says so. Linux, Windows and macOS must all get it.
-        Assert.Equal("9052d3e05ff75b71", match.World.ComputeHash().ToString("x16", System.Globalization.CultureInfo.InvariantCulture));
     }
 
     [Fact]
