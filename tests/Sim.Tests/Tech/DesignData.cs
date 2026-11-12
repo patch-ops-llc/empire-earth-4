@@ -74,7 +74,8 @@ internal static class DesignData
             "deposits": { "main_per_player": 1, "natural_per_player": 1, "contested": 2 },
             "chokepoint_width": { "min": 2, "max": 4 },
             "open_field_min_width": 6
-          }
+          },
+          "debug": { "spawn": true }
         }
         """;
 
