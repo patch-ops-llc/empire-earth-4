@@ -67,6 +67,25 @@ public struct Combatant : IStateValue
     /// </summary>
     public FixedVector2 Fought { get; set; }
 
+    /// <summary>
+    /// The target that <see cref="Place"/> is a place by, or <see cref="EntityId.None"/>. The unit
+    /// has the place only while this is its <see cref="Target"/> (<see cref="HasPlace"/>), so a
+    /// unit that takes another target or another order has given the place up without anything
+    /// being cleared.
+    /// </summary>
+    public EntityId PlaceFor { get; set; }
+
+    /// <summary>
+    /// The free place by its target that a melee unit found for itself when its own side left it
+    /// no room (<see cref="MeleePlaces"/>): where it is walking to, or where it stands. No other
+    /// unit of its side takes a place closer to this point than their spacing. Meaningful while
+    /// <see cref="HasPlace"/>.
+    /// </summary>
+    public FixedVector2 Place { get; set; }
+
+    /// <summary>True when the unit has a place by the target it has now.</summary>
+    public readonly bool HasPlace => PlaceFor != EntityId.None && PlaceFor == Target;
+
     public void Walk(IStateWalker walker)
     {
         ArgumentNullException.ThrowIfNull(walker);
@@ -79,5 +98,7 @@ public struct Combatant : IStateValue
         Wait = walker.Field(Wait);
         Stood = new FixedVector2(walker.Field(Stood.X), walker.Field(Stood.Y));
         Fought = new FixedVector2(walker.Field(Fought.X), walker.Field(Fought.Y));
+        PlaceFor = walker.Field(PlaceFor);
+        Place = new FixedVector2(walker.Field(Place.X), walker.Field(Place.Y));
     }
 }
