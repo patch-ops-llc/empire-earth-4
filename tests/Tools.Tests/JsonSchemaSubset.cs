@@ -186,6 +186,22 @@ internal sealed class JsonSchemaSubset
 
                     break;
 
+                case "minProperties":
+                    if (value.ValueKind == JsonValueKind.Object && value.EnumerateObject().Count() < rule.GetInt32())
+                    {
+                        errors.Add($"{path}: has fewer than {rule.GetInt32()} keys");
+                    }
+
+                    break;
+
+                case "maxProperties":
+                    if (value.ValueKind == JsonValueKind.Object && value.EnumerateObject().Count() > rule.GetInt32())
+                    {
+                        errors.Add($"{path}: has more than {rule.GetInt32()} keys");
+                    }
+
+                    break;
+
                 case "propertyNames":
                     if (value.ValueKind == JsonValueKind.Object)
                     {

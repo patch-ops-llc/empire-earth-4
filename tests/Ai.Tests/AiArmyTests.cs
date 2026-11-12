@@ -250,6 +250,114 @@ public class AiArmyTests
         Assert.Empty(fixture.Commands);
     }
 
+    /// <summary>
+    /// "Raises Artillery to 30% of its army's supply" (design 5.5, item 4): the line is ordered
+    /// before the ratio while it is below the share, whether its personality trains it or not.
+    /// </summary>
+    [Fact]
+    public void ALineARowRaisesIsOrderedBeforeTheRatioUntilItHasItsShare()
+    {
+        var fixture = new AiFixture(players: 2);
+        var barracks = fixture.Place("barracks");
+        var works = fixture.Place("works");
+        var table = fixture.Responding(AiFixture.Personality(lines: [("line_infantry", 1)]), AiFixture.Raising("artillery", "0.3"));
+        var army = new AiArmy(fixture.Sight, table.Personality, table.Responses);
+        var peltast = AiFixture.Chassis("peltast");
+        var ballista = AiFixture.Chassis("ballista");
+        Assert.Equal(2, fixture.Sight.Tech.Blueprints[peltast].Supply);
+        Assert.Equal(3, fixture.Sight.Tech.Blueprints[ballista].Supply);
+
+        // Seven Peltasts take 14 supply. One Ballista is 3 of 17 and two are 6 of 20, which is the 30%.
+        fixture.Spawn("peltast", 7);
+        army.Think(AiFixture.Plenty, fixture.Rich(), fixture.Commands);
+
+        Assert.Equal(
+            [(works, ballista), (works, ballista), (barracks, peltast), (barracks, peltast)],
+            fixture.Commands.Select(command => (command.Entities[0], command.ContentId)).ToList());
+    }
+
+    [Fact]
+    public void ALineAtItsShareIsLeftToTheRatio()
+    {
+        var fixture = new AiFixture(players: 2);
+        var barracks = fixture.Place("barracks");
+        fixture.Place("works");
+        var table = fixture.Responding(AiFixture.Personality(lines: [("line_infantry", 1)]), AiFixture.Raising("artillery", "0.3"));
+        var army = new AiArmy(fixture.Sight, table.Personality, table.Responses);
+
+        // 6 of 20 already. With the Peltast it orders the line is below again, 6 of 22, and a
+        // Ballista follows: 9 of 25. The second Peltast fills the queue of the Barracks.
+        fixture.Spawn("peltast", 7);
+        fixture.Spawn("ballista", 2);
+        army.Think(AiFixture.Plenty, fixture.Rich(), fixture.Commands);
+
+        Assert.Equal(
+            [AiFixture.Chassis("peltast"), AiFixture.Chassis("ballista"), AiFixture.Chassis("peltast")],
+            fixture.Commands.Select(command => command.ContentId).ToList());
+        Assert.Equal(barracks, fixture.Commands[0].Entities[0]);
+    }
+
+    /// <summary>Buying the ratio in its place would keep the line below its share for as long as the row is in force.</summary>
+    [Fact]
+    public void ARaisedLineThatCannotBePaidForIsWaitedFor()
+    {
+        var fixture = new AiFixture(players: 2);
+        fixture.Place("barracks");
+        fixture.Place("works");
+        var table = fixture.Responding(AiFixture.Personality(lines: [("line_infantry", 1)]), AiFixture.Raising("artillery", "0.3"));
+        var army = new AiArmy(fixture.Sight, table.Personality, table.Responses);
+        var infantry = fixture.Sight.Tech.Blueprints[AiFixture.Chassis("peltast")];
+        var artillery = fixture.Sight.Tech.Blueprints[AiFixture.Chassis("ballista")];
+        Assert.True(artillery.Materials > infantry.Materials);
+        fixture.Spawn("peltast", 7);
+
+        var budget = fixture.With(artillery.Materials - 1, artillery.Energy);
+        army.Think(AiFixture.Plenty, budget, fixture.Commands);
+
+        Assert.Empty(fixture.Commands);
+
+        // The workers earn for one unit of the line beside the round of the ratio.
+        Assert.Equal(infantry.Materials + artillery.Materials - (artillery.Materials - 1), budget.MissingMaterials);
+    }
+
+    [Fact]
+    public void ARaisedLineWhoseStructureItDoesNotHaveIsPassedOver()
+    {
+        var fixture = new AiFixture(players: 2);
+        fixture.Place("barracks");
+        var table = fixture.Responding(AiFixture.Personality(lines: [("line_infantry", 1)]), AiFixture.Raising("artillery", "0.3"));
+        var army = new AiArmy(fixture.Sight, table.Personality, table.Responses);
+        fixture.Spawn("peltast", 7);
+
+        army.Think(AiFixture.Plenty, fixture.Rich(), fixture.Commands);
+
+        Assert.Equal(AiEconomy.QueueLength, fixture.Commands.Count);
+        Assert.All(fixture.Commands, command => Assert.Equal(AiFixture.Chassis("peltast"), command.ContentId));
+    }
+
+    /// <summary>A line of its personality that a row raises keeps its place in the ratio and is ordered before it while below the share.</summary>
+    [Fact]
+    public void ALineOfItsPersonalityIsRaisedAboveItsPlaceInTheRatio()
+    {
+        var fixture = new AiFixture(players: 2);
+        fixture.Place("barracks");
+        fixture.Place("works");
+        var personality = AiFixture.Personality(lines: [("line_infantry", 3), ("cavalry_armor", 1)]);
+        var table = fixture.Responding(personality, AiFixture.Raising("cavalry_armor", "0.5"));
+        var peltast = AiFixture.Chassis("peltast");
+        var hippeus = AiFixture.Chassis("hippeus");
+
+        // Nine Peltasts and three Hippeis are the ratio, and 9 of 27 supply is below the half.
+        fixture.Spawn("peltast", 9);
+        fixture.Spawn("hippeus", 3);
+        new AiArmy(fixture.Sight, personality).Think(AiFixture.Plenty, fixture.Rich(), fixture.Commands);
+        Assert.Equal([peltast, hippeus, peltast, hippeus], fixture.Commands.Select(command => command.ContentId).ToList());
+
+        fixture.Commands.Clear();
+        new AiArmy(fixture.Sight, table.Personality, table.Responses).Think(AiFixture.Plenty, fixture.Rich(), fixture.Commands);
+        Assert.Equal([hippeus, hippeus, peltast, peltast], fixture.Commands.Select(command => command.ContentId).ToList());
+    }
+
     [Fact]
     public void TheWorkersEarnForOneRoundOfTheRatio()
     {

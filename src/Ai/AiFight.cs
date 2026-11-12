@@ -65,8 +65,10 @@ internal sealed class AiFight
     private readonly AiSearch _search;
     private readonly AiFightDef _fight;
     private readonly AiRaid _raid;
+    private readonly AiIntel _intel;
+    private readonly AiResponses? _responses;
+    private readonly bool _keepsIntel;
     private readonly List<SimEvent> _events = [];
-    private readonly Dictionary<int, int> _enemyValues = [];
     private readonly Dictionary<int, int> _force = [];
     private readonly Dictionary<int, long> _hitPoints = [];
     private readonly List<OwnFighter> _forceUnits = [];
@@ -81,7 +83,6 @@ internal sealed class AiFight
     private AiReaction _retreatReaction;
     private AiReaction _reinforceReaction;
     private AiReaction _defendReaction;
-    private long _seenEnemyValue;
     private long _forceWhole;
     private int _phaseDeadline;
     private int _searchDeadline;
@@ -92,7 +93,15 @@ internal sealed class AiFight
     private int _defendUntil;
     private Objective _objective;
 
-    public AiFight(AiSight sight, AiSearch search, AiFightDef fight)
+    /// <param name="sight">What its player knows.</param>
+    /// <param name="search">The ground it has seen, and when.</param>
+    /// <param name="fight">The numbers of its personality.</param>
+    /// <param name="intel">
+    /// Its memory of the enemy, kept up to date by whoever made it. Without one it keeps its own:
+    /// <see cref="Watch"/> and <see cref="Think"/> then bring it up to date.
+    /// </param>
+    /// <param name="responses">The response table, which may name another passage than its personality's, or none.</param>
+    public AiFight(AiSight sight, AiSearch search, AiFightDef fight, AiIntel? intel = null, AiResponses? responses = null)
     {
         ArgumentNullException.ThrowIfNull(sight);
         ArgumentNullException.ThrowIfNull(search);
@@ -100,6 +109,9 @@ internal sealed class AiFight
         _sight = sight;
         _search = search;
         _fight = fight;
+        _keepsIntel = intel is null;
+        _intel = intel ?? new AiIntel(sight);
+        _responses = responses;
         _raid = new AiRaid(sight, fight);
         _startSeen = new bool[sight.OtherStarts.Count];
     }
@@ -129,7 +141,13 @@ internal sealed class AiFight
     public long ArmyValue { get; private set; }
 
     /// <summary>What it takes the enemy's army to be worth.</summary>
-    public long EnemyEstimate => Math.Max(_seenEnemyValue, _fight.AssumedEnemyValue);
+    public long EnemyEstimate => Math.Max(_intel.EnemyValue, _fight.AssumedEnemyValue);
+
+    /// <summary>The kind of map marker its army goes through now: the one a row of the response table names, or its personality's.</summary>
+    public MarkerKind Passage => _responses?.Passage ?? _fight.Passage;
+
+    /// <summary>True for a unit that is with a force or a raiding party, and so not at home.</summary>
+    public bool IsAway(EntityId unit) => _force.ContainsKey(unit.Value) || _raid.Has(unit);
 
     /// <summary>True while its units at home keep to a structure that was damaged.</summary>
     public bool IsDefending { get; private set; }
@@ -138,19 +156,15 @@ internal sealed class AiFight
     public int ForceCount => _forceUnits.Count;
 
     /// <summary>
-    /// Reads what happened in the tick that has just run. Call it after every tick: an enemy
-    /// unit it saw die is taken out of its estimate here, and the events of a tick are gone
-    /// after the next.
+    /// Reads what happened in the tick that has just run, when it keeps its own memory of the
+    /// enemy. Call it after every tick: an enemy unit it saw die is taken out of its estimate
+    /// here, and the events of a tick are gone after the next.
     /// </summary>
     public void Watch()
     {
-        _sight.CollectEvents(_events);
-        foreach (var simEvent in _events)
+        if (_keepsIntel)
         {
-            if (simEvent.Kind == SimEventKind.Death && _enemyValues.Remove(simEvent.Entity.Value, out var value))
-            {
-                _seenEnemyValue -= value;
-            }
+            _intel.Watch();
         }
     }
 
@@ -163,7 +177,11 @@ internal sealed class AiFight
     {
         ArgumentNullException.ThrowIfNull(commands);
 
-        RememberEnemies();
+        if (_keepsIntel)
+        {
+            _intel.Update();
+        }
+
         SortUnits();
         NoteDamage();
         if (!hasMuster)
@@ -234,22 +252,6 @@ internal sealed class AiFight
         KeepHome(musterX, musterY, commands);
     }
 
-    private void RememberEnemies()
-    {
-        foreach (var unit in _sight.Enemies)
-        {
-            if (unit.IsWorker || unit.Chassis == SeenUnit.NoChassis)
-            {
-                continue;
-            }
-
-            var value = _sight.ValueOf(unit.Chassis);
-            _enemyValues.TryGetValue(unit.Entity.Value, out var before);
-            _enemyValues[unit.Entity.Value] = value;
-            _seenEnemyValue += value - before;
-        }
-    }
-
     private void SortUnits()
     {
         _forceUnits.Clear();
@@ -259,7 +261,11 @@ internal sealed class AiFight
         foreach (var unit in _sight.Fighters)
         {
             ArmyValue += _sight.ValueOf(unit.Chassis);
-            if (_force.ContainsKey(unit.Entity.Value))
+            if (unit.Entity == _sight.Scout)
+            {
+                // Away to look, and under the orders of the scouting alone.
+            }
+            else if (_force.ContainsKey(unit.Entity.Value))
             {
                 _forceUnits.Add(unit);
             }
@@ -326,7 +332,7 @@ internal sealed class AiFight
         _reinforceReaction.Reset();
         ChooseObjective(musterX, musterY);
         if (_objective.Kind != ObjectiveKind.None
-            && AiOrders.TryFindPassage(_sight, _fight.Passage, musterX, musterY, _objective.X, _objective.Y, out _stagingX, out _stagingY))
+            && AiOrders.TryFindPassage(_sight, Passage, musterX, musterY, _objective.X, _objective.Y, out _stagingX, out _stagingY))
         {
             Phase = FightPhase.Advance;
             _phaseDeadline = DeadlineTo(_forceUnits, _stagingX, _stagingY);
