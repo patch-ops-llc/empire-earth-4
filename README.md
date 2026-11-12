@@ -34,7 +34,9 @@ godot --headless --path game --import --build-solutions
 godot --headless --path game --quit-after 600 -- --smoke-test
 ```
 
-The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, gives it a fixed script of four move orders through the session, runs it for 600 ticks, prints one line that starts with `SMOKE_TEST_OK` and quits. It takes about a second. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, gives it a fixed script of orders through the session, runs it to the script's end, prints one line that starts with `SMOKE_TEST_OK` and quits. It takes about a second. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+
+The script is made of parts that run one after another, one for each kind of order the view can give: `game/scripts/SmokeTest.cs` lists them, and the line's `tick` and `orders` say how many ticks and orders they came to.
 
 The line carries two hashes. `content_hash` is the hash of the data files as the game read them, and it must equal the one `datacheck` prints. `state_hash` is the hash of the match's state after the script, and it must be the same on every system. `ci.yml` checks the first. `export.yml` checks both for every build it makes, and an exported build takes the same argument:
 
@@ -102,6 +104,10 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | Clear the selection | Left click on the ground |
 | Send the selected units somewhere | Right click on the ground |
 | Show or hide the overlay | F3 |
+| Attack a unit of the other player | Right click on it |
+| Go somewhere and fight what is met on the way | Hold Ctrl and right click on the place |
+| Stop | X, or the Stop button in the selection panel |
+| Development aid, while `debug.spawn` is on in `rules.jsonc`: make units at the pointer | G for your own. Alone, H for the other player's. The orange panel at the left edge chooses which and how many |
 
 ## Test builds
 
@@ -121,7 +127,7 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 
 | Path | Contents |
 | --- | --- |
-| `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) `Serialization/` (the byte format, the encoding of a command, and snapshots) and `Economy/` (stockpiles, territories, deposits and Generators, workers and their places, income and supply). |
+| `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) `Serialization/` (the byte format, the encoding of a command, and snapshots), `Economy/` (stockpiles, territories, deposits and Generators, workers and their places, income and supply) and `Combat/` (hit points, attacks, shots, target picking, the four orders and death). |
 | `src/Net/` | The lockstep network session. A plain .NET library that references only `Sim`: `Protocol/` (the messages and their bytes), `Session/` (the host, the client, and the two in one process for single-player), `Transport/` (the connection interface, and the loopback used by single-player and tests), `Lobby/` (a hosted match and a joining player: the description of the match, the version and data check, the draw of starts) and `Files/` (the replay a session writes while it runs). |
 | `src/Net.Udp/` | The real network under the session: a connection over UDP, a listener for the host and a connector for a client. A plain .NET library that references `Net` and the LiteNetLib package. Sockets, the package and the thread that keeps connections alive live here and nowhere else. |
 | `src/Tools/` | The console tools, as one program: `dotnet run --project src/Tools -- <tool> [arguments]`. Each tool is a folder. So far: `datacheck` checks a data folder, `balance-report` prints what the tech rules make of tier mixes, `replay` runs recorded matches again and checks their state hashes, and `desync-diff` takes the replays and snapshots two players wrote when their match came apart and names the tick and the values that differ. |
