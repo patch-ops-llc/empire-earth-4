@@ -485,7 +485,11 @@ public sealed class PlayerView
         events.Clear();
         foreach (var happened in _match.Simulation.Events)
         {
-            if (Knows(in happened))
+            if (happened.Player != Player && IsKnownToEveryone(happened.Kind))
+            {
+                events.Add(ResearchEvent.AsAnnounced(in happened));
+            }
+            else if (Knows(in happened))
             {
                 events.Add(happened);
             }
@@ -494,7 +498,15 @@ public sealed class PlayerView
 
     /// <summary>True when the player may know of an event: see <see cref="CollectEvents"/>.</summary>
     public bool Knows(in SimEvent happened) =>
-        happened.Player == Player || (IsSeenWhereItHappens(happened.Kind) && SeesWhereItHappened(in happened));
+        happened.Player == Player
+        || IsKnownToEveryone(happened.Kind)
+        || (IsSeenWhereItHappens(happened.Kind) && SeesWhereItHappened(in happened));
+
+    /// <summary>
+    /// True for the kinds of event that every player is told of, wherever they happen: a change
+    /// of epoch, which is announced to all players (design 1.4).
+    /// </summary>
+    public static bool IsKnownToEveryone(SimEventKind kind) => kind is SimEventKind.EpochChanged;
 
     /// <summary>
     /// True for the kinds of event that anyone sees who sees the tile they happen on. Every other

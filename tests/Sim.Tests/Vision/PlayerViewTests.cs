@@ -630,11 +630,11 @@ public class PlayerViewTests
     }
 
     /// <summary>
-    /// Every kind of event is on one of two lists. A piece that adds a kind adds it to one of them
-    /// here, and so decides who may know of it.
+    /// Every kind of event is on one of three lists. A piece that adds a kind adds it to one of
+    /// them here, and so decides who may know of it.
     /// </summary>
     [Fact]
-    public void EveryKindOfEventIsEitherSeenWhereItHappensOrKnownToItsPlayerAlone()
+    public void EveryKindOfEventIsSeenWhereItHappensOrKnownToItsPlayerAloneOrKnownToEveryone()
     {
         SimEventKind[] seenWhereItHappens =
         [
@@ -654,9 +654,11 @@ public class PlayerViewTests
             SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded,
             SimEventKind.RallyPointSet, SimEventKind.TrainOrdered, SimEventKind.TrainCancelled, SimEventKind.TrainRefunded,
             SimEventKind.TrainRefused, SimEventKind.UnitTrained, SimEventKind.ReservesRefunded,
-            SimEventKind.EpochChanged, SimEventKind.ResearchCancelled, SimEventKind.ResearchFinished, SimEventKind.ResearchLost,
-            SimEventKind.ResearchStarted,
+            SimEventKind.ResearchCancelled, SimEventKind.ResearchFinished, SimEventKind.ResearchLost, SimEventKind.ResearchStarted,
         ];
+
+        // A change of epoch is announced to all players (design 1.4).
+        SimEventKind[] knownToEveryone = [SimEventKind.EpochChanged];
 
         foreach (var kind in Enum.GetValues<SimEventKind>())
         {
@@ -665,11 +667,33 @@ public class PlayerViewTests
                 continue;
             }
 
-            Assert.True(
-                seenWhereItHappens.Contains(kind) != knownToItsPlayerAlone.Contains(kind),
-                $"{kind} must be on exactly one of the two lists of this test.");
+            var lists = (seenWhereItHappens.Contains(kind) ? 1 : 0) + (knownToItsPlayerAlone.Contains(kind) ? 1 : 0) + (knownToEveryone.Contains(kind) ? 1 : 0);
+            Assert.True(lists == 1, $"{kind} must be on exactly one of the three lists of this test.");
             Assert.Equal(seenWhereItHappens.Contains(kind), PlayerView.IsSeenWhereItHappens(kind));
+            Assert.Equal(knownToEveryone.Contains(kind), PlayerView.IsKnownToEveryone(kind));
         }
+    }
+
+    [Fact]
+    public void AChangeOfEpochIsKnownToEveryoneWithoutTheResearchThatRaisedIt()
+    {
+        var scene = new Scene();
+        var events = scene.Match.Simulation.Events;
+        const long TrackTierEpoch = 3 + (4L << 16) + (2L << 32);
+        events.Add(SimEventKind.EpochChanged, 1, amount: TrackTierEpoch);
+        events.Add(SimEventKind.ResearchFinished, 1, amount: TrackTierEpoch);
+        var known = new List<SimEvent>();
+
+        // Player 2 has nothing on the map and sees nothing: it is told of the epoch all the same, and of that alone.
+        scene.Views[2].CollectEvents(known);
+        var told = Assert.Single(known);
+        Assert.True(Sim.Research.ResearchEvent.TryRead(in told, out var announced));
+        Assert.Equal((SimEventKind.EpochChanged, 1, 2, 0, 0), (announced.Kind, announced.Player, announced.Epoch, announced.Track, announced.Tier));
+
+        // The player whose epoch it is knows both, whole.
+        scene.Views[1].CollectEvents(known);
+        Assert.Equal(2, known.Count);
+        Assert.All(known, happened => Assert.Equal(TrackTierEpoch, happened.Amount));
     }
 
     [Fact]
