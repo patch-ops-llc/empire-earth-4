@@ -57,6 +57,7 @@ public sealed class AiPlayer
     private readonly AiIntel _intel;
     private readonly AiResponses _responses;
     private readonly AiScout _scout;
+    private readonly AiWay _way;
     private readonly StructureDef? _generator;
     private readonly StructureDef? _academy;
     private readonly StructureDef? _outpost;
@@ -92,6 +93,7 @@ public sealed class AiPlayer
         _explorer = new AiExplorer(_sight, _search);
         _fight = new AiFight(_sight, _search, personality.Fight, _intel, _responses);
         _scout = new AiScout(_sight, personality.Scouting);
+        _way = new AiWay(_sight);
 
         // What each structure is for is in its file, so none is named here.
         var start = match.Data.StartStructure;
@@ -127,6 +129,8 @@ public sealed class AiPlayer
 
     /// <summary>Its scout, for the same.</summary>
     internal AiScout Scout => _scout;
+
+    internal AiWay Way => _way;
 
     /// <summary>What it remembers of the enemy, for the same.</summary>
     internal AiIntel Intel => _intel;
@@ -183,6 +187,7 @@ public sealed class AiPlayer
         // The scout is chosen before the army is sorted, so that no force takes it along.
         _scout.Think(_fight, hasMuster, musterX, musterY, commands);
         _fight.Think(hasMuster, musterX, musterY, _army.IsAtSupplyCap, commands);
+        _way.Think(_pace.Interval, commands, first);
 
         // The workers are divided last, when the budget knows every purchase of the round, and
         // their orders go first. An order to build is taken by the nearest of the workers, which

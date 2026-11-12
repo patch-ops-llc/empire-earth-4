@@ -3,6 +3,7 @@ using Sim.Construction;
 using Sim.Core;
 using Sim.Data;
 using Sim.Economy;
+using Sim.Movement;
 using Sim.Numerics;
 using Sim.Setup;
 using Sim.Tech;
@@ -31,7 +32,16 @@ internal readonly record struct OwnBuildOrder(int Type, int X, int Y, int Size);
 /// <param name="Chassis">Its chassis, as the index in the roster.</param>
 /// <param name="Order">The order it is on.</param>
 /// <param name="Target">What it is attacking, or <see cref="EntityId.None"/>.</param>
-internal readonly record struct OwnFighter(EntityId Entity, FixedVector2 Position, int Chassis, UnitOrder Order, EntityId Target);
+/// <param name="IsBlocked">True while it has somewhere to go and stands still because an enemy unit is in its way (design 2.4).</param>
+/// <param name="Destination">Where it is walking to. Where it stands when it is not walking.</param>
+internal readonly record struct OwnFighter(
+    EntityId Entity,
+    FixedVector2 Position,
+    int Chassis,
+    UnitOrder Order,
+    EntityId Target,
+    bool IsBlocked = false,
+    FixedVector2 Destination = default);
 
 /// <summary>
 /// A deposit the player knows of, or one of its own Generators.
@@ -226,7 +236,15 @@ internal sealed class AiSight
             }
             else if (unit.Chassis != SeenUnit.NoChassis && _view.TryGetOwnOrder(unit.Entity, out var combatant))
             {
-                Fighters.Add(new OwnFighter(unit.Entity, unit.Position, unit.Chassis, combatant.Order, combatant.Target));
+                var walks = _view.TryGetOwnWalk(unit.Entity, out var walk) && walk.State != MoveState.Idle;
+                Fighters.Add(new OwnFighter(
+                    unit.Entity,
+                    unit.Position,
+                    unit.Chassis,
+                    combatant.Order,
+                    combatant.Target,
+                    walks && walk.Waiting,
+                    walks ? walk.Destination : unit.Position));
             }
         }
 
