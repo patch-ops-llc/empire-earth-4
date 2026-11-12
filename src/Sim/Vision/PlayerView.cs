@@ -473,11 +473,16 @@ public sealed class PlayerView
     /// structure whose hit points ran out is reported by a death as well, which goes by the tile
     /// under its center like any other. A hit on one of the player's
     /// own is on the tile that unit stands on, which the unit sees itself from the first time
-    /// sight is worked out after it appeared. Every other kind is known to its player alone, so a kind
+    /// sight is worked out after it appeared. A change of epoch is announced to all players
+    /// (design 1.4), so every player knows of every player's, wherever it stands
+    /// (<see cref="IsKnownToEveryone"/>). Every other kind is known to its player alone, so a kind
     /// that others should see when it happens in their sight is added to
     /// <see cref="IsSeenWhereItHappens"/>. An event is handed over whole: it may name an entity
     /// the player does not see, such as the unit that fired from unseen ground, and the view
-    /// answers nothing about that entity.
+    /// answers nothing about that entity. The one exception is another player's change of epoch,
+    /// which is handed over with the player and the epoch and without the track and the tier of
+    /// the research that raised it (<see cref="ResearchEvent.AsAnnounced"/>): those are learned
+    /// by scouting alone.
     /// </remarks>
     public void CollectEvents(List<SimEvent> events)
     {
@@ -485,16 +490,32 @@ public sealed class PlayerView
         events.Clear();
         foreach (var happened in _match.Simulation.Events)
         {
-            if (Knows(in happened))
+            if (happened.Player != Player && IsKnownToEveryone(happened.Kind))
+            {
+                events.Add(ResearchEvent.AsAnnounced(in happened));
+            }
+            else if (Knows(in happened))
             {
                 events.Add(happened);
             }
         }
     }
 
-    /// <summary>True when the player may know of an event: see <see cref="CollectEvents"/>.</summary>
+    /// <summary>
+    /// True when the player may know of an event: see <see cref="CollectEvents"/>. For a kind
+    /// that everyone is told of, this says that the player knows it happened, not that it may
+    /// have the event whole: <see cref="CollectEvents"/> hands another player's over as announced.
+    /// </summary>
     public bool Knows(in SimEvent happened) =>
-        happened.Player == Player || (IsSeenWhereItHappens(happened.Kind) && SeesWhereItHappened(in happened));
+        happened.Player == Player
+        || IsKnownToEveryone(happened.Kind)
+        || (IsSeenWhereItHappens(happened.Kind) && SeesWhereItHappened(in happened));
+
+    /// <summary>
+    /// True for the kinds of event that every player is told of, wherever they happen: a change
+    /// of epoch, which is announced to all players (design 1.4).
+    /// </summary>
+    public static bool IsKnownToEveryone(SimEventKind kind) => kind is SimEventKind.EpochChanged;
 
     /// <summary>
     /// True for the kinds of event that anyone sees who sees the tile they happen on. Every other

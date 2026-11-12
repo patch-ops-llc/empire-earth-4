@@ -630,11 +630,11 @@ public class PlayerViewTests
     }
 
     /// <summary>
-    /// Every kind of event is on one of two lists. A piece that adds a kind adds it to one of them
-    /// here, and so decides who may know of it.
+    /// Every kind of event is on one of three lists. A piece that adds a kind adds it to one of
+    /// them here, and so decides who may know of it.
     /// </summary>
     [Fact]
-    public void EveryKindOfEventIsEitherSeenWhereItHappensOrKnownToItsPlayerAlone()
+    public void EveryKindOfEventIsSeenWhereItHappensOrKnownToItsPlayerAloneOrKnownToEveryone()
     {
         SimEventKind[] seenWhereItHappens =
         [
@@ -648,15 +648,18 @@ public class PlayerViewTests
         ];
 
         // A queue, what comes out of it, its rally point and a stockpile are their owner's alone,
-        // and so is what is paid into one.
+        // and so is what is paid into one. So is a research: which track a player raises is
+        // learned by scouting (design 1.4).
         SimEventKind[] knownToItsPlayerAlone =
         [
             SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded,
             SimEventKind.RallyPointSet, SimEventKind.TrainOrdered, SimEventKind.TrainCancelled, SimEventKind.TrainRefunded,
             SimEventKind.TrainRefused, SimEventKind.UnitTrained, SimEventKind.ReservesRefunded,
-            SimEventKind.EpochChanged, SimEventKind.ResearchCancelled, SimEventKind.ResearchFinished, SimEventKind.ResearchLost,
-            SimEventKind.ResearchStarted,
+            SimEventKind.ResearchCancelled, SimEventKind.ResearchFinished, SimEventKind.ResearchLost, SimEventKind.ResearchStarted,
         ];
+
+        // Design 1.4: the epoch "is announced to all players when it changes".
+        SimEventKind[] knownToEveryone = [SimEventKind.EpochChanged];
 
         foreach (var kind in Enum.GetValues<SimEventKind>())
         {
@@ -665,11 +668,45 @@ public class PlayerViewTests
                 continue;
             }
 
-            Assert.True(
-                seenWhereItHappens.Contains(kind) != knownToItsPlayerAlone.Contains(kind),
-                $"{kind} must be on exactly one of the two lists of this test.");
+            var lists = (seenWhereItHappens.Contains(kind) ? 1 : 0) + (knownToItsPlayerAlone.Contains(kind) ? 1 : 0) + (knownToEveryone.Contains(kind) ? 1 : 0);
+            Assert.True(lists == 1, $"{kind} must be on exactly one of the three lists of this test.");
             Assert.Equal(seenWhereItHappens.Contains(kind), PlayerView.IsSeenWhereItHappens(kind));
+            Assert.Equal(knownToEveryone.Contains(kind), PlayerView.IsKnownToEveryone(kind));
         }
+    }
+
+    /// <summary>
+    /// Design 1.4 and 3.2: a change of epoch is announced to all players, and tells them the
+    /// breadth of that player's research and nothing of where it is. So a player who sees
+    /// nothing is told who reached which epoch, without the track and the tier of the research
+    /// that raised it, and is not told of that research.
+    /// </summary>
+    [Fact]
+    public void AChangeOfEpochIsKnownToEveryoneWithoutTheResearchThatRaisedIt()
+    {
+        var scene = new Scene();
+        var events = scene.Match.Simulation.Events;
+        const long TrackTierEpoch = 3 + (4L << 16) + (2L << 32);
+        events.Add(SimEventKind.ResearchFinished, 1, amount: TrackTierEpoch);
+        events.Add(SimEventKind.EpochChanged, 1, amount: TrackTierEpoch);
+        var known = new List<SimEvent>();
+
+        // Player 2 has nothing on the map and sees nothing: it is told of the epoch all the same, and of that alone.
+        scene.Views[2].CollectEvents(known);
+        var told = Assert.Single(known);
+        Assert.True(Sim.Research.ResearchEvent.TryRead(in told, out var announced));
+        Assert.Equal((SimEventKind.EpochChanged, 1, 2, 0, 0), (announced.Kind, announced.Player, announced.Epoch, announced.Track, announced.Tier));
+        Assert.True(scene.Views[2].Knows(in told));
+        Assert.False(scene.Views[2].Knows(events[0]));
+
+        // So is a player who sees the units of the one whose epoch it is.
+        scene.Views[0].CollectEvents(known);
+        Assert.Equal([told], known);
+
+        // The player whose epoch it is knows both, whole.
+        scene.Views[1].CollectEvents(known);
+        Assert.Equal(2, known.Count);
+        Assert.All(known, happened => Assert.Equal(TrackTierEpoch, happened.Amount));
     }
 
     [Fact]
