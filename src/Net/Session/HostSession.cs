@@ -24,6 +24,12 @@ namespace Net;
 /// whose bundles take less than the head start to arrive never has to wait for one.
 /// </para>
 /// <para>
+/// The pace of the match is the host's alone (<see cref="SetPaused"/>, <see cref="SetTickInterval"/>).
+/// Paused, it issues no bundle, so no tick runs anywhere; commands that reach it meanwhile wait
+/// and run when the match goes on. The speed is the time between two bundles. Every client is
+/// told of both, and neither is anything the simulation knows of.
+/// </para>
+/// <para>
 /// It reads no clock and uses no thread. The caller says how much time has passed with
 /// <see cref="Advance"/>.
 /// </para>
@@ -44,6 +50,7 @@ public sealed class HostSession
         Options.Validate();
         _peers = new Peer?[Options.PlayerCount];
         NextTick = Options.FirstTick;
+        TickInterval = Options.TickInterval;
     }
 
     /// <summary>A client finished joining its seat.</summary>
@@ -64,6 +71,12 @@ public sealed class HostSession
 
     /// <summary>The next tick the host issues a bundle for. Every tick below it is final.</summary>
     public int NextTick { get; private set; }
+
+    /// <summary>The time between two bundles now: <see cref="HostOptions.TickInterval"/> until <see cref="SetTickInterval"/> changes it.</summary>
+    public TimeSpan TickInterval { get; private set; }
+
+    /// <summary>True while the host holds the match: no bundle is issued until it goes on.</summary>
+    public bool IsPaused { get; private set; }
 
     /// <summary>How the session ended, once it has.</summary>
     public SessionEndInfo? EndInfo { get; private set; }
@@ -179,7 +192,7 @@ public sealed class HostSession
         CommandDelay = Options.CommandDelay ?? ChooseCommandDelay();
         Phase = SessionPhase.Running;
         _accumulator = TimeSpan.Zero;
-        Broadcast(new MatchStart(Options.FirstTick, CommandDelay, Options.HashInterval, Options.TickInterval));
+        Broadcast(new MatchStart(Options.FirstTick, CommandDelay, Options.HashInterval, TickInterval));
         for (var i = 1; i < CommandDelay; i++)
         {
             IssueBundle();
@@ -213,6 +226,57 @@ public sealed class HostSession
     }
 
     /// <summary>
+    /// Pauses the running match, or lets it go on, and tells every client. While it is paused no
+    /// bundle is issued and no time is owed for the pause afterwards; commands that arrive wait
+    /// for the first bundle after it. Returns false, having done nothing, when the match is not
+    /// running.
+    /// </summary>
+    public bool SetPaused(bool paused)
+    {
+        if (Phase != SessionPhase.Running)
+        {
+            return false;
+        }
+
+        if (IsPaused != paused)
+        {
+            IsPaused = paused;
+            _accumulator = TimeSpan.Zero;
+            Broadcast(new PauseNotice(paused));
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Sets the speed of the running match, as the time between two ticks, and tells every client.
+    /// The command delay stays what it was in ticks, so at a higher speed the head start is
+    /// shorter in time, and a client far away may wait for a bundle now and then. Returns false,
+    /// having done nothing, when the match is not running.
+    /// </summary>
+    public bool SetTickInterval(TimeSpan interval)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(interval, TimeSpan.Zero);
+        if (Phase != SessionPhase.Running)
+        {
+            return false;
+        }
+
+        if (TickInterval != interval)
+        {
+            TickInterval = interval;
+            if (_accumulator > interval)
+            {
+                _accumulator = interval;
+            }
+
+            Broadcast(new SpeedNotice(interval));
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Takes in what the clients sent, then lets the given time pass: one bundle is issued for each
     /// tick interval that has gone by.
     /// </summary>
@@ -227,14 +291,14 @@ public sealed class HostSession
 
         ReceiveFromPeers();
 
-        if (Phase == SessionPhase.Running)
+        if (Phase == SessionPhase.Running && !IsPaused)
         {
             // Time the host could not use is not owed. See HostOptions.MaxTicksPerAdvance.
-            var most = SessionClock.Times(Options.TickInterval, Options.MaxTicksPerAdvance);
+            var most = SessionClock.Times(TickInterval, Options.MaxTicksPerAdvance);
             _accumulator = elapsed >= most - _accumulator ? most : _accumulator + elapsed;
-            while (_accumulator >= Options.TickInterval)
+            while (_accumulator >= TickInterval)
             {
-                _accumulator -= Options.TickInterval;
+                _accumulator -= TickInterval;
                 IssueBundle();
             }
 
@@ -249,12 +313,19 @@ public sealed class HostSession
 
     /// <summary>
     /// Ends the session for everyone. A running match ends at <see cref="NextTick"/>: every client
-    /// runs the bundles it was sent and stops in the same state.
+    /// runs the bundles it was sent and stops in the same state. Commands that reached the host
+    /// and have no tick yet get the last ones first, paused or not, so that nothing a player
+    /// ordered before the end is lost: a player who concedes as it leaves has conceded.
     /// </summary>
     public void EndSession()
     {
         if (Phase != SessionPhase.Stopped)
         {
+            while (Phase == SessionPhase.Running && _pending.Count > 0)
+            {
+                IssueBundle();
+            }
+
             var finalTick = Phase == SessionPhase.Running ? NextTick : -1;
             Stop(new SessionEndInfo(SessionEndReason.HostEnded, finalTick));
         }
@@ -490,7 +561,7 @@ public sealed class HostSession
             }
         }
 
-        return remote ? CommandDelayPolicy.FromRoundTrip(longest, Options.TickInterval) : CommandDelayPolicy.SinglePlayer;
+        return remote ? CommandDelayPolicy.FromRoundTrip(longest, TickInterval) : CommandDelayPolicy.SinglePlayer;
     }
 
     /// <summary>Tells a peer why it is out, closes its connection and tells the others.</summary>

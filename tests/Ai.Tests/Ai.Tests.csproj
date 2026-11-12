@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="4.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Ai/Ai.csproj" />
+  </ItemGroup>
+
+  <!-- The scan of a compiled assembly for floating point and System.Random, as the simulation's own tests use it. -->
+  <ItemGroup>
+    <Compile Include="../Sim.Tests/AssemblyScan.cs" Link="Shared/AssemblyScan.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

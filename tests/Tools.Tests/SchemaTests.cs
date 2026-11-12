@@ -11,7 +11,7 @@ public class SchemaTests
 {
     private static readonly JsonDocumentOptions Jsonc = new() { CommentHandling = JsonCommentHandling.Skip };
 
-    private static readonly string[] OneFileOfEachKind = ["tracks.jsonc", "rules.jsonc", "research.jsonc", "resources.jsonc", "accents.jsonc", "lines/x.jsonc", "maps/x.jsonc"];
+    private static readonly string[] OneFileOfEachKind = ["tracks.jsonc", "rules.jsonc", "research.jsonc", "resources.jsonc", "accents.jsonc", "lines/x.jsonc", "structures/x.jsonc", "maps/x.jsonc", "ai/x.jsonc"];
 
     public static TheoryData<string> DataFiles() =>
         [.. new DiskDataFiles(Repository.DataFolder).ListFiles()];
@@ -39,6 +39,9 @@ public class SchemaTests
     [InlineData("rules.jsonc", "\"damage\": \"1.25\"", "\"damage\": 1.25", "$.per_tier.damage: matches none of the allowed forms")]
     [InlineData("rules.jsonc", "\"manufacturing_cost\": \"0.90\"", "\"manufacturing_cost\": \"90%\"", "$.per_step.manufacturing_cost: matches none of the allowed forms")]
     [InlineData("rules.jsonc", "\"capitol\",", "\"capitol\", \"capitol\",", "$.roster.structures: has the same item twice")]
+    [InlineData("rules.jsonc", "\"look_interval_ticks\": 4", "\"look_interval_ticks\": 0", "$.combat.look_interval_ticks: is below 1")]
+    [InlineData("rules.jsonc", "\"fortification\": \"0.5\"", "\"fortification\": 0.5", "$.combat.fortification: matches none of the allowed forms")]
+    [InlineData("rules.jsonc", "\"structure_reach\": \"0.75\"", "\"structure_reach\": \"0.75\", \"reach\": 1", "$.combat: has an unknown key reach")]
     [InlineData("research.jsonc", "\"seconds\": 45", "\"seconds\": 45.5", "$.tiers[0].seconds: matches none of the allowed forms")]
     [InlineData("research.jsonc", "\"tier\": 2", "\"tier\": 1", "$.tiers[0].tier: is below 2")]
     [InlineData("research.jsonc", "\"materials\": 100,", "\"material\": 100,", "$.tiers[0].cost: has an unknown key material")]
@@ -65,10 +68,38 @@ public class SchemaTests
     [InlineData("lines/artillery.jsonc", "\"min_range\": 3", "\"minimum_range\": 3", "$.attack: has an unknown key minimum_range")]
     [InlineData("lines/line_infantry.jsonc", "\"attack\": { \"range\": 6 }", "\"attack\": { \"reach\": 6 }", "$.chassis[3].attack: has an unknown key reach")]
     [InlineData("lines/cavalry_armor.jsonc", "\"cannot_hit\": [\"air\"]", "\"cannot_hit\": [\"air\", \"air\"]", "$.cannot_hit: has the same item twice")]
+    [InlineData("structures/capitol.jsonc", "\"footprint\": 4,", "\"footprint\": 0,", "$.footprint: is below 1")]
+    [InlineData("structures/capitol.jsonc", "\"hp\": 2000,", "\"hp\": 2000.5,", "$.hp: matches none of the allowed forms")]
+    [InlineData("structures/capitol.jsonc", "\"sight\": 10,", "", "$: has no sight")]
+    [InlineData("structures/capitol.jsonc", "\"trains\": [\"worker\"]", "\"trains\": []", "$.trains: has fewer than 1 items")]
+    [InlineData("structures/capitol.jsonc", "\"research_slots\": 1,", "\"research_slot\": 1,", "$: has an unknown key research_slot")]
+    [InlineData("structures/barracks.jsonc", "\"energy\": 0 }", "\"energy\": -1 }", "$.cost.energy: is below 0")]
+    [InlineData("structures/barracks.jsonc", "[\"line_infantry\", \"guard\"]", "[\"guard\", \"guard\"]", "$.trains: has the same item twice")]
+    [InlineData("structures/generator.jsonc", "\"work_site\": \"energy\"", "\"work_site\": \"materials\"", "$.work_site: is not one of the allowed values")]
+    [InlineData("structures/academy.jsonc", "\"max_per_player\": 2", "\"max_per_player\": 0", "$.max_per_player: is below 1")]
+    [InlineData("structures/wall.jsonc", "\"build_seconds\": 10 }", "\"seconds\": 10 }", "$.wall.gate: has an unknown key seconds")]
+    [InlineData("structures/wall.jsonc", "\"gate\": {", "\"door\": {", "$.wall: has no gate")]
+    [InlineData("structures/tower.jsonc", "\"projectile_speed\": 20,", "", "$.attack: has no projectile_speed")]
+    [InlineData("structures/tower.jsonc", "\"range\": 7,", "\"range\": 7, \"min_range\": 2,", "$.attack: has an unknown key min_range")]
+    [InlineData("structures/tower.jsonc", "\"can_hit_all_from_protection\": 5", "\"can_hit_all_from_protection\": 1", "$.attack.can_hit_all_from_protection: is below 2")]
     [InlineData("maps/ridge.jsonc", "\"symmetry\": \"mirror_x\"", "\"symmetry\": \"rotate_180\"", "$.symmetry: is not one of the allowed values")]
     [InlineData("maps/ridge.jsonc", "{ \"x\": 82, \"y\": 46 }", "{ \"x\": 82, \"y\": 46 }, { \"x\": 40, \"y\": 46 }", "$.starts: has more than 2 items")]
     [InlineData("maps/ridge.jsonc", "\"across\": \"y\" },", "\"across\": \"z\" },", "$.markers[0].across: is not one of the allowed values")]
     [InlineData("maps/ridge.jsonc", "FFFFFF", "FFwFFF", "$.terrain[4]: does not match")]
+    [InlineData("ai/swarm.jsonc", "\"expand_at_materials\": 600", "\"expand_at\": 600", "$.economy: has an unknown key expand_at")]
+    [InlineData("ai/swarm.jsonc", "{ \"epoch\": 1, \"workers\": 18 }", "{ \"epoch\": 0, \"workers\": 18 }", "$.economy.workers[0].epoch: is below 1")]
+    [InlineData("ai/swarm.jsonc", "\"manufacturing\": 6", "\"manufacturing\": \"6\"", "$.research.weights.manufacturing: is not of type integer")]
+    [InlineData("ai/elite.jsonc", "\"firepower\": 6", "\"Firepower\": 6", "$.research.weights.Firepower (key): does not match")]
+    [InlineData("ai/elite.jsonc", "{ \"line\": \"artillery\", \"share\": 1 }", "{ \"line\": \"artillery\", \"share\": 0 }", "$.army.lines[1].share: is below 1")]
+    [InlineData("ai/elite.jsonc", "\"name\": \"Elite\",", "", "$: has no name")]
+    [InlineData("ai/swarm.jsonc", "\"every_seconds\": 180", "\"every_seconds\": 180.5", "$.scouting.every_seconds: matches none of the allowed forms")]
+    [InlineData("ai/swarm.jsonc", "\"army_count_ratio\": \"1.5\"", "\"army_count_ratio\": 1.5", "$.scouting.responses[0].sees[0].army_count_ratio: matches none of the allowed forms")]
+    [InlineData("ai/swarm.jsonc", "{ \"track\": \"firepower\", \"tiers\": 1 }", "{ \"track\": \"firepower\" }", "$.scouting.responses[0].does.research: has fewer than 2 keys")]
+    [InlineData("ai/swarm.jsonc", "{ \"track\": \"firepower\", \"tiers\": 1 }", "{ \"track\": \"firepower\", \"tiers\": 1, \"until_accent_level\": 1 }", "$.scouting.responses[0].does.research: has more than 2 keys")]
+    [InlineData("ai/swarm.jsonc", "\"passage\": \"chokepoint\"", "\"passage\": \"ford\"", "$.scouting.responses[0].does.passage: is not one of the allowed values")]
+    [InlineData("ai/elite.jsonc", "{ \"epochs_ahead\": 2 }", "{ }", "$.scouting.responses[3].sees[0]: has fewer than 1 keys")]
+    [InlineData("ai/elite.jsonc", "{ \"catch_up_first\": true }", "{ \"catch_up\": true }", "$.scouting.responses[3].does: has an unknown key catch_up")]
+    [InlineData("ai/elite.jsonc", "{ \"line\": \"artillery\", \"count\": 3 }", "{ \"line\": \"artillery\" }", "$.scouting.responses[1].sees[1].units: has no count")]
     public void ASchemaRejectsTheMistakesAnEditorShouldUnderline(string file, string oldText, string newText, string expectedError)
     {
         var text = File.ReadAllText(Path.Combine(Repository.DataFolder, file));
@@ -111,7 +142,9 @@ public class SchemaTests
             "resources.jsonc" => "resources.schema.json",
             "accents.jsonc" => "accents.schema.json",
             _ when file.StartsWith("lines/", StringComparison.Ordinal) => "line.schema.json",
+            _ when file.StartsWith("structures/", StringComparison.Ordinal) => "structure.schema.json",
             _ when file.StartsWith("maps/", StringComparison.Ordinal) => "map.schema.json",
+            _ when file.StartsWith("ai/", StringComparison.Ordinal) => "ai.schema.json",
             _ => throw new InvalidOperationException($"No schema is known for {file}."),
         };
         return Path.Combine(Repository.SchemasFolder, name);

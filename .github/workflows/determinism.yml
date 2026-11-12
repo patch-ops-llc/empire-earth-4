@@ -119,6 +119,96 @@ jobs:
           overwrite: true
           retention-days: 14
 
+      # Times the simulation on its costliest cases: 200 units through a pass 6 tiles wide, 500
+      # units on the move, 500 separate orders in one tick, a search across a whole map. The
+      # times go into the summary of the run, as a record to compare over time: a time over the
+      # budget fails nothing, because these machines are not the ones the budget is for. What a
+      # scenario shows is the same on every machine, and the step fails when a scenario does not
+      # do it: units that never arrive, or enemies closer than their spacing. Release only: the
+      # times of a build that is not optimized mean nothing.
+      - name: Run the benchmark
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && matrix.configuration == 'Release' }}
+        shell: bash
+        run: |
+          dotnet run --no-build --configuration Release --project src/Tools -- benchmark | tee "$RUNNER_TEMP/benchmark.txt"
+          {
+            echo "### Benchmark on ${{ matrix.system.name }}"
+            echo '```'
+            cat "$RUNNER_TEMP/benchmark.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the benchmark
+        if: ${{ !cancelled() && matrix.configuration == 'Release' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: benchmark-${{ matrix.system.id }}
+          path: ${{ runner.temp }}/benchmark.txt
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 90
+
+  # The balance harness, as a report and never as a gate. It fights the four acceptance battles
+  # of design 3.1, each both ways round, and says for each whether its target was met; then it
+  # plays a match between computer players with nobody watching, both ways round. A target that
+  # is missed fails nothing: the targets are what the numbers in game/data are tuned toward, and
+  # the design expects some to be missed until they are. The job fails only when a report could
+  # not be made, for example because an army of a battle can no longer be built with the data.
+  # What the battles and the matches come to is the same on every system, so one system runs
+  # them; only the times of the match belong to this machine. It runs every night, and with
+  # every pull request that runs this workflow, so a change to the data shows what it does to
+  # the battles before it merges.
+  balance:
+    name: Balance report
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the .NET SDK pinned in global.json
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Build the tools
+        id: build
+        run: dotnet build src/Tools --configuration Release -warnaserror
+
+      - name: Fight the acceptance battles
+        shell: bash
+        run: |
+          dotnet run --no-build --configuration Release --project src/Tools -- battles | tee "$RUNNER_TEMP/battles.txt"
+          {
+            echo "### Acceptance battles (design 3.1)"
+            echo '```'
+            cat "$RUNNER_TEMP/battles.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Play the computer players against each other
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        run: |
+          dotnet run --no-build --configuration Release --project src/Tools -- ai-match | tee "$RUNNER_TEMP/ai-match.txt"
+          {
+            echo "### Computer players against each other"
+            echo '```'
+            cat "$RUNNER_TEMP/ai-match.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: balance-report
+          path: |
+            ${{ runner.temp }}/battles.txt
+            ${{ runner.temp }}/ai-match.txt
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 90
+
   # Each job above has compared its own run with the hashes in the replay files. This one compares
   # the jobs with each other: every system and configuration must have written the same report,
   # so the same replays with the same final hashes. It fails when a job above failed, because then

@@ -23,6 +23,7 @@ public class MessageCodecTests
     [
         "JoinRequest", "JoinAccept", "ReadyNotice", "Ping", "Pong", "MatchStart", "CommandRequest",
         "TickBundle", "empty TickBundle", "HashReport", "PeerLeft", "SessionEnd", "MatchNotice", "LeaveNotice",
+        "PauseNotice", "PauseNotice that ends a pause", "SpeedNotice",
     ];
 
     [Theory]
@@ -86,6 +87,9 @@ public class MessageCodecTests
         Assert.Equal("0B 01 FFFFFFFF FFFFFFFF", Hex(new SessionEnd(SessionEndReason.HostEnded, -1, -1), 1, 1, 4, 4));
         Assert.Equal("0D 07", Hex(new LeaveNotice(SessionEndReason.Left), 1, 1));
         Assert.Equal("0D 08", Hex(new LeaveNotice(SessionEndReason.SetupMismatch), 1, 1));
+        Assert.Equal("0E 01", Hex(new PauseNotice(true), 1, 1));
+        Assert.Equal("0E 00", Hex(new PauseNotice(false), 1, 1));
+        Assert.Equal("0F 48E8010000000000", Hex(new SpeedNotice(TimeSpan.FromMilliseconds(12.5)), 1, 8));
 
         // Around commands, which are laid out by the simulation's one encoding of them.
         Assert.Equal([7, .. Bytes(Full)], MessageCodec.Encode(new CommandRequest(Full)));
@@ -301,6 +305,9 @@ public class MessageCodecTests
         "SessionEnd" => new SessionEnd(SessionEndReason.Desync, 500, 480),
         "MatchNotice" => new MatchNotice(TestData.Description()),
         "LeaveNotice" => new LeaveNotice(SessionEndReason.SetupMismatch),
+        "PauseNotice" => new PauseNotice(true),
+        "PauseNotice that ends a pause" => new PauseNotice(false),
+        "SpeedNotice" => new SpeedNotice(TimeSpan.FromMilliseconds(25)),
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 
