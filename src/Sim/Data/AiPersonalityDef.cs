@@ -30,6 +30,22 @@ public sealed record AiPersonalityDef(
     IReadOnlyList<AiLineShare> Lines,
     AiFightDef Fight)
 {
+    /// <summary>
+    /// A personality with no fight block, <see cref="AiFightDef.None"/>: it never sends its army
+    /// out and never raids. For code that makes a personality of its own; a personality file
+    /// must have the block.
+    /// </summary>
+    public AiPersonalityDef(
+        string id,
+        string name,
+        IReadOnlyList<AiWorkerTarget> workerTargets,
+        int expandAtMaterials,
+        IReadOnlyList<int> trackWeights,
+        IReadOnlyList<AiLineShare> lines)
+        : this(id, name, workerTargets, expandAtMaterials, trackWeights, lines, AiFightDef.None)
+    {
+    }
+
     /// <summary>The workers it keeps in an epoch: the count of the last entry at or below it.</summary>
     public int WorkersAt(int epoch)
     {
@@ -97,6 +113,16 @@ public sealed record AiFightDef(
     int RaidParty,
     int ReactionTicks)
 {
+    /// <summary>
+    /// No fight block: a personality that never sends its army out and never raids. Its units
+    /// still defend its structures. No personality file gives it, since the loader asks for a
+    /// raid party of at least one unit.
+    /// </summary>
+    public static AiFightDef None { get; } = new(DataNumber.FromInteger(1), 0, DataNumber.FromInteger(1), 1, MarkerKind.OpenField, 0, 0, 0);
+
+    /// <summary>True for <see cref="None"/>.</summary>
+    public bool IsNone => this == None;
+
     /// <summary>True when an army worth <paramref name="own"/> is enough to attack one worth <paramref name="enemy"/>.</summary>
     public bool IsEnoughToAttack(long own, long enemy) => own * Pow10(AttackRatio.Scale) >= AttackRatio.Unscaled * enemy;
 

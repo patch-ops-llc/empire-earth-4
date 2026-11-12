@@ -72,6 +72,34 @@ public class AiFightTests
         Assert.Empty(fixture.Commands);
     }
 
+    /// <summary>
+    /// A personality made in code without a fight block has <see cref="AiFightDef.None"/>: its
+    /// army stays at home whatever it is worth and at its supply cap, and no raid leaves.
+    /// </summary>
+    [Fact]
+    public void WithNoFightBlockItNeitherSetsOutNorRaids()
+    {
+        var personality = new AiPersonalityDef("plain", "Plain", [new AiWorkerTarget(1, 6)], 600, [.. GameFiles.Data.Tracks.Select(_ => 1)], []);
+        Assert.True(personality.Fight.IsNone);
+        Assert.False(AiFixture.Fight().IsNone);
+
+        var (fixture, fight) = Make(personality.Fight);
+        fixture.SpawnRow(AiFixture.Player, "peltast", 12, HomeX - 6, HomeY + 2);
+        fixture.SpawnRow(AiFixture.Player, "peltast", 8, HomeX - 6, HomeY + 3);
+
+        for (var round = 0; round < 3; round++)
+        {
+            Round(fixture, fight, atSupplyCap: round > 0);
+
+            Assert.Equal(FightPhase.Gather, fight.Phase);
+            Assert.Equal(RaidPhase.None, fight.Raid.Phase);
+            Assert.Empty(fixture.Commands);
+        }
+
+        Assert.Equal(-1, fight.FirstAttackTick);
+        Assert.Equal(0, fight.Attacks);
+    }
+
     /// <summary>It plays under the fog (design 5.5): an army it has not seen is not in its estimate.</summary>
     [Fact]
     public void ItsEstimateIsOfTheEnemyUnitsItHasSeen()

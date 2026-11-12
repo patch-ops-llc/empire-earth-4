@@ -84,6 +84,7 @@ public class AiTests
     public void HowItFightsIsReadWithEveryValueOfItsFile()
     {
         var fight = DataAssert.Valid(SamplePersonality.Files()).PersonalityOf("raider")!.Fight;
+        Assert.False(fight.IsNone);
 
         Assert.Equal((125, 2), (fight.AttackRatio.Unscaled, fight.AttackRatio.Scale));
         Assert.Equal(300, fight.AssumedEnemyValue);
@@ -92,6 +93,21 @@ public class AiTests
         Assert.Equal(MarkerKind.OpenField, fight.Passage);
         Assert.Equal((CavalryArmor, 3), (fight.RaidLine, fight.RaidParty));
         Assert.Equal(SimInfo.TicksPerSecond / 2, fight.ReactionTicks);
+    }
+
+    /// <summary>
+    /// Code that makes a personality may leave the fight block out, as code written before there
+    /// was one does: it gets the block that means none, which no file can give.
+    /// </summary>
+    [Fact]
+    public void APersonalityMadeWithoutAFightBlockHasTheOneThatMeansNone()
+    {
+        var plain = new AiPersonalityDef("plain", "Plain", [new AiWorkerTarget(1, 6)], 600, [1, 1, 1, 1, 1, 1], []);
+
+        Assert.Same(AiFightDef.None, plain.Fight);
+        Assert.True(plain.Fight.IsNone);
+        Assert.Equal(0, AiFightDef.None.RaidParty);
+        Assert.Equal(plain, new AiPersonalityDef("plain", "Plain", plain.WorkerTargets, 600, plain.TrackWeights, plain.Lines, AiFightDef.None));
     }
 
     /// <summary>Both rules are worked out in whole numbers, and reaching the number of the file is enough.</summary>
