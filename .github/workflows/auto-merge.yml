@@ -87,7 +87,8 @@ jobs:
       # To merge.
       contents: write
       pull-requests: write
-      # To start the workflows of START_ON_MAIN after a merge, and to read the runs of a commit.
+      # To start the workflows of START_ON_MAIN and BUILD_ON_MAIN, and to read the runs of a
+      # commit.
       actions: write
     env:
       GH_TOKEN: ${{ github.token }}
@@ -100,6 +101,11 @@ jobs:
       # So the workflows that do are started here, after each merge. Each needs a
       # workflow_dispatch trigger. A workflow that gains a push trigger for main belongs here.
       START_ON_MAIN: determinism.yml
+      # Started once at the end of a run that merged something, on main as the last merge left
+      # it: the Windows and macOS builds, so that there is always a build of the newest main to
+      # download. export.yml cancels its older run on main when a newer one starts, so merges
+      # that land close together end in one build and not in a queue of them.
+      BUILD_ON_MAIN: export.yml
       DRY_RUN: ${{ inputs.dry_run && 'yes' || '' }}
     steps:
       - name: Merge every pull request that is ready
@@ -108,6 +114,19 @@ jobs:
           set -euo pipefail
 
           note() { echo "- #$number $*" | tee -a "$GITHUB_STEP_SUMMARY"; }
+
+          # Runs when the script ends, also when it ends early, so that a merge is never left
+          # without its build.
+          merged=""
+          start_builds() {
+            if [ -n "$merged" ]; then
+              for workflow in $BUILD_ON_MAIN; do
+                gh workflow run "$workflow" --ref main
+                echo "Started $workflow on main." | tee -a "$GITHUB_STEP_SUMMARY"
+              done
+            fi
+          }
+          trap start_builds EXIT
 
           numbers=$(gh pr list --state open --base main --limit 200 --json number --jq 'sort_by(.number)[].number')
           for number in $numbers; do
@@ -175,6 +194,7 @@ jobs:
 
             if gh pr merge "$number" --squash --match-head-commit "$head" --subject "$title (#$number)"; then
               note "is merged at ${head:0:7}."
+              merged=yes
               for workflow in $START_ON_MAIN; do
                 gh workflow run "$workflow" --ref main
               done
