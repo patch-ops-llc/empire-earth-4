@@ -231,15 +231,21 @@ public sealed class Targeting
     /// in and the result rounded once. Hit points stop at zero, and the target stays until the end
     /// of the tick even there.
     /// </summary>
-    public void Hit(EntityId target, Fraction attackerSide, int attackerLine)
+    /// <returns>
+    /// The damage of the hit in thousandths of a hit point, which may be more than the target had
+    /// left. Zero for a target that cannot be damaged.
+    /// </returns>
+    public long Hit(EntityId target, Fraction attackerSide, int attackerLine)
     {
         var index = _health.IndexOf(target);
         if (index < 0)
         {
-            return;
+            return 0;
         }
 
         ref var health = ref _health.ValueAt(index);
-        health.HitPoints = Math.Max(0, checked(health.HitPoints - _rules.DamageOf(attackerSide, attackerLine, LineOf(target))));
+        var damage = _rules.DamageOf(attackerSide, attackerLine, LineOf(target));
+        health.HitPoints = Math.Max(0, checked(health.HitPoints - damage));
+        return damage;
     }
 }

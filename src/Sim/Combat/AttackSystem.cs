@@ -15,9 +15,11 @@ namespace Sim.Combat;
 /// stands, and it has not moved in this tick. Then it waits its attack interval. A melee hit lands
 /// in the tick it is made; a ranged attack fires a <see cref="Shot"/>. A unit that comes into reach
 /// while walking is stopped, and so attacks in the next tick at the earliest. Turning takes no
-/// time, and a unit may walk again in the tick after an attack. A melee unit that stands closer
-/// than their spacing to a unit of its own side that is fighting has no room in the rank and does
-/// not attack (<see cref="Fighters.HasNoRoom"/>): only the front rank of a melee block fights.
+/// time, and a unit may walk again in the tick after an attack. A melee hit is reported as a
+/// <see cref="SimEventKind.MeleeHit"/> and a shot as a <see cref="SimEventKind.ShotFired"/>. A melee
+/// unit that stands closer than their spacing to a unit of its own side that is fighting has no
+/// room in the rank and does not attack (<see cref="Fighters.HasNoRoom"/>): only the front rank
+/// of a melee block fights.
 /// </para>
 /// <para>
 /// <b>Nothing between enemies depends on the order of the units.</b> A unit decides from positions,
@@ -54,6 +56,7 @@ public sealed class AttackSystem : ISystem
     private readonly Targeting _targeting;
     private readonly Approach _approach;
     private readonly Fighters _fighters;
+    private readonly SimEventList _events;
 
     public AttackSystem(
         ComponentStore<Body> bodies,
@@ -62,7 +65,8 @@ public sealed class AttackSystem : ISystem
         ComponentStore<Shot> shots,
         Targeting targeting,
         Approach approach,
-        Fighters fighters)
+        Fighters fighters,
+        SimEventList events)
     {
         ArgumentNullException.ThrowIfNull(bodies);
         ArgumentNullException.ThrowIfNull(movers);
@@ -71,6 +75,7 @@ public sealed class AttackSystem : ISystem
         ArgumentNullException.ThrowIfNull(targeting);
         ArgumentNullException.ThrowIfNull(approach);
         ArgumentNullException.ThrowIfNull(fighters);
+        ArgumentNullException.ThrowIfNull(events);
         _bodies = bodies;
         _movers = movers;
         _combatants = combatants;
@@ -78,6 +83,7 @@ public sealed class AttackSystem : ISystem
         _targeting = targeting;
         _approach = approach;
         _fighters = fighters;
+        _events = events;
     }
 
     public void Run(World world)
@@ -289,7 +295,8 @@ public sealed class AttackSystem : ISystem
 
             if (profile.Melee)
             {
-                _targeting.Hit(unit.Target, profile.Damage, profile.Line);
+                var damage = _targeting.Hit(unit.Target, profile.Damage, profile.Line);
+                _events.Add(SimEventKind.MeleeHit, turn.Body.Owner, unit.Target, turn.Entity, target.Position, damage);
             }
             else
             {
@@ -304,6 +311,7 @@ public sealed class AttackSystem : ISystem
                     Line = profile.Line,
                     Firepower = profile.Firepower,
                 });
+                _events.Add(SimEventKind.ShotFired, turn.Body.Owner, shot, turn.Entity, position);
             }
 
             unit.Wait += profile.IntervalTicks;

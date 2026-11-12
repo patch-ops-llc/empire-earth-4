@@ -95,6 +95,7 @@ A `Command` is the only way anything outside the simulation changes it. It is im
 - Whoever orders commands (the host, the local session, a replay) schedules each for a tick with `Simulation.Commands.Enqueue(tick, command)`. Commands for one tick run in the order they were queued, so that order must be the same on every machine. Scheduling a command for a tick that has already run throws.
 - Each command type has one `ICommandHandler`. It checks the command against the world as it is when the command runs (ownership, affordability, placement) and returns `false`, having changed nothing, if the command is not valid. The command is then dropped, on every machine alike. A type with no handler is dropped too.
 - The queue is input, not state. It is not in the state hash, because peers may hold different amounts of the future when they compare hashes.
+- One command is not an order of the game: `DebugSpawn`, the development spawn, makes one unit of a chassis from nothing for the player who sends it, at the command's point. The match setup gives it a handler only while the rules have `debug.spawn` on; otherwise it is dropped like any type without a handler. The switch is data, so every machine of a match has the same one, and it is part of the content hash. It is on in `tests/golden/data/` for good, because the golden replay with a fight gets its forces through it.
 
 ## Events
 
@@ -105,6 +106,7 @@ Commands go in; events come out. `Simulation.Events` is the list of what happene
 - The tick empties the list before it runs its commands. So after `Tick()` the list holds that tick's events, and a reader that skips a tick has missed them. A handler that refuses its command changes no state, but it may add an event that says why.
 - **The list is output, not state.** It is not walked, so it is in neither the state hash nor a snapshot, and restoring a snapshot empties it. A match runs to the same state whether or not anything is reported: `SimEventTests` runs the toy match with and without a system that reports, and compares every hash and the snapshots.
 - **Nothing in the simulation reads the list.** What a rule needs to know goes in a store. Adding an event draws nothing from the random generator and changes nothing in the world. Enforced by review.
+- Combat reports `MeleeHit`, `ShotFired`, `ShotHit`, `ShotLost` and `Death`, and `OrderRefused` for a move, attack-move, attack or stop order or a development spawn that was not carried out. In a tick they stand as the systems run: the refusals of the commands, then the shots that land or are lost, then the attacks, then the deaths.
 - A piece that reports something adds its kinds to `SimEventKind`, in alphabetical order and without numbers. The number of a kind is recorded nowhere, unlike that of a command type, so it may change from one build to the next and nothing may store one.
 
 ## The state hash
@@ -284,7 +286,7 @@ The `replay` tool does this from the command line, with no Godot:
 ```sh
 dotnet run --project src/Tools -- replay verify <file or folder>... [--data <folder>]
 dotnet run --project src/Tools -- replay update <file or folder>... [--data <folder>]
-dotnet run --project src/Tools -- replay record <file> --map <id> [--data <folder>] [--starts 0,1] [--seed <n>] [--ticks <n>] [--orders <n>]
+dotnet run --project src/Tools -- replay record <file> --map <id> [--data <folder>] [--starts 0,1] [--seed <n>] [--ticks <n>] [--orders <n>] [--script <list>]
 ```
 
 `verify` prints one line for each replay (`ok`, `PARTIAL` for a file that is cut short or has no end record, or `FAILED` with the tick and both hashes) and exits with 1 unless every replay is whole and reproduced. A folder is searched for files that end in `.replay`. The lines name no folder and are the same on every system. `update` and `record` are for golden replays, below. Replays are tooling for developers: the game has no screen for them.
@@ -300,7 +302,8 @@ dotnet run --project src/Tools -- replay verify tests/golden/replays --data test
 `determinism.yml` does the same on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build, and a last job fails unless all eight reports are the same. So the final hash of every golden replay must match the value stored in the file and must be the same on every system.
 
 - **The data is frozen.** `tests/golden/data/` is a copy of `game/data/` from when the replays were last updated, plus the map `switchback`, which was made for these tests: long routes whose searches use up the route budget of a tick. Balance changes in `game/data/` do not touch it, so they do not change the golden replays. The folder must satisfy the loader like any data folder; when the loader comes to need a new file or a new value, add it there in the same pull request, and update the replays if their hashes change.
-- **The matches are scripted.** `replay record` plays a match with orders from a seeded generator (`ScriptedOrders` in `src/Tools/Replay/`): groups and single units sent across the map, every unit ordered separately in one tick, short hops, targets on blocked ground and off the map, research started and cancelled, workers sent to deposits, and commands the simulation must drop. Nobody needs to play a match to record one. A test in `ReplayToolTests` lists what the golden replays must reach between them, such as a unit that waits more than a tick for its route, and fails when they no longer do.
+- **The matches are scripted.** `replay record` plays a match with orders from seeded generators, so nobody needs to play a match to record one. Each kind of order is a script, a class of its own in `src/Tools/Replay/Scripts/`: `movement` (groups and single units sent across the map, every unit ordered separately in one tick, short hops, targets on blocked ground and off the map), `research` (research started and cancelled), `gather` (workers sent to deposits) and `fight` (fighting units made with the development spawn round one field for every player, then attack-move, attack and stop orders for them and the workers). Each also gives commands the simulation must drop or refuse. `--script` lists the scripts of a recording, and without it all are used. In a tick the scripts add their orders in the order of their names.
+- **Each script has its tests.** A class of its own in `tests/Tools.Tests/ReplayScripts/` lists what the script must give and what the golden replays recorded for it must reach, such as a unit that waits more than a tick for its route, and fails when they no longer do. `ReplayToolTests` tests the tool on every replay it finds in the folder and lists none.
 - **When a golden replay fails and the change was not meant to change the rules,** the change has broken determinism with earlier builds: fix the change. `verify` names the first tick whose hash differs, within one second of game time of the cause.
 - **When the change was meant to change the rules** (a system added or moved, a rule or a number in the frozen data changed, a field added to the state), update the stored hashes in the same pull request and say so in its description:
 
@@ -309,17 +312,36 @@ dotnet run --project src/Tools -- replay verify tests/golden/replays --data test
   ```
 
   `update` runs the commands of each replay under the rules as they are now and writes the file again with the new hashes and the content hash of the data folder. The commands stay as they were. If they no longer exercise the game (the units they name no longer exist, say), record a new replay instead.
-- **A milestone that adds rules adds a replay that reaches them:** it adds its commands to `ScriptedOrders`, after the kinds that are there, records a replay with `replay record`, and adds what the replay must reach to the list in `ReplayToolTests`. The replays there now were recorded with:
+- **When `main` has moved under a pull request that changes the replays,** the stored hashes are `main`'s. Take `main` in, take `main`'s copy of every replay `main` has, update, verify, and commit that alone:
 
   ```sh
-  replay record tests/golden/replays/ridge-skirmish.replay --data tests/golden/data --map ridge --starts 0,1 --seed 1 --orders 1 --ticks 3600
-  replay record tests/golden/replays/switchback-crossing.replay --data tests/golden/data --map switchback --starts 1,0 --seed 2 --orders 3 --ticks 6000
-  replay record tests/golden/replays/switchback-three-players.replay --data tests/golden/data --map switchback --starts 0,-,1 --seed 3 --orders 5 --ticks 2410
-  replay record tests/golden/replays/switchback-research.replay --data tests/golden/data --map switchback --starts 1,-,0 --seed 4 --orders 8 --ticks 4800
-  replay record tests/golden/replays/switchback-workers.replay --data tests/golden/data --map switchback --starts 0,1 --seed 5 --orders 13 --ticks 4800
+  git merge origin/main
+  git checkout origin/main -- tests/golden/replays
+  dotnet run --project src/Tools -- replay update tests/golden/replays --data tests/golden/data
+  dotnet run --project src/Tools -- replay verify tests/golden/replays --data tests/golden/data
   ```
 
-  Recording again with the same arguments gives the same file only while `ScriptedOrders` and the rules are unchanged. Each was recorded before `ScriptedOrders` gave the orders of the pieces that came after it, so recording any of them again gives another match: the first three have neither research nor gather orders, the fourth has research, and the fifth has workers at deposits and no research. An existing replay is therefore only ever updated.
+  The second line leaves a replay that only the branch has where it is. A conflict in a `.replay` file is never settled by choosing a side, and an existing replay is never recorded again. No test of a match pins a state hash, so the replays are all there is to refresh: the fight that every system must bring to the same end is `ridge-fight.replay`. Pull requests that change the replays merge one at a time, and each is refreshed like this after the one before it has merged.
+- **A milestone that adds rules adds a replay that reaches them,** in three files of its own, so that it edits nothing that another milestone edits:
+
+  1. A script for its kind of order, in `src/Tools/Replay/Scripts/`: a class that extends `OrderScript`, with `[OrderScript("name")]` and a constructor that takes a `ScriptSetup`. `GatherOrders` is the one to copy. The script keeps a clock of its own and takes its random generator from `ScriptSetup.Generator`, with a number no other script uses, so that adding it changes nothing the other scripts draw. `ScriptedOrders` finds the class by reflection.
+  2. A replay, named for what it holds, recorded with `replay record`.
+  3. A test class in `tests/Tools.Tests/ReplayScripts/` that says what the script must give and what the replay must reach. `GatherScriptTests` is the one to copy.
+
+  Movement and research are the one pair of scripts that share a clock and a generator (`SharedTurns`): research was added by widening movement's draw, before kinds of order had clocks of their own, and replays were recorded with what that gives. Research's kinds are in the draw only when the script `research` is used.
+
+  The replays there now were recorded with:
+
+  ```sh
+  replay record tests/golden/replays/ridge-skirmish.replay --data tests/golden/data --map ridge --starts 0,1 --seed 1 --orders 1 --ticks 3600 --script movement
+  replay record tests/golden/replays/switchback-crossing.replay --data tests/golden/data --map switchback --starts 1,0 --seed 2 --orders 3 --ticks 6000 --script movement
+  replay record tests/golden/replays/switchback-three-players.replay --data tests/golden/data --map switchback --starts 0,-,1 --seed 3 --orders 5 --ticks 2410 --script movement
+  replay record tests/golden/replays/switchback-research.replay --data tests/golden/data --map switchback --starts 1,-,0 --seed 4 --orders 8 --ticks 4800 --script movement,research
+  replay record tests/golden/replays/switchback-workers.replay --data tests/golden/data --map switchback --starts 0,1 --seed 5 --orders 13 --ticks 4800 --script gather,movement
+  replay record tests/golden/replays/ridge-fight.replay --data tests/golden/data --map ridge --starts 0,1 --seed 6 --orders 27 --ticks 4800 --script fight,gather,movement,research
+  ```
+
+  Each of the first five was recorded when the generator had only the kinds of order of its time, before there was a `--script`; the option here names the scripts that draw what the generator drew then. `ridge-fight.replay` was recorded with the option, as written. Recording again with the same arguments gives the same file only while the scripts and the rules are unchanged, because a script reads the match: a short hop starts from where a unit stands, and an order for every entity lists the entities there are. Both have changed since the first four were recorded. An existing replay is therefore only ever updated.
 
 ## Adding a system
 
