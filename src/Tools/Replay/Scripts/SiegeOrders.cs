@@ -1,6 +1,7 @@
 using Sim.Core;
 using Sim.Data;
 using Sim.Numerics;
+using Sim.Outcome;
 
 namespace Tools.Replay.Scripts;
 
@@ -16,6 +17,13 @@ namespace Tools.Replay.Scripts;
 /// of the data for both. Which structures attack and which are walls it reads from the data. With
 /// the script <c>research</c> beside it, the tiers of the players drift apart, which is what the
 /// fortification rule needs.
+/// <para>
+/// A player with no Capitol and no Outpost is out of the match and gives no more orders (design
+/// 5.1), and a siege in which one side can no longer answer reaches little. So a player who is
+/// down to its last one is given another before its turn, with the development placement. It can
+/// still lose both between two of its turns; then the match is decided and only the winner's
+/// orders are carried out.
+/// </para>
 /// </remarks>
 [OrderScript("siege")]
 internal sealed class SiegeOrders : OrderScript
@@ -35,10 +43,12 @@ internal sealed class SiegeOrders : OrderScript
     private readonly List<StructureDef> _towers = [];
     private readonly List<StructureDef> _walls = [];
     private readonly List<StructureDef> _others = [];
+    private readonly StructureDef? _hold;
     private readonly List<EntityId> _ownStructures = [];
     private readonly List<EntityId> _enemyStructures = [];
     private readonly List<EntityId> _enemyWalls = [];
     private readonly List<EntityId> _fighters = [];
+    private int _holds;
     private int _nextTick;
 
     public SiegeOrders(ScriptSetup setup)
@@ -49,6 +59,11 @@ internal sealed class SiegeOrders : OrderScript
         foreach (var structure in Match.Data.Structures)
         {
             (structure.Attack is not null ? _towers : structure.Wall is not null ? _walls : _others).Add(structure);
+            if (ConquestSystem.KeepsInTheMatch(structure) && (_hold is null || structure.Footprint < _hold.Footprint))
+            {
+                // The smallest of them finds room most easily.
+                _hold = structure;
+            }
         }
     }
 
@@ -63,6 +78,12 @@ internal sealed class SiegeOrders : OrderScript
         var player = _random.NextInt(Match.Players.Count);
         var kind = _random.NextInt(100);
         Collect(player);
+        if (_holds < 2 && _hold is not null && _ownStructures.Count > 0)
+        {
+            var beside = CenterOf(Any(_ownStructures));
+            commands.Add(new Command(CommandType.DebugPlace, player, targetX: Near(beside.X, 8), targetY: Near(beside.Y, 8), contentId: _hold.Index));
+        }
+
         if (kind < 24)
         {
             Place(player, commands);
@@ -152,7 +173,8 @@ internal sealed class SiegeOrders : OrderScript
 
     /// <summary>
     /// Sorts what there is for a player: its structures, those of the other players with the
-    /// walls among them apart, and its units that fight.
+    /// walls among them apart, and its units that fight. Counts how many of its structures keep
+    /// it in the match.
     /// </summary>
     private void Collect(int player)
     {
@@ -160,6 +182,7 @@ internal sealed class SiegeOrders : OrderScript
         _enemyStructures.Clear();
         _enemyWalls.Clear();
         _fighters.Clear();
+        _holds = 0;
         var structures = Match.Structures;
         for (var i = 0; i < structures.Count; i++)
         {
@@ -169,14 +192,16 @@ internal sealed class SiegeOrders : OrderScript
                 continue;
             }
 
+            var def = Match.Data.StructureOf(structures.ValueAt(i).Type);
             if (body.Owner == player)
             {
                 _ownStructures.Add(entity);
+                _holds += def is not null && ConquestSystem.KeepsInTheMatch(def) ? 1 : 0;
                 continue;
             }
 
             _enemyStructures.Add(entity);
-            if (Match.Data.StructureOf(structures.ValueAt(i).Type)?.Wall is not null)
+            if (def?.Wall is not null)
             {
                 _enemyWalls.Add(entity);
             }

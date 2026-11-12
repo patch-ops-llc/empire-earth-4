@@ -12,9 +12,9 @@ namespace Sim.Structures;
 /// Puts structures on the map. A structure comes in two steps (design 2.5): it is laid, from
 /// which moment it blocks its tiles and has its full hit points, and it is finished, from which
 /// moment it gives what its file says: a territory, a research slot, a Generator's places, a
-/// Tower's attack.
-/// Construction lays a structure when its worker arrives and finishes it when it has built
-/// itself; the match setup and fixtures do both at once, through <see cref="StructureSetup"/>.
+/// Tower's attack. Construction lays a structure when its worker arrives and finishes it when
+/// it has built itself; the match setup and fixtures do both at once, through
+/// <see cref="StructureSetup"/>.
 /// </summary>
 /// <remarks>
 /// Call these before the first tick, or inside a tick from a system or a command handler, so that

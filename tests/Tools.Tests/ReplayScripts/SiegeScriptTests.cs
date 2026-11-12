@@ -12,6 +12,7 @@ namespace Tools.Tests.ReplayScripts;
 public class SiegeScriptTests
 {
     private const string GoldenReplay = "switchback-siege.replay";
+    private const string SecondGoldenReplay = "ridge-siege.replay";
 
     private static readonly string[] EveryKindOfOrder =
     [
@@ -28,11 +29,42 @@ public class SiegeScriptTests
         "a stop",
     ];
 
+    private static readonly string[] EveryRule =
+    [
+        "a Tower fires at a unit",
+        "a Tower fires at a Tower",
+        "a Tower's shot hits a unit",
+        "a Tower's shot hits a Tower",
+        "a unit killed by a Tower",
+        "a melee hit on a structure",
+        "a shot hits a structure",
+        "a shell hits a structure",
+        "a blast that reaches a structure and a unit",
+        "a hit on a structure with the multiplier of its attacker's line",
+        "a hit on a structure at full damage",
+        "a hit on a structure halved by the fortification rule",
+        "a hit on a wall",
+        "a hit on a Capitol",
+        "a structure destroyed",
+        "a Tower destroyed",
+        "a unit that picked a Tower by itself",
+        "a unit on an attack-move that picked a structure that does not attack",
+    ];
+
+    /// <summary>The rules a match reaches only while both sides place Towers and make units for a long time.</summary>
+    private static readonly string[] NeedsBothSidesForLong =
+    [
+        "a Tower fires at a Tower",
+        "a Tower's shot hits a Tower",
+        "a Tower destroyed",
+        "a blast that reaches a structure and a unit",
+    ];
+
     /// <summary>
     /// The script gives every kind of order it is meant to: here in one long match on each map.
     /// The rarest kind comes about once in 350 ticks, and needs a wall of an enemy to stand.
     /// </summary>
-    [Theory(Skip = TestBuild.SiegeMeetsConquest)]
+    [Theory]
     [InlineData("ridge")]
     [InlineData("switchback")]
     public void TheScriptGivesEveryKindOfItsOrders(string map)
@@ -55,16 +87,50 @@ public class SiegeScriptTests
     }
 
     /// <summary>
-    /// What this recorded match is for: it must reach the rules of structures in combat that a
-    /// change could break. The match has research orders beside the script's own, so that the
-    /// tiers of the two players drift apart and the fortification rule applies to some hits and
-    /// not to others. Every hit on a structure in it is worked out again here, apart from the
+    /// What the first recorded match is for: it must reach the rules of structures in combat
+    /// that a change could break. The match has research orders beside the script's own, so that
+    /// the tiers of the two players drift apart and the fortification rule applies to some hits
+    /// and not to others. Every hit on a structure in it is worked out again here, apart from the
     /// simulation's own sum.
     /// </summary>
-    [Fact(Skip = TestBuild.SiegeMeetsConquest)]
+    /// <remarks>
+    /// It was recorded before a match could be lost. Now its first player loses its only Capitol
+    /// in tick 850 and is out (design 5.1), and what it ordered after that is dropped, so the
+    /// match no longer reaches the four rules of <see cref="NeedsBothSidesForLong"/>. The second
+    /// recorded match reaches them. What this one reaches of conquest is in
+    /// <see cref="ConquestByAttackReplayTests"/>.
+    /// </remarks>
+    [Fact]
     public void ItsGoldenReplayReachesTheRulesItGuards()
     {
-        var replay = ReplayRuns.ReadGolden(GoldenReplay);
+        var seen = WhatItReaches(GoldenReplay);
+
+        AssertReached([.. EveryKindOfOrder, .. EveryRule.Except(NeedsBothSidesForLong)], seen);
+    }
+
+    /// <summary>
+    /// The second recorded match, with the script as it is since a match can be lost: no player
+    /// goes out, both sides give orders to the end, and every rule on the list is reached.
+    /// </summary>
+    [Fact]
+    public void ItsSecondGoldenReplayReachesEveryRuleItGuards()
+    {
+        var replay = ReplayRuns.ReadGolden(SecondGoldenReplay);
+        var seen = WhatItReaches(SecondGoldenReplay);
+
+        AssertReached([.. EveryKindOfOrder, .. EveryRule], seen);
+        var match = ReplayRuns.Start(replay);
+        for (var tick = 0; tick < replay.TickCount; tick++)
+        {
+            match.Simulation.Tick();
+        }
+
+        Assert.All(Enumerable.Range(0, match.Players.Count), player => Assert.True(match.Standings.IsPlaying(player), $"Player {player} is out of the match."));
+    }
+
+    private static HashSet<string> WhatItReaches(string goldenReplay)
+    {
+        var replay = ReplayRuns.ReadGolden(goldenReplay);
         var match = ReplayRuns.Start(replay);
         var due = replay.Commands.ToLookup(entry => entry.Tick, entry => entry.Command);
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -78,28 +144,11 @@ public class SiegeScriptTests
             seen.UnionWith(WhatTheTickDid(match, before));
         }
 
-        string[] expected =
-        [
-            .. EveryKindOfOrder,
-            "a Tower fires at a unit",
-            "a Tower fires at a Tower",
-            "a Tower's shot hits a unit",
-            "a Tower's shot hits a Tower",
-            "a unit killed by a Tower",
-            "a melee hit on a structure",
-            "a shot hits a structure",
-            "a shell hits a structure",
-            "a blast that reaches a structure and a unit",
-            "a hit on a structure with the multiplier of its attacker's line",
-            "a hit on a structure at full damage",
-            "a hit on a structure halved by the fortification rule",
-            "a hit on a wall",
-            "a hit on a Capitol",
-            "a structure destroyed",
-            "a Tower destroyed",
-            "a unit that picked a Tower by itself",
-            "a unit on an attack-move that picked a structure that does not attack",
-        ];
+        return seen;
+    }
+
+    private static void AssertReached(string[] expected, HashSet<string> seen)
+    {
         var missing = string.Join("; ", expected.Except(seen).Order(StringComparer.Ordinal));
         var unexpected = string.Join("; ", seen.Except(expected).Order(StringComparer.Ordinal));
         Assert.True(missing.Length == 0 && unexpected.Length == 0, $"Not reached: {missing}. Reached and not on the list: {unexpected}.");
