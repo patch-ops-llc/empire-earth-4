@@ -118,7 +118,6 @@ public class TracksAndRulesTests
     [InlineData("\"min\": 2, \"max\": 4", "\"min\": 5, \"max\": 4", "$.map.chokepoint_width.max", "must not be below min (5), found 4")]
     [InlineData("\"open_field_min_width\": 6", "\"open_field_min_width\": 4", "$.map.open_field_min_width", "must be above the widest chokepoint (4), found 4")]
     [InlineData("\"deposit_size\": 2", "\"deposit_size\": 0", "$.map.deposit_size", "must be between 1 and 8, found 0")]
-    [InlineData("\"radius\": 6", "\"radius\": 0", "$.map.start_territory.radius", "must be between 1 and 256, found 0")]
     public void TheMapRulesMustMakeSense(string oldText, string newText, string location, string message)
     {
         var files = SampleData.With(SampleData.RulesPath, oldText, newText);
@@ -132,5 +131,73 @@ public class TracksAndRulesTests
         var files = SampleData.With(SampleData.RulesPath, "\"structures\": [\"capitol\", \"barracks\"]", "\"structures\": []");
 
         DataAssert.RejectedOnce(files, SampleData.RulesPath, "$.roster.structures", "must have at least 1 entries, found 0");
+    }
+
+    [Theory]
+    [InlineData("\"debug\": { \"spawn\": true }", "\"debug\": { \"spawn\": false }")]
+    [InlineData("\"debug\": { \"spawn\": true }", "\"debug\":{\"spawn\":true}")]
+    public void TheDevelopmentSpawnIsSwitchedOnOrOff(string oldText, string newText)
+    {
+        var data = DataAssert.Valid(SampleData.With(SampleData.RulesPath, oldText, newText));
+
+        Assert.Equal(newText.Contains("true", StringComparison.Ordinal), data.Rules.Debug.Spawn);
+    }
+
+    [Theory]
+    [InlineData("\"debug\": { \"spawn\": true }", "\"debug\": { \"spawn\": 1 }", "$.debug.spawn", "expected true or false, found a number")]
+    [InlineData("\"debug\": { \"spawn\": true }", "\"debug\": { \"spawn\": \"true\" }", "$.debug.spawn", "expected true or false, found text")]
+    [InlineData("\"debug\": { \"spawn\": true }", "\"debug\": { }", "$.debug", "missing key \"spawn\"")]
+    [InlineData(",\n  \"debug\": { \"spawn\": true }", "", "$", "missing key \"debug\"")]
+    [InlineData("\"debug\": { \"spawn\": true }", "\"debug\": { \"spawn\": true, \"god_mode\": true }", "$.debug.god_mode", "unknown key \"god_mode\"")]
+    public void TheDebugBlockMustBeThereWithItsSwitchAndNothingElse(string oldText, string newText, string location, string message)
+    {
+        var files = SampleData.With(SampleData.RulesPath, oldText, newText);
+
+        DataAssert.RejectedOnce(files, SampleData.RulesPath, location, message);
+    }
+
+    [Fact]
+    public void TheCombatBlockGivesTheNumbersThatBelongToNoLine()
+    {
+        var combat = DataAssert.Valid(SampleData.Files()).Rules.Combat;
+
+        Assert.Equal(4, combat.LookIntervalTicks);
+        Assert.Equal("0.25", combat.UnitReachMargin.ToString());
+        Assert.Equal("0.75", combat.StructureReach.ToString());
+        Assert.Equal("0.5", combat.Fortification.ToString());
+    }
+
+    [Theory]
+    [InlineData("\"look_interval_ticks\": 4", "\"look_interval_ticks\": 1")]
+    [InlineData("\"look_interval_ticks\": 4", "\"look_interval_ticks\": 1000")]
+    [InlineData("\"unit_reach_margin\": \"0.25\"", "\"unit_reach_margin\": 0")]
+    [InlineData("\"unit_reach_margin\": \"0.25\"", "\"unit_reach_margin\": 64")]
+    [InlineData("\"structure_reach\": \"0.75\"", "\"structure_reach\": \"0.001\"")]
+    [InlineData("\"structure_reach\": \"0.75\"", "\"structure_reach\": 64")]
+    [InlineData("\"fortification\": \"0.5\"", "\"fortification\": \"0.001\"")]
+    [InlineData("\"fortification\": \"0.5\"", "\"fortification\": 1")]
+    public void TheCombatNumbersMayStandAtTheirLimits(string oldText, string newText)
+    {
+        DataAssert.Valid(SampleData.With(SampleData.RulesPath, oldText, newText));
+    }
+
+    [Theory]
+    [InlineData("\"look_interval_ticks\": 4", "\"look_interval_ticks\": 0", "$.combat.look_interval_ticks", "must be between 1 and 1000, found 0")]
+    [InlineData("\"look_interval_ticks\": 4", "\"look_interval_ticks\": 1001", "$.combat.look_interval_ticks", "must be between 1 and 1000, found 1001")]
+    [InlineData("\"look_interval_ticks\": 4", "\"look_interval_ticks\": \"4\"", "$.combat.look_interval_ticks", "expected a whole number, found text")]
+    [InlineData("\"unit_reach_margin\": \"0.25\"", "\"unit_reach_margin\": \"-0.25\"", "$.combat.unit_reach_margin", "must be between 0 and 64, found -0.25")]
+    [InlineData("\"unit_reach_margin\": \"0.25\"", "\"unit_reach_margin\": 0.25", "$.combat.unit_reach_margin", "write 0.25 as text")]
+    [InlineData("\"structure_reach\": \"0.75\"", "\"structure_reach\": 0", "$.combat.structure_reach", "must be above 0 and at most 64, found 0")]
+    [InlineData("\"structure_reach\": \"0.75\"", "\"structure_reach\": \"64.5\"", "$.combat.structure_reach", "must be above 0 and at most 64, found 64.5")]
+    [InlineData("\"fortification\": \"0.5\"", "\"fortification\": 0", "$.combat.fortification", "must be above 0 and at most 1, found 0")]
+    [InlineData("\"fortification\": \"0.5\"", "\"fortification\": \"1.5\"", "$.combat.fortification", "must be above 0 and at most 1, found 1.5")]
+    [InlineData("\"fortification\": \"0.5\"", "\"fortification\": \"0.5\", \"armor\": 1", "$.combat.armor", "unknown key \"armor\"")]
+    [InlineData("\"fortification\": \"0.5\"", "\"fortifications\": \"0.5\"", "$.combat", "missing key \"fortification\"")]
+    [InlineData("\"combat\":", "\"fight\":", "$", "missing key \"combat\"")]
+    public void TheCombatBlockMustHaveItsNumbersWithinTheirLimitsAndNothingElse(string oldText, string newText, string location, string message)
+    {
+        var files = SampleData.With(SampleData.RulesPath, oldText, newText);
+
+        DataAssert.Rejected(files, SampleData.RulesPath, location, message);
     }
 }

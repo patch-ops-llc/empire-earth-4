@@ -14,12 +14,6 @@ public class RoutingTests
 {
     private static readonly Fixed QuarterTile = Fixed.One / 4;
 
-    /// <summary>
-    /// What rounding may take off the distance a walking unit keeps from blocked ground: a
-    /// thousandth of a tile.
-    /// </summary>
-    private static readonly Fixed Slack = Fixed.FromRaw(64);
-
     private static FixedVector2 Point(string x, string y) => TestMatches.Point(x, y);
 
     [Fact]
@@ -190,14 +184,16 @@ public class RoutingTests
             "....#....",
             "....#....",
             "....#...."));
-        var left = match.SpawnUnit(0, Point("0.5", "0.5"), QuarterTile);
-        var right = match.SpawnUnit(0, Point("8.5", "2.5"), QuarterTile);
+        var left = match.SpawnUnit(0, Point("2.5", "0.5"), QuarterTile);
+        var right = match.SpawnUnit(0, Point("6.5", "2.5"), QuarterTile);
 
+        // The middle of the two is (4.5, 1.5), so their places are (4.75, 0.25), which is in the
+        // wall, and (8.75, 2.25), which is too close to the edge of the map.
         match.OrderMove(0, Point("6.75", "1.25"), left, right);
         RunUntilIdle(match, 200, left, right);
 
-        Assert.Equal(MapGrid.TileCenter(3, 1), match.PositionOf(left));
-        Assert.Equal(Point("6.75", "1.25"), match.PositionOf(right));
+        Assert.Equal(MapGrid.TileCenter(3, 0), match.PositionOf(left));
+        Assert.Equal(new FixedVector2(Fixed.FromInt(9) - Mover.StandOff, Point("0", "2.25").Y), match.PositionOf(right));
     }
 
     /// <summary>
@@ -245,6 +241,7 @@ public class RoutingTests
         }
 
         var target = Point("15.5", "3.5");
+        var places = match.PlacesAround(target, [.. units]);
         match.OrderMove(0, target, [.. units]);
         match.Simulation.Tick();
 
@@ -260,8 +257,8 @@ public class RoutingTests
 
         RunUntilIdle(match, 400, [.. units]);
 
-        // Until group movement (M12) spreads them, they all end on the one point.
-        Assert.All(units, unit => Assert.Equal(target, match.PositionOf(unit)));
+        // Each ends on its own place around the target, as far from the others as it began.
+        Assert.Equal(places, units.Select(match.PositionOf));
         Assert.Equal(1, match.Routes.SearchCount);
     }
 
@@ -285,13 +282,26 @@ public class RoutingTests
         match.OrderMove(0, target, first, beside, behindTheWall);
         match.Simulation.Tick();
 
-        Assert.Equal(2, match.Routes.SearchCount);
         Assert.Equal(1, match.Movers.Get(first).RouteStart);
         Assert.Equal(1, match.Movers.Get(beside).RouteStart);
         Assert.Equal(5, match.Movers.Get(behindTheWall).RouteStart);
 
+        // The middle of the three is (3, 1.5). The first unit's place and the third's are off the
+        // top of the map, so they end beside its edge, one of them beside the wall too. Both can
+        // be walked to from the end of the group's route.
+        Assert.Equal(13, match.Movers.Get(first).RouteGoal);
+        Assert.Equal(13, match.Movers.Get(behindTheWall).RouteGoal);
+
+        // The second unit's place, (11, 1.5), is in the wall at x = 11. The nearest tile to it is
+        // on the near side of that wall, out of sight from the end of the group's route, so this
+        // unit gets a route to that tile: the third search.
+        Assert.Equal((1 * 15) + 10, match.Movers.Get(beside).RouteGoal);
+        Assert.Equal(3, match.Routes.SearchCount);
+
         RunUntilIdle(match, 400, first, beside, behindTheWall);
-        Assert.All((EntityId[])[first, beside, behindTheWall], unit => Assert.Equal(target, match.PositionOf(unit)));
+        Assert.Equal(new FixedVector2(Fixed.FromInt(12) + Mover.StandOff, Mover.StandOff), match.PositionOf(first));
+        Assert.Equal(MapGrid.TileCenter(10, 1), match.PositionOf(beside));
+        Assert.Equal(new FixedVector2(Fixed.FromInt(15) - Mover.StandOff, Mover.StandOff), match.PositionOf(behindTheWall));
     }
 
     /// <summary>
@@ -302,8 +312,8 @@ public class RoutingTests
     public void UnitsWithAClearLineNeedNoRoute()
     {
         var match = TestMatches.Create(WalledField());
-        var blocked = match.SpawnUnit(0, Point("3.5", "3.5"), QuarterTile);
-        var clear = match.SpawnUnit(0, Point("14.5", "10.5"), QuarterTile);
+        var blocked = match.SpawnUnit(0, Point("7.5", "3.5"), QuarterTile);
+        var clear = match.SpawnUnit(0, Point("12.5", "5.5"), QuarterTile);
         var target = Point("15.5", "3.5");
 
         match.OrderMove(0, target, blocked, clear);
@@ -315,11 +325,12 @@ public class RoutingTests
 
         var open = TestMatches.Create(TestMaps.Open(30, 30));
         var group = Enumerable.Range(0, 40).Select(i => open.SpawnUnit(0, MapGrid.TileCenter(2 + (i % 8), 2 + (i / 8)), QuarterTile)).ToArray();
+        var places = open.PlacesAround(Point("25.25", "20.75"), group);
         open.OrderMove(0, Point("25.25", "20.75"), group);
         RunUntilIdle(open, 200, group);
 
         Assert.Equal(0, open.Routes.SearchCount);
-        Assert.All(group, unit => Assert.Equal(Point("25.25", "20.75"), open.PositionOf(unit)));
+        Assert.Equal(places, group.Select(open.PositionOf));
     }
 
     /// <summary>A unit takes its first step in the tick that carries out its order, route or no route.</summary>
@@ -411,8 +422,12 @@ public class RoutingTests
         Assert.Equal(expectedStart, started);
         Assert.Equal(units.Length, match.Routes.SearchCount);
 
+        // All were sent to the one point, each by its own order. They arrive in the last row,
+        // which is one tile wide, and step apart along it.
         RunUntilIdle(match, 4000, units);
-        Assert.All(units, unit => Assert.Equal(MapGrid.TileCenter(24, Size - 1), match.PositionOf(unit)));
+        match.RunUntilAtRest(4000, units);
+        Assert.All(units, unit => Assert.Equal(Size - 1, match.PositionOf(unit).Y.FloorToInt()));
+        match.AssertKeepTheirSpacing(units);
     }
 
     /// <summary>
@@ -462,8 +477,14 @@ public class RoutingTests
 
         Assert.Equal(12, match.Routes.SearchCount);
 
-        RunUntilIdle(match, 400, [.. back, .. front]);
-        Assert.All((EntityId[])[.. back, .. front], unit => Assert.Equal(Point("0.5", "5.5"), match.PositionOf(unit)));
+        // The stalls are 18 tiles from end to end: too long a group to keep a shape, so all go to
+        // the point itself, in the bottom lane, and step apart along it.
+        EntityId[] all = [.. back, .. front];
+        Assert.All(all, unit => Assert.Equal(Point("0.5", "5.5"), match.Movers.Get(unit).Destination));
+        RunUntilIdle(match, 400, all);
+        match.RunUntilAtRest(4000, all);
+        Assert.All(all, unit => Assert.Equal(5, match.PositionOf(unit).Y.FloorToInt()));
+        match.AssertKeepTheirSpacing(all);
     }
 
     /// <summary>A route costs its search once in a tick, however many units of the group take it.</summary>
@@ -505,7 +526,7 @@ public class RoutingTests
     /// <summary>
     /// Many units, many orders, some given while a unit is waiting for a route or is half way along
     /// one. Whatever happens, no unit ever stands on or too close to blocked ground, and every unit
-    /// ends where its last order sent it.
+    /// ends its order near where it sent it: units that arrive on top of each other step apart.
     /// </summary>
     [Theory]
     [InlineData(1UL, 2)]
@@ -541,11 +562,15 @@ public class RoutingTests
 
         RunUntilIdle(match, 2000, units);
         Assert.Equal(0, match.Simulation.DroppedCommandCount);
+        match.RunUntilAtRest(2000, units);
         Assert.All(units, unit =>
         {
             var mover = match.Movers.Get(unit);
-            Assert.Equal(mover.Destination, match.PositionOf(unit));
+            AssertStandsClear(match, unit);
+            Assert.Equal(match.Grid.RegionOf(mover.Destination), match.Grid.RegionOf(match.PositionOf(unit)));
+            Assert.InRange(FixedVector2.Distance(mover.Destination, match.PositionOf(unit)).Raw, 0, 6 * Fixed.RawOne);
             Assert.Equal((0, 0, 0), (mover.RouteStart, mover.RouteGoal, mover.RouteNode));
+            Assert.Equal(FixedVector2.Zero, mover.Spread);
         });
     }
 
@@ -587,8 +612,9 @@ public class RoutingTests
         Assert.False(match.Movers.Contains(first));
         Assert.Equal((3 * 20) + 3, match.Movers.Get(second).RouteStart);
 
+        // The second unit's place is half a tile right of and below the target, as it stood.
         RunUntilIdle(match, 400, second);
-        Assert.Equal(target, match.PositionOf(second));
+        Assert.Equal(Point("16", "4"), match.PositionOf(second));
     }
 
     /// <summary>
@@ -639,11 +665,14 @@ public class RoutingTests
         var match = MatchSetup.Create(loaded.Data, ridge, 1, [new(0), new(1)]);
         var workers = Enumerable.Range(0, 6).Select(match.Bodies.EntityAt).ToArray();
         var target = MapGrid.TileCenter(84, 44);
+        var places = match.PlacesAround(target, workers);
 
         match.OrderMove(0, target, workers);
         var ticks = RunUntilIdle(match, 2000, workers);
 
-        Assert.All(workers, worker => Assert.Equal(target, match.PositionOf(worker)));
+        // They arrive as they started, in a row around the point.
+        Assert.Equal(places, workers.Select(match.PositionOf));
+        match.AssertKeepTheirSpacing(workers);
         Assert.InRange(match.Routes.SearchCount, 0, 1);
 
         // 75 tiles at 0.15 of a tile per tick.
@@ -748,37 +777,7 @@ public class RoutingTests
         return 0;
     }
 
-    /// <summary>
-    /// Asserts that a unit stands on passable ground, no closer to any blocked tile or to the edge
-    /// of the map than <see cref="Mover.Clearance"/>.
-    /// </summary>
-    private static void AssertStandsClear(Match match, EntityId unit)
-    {
-        var position = match.PositionOf(unit);
-        var tileX = position.X.FloorToInt();
-        var tileY = position.Y.FloorToInt();
-        Assert.True(match.Grid.IsPassable(tileX, tileY), $"Unit {unit} stands on the blocked tile ({tileX}, {tileY}).");
-
-        var least = FixedVector2.SquareRaw(Mover.Clearance - Slack);
-        for (var y = tileY - 1; y <= tileY + 1; y++)
-        {
-            for (var x = tileX - 1; x <= tileX + 1; x++)
-            {
-                if (match.Grid.IsPassable(x, y))
-                {
-                    continue;
-                }
-
-                // The nearest point of the tile's square, edges included.
-                var nearest = new FixedVector2(
-                    Fixed.Clamp(position.X, Fixed.FromInt(x), Fixed.FromInt(x + 1)),
-                    Fixed.Clamp(position.Y, Fixed.FromInt(y), Fixed.FromInt(y + 1)));
-                Assert.True(
-                    FixedVector2.DistanceSquaredRaw(position, nearest) >= least,
-                    $"Unit {unit} at {position} is too close to the blocked tile ({x}, {y}).");
-            }
-        }
-    }
+    private static void AssertStandsClear(Match match, EntityId unit) => match.AssertStandsClear(unit);
 
     /// <summary>
     /// The ticks a unit needs to walk from the center of one tile to the center of another along
