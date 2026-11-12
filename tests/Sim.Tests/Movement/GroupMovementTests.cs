@@ -404,7 +404,8 @@ public class GroupMovementTests
 
     /// <summary>
     /// Units pressed into a place too small for them stay closer than their spacing. They stay in
-    /// the place and off its walls, whatever they are pushed with.
+    /// the place and off its walls, whatever they are pushed with, and come to rest there: a step
+    /// that the walls turn aside is not taken when it leads nearer to another unit.
     /// </summary>
     [Fact]
     public void UnitsInAPlaceTooSmallForThemStayInIt()
@@ -424,6 +425,7 @@ public class GroupMovementTests
         }
 
         Assert.Equal(3, walledIn.Select(match.PositionOf).Distinct().Count());
+        Assert.Equal(1, match.RunUntilAtRest(10, walledIn));
     }
 
     /// <summary>
