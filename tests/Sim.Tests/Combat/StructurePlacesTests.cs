@@ -125,6 +125,7 @@ public class StructurePlacesTests
         var capitol = Place(match, Capitol);
         var unit = match.Unit(0, Hoplite, x, y);
         var from = match.PositionOf(unit);
+        Spotter(match);
         Order(match, capitol, attackMove, unit);
         var tiles = match.Structures.Get(capitol).Tiles;
         var inReach = -1;
@@ -699,6 +700,15 @@ public class StructurePlacesTests
         return placed;
     }
 
+    /// <summary>
+    /// A worker of the attackers' side that stands in sight of the structure, north-east of it
+    /// and out of everybody's way: an attack order may name only what its player sees or
+    /// remembers (design 5.3), and the attackers start further off than they see. It is made
+    /// after the units, so that each of them has the ID it would have without it. Where there
+    /// is no fog it changes nothing.
+    /// </summary>
+    private static void Spotter(Match match) => match.SpawnWorker(0, "19.5", "5.5");
+
     private static void Order(Match match, EntityId target, bool attackMove, params EntityId[] units)
     {
         if (attackMove)
@@ -756,6 +766,7 @@ public class StructurePlacesTests
             units.Add(match.Unit(0, chassis, FormattableString.Invariant($"{x}.5"), FormattableString.Invariant($"{y}.5")));
         }
 
+        Spotter(match);
         if (ordered)
         {
             Order(match, target, attackMove, [.. units]);
