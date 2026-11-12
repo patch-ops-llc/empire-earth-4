@@ -28,11 +28,14 @@ public static class CombatOrders
     /// <summary>The color of the mark an attack-move order leaves.</summary>
     public static readonly Color AttackMoveMark = new(1f, 0.6f, 0.2f);
 
-    /// <summary>The row for a click on an enemy unit: the selected units that can hit it go after it.</summary>
+    /// <summary>
+    /// The row for a click on an enemy unit or structure: the selected units that can hit it go
+    /// after it.
+    /// </summary>
     public static OrderRow AttackRow() => new()
     {
         Name = "Attack",
-        Targets = PointerTargets.EnemyUnit,
+        Targets = PointerTargets.EnemyUnit | PointerTargets.EnemyStructure,
         Mark = AttackMark,
         Give = Attack,
     };
@@ -75,7 +78,7 @@ public static class CombatOrders
     /// True when at least one of these units can take an attack order on the target: the
     /// simulation's own test (design 2.4), so that the view sends no order that would be refused.
     /// A worker has no attack, and some lines cannot hit some others. An attack order may name
-    /// only a unit the player sees (design 5.3).
+    /// only a unit the player sees, or a structure the player sees or remembers (design 5.3).
     /// </summary>
     public static bool CanAttack(MatchView view, ReadOnlySpan<EntityId> units, EntityId target)
     {
@@ -84,7 +87,7 @@ public static class CombatOrders
             || !match.Health.Contains(target)
             || !match.Bodies.TryGet(target, out var targetBody)
             || targetBody.Owner == view.Player
-            || !view.Sight.TrulySees(target))
+            || !IsKnownForAnOrder(view, target))
         {
             return false;
         }
@@ -104,6 +107,13 @@ public static class CombatOrders
         return false;
     }
 
+    // What the simulation asks of the target of an attack order: a unit seen now, a structure
+    // seen now or remembered.
+    private static bool IsKnownForAnOrder(MatchView view, EntityId target) =>
+        view.Match.Structures.Contains(target)
+            ? view.Match.Vision.KnowsStructure(view.Player, target)
+            : view.Sight.TrulySees(target);
+
     // Selected units that cannot take the order are listed all the same: the simulation skips
     // them and they keep the order they had. With nobody who can take it this row has no order,
     // and the click falls through to the move order.
@@ -115,9 +125,9 @@ public static class CombatOrders
         // Only with the development switch that lifts the fog from the screen can the player
         // click on a unit they do not see. The simulation would refuse the order, so the tester
         // is told why the units walk there instead.
-        if (view.Sight.FogOff && view.Match.World.Entities.IsAlive(target) && !view.Sight.TrulySees(target))
+        if (view.Sight.FogOff && view.Match.World.Entities.IsAlive(target) && !IsKnownForAnOrder(view, target))
         {
-            view.Interface.Say("Development: the fog is off on the screen only. Your units do not see that unit, so they walk there instead of attacking it.");
+            view.Interface.Say("Development: the fog is off on the screen only. Your units do not see that, so they walk there instead of attacking it.");
         }
 
         return CanAttack(view, request.Selected, target)

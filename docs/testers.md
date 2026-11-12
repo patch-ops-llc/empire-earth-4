@@ -1,6 +1,6 @@
 # Running a test build
 
-This is an early build of a hobby real-time strategy prototype, and the first one two people can play together. Each player has six workers on a map with forest and a ridge of cliffs, and can select them and send them round it. Workers can build structures, a Generator among them for Energy: see Building below. No match can train a fighting unit yet, so for now a development aid makes them from nothing: see Trying a fight below. Its job for now is to show that the game starts on your machine, that selecting units, moving them and fighting with them works, and that two machines can share one match.
+This is an early build of a hobby real-time strategy prototype. **This one is a test build of every open piece put together**, so that all of it can be played at once before any of it is merged; some pieces meet here for the first time, and what does not fit yet is listed in the pull request this build comes from. Each player starts with a Capitol and six workers on a map with forest and a ridge of cliffs. Workers earn resources and build structures; a Barracks or a Works trains fighting units; research raises your tiers; units fight units and structures; you see only what your own units see; and you can play alone against a computer opponent that builds a base and an army, or share a match with a second machine.
 
 The builds are not signed, because signing costs money and this is a hobby project. Windows and macOS both warn about that the first time you start the game. The steps below get past the warning.
 
@@ -41,7 +41,7 @@ If the button does not appear, open Terminal instead. Type `xattr -dr com.apple.
 
 The game opens on a menu with four choices.
 
-- **Play alone** starts a match at once, on your machine only. Nothing is opened to the network, so the system asks no question about connections, and no second copy of the game or second player is needed. The other player's workers are there, and nothing controls them.
+- **Play alone** starts a match at once, on your machine only. Nothing is opened to the network, so the system asks no question about connections, and no second copy of the game or second player is needed. The other player's workers are there, and nothing controls them. For an opponent that plays, see Playing against the computer.
 - **Play against the computer** starts a match at once against a computer opponent, on your machine only. The list beside the button chooses its personality. See Playing against the computer.
 - **Host a match** shows the settings of the match first, then opens it for one other player and waits. See the next section.
 - **Join** joins a match someone else hosts. Type their address into the box first.
@@ -125,7 +125,7 @@ The brown blocks on the map are deposits. Select workers and right-click a depos
 
 - Each worker at a deposit earns 45 Materials a minute, paid a little every second from one second after it arrives. Your six workers at one deposit earn 4.5 a second.
 - A deposit has room for eight workers, so all six of yours fit at one.
-- A deposit pays only inside your territory, which for now is the ground round your start: the two deposits nearest your workers. Workers sent to any other deposit stand there and earn nothing, and a line under the top bar says so. Nothing can claim more territory yet.
+- A deposit pays only inside your territory, which at the start is the ground round your Capitol: the two deposits nearest your workers. Workers sent to any other deposit stand there and earn nothing, and a line under the top bar says so. An Outpost claims more ground: see Building.
 - A worker stops earning when you send it somewhere else. Send it back to a deposit and it starts again.
 - Nobody can walk through a deposit.
 - Materials and Energy are shown as whole numbers. Supply is what you use out of what you may use: each worker uses 1.
@@ -143,9 +143,9 @@ The brown blocks on the map are deposits. Select workers and right-click a depos
 - Under the bar at the top, on the left, a row of small buttons shows your groups, each as its digit and the number of units in it, and after them how many of your workers are idle. A group that is exactly what you have selected has a green edge. Clicking a button does what its key does.
 - A group holds units, wherever they go. A unit can be in several groups. Ctrl and a digit with nothing selected changes nothing, and so does the digit of a group that is empty. The groups are yours alone: the other player never learns of them.
 - A worker is idle when it stands still and has neither an order nor work to do. The period key goes through your idle workers one after another, and a line under the top bar says so when there is none.
-- Every unit is a worker for now, so a double-click on one selects all your workers on screen.
-- Units sent to the same place end up standing inside each other, on one point. They do not make room for each other yet.
-- When you play alone, the other player's workers never move. Nothing controls them.
+- A double-click on a unit selects all your units of its kind on screen. At the start every unit is a worker.
+- Units sent to the same place stand beside each other there: units of one player step apart to their spacing.
+- When you play alone from "Play alone", the other player's workers never move. Nothing controls them.
 - In a shared match, both players see the same workers in the same places. An order takes a moment longer to start than it does alone, because it travels to the host first.
 - If the other player leaves or closes the game, a line under the top bar says why, and they have conceded: you win. If the host leaves, the match ends for both, and the host has conceded. See How a match ends.
 - Each player has a Capitol where they start, on the square their workers stand around: a stone hall with a keep and a pointed roof in the player's color. Nobody can stand on it, and units walk round it.
@@ -180,9 +180,9 @@ You are shown only what your own units see. Each unit sees a circle round itself
 
 Click Play against the computer on the menu. The computer takes Player 2, in red, on the other side of the map. Nothing is opened to the network.
 
-- **This is the first part of the computer opponent. It builds up its base, researches and trains an army. It does not attack yet**, so nothing comes for you, and the match ends when you concede or leave.
+- **This is the first part of the computer opponent. It builds up its base, researches and trains an army. It does not attack yet**, so nothing comes for you. In this build you can go for it: its units fight back when yours come near, and when its Capitol and every Outpost of its are destroyed it is out and you have won.
 - It has two personalities, chosen in the list beside the button. Swarm keeps more workers, researches Manufacturing and Logistics first and trains line infantry with some cavalry. Elite keeps a few workers fewer, researches Firepower and Protection first and trains guards with some artillery.
-- To watch it, move the camera across the map to its base: nothing hides it yet. You will see its workers go to the deposits, more workers come out of its Capitol, Generators and then a Barracks or a Works go up, and units gather beside them. A banner says when it reaches a new epoch. The speed buttons under the bar at the top make the wait shorter.
+- To watch it, lift the fog with the development switch (F, see The fog of war) and move the camera across the map to its base; without the switch you see of it only what your units see. You will see its workers go to the deposits, more workers come out of its Capitol, Generators and then a Barracks or a Works go up, and units gather beside them. A banner says when it reaches a new epoch. The speed buttons under the bar at the top make the wait shorter.
 - It plays by the rules you play by: it pays for everything, its orders are commands like yours, and they are in the replay.
 - To set the starts as well, click Host a match and set Player 2 to Computer on the page of the settings.
 - The end screen names it: Player 2, red (computer, swarm).
@@ -197,7 +197,7 @@ A player is out of the match when they have no Capitol and no Outpost left, or w
 - A player who is out gives no more orders. Their units and structures stay where they are and still defend themselves. The bar at the top says that you are out.
 - A Capitol or an Outpost that is still being built counts: you are in the match while one stands, finished or not.
 - If the last two players lose their last Capitol at the same moment, the match has no winner.
-- Nothing can damage a structure yet, so for now a match ends by conceding or leaving only.
+- Structures can be destroyed in this build: right-click an enemy structure you see or remember with fighting units selected, or send them by attack-move. A player with no Capitol and no Outpost left is out, so a match can end by conquest as well as by conceding or leaving.
 - When the host has ended the match, the page that follows says Victory or Defeat as well, and where the replay is.
 
 ## Pause and speed
@@ -240,8 +240,8 @@ Select units and the panel at the bottom of the window says what they are.
 - **Another player's unit**, when you click it, shows its hit points, its Firepower, Protection and Mobility tiers and its accents. Its price and supply are the owner's to know. The panel lets the unit go when it walks out of your sight.
 - Units with accents carry small square badges over their heads, in the color of the track, with one white mark for level I and two for level II. Every player's units show them. They sit just over the place of a unit's hit point bar.
 - When a player's epoch rises, a banner under the top bar says which epoch they reached. Your own is larger and says how high your tracks may now go.
-- Only workers start a match. Fighting units, which have the cards, tiers, accents and badges, come from the development aid for now: see Trying a fight.
-- A unit made before a Protection or Mobility research keeps the hit points and speed it was made with for now, though its card already shows the new tier. Damage, range and accents follow the research at once.
+- Only workers start a match. Fighting units, which have the cards, tiers, accents and badges, are trained at a Barracks or a Works (see Building), or come from the development aid: see Trying a fight.
+- When a Protection or Mobility research finishes, the units you already have take the new hit points and speed at once, as damage, range and accents do.
 - An epoch rises when three tracks have reached its tier. The Energy you start with pays for one research, so the rest has to come from a Generator.
 
 ## Research
@@ -260,7 +260,7 @@ Press R, or click Research in the bar at the top. The panel shows your six track
 ## What structures tell you
 
 - A structure shows how far its owner's research has come in one track. A block in that track's color stands on it, one storey for each tier, and the dots on top of the block count the tier as on a die. The colors are those of the rows in the research panel. The Capitol shows Logistics, in purple, so when your Logistics research finishes, your Capitol's block gains a storey and a dot. The other player's Capitol shows theirs.
-- An Academy gives a second research slot, and flies a banner in the color of the track being researched in it. Academies cannot be built yet, so you will not see one.
+- An Academy gives a second research slot, and flies a banner in the color of the track being researched in it.
 - The small map shows the ground each player holds, tinted in the player's color with a brighter line along its edge.
 
 ## What to know about multiplayer
@@ -271,13 +271,13 @@ Every player's machine runs the whole game and they exchange only commands. That
 - A player who drops out cannot rejoin the match.
 - A slow machine or connection on the host's side slows the match for everyone.
 
-This build also has a development switch on. No match can train a fighting unit yet, so the game accepts an order that makes units from nothing, to try out fights. The development aid described under Trying a fight sends it. It is switched off again once units can be trained.
+This build also has a development switch on: the game accepts an order that makes units from nothing, to try out fights without waiting for a Barracks. The development aid described under Trying a fight sends it.
 
 The two games check each other all the time. If they ever disagree about the state of the match, both stop and say so. That is a fault in the game, and its files are what finds it: see the next section.
 
 ## Trying a fight
 
-No match can train a fighting unit yet. Until one can, this build has a development aid that makes them from nothing, free of charge. It is not part of the game and goes away once units can be trained. Its panel has an orange border and sits at the left edge of the window.
+Fighting units are trained at a Barracks or a Works. To try a fight without building up to one, this build has a development aid that makes units from nothing, free of charge. It is not part of the game. Its panel has an orange border and sits at the left edge of the window.
 
 1. In the panel, choose a unit and how many to make at a time. There are four lines of units, each in four epochs. Line infantry shoots. Guards fight hand to hand. Cavalry fights hand to hand and is larger. Artillery shoots far, cannot shoot at what stands close to it, and its shell hits every enemy near where it lands.
 2. Point at open ground and press G. Your units appear there.
