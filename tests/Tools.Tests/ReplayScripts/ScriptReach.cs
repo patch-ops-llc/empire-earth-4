@@ -109,10 +109,14 @@ internal sealed class ScriptReach
 
         var files = string.Join(" and ", names);
         var holds = _tries.FirstOrDefault(lines => WhatIsWrongWith(RecordedNow(lines)).Length == 0);
-        var advice = holds is null
-            ? "No recording the test makes reaches them either, which the test of the script reports."
-            : $"The script reaches them in a match recorded now, with {Shown(holds)}. "
-              + "A file that has never been on main may be recorded again with that; a file that is on main stays as it is.";
+        var advice = holds switch
+        {
+            null => "No recording the test makes reaches them either, which the test of the script reports.",
+            [_] => $"The script reaches them in a match recorded now, with {Shown(holds)}. "
+                + "A file that has never been on main may be recorded again with that; a file that is on main stays as it is.",
+            _ => $"The script reaches them between the matches recorded now with {Shown(holds)}. "
+                + "A file that has never been on main may be recorded again with one of these; a file that is on main stays as it is.",
+        };
         Assert.Skip($"{files} no longer {(names.Length == 1 ? "reaches" : "reach")} every rule the script guards. That fails nothing: a stored replay only has to reproduce. {problem} {advice}");
     }
 

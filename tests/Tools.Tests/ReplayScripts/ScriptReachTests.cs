@@ -75,7 +75,18 @@ public class ScriptReachTests
 
         Assert.Contains(Stored, skip, StringComparison.Ordinal);
         Assert.Contains("Not reached: a long match.", skip, StringComparison.Ordinal);
-        Assert.Contains($"with \"{Short}\" and \"{Long}\"", skip, StringComparison.Ordinal);
+        Assert.Contains($"between the matches recorded now with \"{Short}\" and \"{Long}\"", skip, StringComparison.Ordinal);
+        Assert.Contains("may be recorded again with one of these", skip, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AStoredReplayThatLacksARuleIsToldTheOneRecordingThatHasThemAll()
+    {
+        var reach = new ScriptReach(Rules[1..], replay => Told(replay, []), [Long]);
+
+        var skip = ReasonOfTheSkip(() => reach.SayWhatTheGoldenReplaysNoLongerReach(Stored));
+
+        Assert.Contains($"in a match recorded now, with \"{Long}\". A file that has never been on main may be recorded again with that", skip, StringComparison.Ordinal);
     }
 
     [Fact]
