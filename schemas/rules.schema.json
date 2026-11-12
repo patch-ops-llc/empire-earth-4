@@ -17,6 +17,7 @@
     "match",
     "start",
     "map",
+    "vision",
     "debug"
   ],
   "properties": {
@@ -172,6 +173,20 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 256
+        }
+      }
+    },
+    "vision": {
+      "description": "The fog of war (design 5.3).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["refresh_ticks"],
+      "properties": {
+        "refresh_ticks": {
+          "description": "What each player sees is worked out again in every tick whose number is a multiple of this.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
         }
       }
     },

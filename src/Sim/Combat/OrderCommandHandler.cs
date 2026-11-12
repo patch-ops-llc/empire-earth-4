@@ -19,7 +19,8 @@ namespace Sim.Combat;
 /// </para>
 /// <para>
 /// <b>Attack</b> names one entity. The command is valid when its player is in the match, the entity
-/// is alive, belongs to another player and can be damaged, and at least one listed unit can take
+/// is alive, belongs to another player, can be damaged and is seen by the player when the command
+/// runs (design 5.3), and at least one listed unit can take
 /// the order: alive, owned by the player, of a chassis, and of a line that can hit the target. The
 /// others are skipped, workers among them, and keep the order they had.
 /// </para>
@@ -168,6 +169,7 @@ public sealed class OrderCommandHandler : ICommandHandler
             unit.Target = command.TargetEntity;
             unit.Engaged = true;
             unit.AimedAt = target.Position;
+            unit.Anchor = target.Position;
 
             var mover = _movers.IndexOf(entity);
             if (mover < 0)

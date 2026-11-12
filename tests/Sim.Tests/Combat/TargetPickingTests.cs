@@ -247,15 +247,19 @@ public class TargetPickingTests
     public void AUnitHitFromBeyondItsAcquisitionRangeDoesNothing()
     {
         var match = Field();
-        var hoplite = match.Spawn(0, Hoplite, "2.5", "5.5");
-        var ballista = match.Spawn(1, Ballista, "11.25", "5.5");
+        var hoplite = match.Spawn(0, Hoplite, "2.25", "5.5");
+        var ballista = match.Spawn(1, Ballista, "10.5", "5.5");
         match.Run(100);
 
-        // The Ballista reaches 9 tiles and sees it; the Guard sees 8.
+        // The two are 8.25 tiles apart. The Ballista sees 8 tiles and so sees the tile the Guard
+        // stands on, whose center is 8 tiles away, and it reaches 9. The Guard sees 8, and the
+        // center of the Ballista's tile is further than that.
+        Assert.True(match.Vision.Sees(1, hoplite));
+        Assert.False(match.Vision.Sees(0, ballista));
         Assert.Equal(hoplite, match.UnitOf(ballista).Target);
         Assert.True(match.HitPointsOf(hoplite) < 130_000);
         Assert.Equal(EntityId.None, match.UnitOf(hoplite).Target);
-        Assert.Equal(TestMatches.Point("2.5", "5.5"), match.PositionOf(hoplite));
+        Assert.Equal(TestMatches.Point("2.25", "5.5"), match.PositionOf(hoplite));
     }
 
     [Fact]

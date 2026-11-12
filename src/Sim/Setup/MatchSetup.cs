@@ -5,6 +5,7 @@ using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Research;
+using Sim.Vision;
 
 namespace Sim.Setup;
 
@@ -46,6 +47,7 @@ public static class MatchSetup
         var shots = world.AddStore(new ComponentStore<Shot>(Shot.StoreName));
         var stockpiles = world.AddStore(new Stockpiles(players.Count));
         var territories = world.AddStore(new ComponentStore<Territory>(Territory.StoreName));
+        var visionGrid = world.AddStore(new VisionGrid(players.Count, map.Width, map.Height));
         var workers = world.AddStore(new ComponentStore<Worker>(Worker.StoreName));
         var workSites = world.AddStore(new ComponentStore<WorkSite>(WorkSite.StoreName));
 
@@ -57,9 +59,12 @@ public static class MatchSetup
         var supply = new SupplyAccount(data, research, world.Entities, bodies, workers);
         supply.AddUser(new CombatSupply(research, world.Entities, bodies, combatants));
 
+        // What each player sees. The grid is state; this works it out and answers who sees whom.
+        var vision = new MatchVision(data, visionGrid, world.Entities, bodies, combatants, workers, research.Tech);
+
         // The combat numbers are worked out from the data and from each player's tech as research has it.
         var combat = new CombatRules(data, players.Count, research.Tech);
-        var targeting = new Targeting(grid, bodies, combatants, health, spatialIndex, combat);
+        var targeting = new Targeting(grid, bodies, combatants, health, spatialIndex, combat, vision);
         var approach = new Approach(grid);
 
         var simulation = new Simulation(world);
@@ -86,6 +91,8 @@ public static class MatchSetup
         // Routes are found before anyone moves, so that a unit ordered in this tick can take its
         // first step in this tick. The spatial index is rebuilt right after movement, so that every
         // system after it sees where things stand now. A system that moves bodies goes before it.
+        // Vision comes after movement and the spatial index and before combat: what a player sees
+        // is worked out from where things stand in this tick, before any unit picks a target.
         // Combat comes after movement, so that it sees where everything stands in this tick and
         // which units have moved in it: a unit attacks only in a tick in which it does not move.
         // Shots land before the attacks, so a shot fired in one tick flies from the next. Deaths
@@ -100,6 +107,7 @@ public static class MatchSetup
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
+        simulation.AddSystem(new VisionSystem(vision));
         simulation.AddSystem(new ShotSystem(bodies, shots, targeting, simulation.Events));
         simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, simulation.Events));
         simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
@@ -126,6 +134,7 @@ public static class MatchSetup
             Stockpiles = stockpiles,
             Supply = supply,
             Territories = territories,
+            Vision = vision,
             Work = work,
             Workers = workers,
             WorkSites = workSites,
@@ -151,6 +160,9 @@ public static class MatchSetup
         }
 
         EconomySetup.PlaceStart(match);
+
+        // Design 5.3: at the start everything is unexplored except what the players' own see.
+        vision.Refresh();
 
         match.RefreshDerivedState();
         return match;

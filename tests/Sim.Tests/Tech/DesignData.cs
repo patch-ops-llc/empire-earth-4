@@ -75,6 +75,7 @@ internal static class DesignData
             "chokepoint_width": { "min": 2, "max": 4 },
             "open_field_min_width": 6
           },
+          "vision": { "refresh_ticks": 4 },
           "debug": { "spawn": true }
         }
         """;

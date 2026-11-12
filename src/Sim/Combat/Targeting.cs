@@ -2,6 +2,7 @@ using Sim.Core;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
+using Sim.Vision;
 
 namespace Sim.Combat;
 
@@ -29,6 +30,7 @@ public sealed class Targeting
     private readonly ComponentStore<Health> _health;
     private readonly SpatialIndex _spatialIndex;
     private readonly CombatRules _rules;
+    private readonly MatchVision _vision;
 
     // Scratch for one search, emptied at its start. Not state.
     private readonly List<EntityId> _found = [];
@@ -39,7 +41,8 @@ public sealed class Targeting
         ComponentStore<Combatant> combatants,
         ComponentStore<Health> health,
         SpatialIndex spatialIndex,
-        CombatRules rules)
+        CombatRules rules,
+        MatchVision vision)
     {
         ArgumentNullException.ThrowIfNull(grid);
         ArgumentNullException.ThrowIfNull(bodies);
@@ -47,25 +50,35 @@ public sealed class Targeting
         ArgumentNullException.ThrowIfNull(health);
         ArgumentNullException.ThrowIfNull(spatialIndex);
         ArgumentNullException.ThrowIfNull(rules);
+        ArgumentNullException.ThrowIfNull(vision);
         _grid = grid;
         _bodies = bodies;
         _combatants = combatants;
         _health = health;
         _spatialIndex = spatialIndex;
         _rules = rules;
+        _vision = vision;
     }
 
     public CombatRules Rules => _rules;
 
     /// <summary>
-    /// True when the entity can be attacked by a player: it is alive, on the map, has hit points, and
-    /// belongs to someone else. There is no friendly fire.
+    /// True when the entity can be attacked by a player: it is alive, on the map, has hit points,
+    /// belongs to someone else, and the player sees it (design 5.3). There is no friendly fire.
     /// </summary>
     /// <remarks>
-    /// Fog of war adds its test here and in <see cref="Pick"/>: until it exists, a player sees
-    /// every enemy.
+    /// Units pick only targets their owner sees, and an attack order may name only a unit the
+    /// player sees. <see cref="Pick"/> and the order handler both ask here, so both follow.
     /// </remarks>
-    public bool IsEnemy(World world, int player, EntityId entity, out Body body)
+    public bool IsEnemy(World world, int player, EntityId entity, out Body body) =>
+        IsEnemyThere(world, player, entity, out body) && _vision.Sees(player, in body);
+
+    /// <summary>
+    /// <see cref="IsEnemy"/> without the fog: true also for an enemy the player does not see. Only
+    /// for telling a target that is lost from sight from one that is gone, which end an attack
+    /// order differently.
+    /// </summary>
+    public bool IsEnemyThere(World world, int player, EntityId entity, out Body body)
     {
         ArgumentNullException.ThrowIfNull(world);
         body = default;
@@ -74,6 +87,9 @@ public sealed class Targeting
             && body.Owner != player
             && _health.Contains(entity);
     }
+
+    /// <summary>True when a player sees what stands at <paramref name="body"/>: its own always, an enemy's on a tile it sees.</summary>
+    public bool Sees(int player, in Body body) => _vision.Sees(player, in body);
 
     /// <summary>The roster index of an entity's line, or <see cref="CombatRules.NoLine"/> when it is not a unit of a chassis.</summary>
     public int LineOf(EntityId entity) =>

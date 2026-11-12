@@ -13,6 +13,8 @@ namespace Sim.Tests.Combat;
 /// <summary>
 /// A whole battle of mixed armies round a wall, with every kind of order: that a snapshot taken
 /// anywhere in it continues the same way, and the rules that must hold in every tick of it.
+/// The armies start out of each other's sight, so each attack order comes when its player sees
+/// the unit it names.
 /// </summary>
 /// <remarks>
 /// No state hash is pinned here. The fight that every system must bring to the same end is the
@@ -71,12 +73,12 @@ public class BattleTests
         [
             (1, AttackMoveCommand(0, TestMatches.Point("30.5", "12.5"), Ids(1, 11))),
             (2, AttackMoveCommand(1, TestMatches.Point("9.5", "12.5"), Ids(12, 9))),
-            (3, AttackCommand(1, new EntityId(11), new EntityId(21))),
-            (40, AttackCommand(0, new EntityId(21), new EntityId(8), new EntityId(9))),
+            (21, AttackCommand(1, new EntityId(1), new EntityId(21))),
+            (40, AttackCommand(0, new EntityId(16), new EntityId(8), new EntityId(9))),
             (90, new Command(CommandType.Stop, 1, Ids(16, 3))),
             (120, MoveCommand(0, TestMatches.Point("14.5", "2.5"), Ids(5, 3))),
             (200, AttackMoveCommand(0, TestMatches.Point("30.5", "12.5"), Ids(1, 11))),
-            (260, AttackCommand(1, new EntityId(1), Ids(12, 11))),
+            (260, AttackCommand(1, new EntityId(5), Ids(12, 11))),
             (400, AttackMoveCommand(1, TestMatches.Point("9.5", "12.5"), Ids(12, 11))),
         ];
     }
@@ -101,7 +103,7 @@ public class BattleTests
         Assert.Contains(Enumerable.Range(0, early.Combatants.Count), i => early.Combatants.ValueAt(i).Order == UnitOrder.Attack);
         Assert.Contains(Enumerable.Range(0, early.Movers.Count), i => early.Movers.ValueAt(i).State == MoveState.Following);
 
-        var middle = Run(150);
+        var middle = Run(140);
         Assert.NotEqual(0, middle.Shots.Count);
         Assert.Contains(Enumerable.Range(0, middle.Combatants.Count), i => middle.Combatants.ValueAt(i).Wait > Fraction.Zero);
         Assert.Contains(Enumerable.Range(0, middle.Combatants.Count), i => middle.Combatants.ValueAt(i).Engaged);
@@ -117,8 +119,8 @@ public class BattleTests
     [InlineData(0)]
     [InlineData(2)]
     [InlineData(30)]
-    [InlineData(91)]
-    [InlineData(150)]
+    [InlineData(92)]
+    [InlineData(140)]
     [InlineData(263)]
     [InlineData(420)]
     [InlineData(700)]

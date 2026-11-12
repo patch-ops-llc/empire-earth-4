@@ -6,6 +6,7 @@ using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
 using Sim.Research;
+using Sim.Vision;
 
 namespace Sim.Setup;
 
@@ -76,6 +77,12 @@ public sealed class Match
     /// <summary>The ground each Capitol and Outpost holds for its owner.</summary>
     public required ComponentStore<Territory> Territories { get; init; }
 
+    /// <summary>
+    /// What each player sees: the fog of war, which is state, and the questions asked of it. What
+    /// draws a match for a player reads it through a <see cref="PlayerView"/>.
+    /// </summary>
+    public required MatchVision Vision { get; init; }
+
     /// <summary>Assigns workers to work sites. Not state: see <see cref="WorkAssignments"/>.</summary>
     public required WorkAssignments Work { get; init; }
 
@@ -90,6 +97,10 @@ public sealed class Match
     /// the world as it is now. Call it after the world has been changed from outside a tick: after
     /// restoring a snapshot, and after a fixture has placed things.
     /// </summary>
+    /// <remarks>
+    /// The fog of war is state and is not worked out here: a restored snapshot has it as it was. A
+    /// fixture whose units are to see before the first tick calls <see cref="MatchVision.Refresh"/>.
+    /// </remarks>
     public void RefreshDerivedState()
     {
         Research.RefreshTech();
