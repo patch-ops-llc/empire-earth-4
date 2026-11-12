@@ -7,7 +7,8 @@ namespace Tools.Tests.ReplayScripts;
 
 /// <summary>
 /// The script <c>movement</c> of <c>replay record</c> and the three golden replays recorded with
-/// it alone: what the script must give, and what those replays must reach.
+/// it alone: what the script must give, and the rules of setting up a match and of movement it
+/// must reach.
 /// </summary>
 public class MovementScriptTests
 {
@@ -28,6 +29,40 @@ public class MovementScriptTests
     ];
 
     /// <summary>
+    /// The first three recordings are the golden replays' own lines, and they reach the rules
+    /// between them: no one match is on both maps or has both numbers of players. The two
+    /// rarest kinds of order come about once in 4,000 ticks, and with 7 of 30 other seeds matches
+    /// of these lengths miss one. In matches four times as long all 30 reach every rule, so the
+    /// second three are those, for when the first no longer do.
+    /// </summary>
+    private static readonly ScriptReach Reach = new(
+        [
+            "map ridge",
+            "map switchback",
+            "2 players",
+            "3 players",
+            "a player without a start",
+            "starts swapped",
+            .. EveryKindOfOrder,
+            "a unit standing",
+            "a unit walking straight",
+            "a unit walking a route",
+            "a unit waiting for a route",
+            "a unit waiting more than a tick for a route",
+        ],
+        Reached,
+        [
+            "--map ridge --starts 0,1 --seed 1 --orders 1 --ticks 3600 --script movement",
+            "--map switchback --starts 1,0 --seed 2 --orders 3 --ticks 6000 --script movement",
+            "--map switchback --starts 0,-,1 --seed 3 --orders 5 --ticks 2410 --script movement",
+        ],
+        [
+            "--map ridge --starts 0,1 --seed 1 --orders 1 --ticks 14400 --script movement",
+            "--map switchback --starts 1,0 --seed 2 --orders 3 --ticks 24000 --script movement",
+            "--map switchback --starts 0,-,1 --seed 3 --orders 5 --ticks 9640 --script movement",
+        ]);
+
+    /// <summary>
     /// The script gives every kind of order it is meant to, so that a match recorded with it
     /// reaches the rules: here in one long match on each map. The rarest kinds come about once in
     /// 4,000 ticks, so a shorter match can miss one.
@@ -46,65 +81,52 @@ public class MovementScriptTests
     }
 
     /// <summary>
-    /// What these recorded matches are for: between them they must reach the rules of setting up
-    /// a match and of movement that a change could break.
+    /// What the script is for: matches recorded with it must reach, between them, the rules of
+    /// setting up a match and of movement that a change could break.
     /// </summary>
     [Fact]
-    public void ItsGoldenReplaysReachTheRulesTheyGuard()
+    public void TheScriptReachesTheRulesItGuards() => Reach.MustHoldOnARecordingMadeNow();
+
+    /// <summary>Says, without failing, what the stored replays no longer reach of them.</summary>
+    [Fact]
+    public void ItsGoldenReplaysStillReachThem() => Reach.SayWhatTheGoldenReplaysNoLongerReach(Replays);
+
+    /// <summary>What the match of a replay reaches, in the words of the list of <see cref="Reach"/>.</summary>
+    private static HashSet<string> Reached(Sim.Serialization.Replay replay)
     {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var name in Replays)
+        var match = ReplayRuns.Start(replay);
+        var seen = KindsOfOrders(replay, match);
+        seen.Add($"map {replay.Description.MapId}");
+        seen.Add($"{replay.Description.Players.Count} players");
+        if (replay.Description.Players.Any(player => !player.HasStart))
         {
-            var replay = ReplayRuns.ReadGolden(name);
-            seen.Add($"map {replay.Description.MapId}");
-            seen.Add($"{replay.Description.Players.Count} players");
-            if (replay.Description.Players.Any(player => !player.HasStart))
-            {
-                seen.Add("a player without a start");
-            }
+            seen.Add("a player without a start");
+        }
 
-            if (replay.Description.Players[0].Start > replay.Description.Players[^1].Start)
-            {
-                seen.Add("starts swapped");
-            }
+        if (replay.Description.Players[0].Start > replay.Description.Players[^1].Start)
+        {
+            seen.Add("starts swapped");
+        }
 
-            var match = ReplayRuns.Start(replay);
-            seen.UnionWith(KindsOfOrders(replay, match));
-            var waited = new int[match.Movers.Count];
-            for (var tick = 0; tick < replay.TickCount; tick++)
+        var waited = new int[match.Movers.Count];
+        for (var tick = 0; tick < replay.TickCount; tick++)
+        {
+            match.Simulation.Tick();
+            for (var i = 0; i < waited.Length; i++)
             {
-                match.Simulation.Tick();
-                for (var i = 0; i < waited.Length; i++)
+                var state = match.Movers.ValueAt(i).State;
+                waited[i] = state == MoveState.Planning ? waited[i] + 1 : 0;
+                seen.Add(state switch
                 {
-                    var state = match.Movers.ValueAt(i).State;
-                    waited[i] = state == MoveState.Planning ? waited[i] + 1 : 0;
-                    seen.Add(state switch
-                    {
-                        MoveState.Idle => "a unit standing",
-                        MoveState.Moving => "a unit walking straight",
-                        MoveState.Following => "a unit walking a route",
-                        _ => waited[i] > 1 ? "a unit waiting more than a tick for a route" : "a unit waiting for a route",
-                    });
-                }
+                    MoveState.Idle => "a unit standing",
+                    MoveState.Moving => "a unit walking straight",
+                    MoveState.Following => "a unit walking a route",
+                    _ => waited[i] > 1 ? "a unit waiting more than a tick for a route" : "a unit waiting for a route",
+                });
             }
         }
 
-        string[] expected =
-        [
-            "map ridge",
-            "map switchback",
-            "2 players",
-            "3 players",
-            "a player without a start",
-            "starts swapped",
-            .. EveryKindOfOrder,
-            "a unit standing",
-            "a unit walking straight",
-            "a unit walking a route",
-            "a unit waiting for a route",
-            "a unit waiting more than a tick for a route",
-        ];
-        Assert.Equal(expected.Order(StringComparer.Ordinal), seen.Order(StringComparer.Ordinal));
+        return seen;
     }
 
     /// <summary>A move, or a command of a kind that nothing handles, which this script gives as well.</summary>
