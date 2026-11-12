@@ -77,6 +77,10 @@ internal static class RulesReader
 
         var mapRules = ReadMapRules(file.Required("map"));
 
+        var debug = file.Required("debug").Object();
+        var debugRules = new DebugRules(debug.Required("spawn").Boolean());
+        debug.End();
+
         file.End();
         return new RuleSet(
             lines,
@@ -91,7 +95,8 @@ internal static class RulesReader
             wallCrossingCost,
             new MatchRules(startEpoch, epochCap),
             startRules,
-            mapRules);
+            mapRules,
+            debugRules);
     }
 
     private static List<string> ReadRoster(JsonValue value, string what)
@@ -130,11 +135,6 @@ internal static class RulesReader
     {
         var map = value.Object();
 
-        var territory = map.Required("start_territory").Object();
-        var footprint = territory.Required("footprint").Integer(1, 16);
-        var radius = territory.Required("radius").Integer(1, DataRules.MaxMapSize);
-        territory.End();
-
         var depositSize = map.Required("deposit_size").Integer(1, 8);
 
         var deposits = map.Required("deposits").Object();
@@ -164,8 +164,6 @@ internal static class RulesReader
 
         map.End();
         return new MapRules(
-            footprint,
-            radius,
             depositSize,
             mainPerPlayer,
             naturalPerPlayer,
