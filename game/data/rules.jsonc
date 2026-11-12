@@ -51,6 +51,19 @@
   // Design 2.5. In the second path search, crossing one enemy wall tile costs this many tiles of walking.
   "wall_crossing_cost": 20,
 
+  // Design 2.4 and 2.5. The numbers of combat that belong to no line and no structure.
+  "combat": {
+    // A unit or a Tower without a target looks for one every this many ticks.
+    "look_interval_ticks": 4,
+    // Melee reach against a unit: the spacing between the two units plus this, in tiles.
+    "unit_reach_margin": "0.25",
+    // Melee reach against a structure, in tiles, to the nearest edge of its footprint.
+    "structure_reach": "0.75",
+    // The fortification rule: what multiplies the damage a structure takes from an attacker whose
+    // effective Firepower is below the Protection tier of the structure's owner.
+    "fortification": "0.5"
+  },
+
   // Design 5.2, first playable.
   "match": { "start_epoch": 1, "epoch_cap": 4 },
 
@@ -59,14 +72,22 @@
 
   // What every map must satisfy (design 5.3 and 5.4). datacheck enforces these on maps/*.jsonc.
   "map": {
-    // The starting Capitol's footprint (4 by 4) and territory radius (design 2.5). They are repeated
-    // here because structures have no data files yet; they must agree with the Capitol once it has one.
-    "start_territory": { "footprint": 4, "radius": 16 },
+    // A start is measured with the footprint and the territory radius of the starting Capitol,
+    // which are in structures/capitol.jsonc.
     // A deposit covers 2 by 2 tiles.
     "deposit_size": 2,
     // Two in each main base, one at each natural expansion, four contested: ten in total.
     "deposits": { "main_per_player": 2, "natural_per_player": 1, "contested": 4 },
     "chokepoint_width": { "min": 4, "max": 8 },
     "open_field_min_width": 20
+  },
+
+  // Switches for development. They are not in the design.
+  "debug": {
+    // Whether a match carries out the development spawn, a command that makes units of any chassis
+    // from nothing, for either player, and the development placement, which lays a finished
+    // structure the same way. It is on until units can be trained and structures built in a match,
+    // so that a fight can be seen and tested, and is turned off then.
+    "spawn": true
   }
 }

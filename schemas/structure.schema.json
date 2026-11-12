@@ -1,0 +1,91 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "structures/<id>.jsonc",
+  "description": "One structure (game design 2.5). Whole numbers are bare; a number with a fraction is text, such as \"2.5\".",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "footprint", "hp", "cost", "build_seconds", "sight"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": { "description": "The structure's ID. It must equal the file name and be in the roster in rules.jsonc.", "$ref": "#/definitions/id" },
+    "track": { "description": "The track whose tier the structure's look shows, from tracks.jsonc. Leave it out for a structure that shows none.", "$ref": "#/definitions/id" },
+    "unlock_tier": { "description": "The tier of \"track\" the owner needs to place the structure. Leave it out for a structure that is there from the start.", "type": "integer", "minimum": 2, "maximum": 20 },
+    "footprint": { "description": "The side of the square of tiles the structure stands on.", "type": "integer", "minimum": 1, "maximum": 8 },
+    "hp": { "description": "Hit points at Protection 1. Each Protection tier of the owner multiplies them.", "$ref": "#/definitions/number" },
+    "cost": { "description": "The price. For a wall, of one tile.", "$ref": "#/definitions/cost" },
+    "build_seconds": { "description": "Build time in seconds. It must be a whole number of ticks.", "$ref": "#/definitions/number" },
+    "sight": { "description": "Sight range in tiles when finished.", "type": "integer", "minimum": 1, "maximum": 64 },
+    "territory_radius": { "description": "The radius in tiles of the territory the structure gives its owner when finished.", "type": "integer", "minimum": 1, "maximum": 64 },
+    "research_slots": { "description": "Research slots the structure gives its owner when finished.", "type": "integer", "minimum": 1, "maximum": 8 },
+    "max_per_player": { "description": "The most a player may have, counting those under way.", "type": "integer", "minimum": 1, "maximum": 1000 },
+    "trains": {
+      "description": "What the structure trains, in the order it is offered: \"worker\", or a line ID from the roster whose file names this structure in \"built_at\".",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/definitions/id" }
+    },
+    "work_site": { "description": "The resource workers earn at the structure. How many it holds and what each earns are in resources.jsonc.", "enum": ["energy"] },
+    "attack": {
+      "description": "How the structure attacks when finished. The attack is always ranged.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dps", "interval_seconds", "range", "projectile_speed"],
+      "properties": {
+        "dps": { "description": "Damage per second at Firepower 1. Each Firepower tier of the owner multiplies it.", "$ref": "#/definitions/number" },
+        "interval_seconds": { "description": "Seconds between attacks. It must be a whole number of ticks.", "$ref": "#/definitions/number" },
+        "range": { "description": "Range in tiles, measured from the nearest edge of the footprint.", "$ref": "#/definitions/number" },
+        "projectile_speed": { "description": "How fast a shot flies, in tiles per second.", "$ref": "#/definitions/number" },
+        "cannot_hit": {
+          "description": "Lines the attack cannot hit.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/id" }
+        },
+        "can_hit_all_from_protection": { "description": "The owner's Protection tier from which \"cannot_hit\" no longer applies.", "type": "integer", "minimum": 2, "maximum": 20 }
+      }
+    },
+    "wall": {
+      "description": "Makes the structure the wall, which is laid tile by tile. Its footprint must be 1.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate"],
+      "properties": {
+        "gate": {
+          "description": "A wall tile its owner's units can walk through. It has the wall's hit points and sight.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cost", "build_seconds"],
+          "properties": {
+            "cost": { "$ref": "#/definitions/cost" },
+            "build_seconds": { "description": "Build time in seconds. It must be a whole number of ticks.", "$ref": "#/definitions/number" }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "id": {
+      "description": "Lowercase letters, digits and underscores, starting with a letter.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$"
+    },
+    "number": {
+      "description": "A whole number, or text in plain decimal notation such as \"2.5\". A bare number with a fraction is not accepted, so that every value is read exactly.",
+      "anyOf": [
+        { "type": "integer" },
+        { "type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$" }
+      ]
+    },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["materials", "energy"],
+      "properties": {
+        "materials": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "energy": { "type": "integer", "minimum": 0, "maximum": 1000000 }
+      }
+    }
+  }
+}

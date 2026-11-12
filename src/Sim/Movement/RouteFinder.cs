@@ -53,6 +53,52 @@ public sealed class RouteFinder
                 $"No walk leads from tile ({startX}, {startY}) to tile ({goalX}, {goalY}).", nameof(goalX));
         }
 
+        return Search(startX, startY, goalX, goalY, null, 1, out expansions) ?? throw new InvalidOperationException(
+            $"The search found no walk from tile ({startX}, {startY}) to tile ({goalX}, {goalY}) of one region.");
+    }
+
+    /// <summary>
+    /// The second search of design 2.5: the tiles of the cheapest way from the start tile to the
+    /// goal tile, both included, for a walker that may also cross the tiles marked in
+    /// <paramref name="crossable"/>, each at a high cost. Null when there is no way even so.
+    /// </summary>
+    /// <remarks>
+    /// The step that enters a marked tile costs <paramref name="crossingCost"/> times what it
+    /// would cost otherwise. A marked tile is not ground to walk on: a diagonal step still needs
+    /// both tiles beside it to be passable as they are now, so the way never slips between two
+    /// marked tiles that touch at a corner, and a way that crosses such a line goes through one
+    /// of them. Both ends must be passable or marked.
+    /// </remarks>
+    /// <param name="startX">The x of the start tile.</param>
+    /// <param name="startY">The y of the start tile.</param>
+    /// <param name="goalX">The x of the goal tile.</param>
+    /// <param name="goalY">The y of the goal tile.</param>
+    /// <param name="crossable">For each tile of the grid, as <c>y * width + x</c>, whether the walker may cross it though it is blocked.</param>
+    /// <param name="crossingCost">How many steps one step into a marked tile costs, at least 1.</param>
+    /// <param name="expansions">The number of tiles the search expanded.</param>
+    public int[]? FindAcross(int startX, int startY, int goalX, int goalY, bool[] crossable, int crossingCost, out int expansions)
+    {
+        ArgumentNullException.ThrowIfNull(crossable);
+        ArgumentOutOfRangeException.ThrowIfLessThan(crossingCost, 1);
+        if (crossable.Length != _grid.Width * _grid.Height)
+        {
+            throw new ArgumentException(
+                $"The marks are for {crossable.Length} tiles and the grid has {_grid.Width * _grid.Height}.", nameof(crossable));
+        }
+
+        if (!CanStandOrCross(startX, startY) || !CanStandOrCross(goalX, goalY))
+        {
+            throw new ArgumentException(
+                $"The walker can be on neither tile ({startX}, {startY}) nor tile ({goalX}, {goalY}), or on only one of them.", nameof(goalX));
+        }
+
+        return Search(startX, startY, goalX, goalY, crossable, crossingCost, out expansions);
+
+        bool CanStandOrCross(int x, int y) => _grid.Contains(x, y) && (_grid.IsPassable(x, y) || crossable[(y * _grid.Width) + x]);
+    }
+
+    private int[]? Search(int startX, int startY, int goalX, int goalY, bool[]? crossable, int crossingCost, out int expansions)
+    {
         var width = _grid.Width;
         if (_cost.Length == 0)
         {
@@ -74,6 +120,7 @@ public sealed class RouteFinder
         _seenIn[start] = _search;
         Push(new Candidate(Estimate(startX, startY), 0, start));
 
+        var found = false;
         while (_heapCount > 0)
         {
             var tile = Pop().Tile;
@@ -86,6 +133,7 @@ public sealed class RouteFinder
             expansions++;
             if (tile == goal)
             {
+                found = true;
                 break;
             }
 
@@ -95,9 +143,15 @@ public sealed class RouteFinder
             {
                 var nextX = x + StepX[direction];
                 var nextY = y + StepY[direction];
+                var steps = 1;
                 if (!_grid.IsPassable(nextX, nextY))
                 {
-                    continue;
+                    if (crossable is null || !_grid.Contains(nextX, nextY) || !crossable[(nextY * width) + nextX])
+                    {
+                        continue;
+                    }
+
+                    steps = crossingCost;
                 }
 
                 var diagonal = direction >= 4;
@@ -112,7 +166,7 @@ public sealed class RouteFinder
                     continue;
                 }
 
-                var cost = checked(_cost[tile] + (diagonal ? DiagonalCost : StraightCost));
+                var cost = checked(_cost[tile] + (steps * (diagonal ? DiagonalCost : StraightCost)));
                 if (_seenIn[next] == _search && _cost[next] <= cost)
                 {
                     continue;
@@ -123,6 +177,11 @@ public sealed class RouteFinder
                 _seenIn[next] = _search;
                 Push(new Candidate(checked(cost + Estimate(nextX, nextY)), OffLine(nextX, nextY), next));
             }
+        }
+
+        if (!found)
+        {
+            return null;
         }
 
         var length = 1;
