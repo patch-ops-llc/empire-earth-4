@@ -180,6 +180,7 @@ public class FogScriptTests
             && Enumerable.Range(0, match.Bodies.Count).Any(i =>
                 match.Bodies.ValueAt(i).Owner != spawn.Player
                 && match.World.Entities.IsAlive(match.Bodies.EntityAt(i))
+                && !match.Structures.Contains(match.Bodies.EntityAt(i))
                 && FixedVector2.DistanceSquaredRaw(match.Bodies.ValueAt(i).Position, point) <= FixedVector2.SquareRaw(sight));
     }
 
@@ -423,6 +424,13 @@ public class FogScriptTests
                     if (player == body.Owner)
                     {
                         Assert.True(match.Vision.Sees(player, entity));
+                        continue;
+                    }
+
+                    if (match.Structures.TryGet(entity, out var structure))
+                    {
+                        // Design 8.4, row 39: a structure is seen exactly while any tile of its footprint is visible.
+                        Assert.Equal(grid.IsAnyVisible(player, structure.Tiles), match.Vision.Sees(player, entity));
                         continue;
                     }
 

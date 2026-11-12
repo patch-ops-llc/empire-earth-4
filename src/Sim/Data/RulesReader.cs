@@ -140,11 +140,6 @@ internal static class RulesReader
     {
         var map = value.Object();
 
-        var territory = map.Required("start_territory").Object();
-        var footprint = territory.Required("footprint").Integer(1, 16);
-        var radius = territory.Required("radius").Integer(1, DataRules.MaxMapSize);
-        territory.End();
-
         var depositSize = map.Required("deposit_size").Integer(1, 8);
 
         var deposits = map.Required("deposits").Object();
@@ -174,8 +169,6 @@ internal static class RulesReader
 
         map.End();
         return new MapRules(
-            footprint,
-            radius,
             depositSize,
             mainPerPlayer,
             naturalPerPlayer,

@@ -24,9 +24,9 @@ public class FogOfWarTests
 
     private static Match Field() => Create(TestMaps.Open(40, 24));
 
-    /// <summary>Design 8.4, row 39, and design 5.3: at the start everything is unexplored except what the starting workers see.</summary>
+    /// <summary>Design 8.4, row 39, and design 5.3: at the start everything is unexplored except what the starting Capitol and workers see.</summary>
     [Fact]
-    public void AtTheStartEverythingIsUnexploredExceptWhatTheStartingWorkersSee()
+    public void AtTheStartEverythingIsUnexploredExceptWhatTheStartingCapitolAndWorkersSee()
     {
         var result = DataLoader.Load(GameDataOnDisk.Files());
         Assert.True(result.IsValid, string.Join(Environment.NewLine, result.Errors));
@@ -41,12 +41,19 @@ public class FogOfWarTests
                 .Select(i => match.Bodies.Get(match.Workers.EntityAt(i)))
                 .Where(body => body.Owner == player)
                 .Select(body => (body.Position, WorkerSight))
-                .ToArray();
-            Assert.Equal(data.Rules.Start.Workers, eyes.Length);
+                .ToList();
+            Assert.Equal(data.Rules.Start.Workers, eyes.Count);
 
-            VisionAssert.SeesExactly(grid, player, eyes);
+            // The Capitol sees from the middle of its footprint, as far as its file says (design 2.5: 10).
+            var capitol = Enumerable.Range(0, match.Structures.Count)
+                .Select(match.Structures.EntityAt)
+                .Single(structure => match.Bodies.Get(structure).Owner == player);
+            Assert.Equal(10, data.StartStructure.Sight);
+            eyes.Add((match.Bodies.Get(capitol).Position, data.StartStructure.Sight));
+
+            VisionAssert.SeesExactly(grid, player, [.. eyes]);
             Assert.Equal(grid.CountVisible(player), grid.CountExplored(player));
-            Assert.InRange(grid.CountVisible(player), 113, (match.Map.Width * match.Map.Height) / 4);
+            Assert.InRange(grid.CountVisible(player), 316, (match.Map.Width * match.Map.Height) / 4);
 
             // Not the other player's start, and none of the other player's workers.
             var other = match.Map.Starts[1 - player];

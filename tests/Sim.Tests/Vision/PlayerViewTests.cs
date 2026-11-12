@@ -35,7 +35,7 @@ public class PlayerViewTests
     {
         public Scene()
         {
-            Match = Create(
+            Match = FogMatches.Create(
                 TestMaps.FromRows([.. Enumerable.Range(0, 24).Select(y => y == 2 ? "..FF" + new string('.', 34) + "#." : new string('.', 40))])
                     .WithDeposits((10, 10), (30, 10)),
                 players: 3);
@@ -184,17 +184,17 @@ public class PlayerViewTests
     public void ADepositIsKnownOnceATileOfItIsExploredAndAGeneratorToItsOwner()
     {
         var scene = new Scene();
-        var generator = scene.Match.PlaceGenerator(0, 12, 14);
+        var generator = scene.Match.Place(0, "generator", 16, 18);
         var sites = new List<SeenWorkSite> { default };
 
         scene.Views[0].CollectWorkSites(sites);
         Assert.Equal(
-            [new SeenWorkSite(scene.West, WorkSiteKind.Deposit, 10, 10, 2), new SeenWorkSite(generator, WorkSiteKind.Generator, 12, 14, 2)],
+            [new SeenWorkSite(scene.West, WorkSiteKind.Deposit, 10, 10, 2), new SeenWorkSite(generator, WorkSiteKind.Generator, 16, 18, 2)],
             sites);
 
         // Player 1's worker sees a tile of the west deposit, and the tiles of the Generator, which is not a deposit and not its own.
         Assert.Equal(FogState.Visible, scene.Views[1].FogAt(11, 11));
-        Assert.Equal(FogState.Visible, scene.Views[1].FogAt(12, 14));
+        Assert.Equal(FogState.Visible, scene.Views[1].FogAt(16, 18));
         scene.Views[1].CollectWorkSites(sites);
         Assert.Equal([scene.West, scene.East], sites.Select(site => site.Entity));
 
@@ -587,8 +587,11 @@ public class PlayerViewTests
     public void EveryKindOfEventIsEitherSeenWhereItHappensOrKnownToItsPlayerAlone()
     {
         SimEventKind[] seenWhereItHappens =
-            [SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost];
-        SimEventKind[] knownToItsPlayerAlone = [SimEventKind.OrderRefused];
+        [
+            SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost,
+            SimEventKind.StructurePlaced, SimEventKind.StructureFinished, SimEventKind.StructureRemoved,
+        ];
+        SimEventKind[] knownToItsPlayerAlone = [SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded];
 
         foreach (var kind in Enum.GetValues<SimEventKind>())
         {
