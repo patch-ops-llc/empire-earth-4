@@ -10,7 +10,10 @@ namespace Sim.Structures;
 /// <summary>
 /// Puts structures on the map. A structure comes in two steps (design 2.5): it is laid, from
 /// which moment it blocks its tiles and has its full hit points, and it is finished, from which
-/// moment it gives what its file says: a territory, a research slot, a Generator's places.
+/// moment it gives what its file says: a territory, a research slot, what a Generator's places
+/// earn. A Generator is a work site from the moment it is laid, so that a worker can be sent to
+/// it and stand at its place (design 4.1); the places pay nothing until it is finished, which is
+/// a condition of the payment (<see cref="IncomeSystem"/>).
 /// Construction lays a structure when its worker arrives and finishes it when it has built
 /// itself; the match setup and fixtures do both at once, through <see cref="StructureSetup"/>.
 /// </summary>
@@ -84,7 +87,8 @@ public sealed class StructureFactory
     /// Lays a structure with its lowest tile at (x, y): an entity with a <see cref="Body"/> at the
     /// center of the footprint, the structure's full hit points under its owner's Protection tier,
     /// and its place in the store of structures. Its tiles are blocked at once, and units on
-    /// their way through them find another. Reported as a <see cref="SimEventKind.StructurePlaced"/>.
+    /// their way through them find another. A Generator is a work site from now on, one that
+    /// pays nothing while it is unfinished. Reported as a <see cref="SimEventKind.StructurePlaced"/>.
     /// </summary>
     /// <param name="player">The owner.</param>
     /// <param name="structure">One of the structures of the match's data.</param>
@@ -114,6 +118,12 @@ public sealed class StructureFactory
         _bodies.Add(entity, new Body { Owner = player, Position = center });
         _health.Add(entity, Health.Full(blueprint.HitPoints));
         _structures.Add(entity, new PlacedStructure { Type = structure.Index, X = x, Y = y, Size = structure.Footprint });
+        if (structure.IsEnergyWorkSite)
+        {
+            _workSites.Add(
+                entity,
+                new WorkSite { Kind = WorkSiteKind.Generator, Owner = player, X = x, Y = y, Size = structure.Footprint });
+        }
 
         _tiles.Changed(_world);
         _events.Add(SimEventKind.StructurePlaced, player, entity, position: center, amount: structure.Index);
@@ -122,7 +132,9 @@ public sealed class StructureFactory
 
     /// <summary>
     /// Gives a laid structure what comes with completion (design 2.5): the territory of a Capitol
-    /// or an Outpost, a research slot, the work site of a Generator. Call it once for a structure.
+    /// or an Outpost, a research slot. Call it once for a structure. What a Generator's places
+    /// earn comes with completion too, and needs nothing here: a payment asks whether the
+    /// Generator is still building itself.
     /// </summary>
     /// <exception cref="ArgumentException">The entity is no living structure.</exception>
     /// <exception cref="InvalidOperationException">
@@ -142,13 +154,6 @@ public sealed class StructureFactory
         if (def.TerritoryRadius is { } radius)
         {
             _territories.Add(entity, Territory.Around(body.Owner, structure.X, structure.Y, structure.Size, radius));
-        }
-
-        if (def.IsEnergyWorkSite)
-        {
-            _workSites.Add(
-                entity,
-                new WorkSite { Kind = WorkSiteKind.Generator, Owner = body.Owner, X = structure.X, Y = structure.Y, Size = structure.Size });
         }
 
         if (def.ResearchSlots > 0)

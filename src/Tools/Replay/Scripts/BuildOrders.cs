@@ -248,7 +248,14 @@ internal sealed class BuildOrders : OrderScript
 
             if (site.Kind == WorkSiteKind.Generator && site.Owner == player)
             {
-                return sites.EntityAt(i);
+                // A Generator is a work site while it builds itself too. The script sends workers
+                // to finished ones only, as it did when only those were work sites.
+                if (Match.Construction.IsFinished(sites.EntityAt(i)))
+                {
+                    return sites.EntityAt(i);
+                }
+
+                continue;
             }
 
             if (deposit == EntityId.None

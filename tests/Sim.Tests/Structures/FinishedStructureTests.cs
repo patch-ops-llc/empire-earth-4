@@ -57,8 +57,14 @@ public class FinishedStructureTests
 
         Assert.False(match.Grid.IsPassable(4, 4));
         Assert.Equal(2_000_000, match.Health.Get(capitol).HitPoints);
-        Assert.Equal((0, 0), (match.Territories.Count, match.WorkSites.Count));
+        Assert.Equal(0, match.Territories.Count);
         Assert.False(match.Research.State.Slot(0, 0).IsOpen);
+
+        // A Generator is a work site from the moment it is laid, so that a worker can stand at its
+        // place (design 4.1). What the place earns comes with completion: UnfinishedGeneratorTests.
+        Assert.Equal(
+            new WorkSite { Kind = WorkSiteKind.Generator, Owner = 0, X = 10, Y = 10, Size = 2 },
+            match.WorkSites.Get(generator));
 
         match.FinishStructure(capitol);
         match.FinishStructure(generator);

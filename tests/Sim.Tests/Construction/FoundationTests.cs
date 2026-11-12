@@ -108,7 +108,6 @@ public class FoundationTests
         match.Simulation.Run(499);
         Assert.Equal(499, match.Foundations.Get(generator).Built);
         Assert.False(match.Construction.IsFinished(generator));
-        Assert.Equal(0, match.WorkSites.Count);
         Assert.Empty(match.EventsOf(SimEventKind.StructureFinished));
 
         match.Simulation.Tick();

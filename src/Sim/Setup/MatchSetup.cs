@@ -136,7 +136,7 @@ public static class MatchSetup
         simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
         simulation.AddSystem(new StructureSystem(data, bodies, structures, foundations, structureTiles, research, simulation.Events));
         simulation.AddSystem(new ConstructionSystem(construction, data));
-        simulation.AddSystem(new IncomeSystem(data, grid, bodies, movers, workers, workSites, territories, stockpiles, work, research));
+        simulation.AddSystem(new IncomeSystem(data, grid, bodies, movers, workers, workSites, territories, foundations, stockpiles, work, research));
         simulation.AddSystem(new ResearchSystem(research));
 
         var match = new Match

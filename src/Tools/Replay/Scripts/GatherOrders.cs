@@ -38,12 +38,13 @@ internal sealed class GatherOrders : OrderScript
         var kind = _random.NextInt(100);
         var sites = Match.WorkSites;
         CollectUnitsOf(player);
-        if (Own.Count == 0 || sites.Count == 0)
+        var open = OpenSites();
+        if (Own.Count == 0 || open == 0)
         {
             return;
         }
 
-        var anySite = sites.EntityAt(_random.NextInt(sites.Count));
+        var anySite = OpenSite(_random.NextInt(open));
         if (kind < 40)
         {
             // To a deposit the player holds, where the workers earn. Any deposit when it holds none.
@@ -109,6 +110,42 @@ internal sealed class GatherOrders : OrderScript
             commands.Add(Gather(Match.Players.Count + _random.NextInt(5), Own, anySite));
         }
     }
+
+    /// <summary>
+    /// The number of work sites the script sends workers to: the deposits and the finished
+    /// Generators. A Generator is a work site while it builds itself too (design 4.1); the script
+    /// leaves those out, as it did when only finished ones were work sites, so that the matches
+    /// it records are the ones it recorded then.
+    /// </summary>
+    private int OpenSites()
+    {
+        var count = 0;
+        for (var i = 0; i < Match.WorkSites.Count; i++)
+        {
+            if (IsOpen(i))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private EntityId OpenSite(int pick)
+    {
+        for (var i = 0; i < Match.WorkSites.Count; i++)
+        {
+            if (IsOpen(i) && pick-- == 0)
+            {
+                return Match.WorkSites.EntityAt(i);
+            }
+        }
+
+        throw new InvalidOperationException("There are fewer work sites than were counted.");
+    }
+
+    private bool IsOpen(int index) =>
+        Match.WorkSites.ValueAt(index).Kind == WorkSiteKind.Deposit || !Match.Foundations.Contains(Match.WorkSites.EntityAt(index));
 
     private static Command Gather(int player, List<EntityId> units, EntityId site) =>
         new(CommandType.Gather, player, [.. units], targetEntity: site);
