@@ -34,6 +34,14 @@ internal static class WalledMatches
     public static EntityId UnseenWallTile(this Match match, int player, int x, int y) =>
         match.PlaceStructure(player, SiegeMatches.Wall, x, y);
 
+    /// <summary>A finished gate of a player, which every other player remembers.</summary>
+    public static EntityId GateTile(this Match match, int player, int x, int y)
+    {
+        var gate = match.PlaceStructure(player, "gate", x, y);
+        match.MakeKnown(gate);
+        return gate;
+    }
+
     /// <summary>Lets every other player remember a structure as it is now, as if each had seen it.</summary>
     public static void MakeKnown(this Match match, EntityId structure)
     {

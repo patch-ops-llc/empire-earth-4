@@ -20,6 +20,7 @@ public class GatesScriptTests
         "a gate ordered beside a wall",
         "a gate ordered elsewhere",
         "a camp ordered with a gate in its ring",
+        "a camp laid whole with a gate in its ring",
         "a gate order taken",
         "a gate order refused: the site is not free",
         "a gate order refused: outside the territory",
@@ -52,6 +53,15 @@ public class GatesScriptTests
         "a melee hit on a gate",
         "a shot at a gate",
         "a gate destroyed",
+
+        // Under the fog of war (design 5.3): a gate of an enemy is known as a wall tile is.
+        // The first is an order as well. Whether a match has a gate that a player with fighting
+        // units has never seen turns on where its units have been, so it is asked of this
+        // match and not of every match of the script.
+        "an attack order on a gate its player has never seen",
+        "an attack order on a gate its player has never seen is refused",
+        "a unit has a gate in its way that its player came to know after its order",
+        "a gate in a unit's way that nobody of its side sees",
     ];
 
     /// <summary>
@@ -80,7 +90,7 @@ public class GatesScriptTests
 
         Assert.NotEmpty(replay.Commands);
         Assert.All(replay.Commands, entry => Assert.True(
-            entry.Command.Type is CommandType.Build or CommandType.BuildWall or CommandType.CancelBuild or CommandType.Move,
+            entry.Command.Type is CommandType.Build or CommandType.BuildWall or CommandType.CancelBuild or CommandType.Move or CommandType.DebugPlace,
             $"The script gave a command of type {entry.Command.Type}."));
         Assert.All(
             replay.Commands.Where(entry => entry.Command.Type == CommandType.Build),
@@ -130,6 +140,9 @@ public class GatesScriptTests
         private readonly HashSet<EntityId> _withGateOrder = [];
         private readonly Dictionary<EntityId, (int X, int Y)> _tileBefore = [];
         private readonly Dictionary<EntityId, (int X, int Y)> _cameFrom = [];
+        private readonly Dictionary<(int Player, EntityId Gate), int> _knownSince = [];
+        private readonly Dictionary<EntityId, int> _orderedAt = [];
+        private bool _laidWhole;
 
         public HashSet<string> Run(Sim.Serialization.Replay replay)
         {
@@ -179,6 +192,8 @@ public class GatesScriptTests
                 }
             }
 
+            NoteWhatIsKnown();
+
             _withGateOrder.Clear();
             for (var i = 0; i < match.BuildOrders.Count; i++)
             {
@@ -199,13 +214,48 @@ public class GatesScriptTests
             }
         }
 
+        /// <summary>For each gate that stands and each player, the first tick before which the player knew of it.</summary>
+        private void NoteWhatIsKnown()
+        {
+            for (var i = 0; i < match.Structures.Count; i++)
+            {
+                var gate = match.Structures.EntityAt(i);
+                if (match.Structures.ValueAt(i).Type != _gate || !match.World.Entities.IsAlive(gate))
+                {
+                    continue;
+                }
+
+                for (var player = 0; player < match.Players.Count; player++)
+                {
+                    if (match.Vision.KnowsStructure(player, gate))
+                    {
+                        _knownSince.TryAdd((player, gate), match.World.Tick);
+                    }
+                }
+            }
+        }
+
         /// <summary>What the commands due in the next tick are, judged on the match as the script saw it.</summary>
         private void OrdersBefore(Command[] commands)
         {
             _cancelled.Clear();
+            _laidWhole = commands.Any(command => command.Type == CommandType.DebugPlace && command.ContentId == _gate);
+            if (_laidWhole)
+            {
+                _seen.Add("a camp laid whole with a gate in its ring");
+            }
+
             foreach (var command in commands)
             {
                 var entities = command.Entities.ToArray();
+                if (command.Type is CommandType.Move or CommandType.AttackMove or CommandType.Attack or CommandType.Stop)
+                {
+                    foreach (var entity in entities)
+                    {
+                        _orderedAt[entity] = match.World.Tick;
+                    }
+                }
+
                 var own = entities.Where(entity =>
                     match.Movers.Contains(entity) && match.Bodies.TryGet(entity, out var body) && body.Owner == command.Player).ToArray();
                 var point = new FixedVector2(command.TargetX, command.TargetY);
@@ -264,7 +314,9 @@ public class GatesScriptTests
                         && match.Bodies.TryGet(command.TargetEntity, out var target)
                         && target.Owner != command.Player
                         && own.Any(match.Combatants.Contains):
-                        _seen.Add("an attack order on a gate");
+                        _seen.Add(match.Vision.KnowsStructure(command.Player, command.TargetEntity)
+                            ? "an attack order on a gate"
+                            : "an attack order on a gate its player has never seen");
                         break;
                     default:
                         break;
@@ -275,6 +327,19 @@ public class GatesScriptTests
         /// <summary>What the gate orders of the tick that has just run came to, from its events.</summary>
         private void OrdersAfter(Command[] commands)
         {
+            foreach (var reported in match.Simulation.Events)
+            {
+                // Whether the player knew of the gate is asked after the tick: it comes to know
+                // nothing through an order that was refused.
+                if (reported.Kind == SimEventKind.OrderRefused
+                    && reported.Amount == (long)CommandType.Attack
+                    && IsGate(reported.Other)
+                    && !match.Vision.KnowsStructure(reported.Player, reported.Other))
+                {
+                    _seen.Add("an attack order on a gate its player has never seen is refused");
+                }
+            }
+
             var given = commands.Count(IsGateOrder);
             if (given == 0)
             {
@@ -313,7 +378,7 @@ public class GatesScriptTests
             {
                 switch (reported.Kind)
                 {
-                    case SimEventKind.StructurePlaced when reported.Amount == _gate:
+                    case SimEventKind.StructurePlaced when reported.Amount == _gate && !_laidWhole:
                         _seen.Add("a gate laid");
                         break;
                     case SimEventKind.StructureFinished when IsGate(reported.Entity):
@@ -362,15 +427,30 @@ public class GatesScriptTests
                 }
             }
 
+            NoteWhatIsKnown();
             for (var i = 0; i < match.Combatants.Count; i++)
             {
+                var unit = match.Combatants.EntityAt(i);
                 var wall = match.Combatants.ValueAt(i).WallInWay;
-                if (wall != EntityId.None
-                    && match.World.Entities.IsAlive(match.Combatants.EntityAt(i))
-                    && match.Structures.TryGet(wall, out var tile)
-                    && tile.Type == _gate)
+                if (wall == EntityId.None
+                    || !match.World.Entities.IsAlive(unit)
+                    || !match.World.Entities.IsAlive(wall)
+                    || !match.Structures.TryGet(wall, out var tile)
+                    || tile.Type != _gate)
                 {
-                    _seen.Add("a unit with a gate in its way");
+                    continue;
+                }
+
+                _seen.Add("a unit with a gate in its way");
+                var owner = match.Bodies.Get(unit).Owner;
+                if (!match.Vision.Sees(owner, wall))
+                {
+                    _seen.Add("a gate in a unit's way that nobody of its side sees");
+                }
+
+                if (_orderedAt.TryGetValue(unit, out var ordered) && _knownSince.TryGetValue((owner, wall), out var known) && known > ordered)
+                {
+                    _seen.Add("a unit has a gate in its way that its player came to know after its order");
                 }
             }
 
@@ -403,7 +483,7 @@ public class GatesScriptTests
         /// <summary>
         /// What must hold after every tick: a unit stands on a tile of wall only when the tile
         /// is a finished gate of its own player, and the wall in a unit's way, while it stands,
-        /// is a wall or a gate of another player.
+        /// is a wall or a gate of another player that the unit's player sees or remembers.
         /// </summary>
         private void CheckWhatMustHold()
         {
@@ -442,6 +522,9 @@ public class GatesScriptTests
                     match.Structures.TryGet(wall, out var tile) && match.WallMap.IsWall(tile.Type),
                     $"Tick {match.World.Tick}: {entity} has {wall} in its way, which is no wall.");
                 Assert.NotEqual(match.Bodies.Get(entity).Owner, match.Bodies.Get(wall).Owner);
+                Assert.True(
+                    match.Vision.KnowsStructure(match.Bodies.Get(entity).Owner, wall),
+                    $"Tick {match.World.Tick}: {entity} has {wall} in its way, which its player has never seen.");
             }
         }
     }

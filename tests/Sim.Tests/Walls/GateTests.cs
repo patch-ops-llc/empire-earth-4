@@ -33,7 +33,9 @@ public class GateTests
 
     /// <summary>
     /// The camp of player 1 with a finished gate, on the west side unless another tile of the
-    /// ring is named. A second tile of the ring may be left open.
+    /// ring is named. A second tile of the ring may be left open. Player 0 remembers the ring and
+    /// its gate, as it does every wall of <see cref="WalledMatches"/>; <c>GatesInFogTests</c> is
+    /// about a gate nobody has seen.
     /// </summary>
     private static Match WithCamp((int X, int Y)? gate = null, int wallHitPoints = 24, (int X, int Y)? gap = null)
     {
@@ -50,7 +52,7 @@ public class GateTests
             }
         }
 
-        match.PlaceStructure(1, Gate, gateX, gateY);
+        match.GateTile(1, gateX, gateY);
         match.WeakenWalls(wallHitPoints);
         return match;
     }
@@ -361,6 +363,7 @@ public class GateTests
         var match = WithCamp(wallHitPoints: 400);
         var inGate = match.SpawnWorker(1, "14.5", "12.5");
         var unit = match.Spawn(0, Hoplite, "5.5", "12.5");
+        match.Watcher(0, "10.5", "9.5");
         match.RefreshDerivedState();
         var walls = match.WallHitPoints();
         match.OrderAttack(0, inGate, unit);

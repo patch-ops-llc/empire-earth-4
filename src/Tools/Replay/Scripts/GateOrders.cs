@@ -8,9 +8,10 @@ namespace Tools.Replay.Scripts;
 
 /// <summary>
 /// Gates (18b): build orders for gates in the lines of wall that the player's workers are laying,
-/// beside its walls and anywhere else, camps with a gate in their ring, orders that cancel a
-/// gate, the owner's units sent through their gates and into them, and fighting units sent past
-/// the gates of an enemy and at them.
+/// beside its walls and anywhere else, camps with a gate in their ring, a few such camps laid
+/// whole with the development placement, orders that cancel a gate, the owner's units sent
+/// through their gates and into them, and fighting units sent past the gates of an enemy and at
+/// them.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -32,11 +33,36 @@ namespace Tools.Replay.Scripts;
 /// orders that leave the gate's tile out, or now and then come to it last. The ground inside is
 /// closed to everyone but the owner.
 /// </para>
+/// <para>
+/// A camp that workers lay takes long, and a match may end before one is closed. So the script
+/// also lays a few camps whole, with the development placement, each with a finished gate on one
+/// corner: at most <see cref="MostCampsLaidWhole"/> for a player. They are what the rules of a
+/// closed camp are most often reached in: ground only the owner can reach, units that walk
+/// through their gate, and units of an enemy with the gate in their way.
+/// </para>
+/// <para>
+/// A player's units have only the gates in their way that the player sees or remembers, and an
+/// attack order may only name such a gate (design 5.3). So the script sorts the gates of the
+/// others into those the player knows and those it has never seen, and takes one of each kind
+/// in turn when there are both, for each of its two orders: fighting units sent past a gate their player has never seen
+/// come to know it on their way, and the attack order on it is refused. Of the gates it knows,
+/// it tries first those that nobody of the player sees now, which its units have in their way
+/// from memory.
+/// </para>
+/// <para>
+/// A gate order is cancelled while its worker is on the way only when the order to cancel
+/// comes in that time. So one gate order in four is followed by its own: the script notes the
+/// worker and gives the order to cancel a few ticks later, if the worker still has the gate to
+/// lay then.
+/// </para>
 /// </remarks>
 [OrderScript("gates")]
 internal sealed class GateOrders : OrderScript
 {
     private const int LongestPause = 60;
+
+    /// <summary>The most camps the script lays whole for one player.</summary>
+    private const int MostCampsLaidWhole = 2;
 
     /// <summary>How many places the script tries before it settles for one that may not do.</summary>
     private const int PlacesTried = 16;
@@ -48,11 +74,19 @@ internal sealed class GateOrders : OrderScript
 
     private readonly DeterministicRandom _random;
     private readonly StructureDef? _gate;
+    private readonly StructureDef? _wall;
+    private readonly int[] _campsLaidWhole;
     private readonly List<EntityId> _workers = [];
     private readonly List<EntityId> _fighters = [];
     private readonly List<EntityId> _found = [];
     private readonly List<EntityId> _gates = [];
     private readonly List<EntityId> _enemyGates = [];
+    private readonly List<EntityId> _unseenGates = [];
+    private readonly List<EntityId> _rememberedGates = [];
+    private readonly List<(int Tick, int Player, EntityId Worker)> _toCancel = [];
+
+    // Whether the last gate picked was one its player had never seen: for the orders past a gate, and for those at one.
+    private readonly bool[] _lastWasUnseen = new bool[2];
     private readonly List<EntityId> _walls = [];
     private int _nextTick;
 
@@ -62,11 +96,19 @@ internal sealed class GateOrders : OrderScript
         _random = setup.Generator(Generator);
         _nextTick = 1 + _random.NextInt(10);
         _gate = Match.Data.Gate;
+        _wall = Match.Data.Structures.FirstOrDefault(structure => structure.Wall is not null);
+        _campsLaidWhole = new int[Match.Players.Count];
     }
 
     public override void AddOrdersFor(int tick, List<Command> commands)
     {
-        if (_gate is null || tick < _nextTick)
+        if (_gate is null)
+        {
+            return;
+        }
+
+        CancelWhatWasNoted(tick, commands);
+        if (tick < _nextTick)
         {
             return;
         }
@@ -127,9 +169,13 @@ internal sealed class GateOrders : OrderScript
                 commands.Add(new Command(CommandType.CancelBuild, player, [Any(_found)]));
             }
         }
-        else if (kind < 73)
+        else if (kind < 70)
         {
             ThroughOwnGate(player, commands);
+        }
+        else if (kind < 73)
+        {
+            CampLaidWhole(player, commands);
         }
         else if (kind < 80)
         {
@@ -141,31 +187,48 @@ internal sealed class GateOrders : OrderScript
                 commands.Add(new Command(CommandType.Move, player, [Any(Idle())], Near(gate.X, Fixed.RawOne / 2), Near(gate.Y, Fixed.RawOne / 2)));
             }
         }
-        else if (_fighters.Count > 0 && _enemyGates.Count > 0)
+        else if (_fighters.Count > 0 && _enemyGates.Count + _unseenGates.Count > 0)
         {
-            var gate = Any(_enemyGates);
+            var turn = kind < 90 ? 0 : 1;
+            var gates = _enemyGates.Count > 0 && (_unseenGates.Count == 0 || _lastWasUnseen[turn]) ? _enemyGates : _unseenGates;
+            _lastWasUnseen[turn] = gates == _unseenGates;
+            var gate = Any(gates);
             EntityId[] sent = [.. Some(_fighters)];
             if (kind < 90)
             {
-                // To ground behind a gate of an enemy. The script looks for a gate and a place
-                // within three tiles of it that the gate, of all the tiles of wall, is in the
-                // way to. Where it finds none, the place is one or two tiles past a gate on
-                // the side away from the first of the units.
-                var from = Match.Bodies.Get(sent[0]).Position;
-                var at = Match.Bodies.Get(gate).Position;
-                var (dx, dy) = (at.X.Raw - from.X.Raw, at.Y.Raw - from.Y.Raw);
-                var past = (1 + _random.NextInt(2)) * Fixed.RawOne;
-                var place = Math.Abs(dx) >= Math.Abs(dy)
-                    ? new FixedVector2(Fixed.FromRaw(at.X.Raw + (Math.Sign(dx) * past)), Near(at.Y, Fixed.RawOne / 2))
-                    : new FixedVector2(Near(at.X, Fixed.RawOne / 2), Fixed.FromRaw(at.Y.Raw + (Math.Sign(dy) * past)));
+                // To ground behind a gate of an enemy. The script looks for a gate, a unit and
+                // a place that the gate, of all the tiles of wall, is in the unit's way to: the
+                // tile straight behind the gate as the unit comes to it, or a place within three
+                // tiles. For a gate the player has never seen it looks for a place the unit
+                // cannot reach and that no wall it knows keeps it from, so that the unit comes
+                // to know the gate on its way. Where it finds none, the place is one or two
+                // tiles past a gate on the side away from the first of the units.
+                var known = gates == _enemyGates;
+                var walked = Match.Grid.For(player);
+                var place = Behind(Match.Bodies.Get(gate).Position, Match.Bodies.Get(sent[0]).Position, 1 + _random.NextInt(2), exact: false);
                 for (var i = 0; i < PlacesTried; i++)
                 {
-                    var tried = Any(_enemyGates);
-                    at = Match.Bodies.Get(tried).Position;
-                    var behind = new FixedVector2(Near(at.X, 3 * Fixed.RawOne), Near(at.Y, 3 * Fixed.RawOne));
-                    if (Match.Grid.Contains(behind) && Match.Breaching.FindWall(player, from, behind, out _) == tried)
+                    var tried = Any(known && _rememberedGates.Count > 0 && i < PlacesTried / 2 ? _rememberedGates : gates);
+                    var unit = Any(_fighters);
+                    var from = Match.Bodies.Get(unit).Position;
+                    var at = Match.Bodies.Get(tried).Position;
+                    var behind = i % 2 == 0
+                        ? Behind(at, from, 1, exact: true)
+                        : new FixedVector2(Near(at.X, 3 * Fixed.RawOne), Near(at.Y, 3 * Fixed.RawOne));
+                    if (!Match.Grid.Contains(behind))
+                    {
+                        continue;
+                    }
+
+                    if (known
+                        ? Match.Breaching.FindWall(player, from, behind, out _) == tried
+                        : Match.Grid.IsPassable(behind)
+                            && walked.RegionOf(behind) != walked.RegionOf(from)
+                            && !Match.Breaching.IsCutOff(player, from, behind)
+                            && FixedVector2.DistanceSquaredRaw(from, at) < FixedVector2.DistanceSquaredRaw(from, behind))
                     {
                         place = behind;
+                        sent = [unit, .. sent.Where(other => other != unit)];
                         break;
                     }
                 }
@@ -269,6 +332,43 @@ internal sealed class GateOrders : OrderScript
     }
 
     /// <summary>
+    /// A camp one or two steps wide round a free tile of the player's territory, every tile of
+    /// it put there finished with the development placement: a gate on one corner and wall on
+    /// the rest. A tile that has no room is left out.
+    /// </summary>
+    private void CampLaidWhole(int player, List<Command> commands)
+    {
+        if (_wall is null
+            || _workers.Count == 0
+            || _campsLaidWhole[player] >= MostCampsLaidWhole
+            || !TryPickTileInTerritory(player, out var middle))
+        {
+            return;
+        }
+
+        var radius = 1 + _random.NextInt(2);
+        var corner = Sides[_random.NextInt(Sides.Length)];
+        var gate = (X: middle.X + (corner.X * radius), Y: middle.Y + (corner.Y * radius));
+        _campsLaidWhole[player]++;
+        for (var dx = -radius; dx <= radius; dx++)
+        {
+            var dy = radius - Math.Abs(dx);
+            AddTile(middle.X + dx, middle.Y + dy);
+            if (dy != 0)
+            {
+                AddTile(middle.X + dx, middle.Y - dy);
+            }
+        }
+
+        void AddTile(int x, int y)
+        {
+            var point = MapGrid.TileCenter(x, y);
+            var structure = (x, y) == gate ? _gate! : _wall;
+            commands.Add(new Command(CommandType.DebugPlace, player, targetX: point.X, targetY: point.Y, contentId: structure.Index));
+        }
+    }
+
+    /// <summary>
     /// The player's units that have nothing to build, so that sending one somewhere ends no
     /// order: all of its units when every one has something to build.
     /// </summary>
@@ -279,6 +379,43 @@ internal sealed class GateOrders : OrderScript
         return _found.Count > 0 ? _found : Own;
     }
 
+    /// <summary>
+    /// A place so many tiles past a gate on the side away from a unit, along the axis on which
+    /// the unit is further from the gate: the middle of that tile, or a point near the gate's
+    /// place on the other axis.
+    /// </summary>
+    private FixedVector2 Behind(FixedVector2 gate, FixedVector2 from, int tiles, bool exact)
+    {
+        var (dx, dy) = (gate.X.Raw - from.X.Raw, gate.Y.Raw - from.Y.Raw);
+        var past = tiles * Fixed.RawOne;
+        var slack = exact ? 0 : Fixed.RawOne / 2;
+        return Math.Abs(dx) >= Math.Abs(dy)
+            ? new FixedVector2(Fixed.FromRaw(gate.X.Raw + (Math.Sign(dx) * past)), Near(gate.Y, slack))
+            : new FixedVector2(Near(gate.X, slack), Fixed.FromRaw(gate.Y.Raw + (Math.Sign(dy) * past)));
+    }
+
+    /// <summary>
+    /// The orders to cancel that are due: each for a worker that was given a gate to lay a few
+    /// ticks ago and is still on its way.
+    /// </summary>
+    private void CancelWhatWasNoted(int tick, List<Command> commands)
+    {
+        for (var i = _toCancel.Count - 1; i >= 0; i--)
+        {
+            var (due, player, worker) = _toCancel[i];
+            if (tick < due)
+            {
+                continue;
+            }
+
+            _toCancel.RemoveAt(i);
+            if (Match.World.Entities.IsAlive(worker) && Match.BuildOrders.TryGet(worker, out var order) && order.Type == _gate!.Index)
+            {
+                commands.Add(new Command(CommandType.CancelBuild, player, [worker]));
+            }
+        }
+    }
+
     /// <summary>A build order for a gate on a tile, to a worker: to one of the player's without a wall order, if it has one, when none is named.</summary>
     private Command Gate(int player, (int X, int Y) tile, EntityId worker = default)
     {
@@ -287,6 +424,10 @@ internal sealed class GateOrders : OrderScript
             _found.Clear();
             _found.AddRange(_workers.Where(candidate => !Match.Walls.Has(candidate)));
             worker = Any(_found.Count > 0 ? _found : _workers);
+            if (_random.NextInt(4) == 0)
+            {
+                _toCancel.Add((Match.World.Tick + 3 + _random.NextInt(20), player, worker));
+            }
         }
 
         var point = PointIn(tile);
@@ -389,7 +530,8 @@ internal sealed class GateOrders : OrderScript
 
     /// <summary>
     /// Sorts what there is for a player: its workers, its units that fight, its gates and its
-    /// plain tiles of wall, finished or not, and the gates of the others.
+    /// plain tiles of wall, finished or not, and the gates of the others: those the player sees
+    /// or remembers, of them those it only remembers, and those it has never seen.
     /// </summary>
     private void Collect(int player)
     {
@@ -410,6 +552,8 @@ internal sealed class GateOrders : OrderScript
 
         _gates.Clear();
         _enemyGates.Clear();
+        _unseenGates.Clear();
+        _rememberedGates.Clear();
         _walls.Clear();
         var structures = Match.Structures;
         for (var i = 0; i < structures.Count; i++)
@@ -432,9 +576,17 @@ internal sealed class GateOrders : OrderScript
             {
                 _gates.Add(entity);
             }
+            else if (!Match.Vision.KnowsStructure(player, entity))
+            {
+                _unseenGates.Add(entity);
+            }
             else
             {
                 _enemyGates.Add(entity);
+                if (!Match.Vision.Sees(player, entity))
+                {
+                    _rememberedGates.Add(entity);
+                }
             }
         }
     }
