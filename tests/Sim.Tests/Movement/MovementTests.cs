@@ -208,13 +208,16 @@ public class MovementTests
         Assert.False(match.Movers.Contains(unit));
         Assert.Equal(1, match.Bodies.Count);
 
+        // The other unit goes on to its place in the group of two: one tile below the target.
         match.Simulation.Run(60);
-        Assert.Equal(Point("10.5", "2.5"), match.PositionOf(other));
+        Assert.Equal(Point("10.5", "3.5"), match.PositionOf(other));
     }
 
     /// <summary>
-    /// Design 5.2 and 5.3: both players start alike on a mirrored map. Movement keeps it so: mirrored
-    /// units given mirrored orders stay mirror images of each other on every tick.
+    /// Design 5.2 and 5.3: both players start alike on a mirrored map. Movement keeps it so where
+    /// the two sides do not meet: mirrored units given mirrored orders stay mirror images of each
+    /// other on every tick, also while they step apart from their own side. Where enemy units
+    /// meet, the one with the lower ID moves first, and the design does not ask for a mirror image.
     /// </summary>
     [Theory]
     [InlineData(true)]
@@ -227,9 +230,10 @@ public class MovementTests
         FixedVector2 Mirror(FixedVector2 point) => mirrorX
             ? new FixedVector2(Fixed.FromInt(Size) - point.X, point.Y)
             : new FixedVector2(point.X, Fixed.FromInt(Size) - point.Y);
+        // Two tiles short of the middle, so that the two sides stay out of each other's way.
         FixedVector2 RandomPoint() => new(
-            Fixed.FromRaw(random.NextInt(1, (Size / 2) * Fixed.RawOne)),
-            Fixed.FromRaw(random.NextInt(1, (Size / 2) * Fixed.RawOne)));
+            Fixed.FromRaw(random.NextInt(1, ((Size / 2) - 2) * Fixed.RawOne)),
+            Fixed.FromRaw(random.NextInt(1, ((Size / 2) - 2) * Fixed.RawOne)));
 
         var pairs = new List<(EntityId Left, EntityId Right)>();
         for (var i = 0; i < 12; i++)
@@ -292,6 +296,10 @@ public class MovementTests
             (match, unit) => match.Movers.Get(unit).RouteStart = 1,
             (match, unit) => match.Movers.Get(unit).RouteGoal = 1,
             (match, unit) => match.Movers.Get(unit).RouteNode = 1,
+            (match, unit) => match.Movers.Get(unit).Spacing = Fixed.Half,
+            (match, unit) => match.Movers.Get(unit).Spread = Point("1", "0"),
+            (match, unit) => match.Movers.Get(unit).Spread = Point("0", "1"),
+            (match, unit) => match.Movers.Get(unit).Waiting = true,
         ];
 
         var hashes = changes.Select(HashWith).ToArray();

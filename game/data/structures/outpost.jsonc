@@ -1,0 +1,14 @@
+// Outpost: claims territory away from the Capitol (game design 2.5 and 4.5).
+{
+  "$schema": "../../../schemas/structure.schema.json",
+  "id": "outpost",
+
+  // No "track": an Outpost looks the same at every tier.
+  "footprint": 3,
+  "hp": 1200,
+  "cost": { "materials": 250, "energy": 0 },
+  "build_seconds": 45,
+  "sight": 8,
+
+  "territory_radius": 12
+}
