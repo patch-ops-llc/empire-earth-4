@@ -44,6 +44,12 @@ public sealed record ShellCount(int Landed, int Caught, int MostCaught)
     public static ShellCount None { get; } = new(0, 0, 0);
 
     public double AverageCaught => Landed == 0 ? 0 : (double)Caught / Landed;
+
+    public ShellCount Plus(ShellCount other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        return new(Landed + other.Landed, Caught + other.Caught, Math.Max(MostCaught, other.MostCaught));
+    }
 }
 
 /// <summary>One fight of a battle, one way round.</summary>
@@ -53,6 +59,9 @@ public sealed record ShellCount(int Landed, int Caught, int MostCaught)
 /// <param name="TimedOut">True when both armies still had units when the time ran out.</param>
 public sealed record BattleResult(bool MassWest, Side? Winner, int Ticks, bool TimedOut, ArmyResult Mass, ArmyResult Elite, ShellCount Shells)
 {
+    /// <summary>The hits of the fight that splash (design 2.3, Overgunned II), and how many other units each reached.</summary>
+    public SplashCount Splashes { get; init; } = SplashCount.None;
+
     public double Seconds => (double)Ticks / SimInfo.TicksPerSecond;
 
     public ArmyResult Of(Side side) => side == Side.Mass ? Mass : Elite;
@@ -149,11 +158,13 @@ public static class Battle
         var fight = Start(data, battle, massWest);
         var match = fight.Match;
         var shells = new ShellCounter();
+        var splashes = new SplashCounter();
         var living = new[] { fight.Units(Side.Mass).Length, fight.Units(Side.Elite).Length };
         while (match.World.Tick < mostTicks && living[0] > 0 && living[1] > 0)
         {
             match.Simulation.Tick();
             shells.AfterTick(match);
+            splashes.AfterTick(match);
             fight.CountAttacks();
             living[0] = fight.Living(Side.Mass);
             living[1] = fight.Living(Side.Elite);
@@ -167,7 +178,10 @@ public static class Battle
             TimedOut: living[0] > 0 && living[1] > 0,
             fight.Result(Side.Mass),
             fight.Result(Side.Elite),
-            shells.Count);
+            shells.Count)
+        {
+            Splashes = splashes.Count,
+        };
     }
 
     /// <summary>The match of a fight before its first tick: the armies in place and their one order each scheduled.</summary>

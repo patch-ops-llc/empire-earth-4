@@ -30,12 +30,17 @@ public sealed record BattleReport(BattleDef Battle, BattleResult MassWest, Battl
         output.WriteLine($"{Battle.Number}. {Battle.Name}");
         output.WriteLine($"   mass:   {Army(Side.Mass)}");
         output.WriteLine($"   elite:  {Army(Side.Elite)}");
-        output.WriteLine($"   target: {Battle.Target.Text}. The design expects, with its starting numbers: {Battle.Expected}.");
+        output.WriteLine(Battle.IsMeasure
+            ? $"   target: {Battle.Target.Text}."
+            : $"   target: {Battle.Target.Text}. The design expects, with its starting numbers: {Battle.Expected}.");
         WriteFight(output, "mass west", MassWest);
         WriteFight(output, "mass east", MassEast);
         output.WriteLine(Invariant(
             $"   between the two fights: {(SameWinner ? "the same winner" : "a different winner")}, {DifferenceInPoints:0.0} points of army value kept apart"));
-        output.WriteLine(Met ? "   target MET" : $"   target MISSED{WhyMissed()}");
+        if (!Battle.IsMeasure)
+        {
+            output.WriteLine(Met ? "   target MET" : $"   target MISSED{WhyMissed()}");
+        }
     }
 
     public static void WriteSummary(IReadOnlyList<BattleReport> reports, TextWriter output)
@@ -43,10 +48,11 @@ public sealed record BattleReport(BattleDef Battle, BattleResult MassWest, Battl
         ArgumentNullException.ThrowIfNull(reports);
         ArgumentNullException.ThrowIfNull(output);
 
-        var met = reports.Where(report => report.Met).Select(report => report.Battle.Number).ToList();
-        var missed = reports.Where(report => !report.Met).Select(report => report.Battle.Number).ToList();
+        var judged = reports.Where(report => !report.Battle.IsMeasure).ToList();
+        var met = judged.Where(report => report.Met).Select(report => report.Battle.Number).ToList();
+        var missed = judged.Where(report => !report.Met).Select(report => report.Battle.Number).ToList();
         output.WriteLine(
-            $"battles: {met.Count} of {reports.Count} targets met"
+            $"battles: {met.Count} of {judged.Count} targets met"
             + (met.Count > 0 ? $" ({string.Join(", ", met)})" : "")
             + (missed.Count > 0 ? $"; missed: {string.Join(", ", missed)}." : "."));
 
@@ -81,6 +87,12 @@ public sealed record BattleReport(BattleDef Battle, BattleResult MassWest, Battl
         {
             output.WriteLine(Invariant(
                 $"              shells: {result.Shells.Landed} landed, {result.Shells.AverageCaught:0.0} units caught on average, {result.Shells.MostCaught} at most"));
+        }
+
+        if (result.Splashes.Made > 0)
+        {
+            output.WriteLine(Invariant(
+                $"              splash: {result.Splashes.Made:N0} hits that splash, {result.Splashes.ReachedAnyone:N0} of them ({result.Splashes.PercentThatReachedAnyone:0}%) reached another unit, {result.Splashes.AverageReached:0.00} other units on average, {result.Splashes.MostReached} at most"));
         }
     }
 
