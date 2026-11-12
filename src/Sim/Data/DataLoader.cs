@@ -284,7 +284,8 @@ public static class DataLoader
             }
         }
 
-        // Of the structures only the one every player starts with must have a file.
+        // Of the structures the one every player starts with must have a file, and so must
+        // those the rules say a match is played with (MatchRosterChecker).
         var structures = new List<StructureDef>();
         if (tracksAreValid && rules is not null)
         {
@@ -305,6 +306,7 @@ public static class DataLoader
 
             structures.Sort((left, right) => left.Index.CompareTo(right.Index));
             StructureChecker.Check(structures, lines, rules, errors);
+            MatchRosterChecker.Check(rules, lines, structures, linePaths, structurePaths, errors);
         }
 
         // A map's starts are measured with the starting structure's footprint and territory, so

@@ -18,6 +18,10 @@ public class DataCheckToolTests
         Assert.Contains("  accents:      5\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         Assert.Contains("  structures:   8 of the 11 in the roster\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         Assert.Contains("  ai:           2\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains(
+            "  in a match:   4 lines with 16 chassis up to epoch 4, and 8 structures, each with its file\n",
+            output.ReplaceLineEndings("\n"),
+            StringComparison.Ordinal);
         Assert.Matches("content hash: sha256:[0-9a-f]{64}", output);
     }
 
@@ -51,6 +55,14 @@ public class DataCheckToolTests
     [InlineData("structures/tower.jsonc", "\"can_hit_all_from_protection\": 5", "\"can_hit_all_from_protection\": 10", "structures/tower.jsonc: $.attack.can_hit_all_from_protection: tier 10 changes nothing: tracks have tiers 1 to 9")]
     [InlineData("structures/tower.jsonc", "\"cannot_hit\": [\"air\"]", "\"cannot_hit\": [\"planes\"]", "structures/tower.jsonc: $.attack.cannot_hit[0]: unknown line 'planes'")]
     [InlineData("rules.jsonc", "\"epoch_cap\": 4", "\"epoch_cap\": 10", "rules.jsonc: $.match.epoch_cap: must be between 1 and 9, found 10")]
+    [InlineData("rules.jsonc", "\"epoch_cap\": 4", "\"epoch_cap\": 5", "lines/artillery.jsonc: $.chassis: a match is played with this line up to epoch 5 (\"match\" in rules.jsonc), so it needs a chassis for epoch 5")]
+    [InlineData("rules.jsonc", "\"artillery\"],\n    \"structures\"", "\"artillery\", \"air\"],\n    \"structures\"", "lines/air.jsonc: this file is required and is missing: a match is played with line 'air' (\"match\" in rules.jsonc)")]
+    [InlineData("rules.jsonc", "\"wall\", \"tower\"]\n", "\"wall\", \"tower\", \"airfield\"]\n", "structures/airfield.jsonc: this file is required and is missing: a match is played with structure 'airfield' (\"match\" in rules.jsonc)")]
+    [InlineData("rules.jsonc", "[\"capitol\", \"outpost\", \"generator\", \"barracks\",", "[\"capitol\", \"outpost\", \"generator\",", "lines/guard.jsonc: $.built_at: a match is played with this line and not with structure 'barracks' (\"match\" in rules.jsonc), so nothing could train it")]
+    [InlineData("rules.jsonc", "[\"capitol\", \"outpost\",", "[\"outpost\",", "rules.jsonc: $.match.structures: must list 'capitol': every player starts with it")]
+    [InlineData("rules.jsonc", "\"guard\", \"cavalry_armor\", \"artillery\"],\n", "\"guard\", \"cavalry\", \"artillery\"],\n", "rules.jsonc: $.match.lines[2]: unknown line 'cavalry'; the roster in rules.jsonc has: air, artillery, cavalry_armor, guard, line_infantry, support")]
+    [InlineData("lines/guard.jsonc", "    { \"epoch\": 3, \"id\": \"man_at_arms\" },\n", "", "lines/guard.jsonc: $.chassis: a match is played with this line up to epoch 4 (\"match\" in rules.jsonc), so it needs a chassis for epoch 3")]
+    [InlineData("structures/tower.jsonc", "\"sight\":", "\"unlock_tier\": 5, \"sight\":", "structures/tower.jsonc: $.unlock_tier: a match is played with this structure and no track passes tier 4 (\"match\" in rules.jsonc), so it could never be placed")]
     [InlineData("rules.jsonc", "\"tracks_needed\": 3", "\"tracks_needed\": 7", "rules.jsonc: $.epoch.tracks_needed: must be between 1 and 6, found 7")]
     [InlineData("tracks.jsonc", "\"Antimatter\"", "\"Antimatter\", \"Beyond\"", "tracks.jsonc: $.tracks[5].tiers: must name 9 tiers, one per epoch, found 10")]
     [InlineData("tracks.jsonc", "\"id\": \"extraction\"", "\"id\": \"mining\"", "tracks.jsonc: $.tracks: the rules name the tracks firepower, protection, mobility, manufacturing, logistics, extraction, and each needs an entry with that ID; missing: extraction")]
@@ -126,6 +138,57 @@ public class DataCheckToolTests
 
         Assert.Equal(ExitCodes.Failed, exitCode);
         Assert.Contains("rules.jsonc: this file is required and is missing", errors, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Design 6: a file for everything a match of the first playable can train or build. The
+    /// Capitol's file was required before, since every player starts with one.
+    /// </summary>
+    [Theory]
+    [InlineData("lines/line_infantry.jsonc", "line 'line_infantry'")]
+    [InlineData("lines/guard.jsonc", "line 'guard'")]
+    [InlineData("lines/cavalry_armor.jsonc", "line 'cavalry_armor'")]
+    [InlineData("lines/artillery.jsonc", "line 'artillery'")]
+    [InlineData("structures/outpost.jsonc", "structure 'outpost'")]
+    [InlineData("structures/generator.jsonc", "structure 'generator'")]
+    [InlineData("structures/barracks.jsonc", "structure 'barracks'")]
+    [InlineData("structures/works.jsonc", "structure 'works'")]
+    [InlineData("structures/academy.jsonc", "structure 'academy'")]
+    [InlineData("structures/wall.jsonc", "structure 'wall'")]
+    [InlineData("structures/tower.jsonc", "structure 'tower'")]
+    public void AMissingFileOfWhatAMatchIsPlayedWithFails(string file, string what)
+    {
+        using var data = Repository.CopyOfData();
+        File.Delete(Path.Combine(data.Path, file));
+
+        var (exitCode, output, errors) = Run("datacheck", data.Path);
+
+        Assert.Equal(ExitCodes.Failed, exitCode);
+        Assert.Equal("", output);
+        Assert.Contains(
+            $"{data.Path}/{file}: this file is required and is missing: a match is played with {what} (\"match\" in rules.jsonc)",
+            errors,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DataThatDoesNotSayWhatAMatchIsPlayedWithPassesWithoutThoseFiles()
+    {
+        using var data = Repository.CopyOfData();
+        data.Edit("rules.jsonc", "    \"lines\": [\"line_infantry\", \"guard\", \"cavalry_armor\", \"artillery\"],\n", "");
+        data.Edit("rules.jsonc", "\"epoch_cap\": 4,", "\"epoch_cap\": 4");
+        data.Edit("rules.jsonc", "    \"structures\": [\"capitol\", \"outpost\", \"generator\", \"barracks\", \"works\", \"academy\", \"wall\", \"tower\"]\n", "");
+        File.Delete(Path.Combine(data.Path, "structures", "tower.jsonc"));
+        File.Delete(Path.Combine(data.Path, "structures", "academy.jsonc"));
+
+        var (exitCode, output, errors) = Run("datacheck", data.Path);
+
+        Assert.Equal("", errors);
+        Assert.Equal(ExitCodes.Ok, exitCode);
+        Assert.Contains(
+            "  in a match:   rules.jsonc does not list what a match is played with, so no file is required for it\n",
+            output.ReplaceLineEndings("\n"),
+            StringComparison.Ordinal);
     }
 
     [Theory]

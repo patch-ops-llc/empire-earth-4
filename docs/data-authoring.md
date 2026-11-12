@@ -106,7 +106,7 @@ CI runs both tools every night and with every pull request that changes the data
 | `maps/<id>.jsonc` | One map: terrain, starting positions, deposits and markers. | `schemas/map.schema.json` |
 | `ai/<id>.jsonc` | One personality of the computer player: the workers it keeps, when it expands, its research weights and the lines of its army. | `schemas/ai.schema.json` |
 
-The loader reads exactly these, and the first five are required. It needs at least one line and one map. Structure files are optional: a structure of the roster may have no file yet, and a data folder may have none at all. Personality files are optional too. Any other file in the folder is an error, so a misnamed file is noticed and not skipped. Files and folders whose names start with a dot are ignored.
+The loader reads exactly these, and the first five are required. It needs at least one line and one map. A line or structure of the roster may have no file yet, unless `rules.jsonc` lists it under `match.lines` or `match.structures`: what a match is played with must have its file. `game/data/` lists the four lines and eight structures of the first playable there; a folder that lists nothing needs only `structures/capitol.jsonc`. Personality files are optional. Any other file in the folder is an error, so a misnamed file is noticed and not skipped. Files and folders whose names start with a dot are ignored.
 
 More kinds of file arrive with the milestones that need them. Adding a kind means adding its reader in `src/Sim/Data/`, its schema in `schemas/`, a row in the table above and tests.
 
@@ -151,6 +151,7 @@ The values the design says to tune first. Each block carries a comment naming it
 | `supply_cap.base`, `per_logistics_tier` | The supply cap is the base plus this much per Logistics tier. | 4.1 |
 | `wall_crossing_cost` | Tiles of walking that crossing one enemy wall tile costs in the second path search. | 2.5 |
 | `match.start_epoch`, `epoch_cap` | The tier all tracks start at and the tier none may pass. | 5.2 |
+| `match.lines`, `match.structures` | Optional. The lines and structures of the roster that a match is played with. Each must have its data file. A line listed here needs a chassis for every epoch from 1 to `epoch_cap` and a `built_at` that `match.structures` lists; a structure listed here must not unlock above `epoch_cap`; `match.structures` must list `capitol`. Leave both out and no file is required beyond `structures/capitol.jsonc`, which is how the frozen data of the golden replays is. | 6 |
 | `start.workers`, `materials`, `energy` | What every player starts with, besides a Capitol. | 5.2 |
 | `map` | The map rules below. | 5.3, 5.4 |
 | `combat.look_interval_ticks` | A unit or a Tower without a target looks for one every this many ticks. | 2.4 |
@@ -326,6 +327,7 @@ Besides the shape of each file:
 | --- | --- |
 | References | A line's `id`, `primary`, `secondary`, `built_at`, `counters` and `cannot_hit` must name a track in `tracks.jsonc` or an ID in the roster. So must a structure's `id`, `track`, `trains` and `attack.cannot_hit`. |
 | Structures | `trains` and the lines' `built_at` agree. `structures/capitol.jsonc` exists and has a `territory_radius`: it is what the map checks and the start of a match use. A wall has a footprint of 1. An unlock tier, or the tier from which an attack hits every line, is a tier a track can reach above the first. |
+| Played with | Everything under `match.lines` and `match.structures` has a file. Each such line has a chassis for every epoch up to `epoch_cap` and is built at a structure that is listed too. Each such structure unlocks no later than `epoch_cap`. |
 | Tiers | Counts of tracks and tiers in `rules.jsonc` must fit `tracks.jsonc`; `epoch_cap` is not below `start_epoch`; every track names one tier per epoch. |
 | Tracks | The six tracks the rules name are all defined. |
 | Research | `research.jsonc` has exactly one entry for each tier from 2 to the last, in order. |

@@ -93,6 +93,46 @@ public class GameDataTests
         Assert.Equal(data.Chassis.Select(chassis => chassis.Id).Order(StringComparer.Ordinal), data.Chassis.Select(chassis => chassis.Id));
     }
 
+    /// <summary>
+    /// Design 6, the cut list: the first playable is played with Line infantry, Guard,
+    /// Cavalry/Armor and Artillery and with the Capitol, Outpost, Generator, Barracks, Works,
+    /// Academy, Wall and Tower. The rules say so, which is what makes the loader require a file
+    /// for each, and every one of them has what a match needs of it.
+    /// </summary>
+    [Fact]
+    public void AMatchIsPlayedWithTheFourLinesAndEightStructuresOfTheFirstPlayable()
+    {
+        var data = DataLoader.Load(new DiskDataFiles(Repository.DataFolder)).Data!;
+        var lines = Assert.IsAssignableFrom<IReadOnlyList<int>>(data.Rules.Match.Lines);
+        var structures = Assert.IsAssignableFrom<IReadOnlyList<int>>(data.Rules.Match.Structures);
+
+        Assert.Equal(["artillery", "cavalry_armor", "guard", "line_infantry"], lines.Select(line => data.Rules.Lines[line]));
+        Assert.Equal(
+            ["academy", "barracks", "capitol", "generator", "outpost", "tower", "wall", "works"],
+            structures.Select(structure => data.Rules.Structures[structure]));
+
+        var chassis = data.Chassis.Where(chassis => lines.Contains(chassis.Line) && chassis.Epoch <= data.Rules.Match.EpochCap).ToList();
+        Assert.Equal(16, chassis.Count);
+        Assert.All(lines, line => Assert.Contains(data.LineOf(line)!.BuiltAt, structures));
+        Assert.All(structures, structure => Assert.NotNull(data.StructureOf(structure)));
+
+        // Each line is offered at the structure that builds it, so each chassis has a queue to be ordered in.
+        Assert.All(lines, line => Assert.Contains(line, data.StructureOf(data.LineOf(line)!.BuiltAt)!.Trains));
+    }
+
+    /// <summary>
+    /// The frozen data of the golden replays lists nothing, so its content hash, which every
+    /// recorded match carries, is what it was.
+    /// </summary>
+    [Fact]
+    public void TheFrozenDataOfTheGoldenReplaysDoesNotSayWhatAMatchIsPlayedWith()
+    {
+        var data = DataLoader.Load(new DiskDataFiles(Repository.GoldenDataFolder)).Data!;
+
+        Assert.Null(data.Rules.Match.Lines);
+        Assert.Null(data.Rules.Match.Structures);
+    }
+
     [Fact]
     public void TheHashDoesNotDependOnLineEndingsOnDisk()
     {
