@@ -116,7 +116,7 @@ If joining fails, the menu says why in orange:
 | Go somewhere and fight whatever is met on the way | Hold Ctrl and right-click the place |
 | Stop | X, or the Stop button in the panel at the bottom |
 | Development aid: make units where the pointer is | G for yours. Alone, H for the other player's. See Trying a fight |
-| Development aid: lift the fog of war from your screen, and lay it back | F, alone, or the button in the orange panel "Development aid: fog of war". See The fog of war |
+| Development aid: lift the fog of war from your screen, and lay it back | F4, alone, or the button in the orange panel "Development aid: fog of war". See The fog of war |
 | Quit | Close the window |
 
 ## Resources and workers
@@ -174,7 +174,7 @@ You are shown only what your own units see. Each unit sees a circle round itself
 - The edge of what you see moves in steps of a tile a few times a second, and the screen smooths that.
 - In a shared match each player has their own picture. What you see is not what the other player sees.
 
-**The development switch.** A tester alone has to see the other player's units, so this build has a second development aid, in an orange panel under the first: "Development aid: fog of war". Its button, or the F key, lifts the fog from your screen: the whole map and every unit, structure and territory on it are shown, as they are now. Press it again to lay the fog back. It is not part of the game, and it changes only what is drawn. Your units still see only what they see: they do not shoot at a unit outside their sight, and a right-click on such a unit sends them walking there, with a line of text that says so. The build menu also goes by what you know and not by what the switch shows. In a shared match the switch is not offered, and the panel says so. Like the aid that makes units, it goes away once units can be trained.
+**The development switch.** A tester alone has to see the other player's units, so this build has a second development aid, in an orange panel under the first: "Development aid: fog of war". Its button, or the F4 key, lifts the fog from your screen: the whole map and every unit, structure and territory on it are shown, as they are now. Press it again to lay the fog back. It is not part of the game, and it changes only what is drawn. Your units still see only what they see: they do not shoot at a unit outside their sight, and a right-click on such a unit sends them walking there, with a line of text that says so. The build menu also goes by what you know and not by what the switch shows. In a shared match the switch is not offered, and the panel says so. Like the aid that makes units, it goes away once units can be trained.
 
 ## Playing against the computer
 
@@ -182,7 +182,7 @@ Click Play against the computer on the menu. The computer takes Player 2, in red
 
 - **This is the first part of the computer opponent. It builds up its base, researches and trains an army. It does not attack yet**, so nothing comes for you. In this build you can go for it: its units fight back when yours come near, and when its Capitol and every Outpost of its are destroyed it is out and you have won.
 - It has two personalities, chosen in the list beside the button. Swarm keeps more workers, researches Manufacturing and Logistics first and trains line infantry with some cavalry. Elite keeps a few workers fewer, researches Firepower and Protection first and trains guards with some artillery.
-- To watch it, lift the fog with the development switch (F, see The fog of war) and move the camera across the map to its base; without the switch you see of it only what your units see. You will see its workers go to the deposits, more workers come out of its Capitol, Generators and then a Barracks or a Works go up, and units gather beside them. A banner says when it reaches a new epoch. The speed buttons under the bar at the top make the wait shorter.
+- To watch it, lift the fog with the development switch (F4, see The fog of war) and move the camera across the map to its base; without the switch you see of it only what your units see. You will see its workers go to the deposits, more workers come out of its Capitol, Generators and then a Barracks or a Works go up, and units gather beside them. A banner says when it reaches a new epoch. The speed buttons under the bar at the top make the wait shorter.
 - It plays by the rules you play by: it pays for everything, its orders are commands like yours, and they are in the replay.
 - To set the starts as well, click Host a match and set Player 2 to Computer on the page of the settings.
 - The end screen names it: Player 2, red (computer, swarm).
@@ -282,7 +282,7 @@ Fighting units are trained at a Barracks or a Works. To try a fight without buil
 1. In the panel, choose a unit and how many to make at a time. There are four lines of units, each in four epochs. Line infantry shoots. Guards fight hand to hand. Cavalry fights hand to hand and is larger. Artillery shoots far, cannot shoot at what stands close to it, and its shell hits every enemy near where it lands.
 2. Point at open ground and press G. Your units appear there.
 3. Alone, point somewhere else and press H. Units of the other player appear there, and nothing but their own reflexes controls them. In a shared match H makes nothing: each player makes their own units with G.
-4. Units of the other player made on ground you do not see are there and are not shown: see The fog of war. Make them close to your own units, or press F to lift the fog from your screen first.
+4. Units of the other player made on ground you do not see are there and are not shown: see The fog of war. Make them close to your own units, or press F4 to lift the fog from your screen first.
 
 What you will see:
 
