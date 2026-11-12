@@ -166,6 +166,8 @@ Game design 4.1. Income is a fixed rate: a worker standing at its place at a dep
 
 One payment is the rate for a minute divided by 60, times the Extraction multiplier (`per_tier.income` in `rules.jsonc`, once per tier above the first), times `depleted_rate` for a deposit that had delivered its `full_rate_amount` before the payment. The product is exact and is rounded once, half up, to a thousandth of a resource, which is what stockpiles count in. At the design's numbers a worker is paid 0.75 Materials or 0.5 Energy a second at tier 1.
 
+A worker is paid only while the conditions of its site hold: a deposit lies whole inside its owner's territory, and a Generator is its owner's and finished. A worker sent to a deposit outside its owner's territory, or to a Generator that is still building itself, stands at its place and is paid nothing; its count of ticks runs on, so its first payment comes at its own next moment after the condition holds.
+
 A deposit has as many places as tiles share a side with it, eight for the 2 by 2 of `map.deposit_size`, and a Generator has the same eight. `workers_per_deposit` and `workers_per_generator` say how many workers may use them, so a number above eight changes nothing for a deposit of that size.
 
 The worker is not a chassis: it has no tiers, no accents and no counters, and its speed and sight never change. Only the speed and the supply are in use so far; hit points, sight, spacing, the price and the training time wait for the milestones that fight, see and train.
