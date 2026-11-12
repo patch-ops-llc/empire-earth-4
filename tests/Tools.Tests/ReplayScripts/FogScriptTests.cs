@@ -9,7 +9,7 @@ namespace Tools.Tests.ReplayScripts;
 
 /// <summary>
 /// The script <c>fog</c> of <c>replay record</c> and the golden replay recorded for it: what the
-/// script must give, and what that replay must reach.
+/// script must give, and the rules it must reach.
 /// </summary>
 public class FogScriptTests
 {
@@ -27,6 +27,49 @@ public class FogScriptTests
         "a unit sent away from a shot that has far to go",
         "a stop",
     ];
+
+    private const string ExploredByTheEnd = "every player has been to more than twice what it sees by the end, and none has seen the whole map";
+
+    /// <summary>
+    /// The rules are asked of three matches between them: the golden replay's own line and the
+    /// same with two other pairs of numbers. What a match of this script reaches turns on how its
+    /// fights go, and one match alone can miss a rule: recorded now, the golden replay's line
+    /// has no unit idle after it walked to where its target was last seen. Of 30 other pairs of
+    /// numbers every one reaches every rule alone, so two of them besides that line leave no rule
+    /// to one match. The second set is there for a change that moves all three: the next three
+    /// pairs. The numbers are taken in order, 100 apart, and none was chosen for what it reaches.
+    /// </summary>
+    private static readonly ScriptReach Reach = new(
+        [
+            .. EveryKindOfOrder,
+            "sight worked out with another result",
+            "a tick in which sight is not worked out",
+            "a unit that sees further than a worker",
+            "ground that is explored and no longer visible",
+            "an enemy unit on ground a player has explored and does not see now",
+            "an enemy unit seen",
+            "an enemy unit that comes into sight",
+            "an enemy unit that goes out of sight by walking off the tiles its enemy sees",
+            "an attack order taken for a unit the player sees",
+            "an attack order refused for a unit the player does not see",
+            "a unit sent to where its target was last seen",
+            "a unit idle after it walked to where its target was last seen",
+            "a unit fighting a target that only another unit of its owner sees",
+            "a unit whose attack order ends where it stands because its target died",
+            "a shot that lands on a target its owner no longer sees",
+            ExploredByTheEnd,
+        ],
+        Reached,
+        [
+            "--map switchback --starts 0,1,- --seed 7 --orders 43 --ticks 6000 --script fog,gather,research",
+            "--map switchback --starts 0,1,- --seed 107 --orders 143 --ticks 6000 --script fog,gather,research",
+            "--map switchback --starts 0,1,- --seed 207 --orders 243 --ticks 6000 --script fog,gather,research",
+        ],
+        [
+            "--map switchback --starts 0,1,- --seed 307 --orders 343 --ticks 6000 --script fog,gather,research",
+            "--map switchback --starts 0,1,- --seed 407 --orders 443 --ticks 6000 --script fog,gather,research",
+            "--map switchback --starts 0,1,- --seed 507 --orders 543 --ticks 6000 --script fog,gather,research",
+        ]);
 
     /// <summary>
     /// The script gives every kind of order it is meant to: here in one long match on each map.
@@ -53,27 +96,23 @@ public class FogScriptTests
     }
 
     /// <summary>
-    /// What this recorded match is for: it must reach the rules of the fog of war that a change
-    /// could break (design 5.3; design 8.4, rows 38 to 40). The match has the orders of this
-    /// script, of gathering and of research, so that workers are at deposits when they are found
-    /// and tiers rise under units that see by them. It has not the orders of movement and of
-    /// fights: those order every unit about so often that a unit sent to where its target was
-    /// last seen seldom gets there.
+    /// What the script is for: a match recorded with it must reach the rules of the fog of war
+    /// that a change could break (design 5.3; design 8.4, rows 38 to 40). The match has the
+    /// orders of this script, of gathering and of research, so that workers are at deposits when
+    /// they are found and tiers rise under units that see by them. It has not the orders of
+    /// movement and of fights: those order every unit about so often that a unit sent to where
+    /// its target was last seen seldom gets there.
     /// </summary>
-    /// <remarks>
-    /// The match was recorded before a shell had a blast and before Towers (16a, 16b). Under those
-    /// rules its fights go another way, and the one unit its owner sent away from a shot is no
-    /// longer under fire in the tick it is sent. What that order was for is still reached: a shot
-    /// that lands on a target its owner no longer sees. Nor does a target of an attack order die
-    /// in it any more while the order stands, so "a unit whose attack order ends where it stands
-    /// because its target died" is not reached here: the replay of the script <c>combat-perks</c>
-    /// reaches it, and <see cref="CombatPerkScriptTests"/> has it on its list. An existing replay
-    /// is never recorded again, so this one keeps the orders it has.
-    /// </remarks>
     [Fact]
-    public void ItsGoldenReplayReachesTheRulesItGuards()
+    public void TheScriptReachesTheRulesItGuards() => Reach.MustHoldOnARecordingMadeNow();
+
+    /// <summary>Says, without failing, what the stored replay no longer reaches of them.</summary>
+    [Fact]
+    public void ItsGoldenReplayStillReachesThem() => Reach.SayWhatTheGoldenReplaysNoLongerReach(GoldenReplay);
+
+    /// <summary>What the match of a replay reaches, in the words of the list of <see cref="Reach"/>.</summary>
+    private static HashSet<string> Reached(Sim.Serialization.Replay replay)
     {
-        var replay = ReplayRuns.ReadGolden(GoldenReplay);
         var match = ReplayRuns.Start(replay);
         var due = replay.Commands.ToLookup(entry => entry.Tick, entry => entry.Command);
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -87,33 +126,14 @@ public class FogScriptTests
             seen.UnionWith(watch.WhatTheTickDid(tick));
         }
 
-        string[] expected =
-        [
-            .. EveryKindOfOrder.Where(kind => kind != "a unit sent away from a shot that has far to go"),
-            "sight worked out with another result",
-            "a tick in which sight is not worked out",
-            "a unit that sees further than a worker",
-            "ground that is explored and no longer visible",
-            "an enemy unit on ground a player has explored and does not see now",
-            "an enemy unit seen",
-            "an enemy unit that comes into sight",
-            "an enemy unit that goes out of sight by walking off the tiles its enemy sees",
-            "an attack order taken for a unit the player sees",
-            "an attack order refused for a unit the player does not see",
-            "a unit sent to where its target was last seen",
-            "a unit idle after it walked to where its target was last seen",
-            "a unit fighting a target that only another unit of its owner sees",
-            "a shot that lands on a target its owner no longer sees",
-        ];
-        Assert.Equal(expected.Order(StringComparer.Ordinal), seen.Order(StringComparer.Ordinal));
-
-        // By the end every player has been to more of the map than it sees, and none has seen all of it.
         var grid = match.Vision.Grid;
-        for (var player = 0; player < match.Players.Count; player++)
+        if (Enumerable.Range(0, match.Players.Count).All(player =>
+                grid.CountExplored(player) > 2 * grid.CountVisible(player) && grid.CountExplored(player) < grid.Width * grid.Height))
         {
-            Assert.True(grid.CountExplored(player) > 2 * grid.CountVisible(player), $"Player {player} has explored {grid.CountExplored(player)} tiles.");
-            Assert.True(grid.CountExplored(player) < grid.Width * grid.Height);
+            seen.Add(ExploredByTheEnd);
         }
+
+        return seen;
     }
 
     private static bool IsOfThisScript(Command command) =>
@@ -227,8 +247,8 @@ public class FogScriptTests
 
     /// <summary>
     /// Follows a match tick by tick and says what each tick did, in the words of the list of
-    /// <see cref="ItsGoldenReplayReachesTheRulesItGuards"/>. It looks at the match as a test may:
-    /// at all of it, and at what each player sees.
+    /// <see cref="Reach"/>. It looks at the match as a test may: at all of it, and at what each
+    /// player sees.
     /// </summary>
     private sealed class Watch(Match match)
     {
@@ -380,6 +400,16 @@ public class FogScriptTests
             }
 
             var targetLives = match.World.Entities.IsAlive(before.Target) && match.Bodies.Contains(before.Target);
+            if (!targetLives && unit.Order == UnitOrder.Move)
+            {
+                // The unit had its turn before its target died in this tick, and by then its
+                // owner had lost sight of the target: it is on its way to where it was last seen.
+                Assert.Equal(match.Movers.Get(entity).Destination, unit.Anchor);
+                _walkingToWhereLastSeen.Add(entity);
+                seen.Add("a unit sent to where its target was last seen");
+                return seen;
+            }
+
             if (!targetLives)
             {
                 Assert.Equal(UnitOrder.Idle, unit.Order);

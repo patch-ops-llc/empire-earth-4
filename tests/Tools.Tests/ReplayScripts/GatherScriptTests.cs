@@ -6,7 +6,7 @@ namespace Tools.Tests.ReplayScripts;
 
 /// <summary>
 /// The script <c>gather</c> of <c>replay record</c> and the golden replay recorded for it: what
-/// the script must give, and what that replay must reach.
+/// the script must give, and the rules of workers at deposits it must reach.
 /// </summary>
 public class GatherScriptTests
 {
@@ -27,6 +27,27 @@ public class GatherScriptTests
     ];
 
     /// <summary>
+    /// The first recording is the golden replay's own line. Which workers the script sends
+    /// where, and when, is drawn, and in a match of that length about half of 30 other seeds
+    /// miss a rule; the script makes none of them happen. In a match four times as long all 30
+    /// reach every rule, so the second recording is that, for when the first no longer does.
+    /// </summary>
+    private static readonly ScriptReach Reach = new(
+        [
+            .. EveryKindOfOrder,
+            "a worker walking to its place",
+            "a worker at work",
+            "a worker waiting for a place",
+            "a worker given a place it waited for",
+            "a worker taken off its work by another order",
+            "a payment",
+            "a payment skipped at a deposit outside its owner's territory",
+        ],
+        Reached,
+        ["--map switchback --starts 0,1 --seed 5 --orders 13 --ticks 4800 --script gather,movement"],
+        ["--map switchback --starts 0,1 --seed 5 --orders 13 --ticks 19200 --script gather,movement"]);
+
+    /// <summary>
     /// The script gives every kind of order it is meant to: here in one long match on each map.
     /// The rarest kinds come about once in 1,700 ticks, so a shorter match can miss one.
     /// </summary>
@@ -44,13 +65,19 @@ public class GatherScriptTests
     }
 
     /// <summary>
-    /// What this recorded match is for: it must reach the rules of workers at deposits that a
-    /// change could break.
+    /// What the script is for: a match recorded with it must reach the rules of workers at
+    /// deposits that a change could break.
     /// </summary>
     [Fact]
-    public void ItsGoldenReplayReachesTheRulesItGuards()
+    public void TheScriptReachesTheRulesItGuards() => Reach.MustHoldOnARecordingMadeNow();
+
+    /// <summary>Says, without failing, what the stored replay no longer reaches of them.</summary>
+    [Fact]
+    public void ItsGoldenReplayStillReachesThem() => Reach.SayWhatTheGoldenReplaysNoLongerReach(GoldenReplay);
+
+    /// <summary>What the match of a replay reaches, in the words of the list of <see cref="Reach"/>.</summary>
+    private static HashSet<string> Reached(Sim.Serialization.Replay replay)
     {
-        var replay = ReplayRuns.ReadGolden(GoldenReplay);
         var match = ReplayRuns.Start(replay);
         var seen = KindsOfOrders(replay, match);
         var workers = new Worker[match.Workers.Count];
@@ -61,18 +88,7 @@ public class GatherScriptTests
             seen.UnionWith(WhatTheWorkersDid(match, workers, materials));
         }
 
-        string[] expected =
-        [
-            .. EveryKindOfOrder,
-            "a worker walking to its place",
-            "a worker at work",
-            "a worker waiting for a place",
-            "a worker given a place it waited for",
-            "a worker taken off its work by another order",
-            "a payment",
-            "a payment skipped at a deposit outside its owner's territory",
-        ];
-        Assert.Equal(expected.Order(StringComparer.Ordinal), seen.Order(StringComparer.Ordinal));
+        return seen;
     }
 
     /// <summary>What the commands of this script in a replay are, in the words of <see cref="EveryKindOfOrder"/>.</summary>
@@ -125,7 +141,7 @@ public class GatherScriptTests
 
     /// <summary>
     /// What the tick that has just run did to the workers, in the words of the list of
-    /// <see cref="ItsGoldenReplayReachesTheRulesItGuards"/>. The two arrays hold what the workers
+    /// <see cref="Reach"/>. The two arrays hold what the workers
     /// and the stockpiles of Materials were before it, and are brought up to date.
     /// </summary>
     private static HashSet<string> WhatTheWorkersDid(Match match, Worker[] before, long[] materialsBefore)
