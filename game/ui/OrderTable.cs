@@ -61,6 +61,28 @@ public sealed class OrderTable
     /// <summary>The rows, in the order they were added.</summary>
     public IReadOnlyList<OrderRow> Rows => _rows;
 
+    /// <summary>
+    /// The kinds of target some row names, beside the ground. The pointer is asked for these on
+    /// an order click, so that what no order is about never hides what one is about: a deposit
+    /// is found under the player's own units standing on it, as long as no row names those.
+    /// </summary>
+    public PointerTargets Wanted
+    {
+        get
+        {
+            var wanted = PointerTargets.Ground;
+            foreach (var row in _rows)
+            {
+                if (row.Targets != PointerTargets.Any)
+                {
+                    wanted |= row.Targets;
+                }
+            }
+
+            return wanted;
+        }
+    }
+
     public void Add(OrderRow row) => _rows.Add(row);
 
     /// <summary>

@@ -1,3 +1,4 @@
+using Godot;
 using Net;
 using Sim.Setup;
 
@@ -80,6 +81,10 @@ public sealed class MatchView
         foreach (var piece in ViewPieces.All)
         {
             piece.AddTo(view);
+            if (OS.IsStdOutVerbose())
+            {
+                GD.Print($"View piece added: {piece.Name}.");
+            }
         }
 
         // After every tick the world reads the match first, then the selection drops what is

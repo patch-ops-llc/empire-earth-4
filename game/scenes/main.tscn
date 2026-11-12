@@ -56,7 +56,7 @@ far = 400.0
 script = ExtResource("6_units")
 
 [node name="DebugOverlay" type="CanvasLayer" parent="." node_paths=PackedStringArray("Camera")]
-layer = 100
+layer = 5
 script = ExtResource("3_overlay")
 Camera = NodePath("../CameraRig")
 

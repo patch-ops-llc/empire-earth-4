@@ -229,7 +229,7 @@ public partial class UnitControl : Node
 
     private void Order(MatchView view, Vector2 pointer)
     {
-        var target = view.UnderPointer.At(pointer);
+        var target = view.UnderPointer.At(pointer, view.Orders.Wanted);
         if (view.Orders.Give(view, target) is not { } row)
         {
             return;

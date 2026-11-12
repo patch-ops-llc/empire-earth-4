@@ -204,12 +204,20 @@ public partial class MatchMenu : CanvasLayer
     private void Begin(MatchRun run)
     {
         Run = run;
-        run.Client.Started += () =>
+        run.Client.Started += Announce;
+
+        // A match alone has started by the time it is handed over.
+        if (run.Client.Phase == SessionPhase.Running)
+        {
+            Announce();
+        }
+
+        void Announce()
         {
             var description = run.Description!;
             var seat = run.Client.Player;
             GD.Print($"Match on '{description.MapId}' with seed {description.Seed}. This is player {seat + 1} of {description.Players.Count}, at start {description.Players[seat].Start}. Data sha256:{description.ContentHash}.");
-        };
+        }
     }
 
     // The host draws the seed and the starts from the system's source of chance.

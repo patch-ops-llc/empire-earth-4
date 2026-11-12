@@ -20,11 +20,11 @@ public static class ViewPieces
         // Units: selection, the move order and its mark.
         new UnitsPiece(),
 
+        // 11v. Combat: health bars, shots and hits, the fighting orders.
+
         // 13v. Economy: resources and supply, deposits, the work order.
 
         // 14v. Research: the grid.
-
-        // 11v. Combat: health bars, shots and hits, the fighting orders.
 
         // 15v. Construction and production: structures, the build menu, the production panel.
 
