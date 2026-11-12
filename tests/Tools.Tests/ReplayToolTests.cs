@@ -1,6 +1,7 @@
 using Sim.Core;
 using Sim.Data;
 using Sim.Movement;
+using Sim.Numerics;
 using Sim.Serialization;
 using Tools.Replay;
 
@@ -130,8 +131,19 @@ public class ReplayToolTests
                 match.Simulation.Tick();
                 for (var i = 0; i < match.Movers.Count; i++)
                 {
-                    var state = match.Movers.ValueAt(i).State;
+                    ref readonly var mover = ref match.Movers.ValueAt(i);
+                    var state = mover.State;
                     waited[i] = state == MoveState.Planning ? waited[i] + 1 : 0;
+                    if (mover.Waiting)
+                    {
+                        seen.Add("a unit stopped by an enemy in its way");
+                    }
+
+                    if (mover.Spread != FixedVector2.Zero)
+                    {
+                        seen.Add("a unit walking beside its group's route");
+                    }
+
                     seen.Add(state switch
                     {
                         MoveState.Idle => "a unit standing",
@@ -157,6 +169,8 @@ public class ReplayToolTests
             "a unit walking a route",
             "a unit waiting for a route",
             "a unit waiting more than a tick for a route",
+            "a unit stopped by an enemy in its way",
+            "a unit walking beside its group's route",
         ];
         Assert.Equal(expected.Order(StringComparer.Ordinal), seen.Order(StringComparer.Ordinal));
     }

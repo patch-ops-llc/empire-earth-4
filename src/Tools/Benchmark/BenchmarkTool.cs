@@ -15,7 +15,10 @@ namespace Tools.Benchmark;
 /// <para>
 /// Every scenario is a match that plays the same on every machine: only the times differ. Each is
 /// played once without timing, so that the times are not those of code being compiled, and then
-/// once more with a clock around every tick. Memory is counted around the tick alone.
+/// <see cref="TimedRuns"/> times with a clock around every tick. The time of a tick is the least
+/// of its times in those runs: the runs do the same work in every tick, so what one of them took
+/// longer is the machine doing something else, and on a shared machine that is several
+/// milliseconds every few ticks. Memory is counted around the tick alone, in the last run.
 /// </para>
 /// <para>
 /// A scenario that does not do what it is there to show (units that never arrive, enemies closer
@@ -32,6 +35,9 @@ public sealed class BenchmarkTool : ITool
 
     /// <summary>The plan's budget for the worst tick, in milliseconds.</summary>
     public const double WorstBudget = 25;
+
+    /// <summary>How often a scenario is played with the clock running. A quick run plays it once.</summary>
+    public const int TimedRuns = 3;
 
     private const string Usage =
         """
@@ -108,7 +114,7 @@ public sealed class BenchmarkTool : ITool
         var optimized = IsOptimized(typeof(Sim.SimInfo).Assembly);
         output.WriteLine(string.Create(
             CultureInfo.InvariantCulture,
-            $"benchmark: {(optimized ? "optimized build" : "NOT an optimized build: run with -c Release for times that mean something")}, {Sim.SimInfo.TicksPerSecond} ticks per second, budget {AverageBudget:0.##} ms average and {WorstBudget:0.##} ms worst per tick{(quick ? ", quick run" : "")}"));
+            $"benchmark: {(optimized ? "optimized build" : "NOT an optimized build: run with -c Release for times that mean something")}, {Sim.SimInfo.TicksPerSecond} ticks per second, budget {AverageBudget:0.##} ms average and {WorstBudget:0.##} ms worst per tick, {(quick ? "quick run: each scenario timed once" : $"each tick timed {TimedRuns} times and its least time kept")}"));
         output.WriteLine();
         output.WriteLine($"{"scenario",-18} {"units",5} {"ticks",6} {"average ms",10} {"worst ms",9} {"bytes/tick",10}  what it shows");
 
@@ -121,9 +127,15 @@ public sealed class BenchmarkTool : ITool
                 continue;
             }
 
-            // Once for the compiler, once for the clock.
-            Play(scenario.Create(loaded.Data), timed: false);
-            var result = Play(scenario.Create(loaded.Data), timed: true);
+            // Once for the compiler, then for the clock.
+            Play(scenario.Create(loaded.Data), leastTimes: null);
+            var leastTimes = new List<long>();
+            Result result = default;
+            for (var run = 0; run < (quick ? 1 : TimedRuns); run++)
+            {
+                result = Play(scenario.Create(loaded.Data), leastTimes);
+            }
+
             output.WriteLine(string.Create(
                 CultureInfo.InvariantCulture,
                 $"{scenario.Name,-18} {result.Units,5} {result.Ticks,6} {result.AverageMilliseconds,10:0.000} {result.WorstMilliseconds,9:0.000} {result.BytesPerTick,10:0}  {result.Findings}"));
@@ -152,11 +164,14 @@ public sealed class BenchmarkTool : ITool
         return ExitCodes.Ok;
     }
 
-    private static Result Play(Run run, bool timed)
+    /// <summary>
+    /// Plays a scenario to its end. With <paramref name="leastTimes"/>, the time of each tick goes
+    /// into that list where it is less than the time already there, and the result is computed
+    /// from the list.
+    /// </summary>
+    private static Result Play(Run run, List<long>? leastTimes)
     {
         var simulation = run.Match.Simulation;
-        long total = 0;
-        long worst = 0;
         long bytes = 0;
         var ticks = 0;
         while (ticks < run.MostTicks)
@@ -167,8 +182,18 @@ public sealed class BenchmarkTool : ITool
             simulation.Tick();
             var elapsed = Stopwatch.GetTimestamp() - before;
             bytes += GC.GetAllocatedBytesForCurrentThread() - bytesBefore;
-            total += elapsed;
-            worst = Math.Max(worst, elapsed);
+            if (leastTimes is not null)
+            {
+                if (ticks == leastTimes.Count)
+                {
+                    leastTimes.Add(elapsed);
+                }
+                else
+                {
+                    leastTimes[ticks] = Math.Min(leastTimes[ticks], elapsed);
+                }
+            }
+
             ticks++;
             if (run.AfterTick(ticks))
             {
@@ -176,7 +201,7 @@ public sealed class BenchmarkTool : ITool
             }
         }
 
-        if (!timed)
+        if (leastTimes is null)
         {
             return default;
         }
@@ -186,8 +211,8 @@ public sealed class BenchmarkTool : ITool
         return new Result(
             run.Match.Movers.Count,
             ticks,
-            total * toMilliseconds / ticks,
-            worst * toMilliseconds,
+            leastTimes.Take(ticks).Sum() * toMilliseconds / ticks,
+            leastTimes.Take(ticks).Max() * toMilliseconds,
             (double)bytes / ticks,
             findings,
             problem);
