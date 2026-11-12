@@ -52,11 +52,16 @@ public readonly record struct UnitFacts
     /// </summary>
     public int Kind => Blueprint?.Chassis.Index ?? (IsWorker ? WorkerKind : OtherKind);
 
-    /// <summary>Reads a unit. False for an entity that is gone or does not stand on the map.</summary>
+    /// <summary>
+    /// Reads a unit. False for an entity that is gone, and for one that cannot walk: a structure
+    /// stands on the map and has hit points too, and is described by the piece that draws it.
+    /// </summary>
     public static bool TryRead(Match match, EntityId entity, out UnitFacts facts)
     {
         facts = default;
-        if (!match.World.Entities.IsAlive(entity) || !match.Bodies.TryGet(entity, out var body))
+        if (!match.World.Entities.IsAlive(entity)
+            || !match.Bodies.TryGet(entity, out var body)
+            || !match.Movers.TryGet(entity, out var mover))
         {
             return false;
         }
@@ -69,7 +74,6 @@ public readonly record struct UnitFacts
 
         var isWorker = match.Workers.TryGet(entity, out var worker);
         match.Health.TryGet(entity, out var health);
-        match.Movers.TryGet(entity, out var mover);
         facts = new UnitFacts
         {
             Entity = entity,

@@ -1,6 +1,7 @@
 using Sim.Core;
 using Sim.Data;
 using Sim.Numerics;
+using Sim.Setup;
 using Sim.Tech;
 
 namespace Game;
@@ -36,6 +37,8 @@ public sealed class InspectionSmoke : SmokePart
         [4, 1, 2, 3, 4, 2],
     ];
 
+    private const int MostRowsAway = 12;
+
     private readonly HashSet<EntityId> _before = [];
     private int _spawned;
 
@@ -57,7 +60,8 @@ public sealed class InspectionSmoke : SmokePart
         }
     }
 
-    // One unit of the oldest chassis of each line, in a row across the player's start.
+    // One unit of the oldest chassis of each line, in a row beside the player's start: in the
+    // nearest row of tiles that is open all along, because the start itself may be built on.
     private void Spawn(SmokeOrders orders)
     {
         var match = orders.Match;
@@ -80,6 +84,12 @@ public sealed class InspectionSmoke : SmokePart
 
         var start = match.Map.Starts[setup.Start];
         var lines = match.Data.Lines;
+        if (OpenRow(match, start.X, start.Y, lines.Count) is not { } row)
+        {
+            orders.Fail("no row of open tiles near the local player's start has room for a unit of each line.");
+            return;
+        }
+
         for (var i = 0; i < lines.Count; i++)
         {
             if (lines[i].Chassis.Count == 0)
@@ -87,10 +97,34 @@ public sealed class InspectionSmoke : SmokePart
                 continue;
             }
 
-            var point = new FixedVector2(Fixed.FromInt(start.X + i) + Fixed.Half, Fixed.FromInt(start.Y) + Fixed.Half);
+            var point = new FixedVector2(Fixed.FromInt(start.X + i) + Fixed.Half, Fixed.FromInt(row) + Fixed.Half);
             orders.Submit(new Command(CommandType.DebugSpawn, orders.Player, targetX: point.X, targetY: point.Y, contentId: lines[i].Chassis[0].Index));
             _spawned++;
         }
+    }
+
+    // The y of the row of tiles nearest to (x, y) in which a run of tiles from x on is open
+    // ground, looking further away on either side in turn, or null when there is none close by.
+    private static int? OpenRow(Match match, int x, int y, int length)
+    {
+        for (var away = 0; away <= MostRowsAway; away++)
+        {
+            foreach (var row in new[] { y + away, y - away })
+            {
+                var open = true;
+                for (var i = 0; i < length && open; i++)
+                {
+                    open = match.Grid.IsPassable(x + i, row);
+                }
+
+                if (open)
+                {
+                    return row;
+                }
+            }
+        }
+
+        return null;
     }
 
     private void Look(SmokeOrders orders)
