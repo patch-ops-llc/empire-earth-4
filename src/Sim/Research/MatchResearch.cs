@@ -282,6 +282,53 @@ public sealed class MatchResearch : IPlayerTechSource
     }
 
     /// <summary>
+    /// Carries out <see cref="CommandType.DebugSetTier"/>: the player's track is raised to the
+    /// tier at once, for nothing and without a slot. False, with nothing changed, when the player
+    /// or the track is not in the match, the tier is not above the one the track is at, or it is
+    /// above the match's epoch cap, which is never above the top tier.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every tier on the way is completed in turn, lowest first, exactly as a research that
+    /// finishes completes it: so each is reported as a <see cref="SimEventKind.ResearchFinished"/>,
+    /// with a <see cref="SimEventKind.EpochChanged"/> after it when it raised the epoch, the
+    /// table is worked out again after each, and each handler is called once for each, with one
+    /// track one tier higher, as it is told to expect.
+    /// </para>
+    /// <para>
+    /// A research the player has under way on the track is cancelled first and its price given
+    /// back, as <see cref="Cancel"/> does it: left in its slot, it would finish later and put
+    /// the track back at the tier it was started for.
+    /// </para>
+    /// <para>
+    /// The reach of the epoch and the price are rules of starting a research
+    /// (<see cref="CheckStart"/>), and nothing is started here: a track may be raised further
+    /// above the player's epoch than a research could take it, up to the epoch cap. The other
+    /// tracks and what is under way on them are left as they are.
+    /// </para>
+    /// </remarks>
+    internal bool Raise(int player, int track, int tier)
+    {
+        if (player < 0 || player >= State.PlayerCount || track < 0 || track >= State.TrackCount)
+        {
+            return false;
+        }
+
+        if (tier <= State.Tier(player, track) || tier > EpochCap)
+        {
+            return false;
+        }
+
+        Cancel(player, track);
+        for (var next = State.Tier(player, track) + 1; next <= tier; next++)
+        {
+            Complete(player, track, next, EntityId.None);
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// One tick of research, for every player in order and every slot in order: a slot whose
     /// holder is no longer alive closes, and a research that is still there is one tick further.
     /// </summary>
@@ -317,6 +364,16 @@ public sealed class MatchResearch : IPlayerTechSource
         var tier = slot.Tier;
         var holder = slot.Holder;
         Empty(ref slot);
+        Complete(player, track, tier, holder);
+    }
+
+    /// <summary>
+    /// What a research that completes does, whatever completed it: the track is at the tier, the
+    /// player's table is worked out again from the tiers, with the epoch and every blueprint, each
+    /// handler brings what stands on the map up to date, and it is reported.
+    /// </summary>
+    private void Complete(int player, int track, int tier, EntityId holder)
+    {
         State.SetTier(player, track, tier);
 
         var before = _tech[player];

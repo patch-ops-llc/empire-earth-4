@@ -106,6 +106,14 @@ public static class MatchSetup
         // A player who is out of the match gives no more orders, whatever the order.
         simulation.SetCommandGate(standings);
 
+        // The development tier raises a track the way a research that finishes does, so it is
+        // research's to carry out. Only while the rules switch it on, like the development spawn
+        // further down: otherwise the command has no handler and is dropped.
+        if (data.Rules.Debug.Spawn)
+        {
+            simulation.SetCommandHandler(CommandType.DebugSetTier, new DebugSetTierHandler(research, simulation.Events));
+        }
+
         // Command handlers, in alphabetical order of their types. The order here changes nothing.
         // The four orders of a unit share one handler, which walks a move through the move order's
         // own. A worker walks to its work by the move order, and an order that makes it walk

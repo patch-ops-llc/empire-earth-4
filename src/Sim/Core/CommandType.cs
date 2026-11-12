@@ -23,6 +23,7 @@ public enum CommandType
     CancelTrain = 12,
     Concede = 15,
     DebugPlace = 16,
+    DebugSetTier = 17,
     DebugSpawn = 8,
     Gather = 7,
     Move = 1,
