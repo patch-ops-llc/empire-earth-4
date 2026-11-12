@@ -113,8 +113,8 @@ internal sealed class AiEconomy
     }
 
     /// <summary>
-    /// Sends the workers that have no work to a site, and moves one worker from one resource to
-    /// the other when the division is off. Call it last in a round, when the budget knows every
+    /// Sends the workers that have no work, and those that wait for a place, to a site with a
+    /// free place, and moves one worker from one resource to the other when the division is off. Call it last in a round, when the budget knows every
     /// purchase of the round.
     /// </summary>
     public void AssignWorkers(AiBudget budget, List<Command> commands)
@@ -163,28 +163,50 @@ internal sealed class AiEconomy
         EnergyWorkersWanted = EnergyShareOf(working, atGenerators, depositPlaces, budget);
         var energyTarget = Math.Min(EnergyWorkersWanted, generatorPlaces);
 
+        var movedOne = false;
         for (var i = 0; i < _sight.Workers.Count; i++)
         {
             var worker = _sight.Workers[i];
-            if (worker.State != WorkerState.Idle || worker.IsBuilding || worker.Entity == _sight.Explorer)
+            if (worker.State is not (WorkerState.Idle or WorkerState.Waiting) || worker.IsBuilding || worker.Entity == _sight.Explorer)
             {
                 continue;
             }
 
+            // One that waits for a place earns nothing: it goes where a place is free, as one without work does.
+            var waitsAt = worker.State == WorkerState.Waiting ? SiteOf(worker.Site) : null;
+            if (waitsAt is { Kind: WorkSiteKind.Generator })
+            {
+                atGenerators--;
+            }
+            else if (waitsAt is not null)
+            {
+                atDeposits--;
+            }
+
             var toEnergy = atGenerators < energyTarget;
-            var index = FindSite(worker, toEnergy ? WorkSiteKind.Generator : WorkSiteKind.Deposit);
+            var index = FindSite(worker, toEnergy ? WorkSiteKind.Generator : WorkSiteKind.Deposit, not: waitsAt?.Entity);
             if (index < 0)
             {
                 toEnergy = !toEnergy;
-                index = FindSite(worker, toEnergy ? WorkSiteKind.Generator : WorkSiteKind.Deposit);
+                index = FindSite(worker, toEnergy ? WorkSiteKind.Generator : WorkSiteKind.Deposit, not: waitsAt?.Entity);
             }
 
             if (index < 0)
             {
+                if (waitsAt is { Kind: WorkSiteKind.Generator })
+                {
+                    atGenerators++;
+                }
+                else if (waitsAt is not null)
+                {
+                    atDeposits++;
+                }
+
                 continue;
             }
 
             Send(worker, index, commands);
+            movedOne |= waitsAt is not null;
             if (toEnergy)
             {
                 atGenerators++;
@@ -195,7 +217,8 @@ internal sealed class AiEconomy
             }
         }
 
-        if (_sight.Tick >= _nextRebalance && Rebalance(atGenerators, energyTarget, commands))
+        // A worker that waited and was moved is the round's move.
+        if (!movedOne && _sight.Tick >= _nextRebalance && Rebalance(atGenerators, energyTarget, commands))
         {
             _nextRebalance = _sight.Tick + RebalanceInterval;
         }
@@ -296,7 +319,11 @@ internal sealed class AiEconomy
     /// one that pays the player and has a free place, a deposit at the whole rate before a
     /// depleted one, and of those the nearest.
     /// </summary>
-    private int FindSite(OwnWorker worker, WorkSiteKind kind, bool fullRateOnly = false)
+    /// <param name="worker">The worker.</param>
+    /// <param name="kind">Deposit or Generator.</param>
+    /// <param name="fullRateOnly">True to leave out the depleted deposits.</param>
+    /// <param name="not">A site to leave out: the one the worker waits at, where no place is free whatever the count says.</param>
+    private int FindSite(OwnWorker worker, WorkSiteKind kind, bool fullRateOnly = false, EntityId? not = null)
     {
         var best = -1;
         var bestDepleted = false;
@@ -304,7 +331,7 @@ internal sealed class AiEconomy
         for (var i = 0; i < _sight.Sites.Count; i++)
         {
             var site = _sight.Sites[i];
-            if (site.Kind != kind || !site.IsHeld || site.FreePlaces == 0 || (fullRateOnly && site.IsDepleted))
+            if (site.Kind != kind || !site.IsHeld || site.FreePlaces == 0 || (fullRateOnly && site.IsDepleted) || site.Entity == not)
             {
                 continue;
             }

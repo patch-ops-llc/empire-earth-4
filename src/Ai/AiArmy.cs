@@ -28,18 +28,20 @@ internal sealed class AiArmy
     private readonly List<(EntityId Structure, int Type, int Orders)> _producers = [];
     private readonly EntityId[] _one = new EntityId[1];
     private readonly AiResponses? _responses;
+    private readonly AiPace? _pace;
     private readonly int[] _supplyOfLine;
     private long _armySupply;
     private int _supplyRoom;
     private int _supplyFree;
 
-    public AiArmy(AiSight sight, AiPersonalityDef personality, AiResponses? responses = null)
+    public AiArmy(AiSight sight, AiPersonalityDef personality, AiResponses? responses = null, AiPace? pace = null)
     {
         ArgumentNullException.ThrowIfNull(sight);
         ArgumentNullException.ThrowIfNull(personality);
         _sight = sight;
         _personality = personality;
         _responses = responses;
+        _pace = pace;
         _blueprints = new ChassisBlueprint?[personality.Lines.Count];
         _unitsByLine = new int[sight.Data.Rules.Lines.Count];
         _supplyOfLine = new int[_unitsByLine.Length];
@@ -157,7 +159,7 @@ internal sealed class AiArmy
 
         // A research that ends before these orders are carried out may raise a price, and the
         // order would be refused. It orders in the next round, at the price that then holds.
-        if (_sight.ResearchEndsWithin(AiPlayer.ThinkInterval))
+        if (_sight.ResearchEndsWithin(_pace?.Interval ?? AiPlayer.ThinkInterval))
         {
             return;
         }
