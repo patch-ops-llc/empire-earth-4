@@ -130,6 +130,7 @@ public class AiPlayerTests
     public void ItClaimsTheNearestDepositItDoesNotHoldWhenItsStockpileIsAboveItsMark()
     {
         var fixture = new AiFixture();
+        fixture.ExploreAll();
         var outpost = AiFixture.Structure("outpost");
         var ai = new AiPlayer(fixture.Match, AiFixture.Player, AiFixture.Personality(expandAt: 600));
         var (homeX, homeY, _) = fixture.Home;

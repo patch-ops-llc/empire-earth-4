@@ -39,6 +39,13 @@ internal sealed class AiArmy
     public int SmallestUnitSupply { get; private set; }
 
     /// <summary>
+    /// True when its army is as large as its supply lets it be, as the last round of thinking
+    /// found it: it can train a unit, and the supply its army may take has room for none. Supply
+    /// used above the cap, as after a displaced Light footprint (design 2.3), is at the cap too.
+    /// </summary>
+    public bool IsAtSupplyCap { get; private set; }
+
+    /// <summary>
     /// The newest chassis of a line that the player has unlocked, or null: the one of the highest
     /// epoch.
     /// </summary>
@@ -109,6 +116,8 @@ internal sealed class AiArmy
                 SmallestUnitSupply = SmallestUnitSupply == 0 ? blueprint.Supply : Math.Min(SmallestUnitSupply, blueprint.Supply);
             }
         }
+
+        IsAtSupplyCap = SmallestUnitSupply > 0 && supplyRoom < SmallestUnitSupply;
 
         Array.Clear(_unitsByLine);
         _sight.CountUnitsByLine(_unitsByLine);
