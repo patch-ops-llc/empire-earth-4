@@ -50,9 +50,33 @@ After the import command above has run once:
 godot --path game
 ```
 
-The game starts in `scenes/main.tscn`. It loads `game/data/` through the simulation's loader, builds one match for two players on the map `ridge` and draws it: the ground with a grid, a tree on every forest tile, a block of rock on every cliff tile and one shape for every unit, in its owner's color. The person at the machine is player 0, in blue. The seed of the match and the side of the map that player starts on are drawn for each run.
+The game starts in `scenes/main.tscn`. It loads `game/data/` through the simulation's loader and opens a menu: play alone, host a match, or join one by the host's address. A match is for two players on the map `ridge`. The host draws its seed and each player's start, and sends the description of the match to whoever joins: game version, content hash, map, seed and starts. A joining game that has another version or other data refuses, and tells its player why. The game draws the match: the ground with a grid, a tree on every forest tile, a block of rock on every cliff tile and one shape for every unit, in its owner's color. The host is player 0, in blue.
 
-The match runs through the lockstep session of `src/Net/`, with the host and the player in one process: every frame the game hands the session the time that passed, and the session runs the ticks, 20 a second. The game only reads the match and never changes it. A move order leaves as a command through the session and runs a tick later. Player 1 has nobody to give it orders, so its workers stand still.
+The match runs through the lockstep session of `src/Net/`: every frame the game takes in what the network brought, hands the session the time that passed, and the session runs the ticks, 20 a second. Alone, the host and the player are in one process with no network. Hosting, the game listens on UDP port 24642 unless told otherwise, and its own player joins over the loopback. The game only reads the match and never changes it. A move order leaves as a command through the session and runs a few ticks later. A player who leaves, or closes the window, tells the host so; the others play on. When the host leaves, the match ends for everyone.
+
+Every match writes its replay, with the state hash of every tick, to the folder `matches` in the game's user data folder. A match that stops on a desync also writes a snapshot of its state beside the replay, and `desync-diff` compares the files of two players:
+
+```sh
+dotnet run --project src/Tools -- desync-diff host_p0.replay guest_p1.replay
+```
+
+The game version is the text that two players must share. `Directory.Build.props` takes it from the environment variable `GAME_VERSION`, which the export workflow sets to the tag or to `dev-` and the commit; any other build is `dev`.
+
+Arguments after `--` on the command line start a match without the menu:
+
+| Argument | What it does |
+| --- | --- |
+| `--host [port]` | Hosts a match at once. |
+| `--join <address>[:port]` | Joins a match at once. |
+| `--match-files <folder>` | Writes replays and snapshots to this folder. |
+| `--net-test <ticks>` | With `--host` or `--join`: plays a match with nobody at the keyboard, on the local address only. The host starts when the other game is ready, each game orders its units to move, the host ends the match after this many ticks, and each game prints a line that starts with `NET_TEST_OK` with the last tick and the state hash. The two lines must agree. |
+
+Two games on one machine, the second in another terminal once the first has printed that it is hosting. CI runs the same pair:
+
+```sh
+godot --headless --path game -- --host --net-test 300
+godot --headless --path game -- --join 127.0.0.1 --net-test 300
+```
 
 Selection works without physics. A click or a box is turned into an area of the ground, the simulation's spatial index names the units there, and each is tested again where it appears on screen. Started with Godot's `--verbose`, the game prints every selection and every order.
 
@@ -77,18 +101,18 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 
 | Workflow | Runs on | What it does |
 | --- | --- | --- |
-| `ci.yml` | Every pull request, on Linux | Build with warnings as errors, format check, tests, `datacheck`, the golden replays, Godot import and build, a check that Godot changed or created no file in the working tree, and the smoke test. |
+| `ci.yml` | Every pull request, on Linux | Build with warnings as errors, format check, tests, `datacheck`, the golden replays, Godot import and build, a check that Godot changed or created no file in the working tree, the smoke test, and a network match between two copies of the game on the runner, which must end on the same tick with the same state hash and leave two replays that reproduce. |
 | `determinism.yml` | Every push to `main`, every night, a manual run, and pull requests that change anything it builds, runs or reads: `src/`, `tests/` (with the golden replays), `game/data/`, the workflow, `Directory.Build.props`, `global.json`, the solution file or `.gitattributes` | The tests on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build. The tests hold recorded values, so this is where a result that differs between systems shows up. The transport's tests use real sockets, which also differ between systems. Each of the eight jobs then runs the golden replays, and a last job fails unless all eight report the same final hashes. |
-| `export.yml` | Every tag that starts with `v`, a manual run, and pull requests that change the workflow, `game/export_presets.cfg` or `Directory.Build.props` | Exports the Windows build on Linux and the macOS build on macOS, and uploads both. Runs the smoke test in a Linux export, in the Windows build on Windows and in the macOS build as an Apple silicon and as an Intel program. Opens the Windows and the macOS build in a window for 300 frames. Fails unless every build reports the content hash that `datacheck` prints and the same state hash as the others. |
+| `export.yml` | Every tag that starts with `v`, a manual run, and pull requests that change the workflow, `game/export_presets.cfg` or `Directory.Build.props` | Exports the Windows build on Linux and the macOS build on macOS, and uploads both. Runs the smoke test in a Linux export, in the Windows build on Windows and in the macOS build as an Apple silicon and as an Intel program. Opens the Windows and the macOS build in a window for 300 frames. Fails unless every build reports the game version of the run, the content hash that `datacheck` prints and the same state hash as the others. |
 
 ## Layout
 
 | Path | Contents |
 | --- | --- |
 | `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) and `Serialization/` (the byte format, the encoding of a command, and snapshots). |
-| `src/Net/` | The lockstep network session. A plain .NET library that references only `Sim`: `Protocol/` (the messages and their bytes), `Session/` (the host, the client, and the two in one process for single-player) and `Transport/` (the connection interface, and the loopback used by single-player and tests). |
+| `src/Net/` | The lockstep network session. A plain .NET library that references only `Sim`: `Protocol/` (the messages and their bytes), `Session/` (the host, the client, and the two in one process for single-player), `Transport/` (the connection interface, and the loopback used by single-player and tests), `Lobby/` (a hosted match and a joining player: the description of the match, the version and data check, the draw of starts) and `Files/` (the replay a session writes while it runs). |
 | `src/Net.Udp/` | The real network under the session: a connection over UDP, a listener for the host and a connector for a client. A plain .NET library that references `Net` and the LiteNetLib package. Sockets, the package and the thread that keeps connections alive live here and nowhere else. |
-| `src/Tools/` | The console tools, as one program: `dotnet run --project src/Tools -- <tool> [arguments]`. Each tool is a folder. So far: `datacheck` checks a data folder, `balance-report` prints what the tech rules make of tier mixes, and `replay` runs recorded matches again and checks their state hashes. |
+| `src/Tools/` | The console tools, as one program: `dotnet run --project src/Tools -- <tool> [arguments]`. Each tool is a folder. So far: `datacheck` checks a data folder, `balance-report` prints what the tech rules make of tier mixes, `replay` runs recorded matches again and checks their state hashes, and `desync-diff` takes the replays and snapshots two players wrote when their match came apart and names the tick and the values that differ. |
 | `tests/Sim.Tests/` | Tests for `Sim` (xUnit v3 on Microsoft.Testing.Platform), in folders that match those of `src/Sim/`. |
 | `tests/Net.Tests/` | Tests for `Net`: whole matches between a host and several clients in one process, over a loopback with latency and jitter that the test controls. |
 | `tests/Net.Udp.Tests/` | Tests for `Net.Udp` over real sockets on the local address, on ports the system picks: what a connection promises, the orderly close, and whole matches between a host and clients, through a relay that delays, reorders and loses datagrams. |
@@ -97,7 +121,7 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 | `game/` | The Godot project: `project.godot`, `Game.csproj`, `scenes/`, `scripts/`, `ui/`. References `Sim` and `Net`. |
 | `game/export_presets.cfg` | The export presets: Windows x86_64, macOS universal, and Linux x86_64, which the export workflow uses for its first smoke test. Each packs the data files with the game. |
 | `game/data/` | The content of the game as JSON-with-comments files: tracks, rules, unit lines and maps. |
-| `game/ui/` | What the player does to the match, as scripts: the selection, the box and the rings that show it, and move orders with their mark on the ground. Orders leave through the session of `Net`. |
+| `game/ui/` | What the player does to the match, as scripts: the menu and lobby where a match is started, hosted or joined, the selection, the box and the rings that show it, and move orders with their mark on the ground. Orders leave through the session of `Net`. |
 | `schemas/` | JSON Schemas for the files in `game/data/`. |
 | `docs/` | [determinism.md](docs/determinism.md): the rules that keep the simulation deterministic, the kernel, the byte format, snapshots, replays and the golden replays. [data-authoring.md](docs/data-authoring.md): how the data files are written and checked. [testers.md](docs/testers.md): how a tester gets a build and starts it. |
 | `.github/workflows/` | `ci.yml`, `determinism.yml` and `export.yml`, described above. |

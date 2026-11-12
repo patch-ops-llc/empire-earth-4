@@ -58,7 +58,7 @@ public class ProtocolTests
         _ = new ClientSession(link.ClientEnd);
 
         Assert.Equal([new JoinRequest(ProtocolInfo.Version, CommandEncoding.Version)], link.HostEnd.ReceiveMessages());
-        Assert.Equal(1, ProtocolInfo.Version);
+        Assert.Equal(2, ProtocolInfo.Version);
     }
 
     [Fact]

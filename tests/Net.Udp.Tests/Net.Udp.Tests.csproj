@@ -13,10 +13,11 @@
     <ProjectReference Include="../../src/Net.Udp/Net.Udp.csproj" />
   </ItemGroup>
 
-  <!-- The made-up simulation and the message helpers of the session's own tests, used as they are. -->
+  <!-- The made-up simulation, the message helpers and the reader of game/data of the session's own tests, used as they are. -->
   <ItemGroup>
     <Compile Include="../Net.Tests/ToyGame.cs" Link="Shared/ToyGame.cs" />
     <Compile Include="../Net.Tests/ConnectionExtensions.cs" Link="Shared/ConnectionExtensions.cs" />
+    <Compile Include="../Net.Tests/TestData.cs" Link="Shared/TestData.cs" />
   </ItemGroup>
 
   <ItemGroup>
