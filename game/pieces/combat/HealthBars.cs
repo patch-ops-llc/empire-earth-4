@@ -21,10 +21,11 @@ public partial class HealthBars : WorldLayer
     /// <summary>How tall a bar is, in tiles.</summary>
     public const float Height = 0.1f;
 
-    // The dark edge round the bar, how far above the top of the unit it floats, and how much of
-    // a whole bar the pale part gives up in a second.
+    /// <summary>How far above <see cref="PlaceholderMeshes.UnitHeight"/> the middle of a bar floats.</summary>
+    public const float Lift = 0.62f;
+
+    // The dark edge round the bar, and how much of a whole bar the pale part gives up in a second.
     private const float Edge = 0.025f;
-    private const float Lift = 0.62f;
     private const float TrailPerSecond = 0.6f;
 
     private static readonly Color Back = new(0.05f, 0.05f, 0.06f);

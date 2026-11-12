@@ -1,0 +1,17 @@
+// Musketeer: line infantry, epoch 4 (Industrial). A slim figure in pale breeches and crossed
+// pale belts, under a tall dark shako with a pale plume, with a long dark musket and bayonet.
+{
+  "parts": [
+    { "shape": "cylinder", "size": [0.3, 0.24, 0.22], "at": [0, 0.12, 0], "top": 0.85, "sides": 8, "tone": "pale" },
+    { "shape": "box", "size": [0.36, 0.28, 0.23], "at": [0, 0.38, 0], "tone": "owner" },
+    { "shape": "box", "size": [0.06, 0.447, 0.26], "at": [0, 0.38, 0], "turn": [0, 0, 52.125], "tone": "pale" },
+    { "shape": "box", "size": [0.06, 0.447, 0.26], "at": [0, 0.38, 0], "turn": [0, 0, -52.125], "tone": "pale" },
+    { "shape": "ball", "size": [0.33, 0.33, 0.33], "at": [0, 0.665, 0], "sides": 8, "tone": "pale" },
+    { "shape": "cylinder", "size": [0.304, 0.22, 0.304], "at": [0, 0.89, 0], "top": 0.88, "sides": 10, "tone": "dark" },
+    { "shape": "ball", "size": [0.12, 0.15, 0.12], "at": [0, 1.05, 0], "sides": 6, "tone": "pale" },
+
+    // The musket at the right shoulder, and its bayonet.
+    { "shape": "box", "size": [0.055, 0.055, 0.8], "at": [0.25, 0.5, -0.22], "turn": [12, 0, 0], "tone": "dark" },
+    { "shape": "box", "size": [0.035, 0.035, 0.2], "at": [0.25, 0.604, -0.709], "turn": [12, 0, 0], "tone": "pale" }
+  ]
+}

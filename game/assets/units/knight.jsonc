@@ -1,0 +1,26 @@
+// Knight: cavalry, epoch 3 (Medieval). A long horse under a pale cloth that hangs to its
+// knees, and a rider with steel shoulders in a dark, flat-topped great helm, with a pointed
+// steel shield and a long lance that carries a pennant in the owner's color.
+{
+  "parts": [
+    // The horse, in the darker shade of its owner's color, with a dark tail. The cloth, and the steel on its head.
+    { "shape": "box", "size": [0.32, 0.28, 0.84], "at": [0, 0.33, 0.1], "tone": "owner_dark" },
+    { "shape": "box", "size": [0.17, 0.36, 0.19], "at": [0, 0.54, -0.34], "turn": [-28, 0, 0], "tone": "owner_dark" },
+    { "shape": "box", "size": [0.15, 0.15, 0.32], "at": [0, 0.67, -0.53], "turn": [-25, 0, 0], "tone": "owner_dark" },
+    { "shape": "box", "size": [0.09, 0.22, 0.1], "at": [0.11, 0.11, -0.22], "mirror": true, "tone": "owner_dark" },
+    { "shape": "box", "size": [0.09, 0.22, 0.1], "at": [0.11, 0.11, 0.44], "mirror": true, "tone": "owner_dark" },
+    { "shape": "box", "size": [0.08, 0.28, 0.08], "at": [0, 0.32, 0.58], "turn": [28, 0, 0], "tone": "dark" },
+    { "shape": "box", "size": [0.39, 0.28, 0.74], "at": [0, 0.28, 0.11], "tone": "pale" },
+    { "shape": "box", "size": [0.17, 0.05, 0.24], "at": [0, 0.76, -0.5], "turn": [-25, 0, 0], "tone": "steel" },
+
+    // The rider.
+    { "shape": "box", "size": [0.1, 0.22, 0.13], "at": [0.21, 0.39, 0.12], "mirror": true, "tone": "steel" },
+    { "shape": "box", "size": [0.3, 0.26, 0.2], "at": [0, 0.6, 0.12], "tone": "owner" },
+    { "shape": "box", "size": [0.38, 0.07, 0.24], "at": [0, 0.72, 0.12], "tone": "steel" },
+    { "shape": "box", "size": [0.267, 0.287, 0.267], "at": [0, 0.865, 0.12], "tone": "dark" },
+    { "shape": "box", "size": [0.287, 0.04, 0.287], "at": [0, 0.885, 0.12], "tone": "steel" },
+    { "shape": "cylinder", "size": [0.52, 0.05, 0.48], "at": [-0.26, 0.59, 0.08], "turn": [100, 90, 0], "spin": 90, "sides": 3, "tone": "steel" },
+    { "shape": "box", "size": [0.06, 0.06, 1.14], "at": [0.24, 0.64, -0.22], "tone": "wood" },
+    { "shape": "box", "size": [0.03, 0.14, 0.26], "at": [0.24, 0.74, -0.62], "tone": "owner" }
+  ]
+}

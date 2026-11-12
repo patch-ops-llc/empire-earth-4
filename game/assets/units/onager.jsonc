@@ -1,0 +1,18 @@
+// Onager: artillery, epoch 2 (Romans). A low frame in the owner's color on four wooden wheels,
+// with a pale padded bar across two posts and a throwing arm that rests back, a pale stone in
+// its steel cup.
+{
+  "parts": [
+    // The frame and its wheels.
+    { "shape": "box", "size": [0.6, 0.17, 0.96], "at": [0, 0.24, 0], "tone": "owner" },
+    { "shape": "cylinder", "size": [0.36, 0.1, 0.36], "at": [0.36, 0.18, -0.31], "turn": [0, 0, 90], "mirror": true, "tone": "wood" },
+    { "shape": "cylinder", "size": [0.36, 0.1, 0.36], "at": [0.36, 0.18, 0.31], "turn": [0, 0, 90], "mirror": true, "tone": "wood" },
+
+    // The posts with their bar, the arm, the cup and the stone.
+    { "shape": "box", "size": [0.09, 0.44, 0.09], "at": [0.23, 0.54, -0.16], "mirror": true, "tone": "wood" },
+    { "shape": "box", "size": [0.66, 0.14, 0.14], "at": [0, 0.78, -0.16], "tone": "pale" },
+    { "shape": "box", "size": [0.09, 0.09, 0.82], "at": [0, 0.57, 0.14], "turn": [-38, 0, 0], "tone": "wood" },
+    { "shape": "cylinder", "size": [0.24, 0.06, 0.24], "at": [0, 0.83, 0.48], "sides": 8, "tone": "steel" },
+    { "shape": "ball", "size": [0.21, 0.21, 0.21], "at": [0, 0.92, 0.48], "sides": 8, "tone": "pale" }
+  ]
+}

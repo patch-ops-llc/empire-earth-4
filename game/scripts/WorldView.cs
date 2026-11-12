@@ -189,6 +189,43 @@ public partial class WorldView : Node3D
         return false;
     }
 
+    /// <summary>
+    /// Gives a drawn unit a shape and a material of its own in place of the stand-in. A layer
+    /// that knows what a unit looks like calls it after a tick, so that a unit that is new on
+    /// the screen has its look before its first frame. The node stays this view's: it is moved
+    /// and removed as before, and a unit that is drawn again after it was out of sight starts
+    /// with the stand-in again. False for an entity that is not drawn as a unit.
+    /// </summary>
+    public bool TryDress(EntityId entity, Mesh mesh, Material material)
+    {
+        if (!_units.TryGetValue(entity, out var unit))
+        {
+            return false;
+        }
+
+        unit.Node.Mesh = mesh;
+        unit.Node.MaterialOverride = material;
+        return true;
+    }
+
+    /// <summary>
+    /// The shape and the material a drawn unit has now: the stand-in's, or those a layer gave it
+    /// with <see cref="TryDress"/>. False for an entity that is not drawn as a unit.
+    /// </summary>
+    public bool TryGetDress(EntityId entity, out Mesh? mesh, out Material? material)
+    {
+        if (!_units.TryGetValue(entity, out var unit))
+        {
+            mesh = null;
+            material = null;
+            return false;
+        }
+
+        mesh = unit.Node.Mesh;
+        material = unit.Node.MaterialOverride;
+        return true;
+    }
+
     public override void _Process(double delta)
     {
         _fog?.EveryFrame(delta);

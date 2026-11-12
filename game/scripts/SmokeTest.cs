@@ -103,6 +103,9 @@ public sealed class SmokeTest
         // M20. Accent badges: a research that finishes, a unit of the other seat seen and lost from sight.
         new BadgesSmoke(),
 
+        // M20. Chassis looks: one unit of every chassis in its look, and a unit of the other seat that comes into sight.
+        new LooksSmoke(),
+
         // Later pieces.
     ];
 

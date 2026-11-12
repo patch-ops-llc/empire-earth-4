@@ -1,0 +1,24 @@
+// Cuirassier: cavalry, epoch 4 (Industrial). A long horse with a wide pale saddle cloth behind
+// the saddle, and a rider in pale breeches and a steel breastplate under a tall dark helmet
+// with a pale plume, with a raised steel sabre.
+{
+  "parts": [
+    // The horse, in the darker shade of its owner's color, with a dark tail. The saddle cloth.
+    { "shape": "box", "size": [0.32, 0.28, 0.84], "at": [0, 0.33, 0.1], "tone": "owner_dark" },
+    { "shape": "box", "size": [0.17, 0.36, 0.19], "at": [0, 0.54, -0.34], "turn": [-28, 0, 0], "tone": "owner_dark" },
+    { "shape": "box", "size": [0.15, 0.15, 0.32], "at": [0, 0.67, -0.53], "turn": [-25, 0, 0], "tone": "owner_dark" },
+    { "shape": "box", "size": [0.09, 0.22, 0.1], "at": [0.11, 0.11, -0.22], "mirror": true, "tone": "owner_dark" },
+    { "shape": "box", "size": [0.09, 0.22, 0.1], "at": [0.11, 0.11, 0.44], "mirror": true, "tone": "owner_dark" },
+    { "shape": "box", "size": [0.08, 0.28, 0.08], "at": [0, 0.32, 0.58], "turn": [28, 0, 0], "tone": "dark" },
+    { "shape": "box", "size": [0.42, 0.035, 0.36], "at": [0, 0.475, 0.35], "tone": "pale" },
+
+    // The rider.
+    { "shape": "box", "size": [0.1, 0.22, 0.13], "at": [0.21, 0.39, 0.12], "mirror": true, "tone": "pale" },
+    { "shape": "box", "size": [0.3, 0.26, 0.2], "at": [0, 0.6, 0.12], "tone": "owner" },
+    { "shape": "box", "size": [0.33, 0.21, 0.23], "at": [0, 0.635, 0.12], "tone": "steel" },
+    { "shape": "ball", "size": [0.29, 0.29, 0.29], "at": [0, 0.855, 0.12], "sides": 8, "tone": "pale" },
+    { "shape": "cylinder", "size": [0.267, 0.19, 0.267], "at": [0, 1.045, 0.12], "top": 0.88, "sides": 10, "tone": "dark" },
+    { "shape": "ball", "size": [0.12, 0.15, 0.12], "at": [0, 1.19, 0.12], "sides": 6, "tone": "pale" },
+    { "shape": "box", "size": [0.045, 0.5, 0.06], "at": [0.25, 0.86, -0.02], "turn": [-30, 0, 0], "tone": "steel" }
+  ]
+}

@@ -10,7 +10,14 @@ namespace Game;
 /// larger on a unit of a line that keeps more room round it, as Cavalry does. A worker has none.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The three marks differ in outline when seen from above, which is how the camera sees them.
+/// </para>
+/// <para>
+/// A chassis that has a look of its own (<see cref="ChassisLookSet"/>) is not drawn in the
+/// stand-in shape and carries no mark: its look says more. The marks stay for every chassis
+/// the presentation data does not name yet.
+/// </para>
 /// </remarks>
 public partial class ChassisMarks : WorldLayer
 {
@@ -32,10 +39,15 @@ public partial class ChassisMarks : WorldLayer
 
     // For every line of the roster, whether its units keep more than a tile between their centers.
     private bool[] _large = [];
+    private ChassisLookSet _looks = null!;
+
+    /// <summary>The number of units that carried a mark in the last frame.</summary>
+    public int Count { get; private set; }
 
     protected override void Attach()
     {
         var data = View.Match.Data;
+        _looks = ChassisLookSet.For(data);
         _large = new bool[data.Rules.Lines.Count];
         foreach (var line in data.Lines)
         {
@@ -55,17 +67,20 @@ public partial class ChassisMarks : WorldLayer
         _bars.Begin();
         _balls.Begin();
         _rings.Begin();
+        Count = 0;
 
         var match = View.Match;
         foreach (var entity in View.World.Units)
         {
             if (!match.Combatants.TryGet(entity, out var unit)
+                || _looks.Of(unit.Chassis) is not null
                 || !match.Bodies.TryGet(entity, out var body)
                 || !View.World.TryGetDrawnPosition(entity, out var position))
             {
                 continue;
             }
 
+            Count++;
             var profile = match.Combat.ProfileOf(body.Owner, unit.Chassis);
             var scale = Basis.FromScale(Vector3.One * (_large[profile.Line] ? LargeScale : 1f));
             var center = position + (Vector3.Up * (PlaceholderMeshes.UnitHeight + Lift));

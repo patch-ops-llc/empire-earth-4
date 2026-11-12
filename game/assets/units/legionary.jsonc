@@ -1,0 +1,18 @@
+// Legionary: guard, epoch 2 (Romans). A broad figure with steel shoulders behind a tall square
+// pale shield that carries its owner's color round a steel boss, and a short sword. The steel
+// helmet has a dark crest that runs side to side.
+{
+  "parts": [
+    { "shape": "cylinder", "size": [0.54, 0.24, 0.34], "at": [0, 0.12, 0], "top": 0.85, "sides": 8, "tone": "owner_dark" },
+    { "shape": "box", "size": [0.66, 0.3, 0.34], "at": [0, 0.39, 0], "tone": "owner" },
+    { "shape": "box", "size": [0.74, 0.07, 0.38], "at": [0, 0.53, 0], "tone": "steel" },
+    { "shape": "ball", "size": [0.37, 0.37, 0.37], "at": [0, 0.705, 0], "sides": 8, "tone": "steel" },
+    { "shape": "box", "size": [0.57, 0.15, 0.1], "at": [0, 0.92, 0], "tone": "dark" },
+
+    // The shield and the sword.
+    { "shape": "box", "size": [0.64, 0.66, 0.06], "at": [-0.03, 0.35, -0.28], "turn": [16, 0, 0], "tone": "pale" },
+    { "shape": "box", "size": [0.44, 0.46, 0.03], "at": [-0.03, 0.36, -0.315], "turn": [16, 0, 0], "tone": "owner" },
+    { "shape": "box", "size": [0.18, 0.18, 0.04], "at": [-0.03, 0.365, -0.34], "turn": [16, 0, 0], "tone": "steel" },
+    { "shape": "box", "size": [0.06, 0.06, 0.4], "at": [0.42, 0.4, -0.2], "tone": "steel" }
+  ]
+}

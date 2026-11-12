@@ -225,7 +225,10 @@ No match can train a fighting unit yet. Until one can, this build has a developm
 
 What you will see:
 
-- All units still share one stand-in shape, so each fighting unit carries a pale mark on top that says how it fights: a cross for hand to hand, a ball for shooting, a ring for artillery. Cavalry's cross is larger. Workers carry no mark.
+- Every fighting unit has a shape of its own, in its owner's color, that says its line and its epoch without a click. Workers are still plain blocks.
+- The line is the build of the shape. Line infantry is a slim figure with a weapon in its hands. A guard is a broad figure behind a large shield, or under a huge fur cap in the last epoch. Cavalry is a rider on a long horse, the horse in a darker shade of the owner's color. Artillery is a machine on wheels with nobody on it.
+- The epoch is what the unit wears and carries. Greeks have a bronze helmet with a dark crest that runs front to back, and bronze shields. Romans have a steel helmet with the crest from side to side, and pale shields. Medieval units have a dark, flat hat or helm and steel on the shoulders; the knight's horse wears a pale cloth. Industrial units have a tall dark hat with a pale plume, pale breeches and a firearm. The four machines are a great bow, a throwing arm with a pale ball, a tall frame with a long beam and a dark weight, and a cannon on two large dark wheels.
+- Zoomed far out, the shapes are drawn wider than they are, so that the line can still be told. The epoch is not meant to be read from there.
 - Units fight on their own when an enemy comes near, and go back to where they stood afterwards.
 - A right-click on an enemy leaves a red ring, and the selected units go after that unit. A right-click with Ctrl held leaves an orange ring, and the units go there and fight what they meet. A plain right-click on the ground moves them, and on that walk they do not fight, even when attacked.
 - A unit that has lost hit points has a bar above it: green, yellow below half and red below a quarter. The pale part of a bar is what the unit has just lost. A selected unit shows its bar even when unhurt, and the panel at the bottom gives the number when one unit is selected.

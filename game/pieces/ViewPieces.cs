@@ -42,6 +42,9 @@ public static class ViewPieces
         // Inspection: what the selected units are, accent badges, the epoch announcement.
         new InspectionPiece(),
 
+        // M20. Chassis looks: a shape for each chassis, by which its line and epoch are read.
+        new LooksPiece(),
+
         // Later pieces.
     ];
 }

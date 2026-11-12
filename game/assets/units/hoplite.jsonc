@@ -1,0 +1,16 @@
+// Hoplite: guard, epoch 1 (Greeks). A broad figure behind a large round bronze shield that
+// carries its owner's color in the middle, with a long spear. The bronze helmet has a tall
+// dark crest that runs front to back.
+{
+  "parts": [
+    { "shape": "cylinder", "size": [0.54, 0.24, 0.34], "at": [0, 0.12, 0], "top": 0.85, "sides": 8, "tone": "owner_dark" },
+    { "shape": "box", "size": [0.66, 0.3, 0.34], "at": [0, 0.39, 0], "tone": "owner" },
+    { "shape": "ball", "size": [0.37, 0.37, 0.37], "at": [0, 0.705, 0], "sides": 8, "tone": "bronze" },
+    { "shape": "box", "size": [0.1, 0.15, 0.57], "at": [0, 0.92, 0.05], "tone": "dark" },
+
+    // The shield and the spear.
+    { "shape": "cylinder", "size": [0.72, 0.06, 0.72], "at": [-0.05, 0.38, -0.28], "turn": [106, 6, 0], "sides": 14, "tone": "bronze" },
+    { "shape": "cylinder", "size": [0.32, 0.035, 0.32], "at": [-0.05, 0.39, -0.32], "turn": [106, 6, 0], "sides": 10, "tone": "owner" },
+    { "shape": "box", "size": [0.05, 0.05, 1], "at": [0.41, 0.58, -0.14], "turn": [8, 0, 0], "tone": "wood" }
+  ]
+}

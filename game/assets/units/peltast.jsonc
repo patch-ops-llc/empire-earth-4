@@ -1,0 +1,14 @@
+// Peltast: line infantry, epoch 1 (Greeks). A slim figure with a small round bronze shield and
+// a javelin held high. The bronze helmet has a dark crest that runs front to back.
+{
+  "parts": [
+    { "shape": "cylinder", "size": [0.3, 0.24, 0.22], "at": [0, 0.12, 0], "top": 0.85, "sides": 8, "tone": "owner_dark" },
+    { "shape": "box", "size": [0.36, 0.28, 0.23], "at": [0, 0.38, 0], "tone": "owner" },
+    { "shape": "ball", "size": [0.33, 0.33, 0.33], "at": [0, 0.665, 0], "sides": 8, "tone": "bronze" },
+    { "shape": "box", "size": [0.1, 0.15, 0.53], "at": [0, 0.86, 0.05], "tone": "dark" },
+
+    // The shield on the left arm, and the javelin in the right hand.
+    { "shape": "cylinder", "size": [0.34, 0.05, 0.34], "at": [-0.25, 0.4, -0.12], "turn": [105, 25, 0], "tone": "bronze" },
+    { "shape": "box", "size": [0.05, 0.05, 0.85], "at": [0.25, 0.58, -0.12], "turn": [24, 0, 0], "tone": "wood" }
+  ]
+}
