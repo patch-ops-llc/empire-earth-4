@@ -115,6 +115,9 @@ public sealed class AttackSystem : ISystem
         _events = events;
     }
 
+    /// <summary>EXPERIMENT, variant A: when set, only a walk counts as moving, not a step away from the unit's own side.</summary>
+    public WalkMarks? Walks { get; init; }
+
     public void Run(World world)
     {
         ArgumentNullException.ThrowIfNull(world);
@@ -135,7 +138,7 @@ public sealed class AttackSystem : ISystem
                 body,
                 profile,
                 _movers.IndexOf(entity),
-                Moved: body.Position != unit.Stood,
+                Moved: Walks?.Walked(entity) ?? body.Position != unit.Stood,
                 TurnToLook: (world.Tick + entity.Value) % _targeting.Rules.LookInterval == 0);
 
             unit.Stood = body.Position;
