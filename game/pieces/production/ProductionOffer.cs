@@ -13,8 +13,12 @@ namespace Game;
 /// <param name="UnitMaterials">The Materials of one unit.</param>
 /// <param name="UnitEnergy">The Energy of one unit.</param>
 /// <param name="UnitSupply">The supply of one unit.</param>
+/// <param name="BuildTicks">
+/// The time the whole order would take, in ticks, as the simulation times an order of this
+/// unit and count under the player's tech now: a pair's is the batch time, not twice one's.
+/// </param>
 /// <param name="Check">Whether the order can be placed, and if not, the simulation's reason.</param>
-public readonly record struct ProductionOffer(int Unit, int Count, int UnitMaterials, int UnitEnergy, int UnitSupply, TrainCheck Check)
+public readonly record struct ProductionOffer(int Unit, int Count, int UnitMaterials, int UnitEnergy, int UnitSupply, int BuildTicks, TrainCheck Check)
 {
     /// <summary>The Materials the whole order would cost.</summary>
     public int Materials => Count * UnitMaterials;
@@ -66,12 +70,14 @@ public readonly record struct ProductionOffer(int Unit, int Count, int UnitMater
         foreach (var unit in production.TrainedAt(placed.Type))
         {
             var (materials, energy, supply) = production.PriceOf(player, unit);
+            var count = production.CountOf(player, unit);
             offers.Add(new ProductionOffer(
                 unit,
-                production.CountOf(player, unit),
+                count,
                 materials,
                 energy,
                 supply,
+                production.BuildTicksOf(player, new TrainOrder { Unit = unit, Count = count }),
                 production.CheckTrain(player, structure, unit)));
         }
     }

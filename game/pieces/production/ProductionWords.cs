@@ -55,10 +55,36 @@ public static class ProductionWords
         TrainCheck.Locked => Needs(match, player, offer.Unit, fitButton: true) is { Length: > 0 } research ? $"Needs {research}" : "Locked",
         TrainCheck.QueueFull => "Queue full",
         TrainCheck.TooExpensive => Lacks(match, player, offer),
-        TrainCheck.NoSupply => "No free supply",
+        TrainCheck.NoSupply => NoSupply(match, player, offer.UnitSupply),
         TrainCheck.NotTrainedHere => "Not trained here",
         _ => "Not ready",
     };
+
+    /// <summary>What a button says of an order that can be placed: its supply and its time, as "4 supply · 27 s".</summary>
+    public static string SupplyAndTime(in ProductionOffer offer) =>
+        string.Create(CultureInfo.InvariantCulture, $"{offer.Supply} supply · {Time(offer.BuildTicks)}");
+
+    /// <summary>
+    /// What a click on a button does, as a sentence with the order's own numbers: the price and
+    /// the supply of the whole order and the time it takes.
+    /// </summary>
+    public static string OfferSentence(in ProductionOffer offer)
+    {
+        var what = offer.Count > 1 ? "Adds a pair to the queue" : "Adds one to the queue";
+        var each = offer.Count > 1 ? " for the two" : string.Empty;
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{what}: {Price(offer.Materials, offer.Energy)} and {offer.Supply} supply{each}, ready in {Time(offer.BuildTicks)}.");
+    }
+
+    /// <summary>What an order in the queue was placed with, which is what cancelling it gives back: "198 M 28 E".</summary>
+    public static string Paid(in TrainOrder order) => Price(order.Materials, order.Energy);
+
+    /// <summary>What cancelling an order in the queue does, with what it was placed with and not today's price.</summary>
+    public static string CancelSentence(in TrainOrder order) =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"Click to cancel this order. It gives back the {Paid(order)} it was placed with and frees {order.Supply} supply.");
 
     /// <summary>Why an order cannot be placed, as a sentence for the player. Empty when it can.</summary>
     public static string ReasonSentence(Match match, int player, int unit, TrainCheck check)
@@ -72,18 +98,51 @@ public static class ProductionWords
                 : $"{name} is locked: research has not reached it yet.",
             TrainCheck.QueueFull => string.Create(CultureInfo.InvariantCulture, $"The queue is full: a structure holds {Producer.MaxOrders} orders."),
             TrainCheck.TooExpensive => $"{name} costs more than you have.",
-            TrainCheck.NoSupply => $"No free supply for {name}.",
+            TrainCheck.NoSupply => NoSupplySentence(match, player, unit, name),
             TrainCheck.NotTrainedHere => $"{name} is not trained at this structure.",
             _ => "This structure trains nothing now.",
         };
     }
 
     /// <summary>The time left of an order in whole seconds, rounded up: "8 s".</summary>
-    public static string TimeLeft(int progress, int buildTicks)
+    public static string TimeLeft(int progress, int buildTicks) => Time(buildTicks - progress);
+
+    /// <summary>A time in ticks as whole seconds, rounded up: "27 s".</summary>
+    public static string Time(int ticks)
     {
-        var ticks = Math.Max(0, buildTicks - progress);
-        var seconds = (ticks + SimInfo.TicksPerSecond - 1) / SimInfo.TicksPerSecond;
+        var seconds = (Math.Max(0, ticks) + SimInfo.TicksPerSecond - 1) / SimInfo.TicksPerSecond;
         return string.Create(CultureInfo.InvariantCulture, $"{seconds} s");
+    }
+
+    // Why supply stops an order, short enough for a button. The used supply can be over the cap,
+    // when a research has made standing units take more (design 2.3, Light footprint).
+    private static string NoSupply(Match match, int player, int unitSupply)
+    {
+        var used = match.Supply.Used(player);
+        var cap = match.Supply.Cap(player);
+        return used > cap ? string.Create(CultureInfo.InvariantCulture, $"Over supply: {used} of {cap}")
+            : used == cap ? string.Create(CultureInfo.InvariantCulture, $"Supply full: {used} of {cap}")
+            : string.Create(CultureInfo.InvariantCulture, $"Needs {unitSupply - (cap - used)} more supply");
+    }
+
+    private static string NoSupplySentence(Match match, int player, int unit, string name)
+    {
+        var used = match.Supply.Used(player);
+        var cap = match.Supply.Cap(player);
+        if (used > cap)
+        {
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"No supply for {name}: you use {used} of {cap}, which is over the cap. Nothing can be ordered until you use less or Logistics raises the cap.");
+        }
+
+        if (used == cap)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"No supply for {name}: you use all {cap} of your supply.");
+        }
+
+        var needs = match.Production.PriceOf(player, unit).Supply;
+        return string.Create(CultureInfo.InvariantCulture, $"{name} takes {needs} supply and {cap - used} is free: you use {used} of {cap}.");
     }
 
     // What research a locked chassis waits for: its line's first track at the chassis's epoch
