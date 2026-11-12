@@ -80,8 +80,15 @@ public static class MatchSetup
         var move = new MoveCommandHandler(grid, bodies, movers, players.Count);
         var structureTiles = new StructureTiles(grid, world.Entities, structures, routes, new Rerouting(grid, bodies, movers, move));
         research.AddTechChangeHandler(new StructureHealth(bodies, health, structures));
+
+        // The wall rule: where the walls stand follows the tiles, and the orders and the attacks
+        // of units share one judge of which wall is in a unit's way.
+        var wallMap = new WallMap(data, grid, world.Entities, bodies, structures, players.Count);
+        structureTiles.Follow(wallMap);
+        var breaching = new Breaching(grid, wallMap, data.Rules.WallCrossingCost);
+        var wallRule = new WallRule(grid, breaching, targeting, approach);
         var work = new WorkAssignments(data.Resources, grid, bodies, workers, workSites, move);
-        var orders = new OrderCommandHandler(move, grid, bodies, movers, combatants, targeting, approach, simulation.Events, players.Count);
+        var orders = new OrderCommandHandler(move, grid, bodies, movers, combatants, targeting, approach, simulation.Events, wallRule, players.Count);
         var walkOrders = new LeaveWorkHandler(orders, bodies, work);
 
         // A worker walks to the site of its build order by the move order too, and any other
@@ -142,7 +149,7 @@ public static class MatchSetup
         simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, new PlaceHolders(workers), fighters));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
         simulation.AddSystem(new ShotSystem(bodies, shots, targeting, simulation.Events));
-        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, simulation.Events));
+        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, simulation.Events, wallRule));
         simulation.AddSystem(new TurretSystem(bodies, structures, turrets, shots, targeting, simulation.Events));
         simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
         simulation.AddSystem(new StructureSystem(data, bodies, structures, foundations, structureTiles, research, simulation.Events));
@@ -160,6 +167,7 @@ public static class MatchSetup
             Simulation = simulation,
             Grid = grid,
             Bodies = bodies,
+            Breaching = breaching,
             BuildOrders = buildOrders,
             Combat = combat,
             Combatants = combatants,
@@ -178,6 +186,7 @@ public static class MatchSetup
             Supply = supply,
             Territories = territories,
             Turrets = turrets,
+            WallMap = wallMap,
             WallPlans = wallPlans,
             Walls = walls,
             Work = work,

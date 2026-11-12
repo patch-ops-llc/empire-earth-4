@@ -58,6 +58,7 @@ public sealed class MoveCommandHandler : ICommandHandler
     private readonly List<Area> _areas = [];
     private readonly List<Member> _members = [];
     private readonly List<SharedStart> _starts = [];
+    private readonly List<(int Mover, FixedVector2 Place)> _places = [];
 
     public MoveCommandHandler(MapGrid grid, ComponentStore<Body> bodies, ComponentStore<Mover> movers, int playerCount)
     {
@@ -84,6 +85,7 @@ public sealed class MoveCommandHandler : ICommandHandler
         _areas.Clear();
         _members.Clear();
         _starts.Clear();
+        _places.Clear();
         var low = new FixedVector2(Fixed.MaxValue, Fixed.MaxValue);
         var high = new FixedVector2(Fixed.MinValue, Fixed.MinValue);
         foreach (var entity in command.Entities)
@@ -128,6 +130,7 @@ public sealed class MoveCommandHandler : ICommandHandler
             var position = member.Position;
             var offset = keepsShape ? position - middle : FixedVector2.Zero;
             var destination = offset == FixedVector2.Zero ? area.Destination : PlaceFor(area, target + offset);
+            _places.Add((member.Mover, offset == FixedVector2.Zero ? target : OnMap(target + offset)));
 
             ref var mover = ref _movers.ValueAt(member.Mover);
             if (TileOf(position) == TileOf(destination) || _grid.IsCorridorClear(position, destination, Mover.Clearance))
@@ -145,6 +148,29 @@ public sealed class MoveCommandHandler : ICommandHandler
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// The place the command that was carried out last named for one of the units it sent: the
+    /// target plus the unit's offset in the group, taken to the nearest point of the map, before
+    /// the ground had its say. The wall rule of design 2.5 judges it. False for a mover the
+    /// command did not send.
+    /// </summary>
+    /// <param name="mover">The unit's position in the store of movers.</param>
+    /// <param name="place">The place.</param>
+    public bool TryGetOrderedPlace(int mover, out FixedVector2 place)
+    {
+        foreach (var (index, ordered) in _places)
+        {
+            if (index == mover)
+            {
+                place = ordered;
+                return true;
+            }
+        }
+
+        place = default;
+        return false;
     }
 
     /// <summary>
@@ -169,12 +195,13 @@ public sealed class MoveCommandHandler : ICommandHandler
     /// <summary>Where a unit of an area goes when its own place in the group is a point.</summary>
     private FixedVector2 PlaceFor(Area area, FixedVector2 point)
     {
-        // The last point of the map on each axis: a tile ends just before the next begins.
-        var onMap = new FixedVector2(
-            Fixed.Clamp(point.X, Fixed.Zero, Fixed.FromInt(_grid.Width) - Fixed.Epsilon),
-            Fixed.Clamp(point.Y, Fixed.Zero, Fixed.FromInt(_grid.Height) - Fixed.Epsilon));
-        return Reachable(area.Region, onMap, area.FirstPosition);
+        return Reachable(area.Region, OnMap(point), area.FirstPosition);
     }
+
+    /// <summary>A point taken to the nearest point of the map. The last point of the map on each axis: a tile ends just before the next begins.</summary>
+    private FixedVector2 OnMap(FixedVector2 point) => new(
+        Fixed.Clamp(point.X, Fixed.Zero, Fixed.FromInt(_grid.Width) - Fixed.Epsilon),
+        Fixed.Clamp(point.Y, Fixed.Zero, Fixed.FromInt(_grid.Height) - Fixed.Epsilon));
 
     /// <summary>
     /// A point as a destination for the units of a region: itself, kept off blocked ground, when

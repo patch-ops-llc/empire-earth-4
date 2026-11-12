@@ -374,6 +374,35 @@ public sealed class MapGrid
     /// </summary>
     public bool TryFindNearestTile(FixedVector2 point, int region, FixedVector2 preferNear, out int tileX, out int tileY)
     {
+        if (region > RegionCount && Contains(point))
+        {
+            tileX = -1;
+            tileY = -1;
+            return false;
+        }
+
+        return TryFindNearestTile(_regions, point, region, preferNear, out tileX, out tileY);
+    }
+
+    /// <summary>
+    /// <see cref="TryFindNearestTile(FixedVector2, int, FixedVector2, out int, out int)"/> for
+    /// another way of numbering the tiles than the regions: finds the tile with a given label
+    /// whose center is nearest a point, by the same rules.
+    /// </summary>
+    /// <param name="labels">One number for each tile of this grid, as <c>y * width + x</c>.</param>
+    /// <param name="point">The point, which must be on the map.</param>
+    /// <param name="label">The label to look for, from 1.</param>
+    /// <param name="preferNear">Among tiles equally near the point, the one nearest this point wins.</param>
+    /// <param name="tileX">The x of the tile found.</param>
+    /// <param name="tileY">The y of the tile found.</param>
+    public bool TryFindNearestTile(
+        ReadOnlySpan<int> labels, FixedVector2 point, int label, FixedVector2 preferNear, out int tileX, out int tileY)
+    {
+        if (labels.Length != _passable.Length)
+        {
+            throw new ArgumentException($"The labels are for {labels.Length} tiles and the grid has {_passable.Length}.", nameof(labels));
+        }
+
         tileX = -1;
         tileY = -1;
         var centerX = point.X.FloorToInt();
@@ -383,7 +412,7 @@ public sealed class MapGrid
             throw new ArgumentException($"The point {point} is not on the map.", nameof(point));
         }
 
-        if (region < 1 || region > RegionCount)
+        if (label < 1)
         {
             return false;
         }
@@ -405,7 +434,7 @@ public sealed class MapGrid
                 var onEdgeRow = y == centerY - ring || y == centerY + ring;
                 for (var x = centerX - ring; x <= centerX + ring; x += onEdgeRow ? 1 : Math.Max(2 * ring, 1))
                 {
-                    if (RegionOf(x, y) != region)
+                    if (!Contains(x, y) || labels[(y * Width) + x] != label)
                     {
                         continue;
                     }
