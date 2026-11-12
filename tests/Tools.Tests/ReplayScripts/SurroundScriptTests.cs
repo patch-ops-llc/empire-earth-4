@@ -35,6 +35,15 @@ public class SurroundScriptTests
         "units of two players with places by each other",
     ];
 
+    /// <summary>The rules of the places round a footprint.</summary>
+    private static readonly string[] RulesOfPlacesByStructures =
+    [
+        "a unit on its place by a structure that attacks from it",
+        "nine units on their places by one structure",
+        "units on their places on all four sides of one structure",
+        "a unit that waits out of reach of a structure while five of its side are on their places by it",
+    ];
+
     private static readonly string[] EveryKindOfOrder =
     [
         "a band made",
@@ -58,6 +67,36 @@ public class SurroundScriptTests
     }
 
     /// <summary>
+    /// The script sends a band by attack order only at what the band has in sight: a target that
+    /// a unit of the band stands at least a tile nearer to than it sees, when the order is
+    /// given. A player may order an attack only on what it sees (design 5.3), so no order of the
+    /// script is one that a match with fog refuses.
+    /// </summary>
+    [Theory]
+    [InlineData("ridge")]
+    [InlineData("switchback")]
+    public void TheScriptOrdersAnAttackOnlyOnWhatTheBandHasInSight(string map)
+    {
+        var replay = ReplayRuns.Record("--map", map, "--ticks", "6000", "--orders", "33", "--script", "surround");
+
+        var match = ReplayRuns.Start(replay);
+        var due = replay.Commands.ToLookup(entry => entry.Tick, entry => entry.Command);
+        var attacks = 0;
+        for (var tick = 0; tick < replay.TickCount; tick++)
+        {
+            foreach (var command in due[tick].Where(command => command.Type == CommandType.Attack))
+            {
+                attacks++;
+                Assert.True(HasInSight(match, command), $"The attack order of tick {tick} names a target that no unit of its band has in sight.");
+            }
+
+            match.Simulation.Tick();
+        }
+
+        Assert.True(attacks >= 20, $"The script gave only {attacks} attack orders.");
+    }
+
+    /// <summary>
     /// What this recorded match is for: it must reach the rules of the places round one target
     /// that a change could break. The match has the orders of <c>gather</c> as well, so that
     /// workers stand at their deposits when a band comes for them.
@@ -67,17 +106,20 @@ public class SurroundScriptTests
     /// bands that come to a Capitol stand round it, the match takes another course from there,
     /// and it no longer has seven units on their places by one target. The match of
     /// <see cref="TheGoldenReplayWithPlacesRoundStructuresReachesTheRulesItGuards"/> has.
+    /// <para>
+    /// It was also recorded when the script sent a band at any target by attack order, in sight
+    /// or not, and most of its attack orders are ones that a match with fog refuses (design
+    /// 5.3). What it reaches round a structure depends on which of its orders at a Capitol are
+    /// carried out, so that is the second match's to guard and is not counted here.
+    /// </para>
     /// </remarks>
     [Fact]
     public void ItsGoldenReplayReachesTheRulesItGuards()
     {
-        string[] expected =
-        [
-            .. EveryKindOfOrder,
-            .. RulesOfPlacesByUnits,
-            "a unit on its place by a structure that attacks from it",
-        ];
-        Assert.Equal(expected.Order(StringComparer.Ordinal), Reached(ReplayRuns.ReadGolden(GoldenReplay)).Order(StringComparer.Ordinal));
+        string[] expected = [.. EveryKindOfOrder, .. RulesOfPlacesByUnits];
+        var reached = Reached(ReplayRuns.ReadGolden(GoldenReplay));
+        reached.ExceptWith(RulesOfPlacesByStructures);
+        Assert.Equal(expected.Order(StringComparer.Ordinal), reached.Order(StringComparer.Ordinal));
     }
 
     /// <summary>
@@ -86,6 +128,12 @@ public class SurroundScriptTests
     /// round a unit and the rules of the places round a footprint: its bands stand round the two
     /// Capitols, on every side of one, and wait behind when they have no place.
     /// </summary>
+    /// <remarks>
+    /// It was recorded with the script as it is since
+    /// <see cref="TheScriptOrdersAnAttackOnlyOnWhatTheBandHasInSight"/>: each of its attack
+    /// orders names a target that a unit of the band had in sight, so they are orders that a
+    /// match with fog carries out too (design 5.3).
+    /// </remarks>
     [Fact]
     public void TheGoldenReplayWithPlacesRoundStructuresReachesTheRulesItGuards()
     {
@@ -94,10 +142,7 @@ public class SurroundScriptTests
             .. EveryKindOfOrder,
             .. RulesOfPlacesByUnits,
             "seven units on their places by one target",
-            "a unit on its place by a structure that attacks from it",
-            "nine units on their places by one structure",
-            "units on their places on all four sides of one structure",
-            "a unit that waits out of reach of a structure while five of its side are on their places by it",
+            .. RulesOfPlacesByStructures,
         ];
         Assert.Equal(expected.Order(StringComparer.Ordinal), Reached(ReplayRuns.ReadGolden(GoldenReplayRoundStructures)).Order(StringComparer.Ordinal));
     }
@@ -122,6 +167,29 @@ public class SurroundScriptTests
         }
 
         return seen;
+    }
+
+    /// <summary>
+    /// Whether a unit that an attack order is for stands at least a tile nearer to the target
+    /// than it sees, in the match as it is before the tick of the order. A melee unit picks
+    /// targets as far as it sees, and a structure is as far as the nearest edge of its footprint.
+    /// </summary>
+    private static bool HasInSight(Match match, Command command)
+    {
+        var at = match.Bodies.Get(command.TargetEntity).Position;
+        var isStructure = match.Structures.TryGet(command.TargetEntity, out var structure);
+        foreach (var unit in command.Entities.ToArray())
+        {
+            var from = match.Bodies.Get(unit).Position;
+            var sight = match.Combat.ProfileOf(command.Player, match.Combatants.Get(unit).Chassis).Acquisition - Fixed.One;
+            var distance = isStructure ? structure.Tiles.DistanceSquaredRawTo(from) : FixedVector2.DistanceSquaredRaw(from, at);
+            if (distance <= FixedVector2.SquareRaw(sight))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsOfThisScript(Command command) =>
