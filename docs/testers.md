@@ -77,6 +77,8 @@ If joining fails, the menu says why in orange:
 | --- | --- |
 | Move the camera | W, A, S, D or the arrow keys, or push the pointer against an edge of the window |
 | Zoom | Mouse wheel, the = and - keys, or a pinch or two-finger scroll on a trackpad |
+| Look somewhere else on the map | Click the minimap in the bottom right corner, or hold the left button on it and drag |
+| Send the selected units somewhere on the minimap | Right-click the minimap |
 | Select one of your units | Click it |
 | Select one of your structures | Click it |
 | Select several | Hold the left button and drag a box round them |
@@ -93,6 +95,9 @@ If joining fails, the menu says why in orange:
 
 - The host's workers are blue and the other player's are red. Alone, yours are blue. Which side of the map each player starts on is chosen at random each time.
 - Selected units have a green ring under them. A right-click leaves a yellow ring that closes on the place you clicked.
+- The small map in the bottom right corner shows the whole map: forest in dark green, cliffs in grey, deposits as orange squares, and every unit as a dot in its player's color. The white outline is the part of the map on your screen. Your selected units have a white rim.
+- Click the small map and the view jumps there; hold the button and drag, and the view follows. A right-click on it sends the selected units to that place, and a yellow ring closes on the place for a moment. The mouse wheel still zooms while the pointer is on it.
+- The small map shows everything, the other player's units too. Nothing is hidden yet.
 - Units find their own way round the cliffs and the forest. A unit that needs a way round stands still for a moment while it works one out.
 - Nobody can stand on cliffs or among trees. If you send units there, they go to the nearest place they can reach. The yellow ring stays where you clicked.
 - Units sent to the same place end up standing inside each other, on one point. They do not make room for each other yet.

@@ -90,6 +90,9 @@ public sealed class SmokeTest
 
         // 17v. Fog of war.
 
+        // 24v. Minimap: an order given on it.
+        new MinimapSmoke(),
+
         // Later pieces.
     ];
 

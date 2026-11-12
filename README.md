@@ -98,6 +98,8 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | --- | --- |
 | Pan | W A S D or the arrow keys, or move the pointer to a window edge |
 | Zoom | Mouse wheel, `=` and `-`, or a trackpad pinch or two-finger scroll |
+| Look somewhere else on the map | Left click on the minimap, or hold the button on it and drag |
+| Send the selected units somewhere on the minimap | Right click on the minimap |
 | Select a unit of your own | Left click on it |
 | Select a structure of your own | Left click on it. Structures and units are not selected together |
 | Select several | Drag a box round them with the left button |
