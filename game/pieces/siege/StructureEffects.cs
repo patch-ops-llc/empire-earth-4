@@ -57,7 +57,7 @@ public partial class StructureEffects : WorldLayer
     // The line of the mark runs outside the tiles, where the structure does not hide it.
     private const float MarkOutside = 0.12f;
     private const float MarkWidth = 0.1f;
-    private const int PuffsInAPlume = 5;
+    private const int PuffsInAPlume = 7;
 
     // How much of the footprint the box takes that a shot is drawn going into.
     private const float BodyShare = 0.8f;
@@ -310,9 +310,9 @@ public partial class StructureEffects : WorldLayer
                 for (var puff = 0; puff < PuffsInAPlume; puff++)
                 {
                     var age = Mathf.PosMod((float)(_time * 0.42) + (puff / (float)PuffsInAPlume) + Scatter(seed + 3), 1f);
-                    var at = foot + (Vector3.Up * (1.7f * age)) + (Wind * age * age);
-                    var solid = 0.55f * (1f - age) * Mathf.Min(1f, age * 8f);
-                    AddBall(at, scale * Mathf.Lerp(0.22f, 0.75f, age), SmokeDark.Lerp(SmokePale, age), solid);
+                    var at = foot + (Vector3.Up * (2.6f * age)) + (Wind * age * age);
+                    var solid = 0.72f * (1f - (age * age)) * Mathf.Min(1f, age * 8f);
+                    AddBall(at, scale * Mathf.Lerp(0.24f, 0.95f, age), SmokeDark.Lerp(SmokePale, age * 0.8f), solid);
                 }
 
                 if (burns)
