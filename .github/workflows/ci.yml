@@ -82,3 +82,41 @@ jobs:
             echo "::error::The game and datacheck do not agree on the content hash of game/data."
             exit 1
           fi
+
+      # Two copies of the game on this machine, one hosting and one joining over the local
+      # address, play a short match with nobody at the keyboard: the guest is sent the match, both
+      # give a move order, and the host ends it. Each prints one line with the last tick and the
+      # state hash, which must agree, and the replay each wrote must give the same match again.
+      # This is the only test of the network as the game wires it.
+      - name: Run a network match between two copies of the game
+        shell: bash
+        run: |
+          files="$RUNNER_TEMP/net-test"
+          rm -rf "$files"
+          mkdir -p "$files/host" "$files/guest"
+          godot --headless --path game -- --host 24642 --net-test 200 --match-files "$files/host" > "$files/host.log" 2>&1 &
+          host=$!
+          # The guest starts once the host listens: a join to a port nobody has open fails at once.
+          for _ in $(seq 1 240); do
+            if grep -q '^Hosting on port' "$files/host.log" || ! kill -0 "$host" 2>/dev/null; then
+              break
+            fi
+            sleep 0.25
+          done
+          godot --headless --path game -- --join 127.0.0.1:24642 --net-test 200 --match-files "$files/guest" > "$files/guest.log" 2>&1 || true
+          wait "$host" || true
+          cat "$files/host.log" "$files/guest.log"
+          host_line="$(grep '^NET_TEST_OK role=host ' "$files/host.log" || true)"
+          guest_line="$(grep '^NET_TEST_OK role=guest ' "$files/guest.log" || true)"
+          if [ -z "$host_line" ] || [ -z "$guest_line" ]; then
+            echo "::error::The two games did not both finish the network match."
+            exit 1
+          fi
+          host_end="$(sed -n 's/.* \(tick=[0-9]* \).*\( dropped=[0-9]*\).*\( state_hash=[0-9a-f]*\).*/\1\2\3/p' <<< "$host_line")"
+          guest_end="$(sed -n 's/.* \(tick=[0-9]* \).*\( dropped=[0-9]*\).*\( state_hash=[0-9a-f]*\).*/\1\2\3/p' <<< "$guest_line")"
+          echo "The host ended with $host_end and the guest with $guest_end."
+          if [ -z "$host_end" ] || [ "$host_end" != "$guest_end" ] || ! grep -q ' dropped=0 ' <<< "$host_line"; then
+            echo "::error::The two games do not agree on how the network match ended, or an order was dropped."
+            exit 1
+          fi
+          dotnet run --no-build --project src/Tools -- replay verify "$files/host" "$files/guest" --data game/data

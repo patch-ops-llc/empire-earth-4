@@ -49,7 +49,7 @@ public sealed class HostSession
     /// <summary>A client finished joining its seat.</summary>
     public event Action<int>? PlayerJoined;
 
-    /// <summary>A player's connection is gone, or the host dropped it. The others were told.</summary>
+    /// <summary>A player left, its connection is gone, or the host dropped it. The others were told.</summary>
     public event Action<int, SessionEndReason>? PlayerLeft;
 
     /// <summary>The session is over.</summary>
@@ -311,7 +311,17 @@ public sealed class HostSession
 
                 peer.Joined = true;
                 Send(peer, new JoinAccept(peer.Player, _peers.Length));
+                if (Options.Match is { } match)
+                {
+                    Send(peer, new MatchNotice(match));
+                }
+
                 PlayerJoined?.Invoke(peer.Player);
+                break;
+
+            // The client closes its connection after this, so nothing is sent back to it.
+            case LeaveNotice leave when peer.Joined && leave.Reason is SessionEndReason.Left or SessionEndReason.SetupMismatch:
+                Remove(peer, leave.Reason);
                 break;
 
             case ReadyNotice when peer.Joined && !peer.Ready && Phase == SessionPhase.Joining:

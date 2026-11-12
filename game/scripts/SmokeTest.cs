@@ -151,7 +151,7 @@ public sealed class SmokeTest
         var stateHash = _match.World.ComputeHash().ToString("x16", CultureInfo.InvariantCulture);
 
         GD.Print(string.Create(CultureInfo.InvariantCulture,
-            $"{Marker} runtime={System.Environment.Version} game=[{gameFramework}] sim=[{simFramework}] " +
+            $"{Marker} game_version={GameInfo.Version} runtime={System.Environment.Version} game=[{gameFramework}] sim=[{simFramework}] " +
             $"sim_optimized={simOptimized} ticks_per_second={SimInfo.TicksPerSecond} map={_match.Map.Id} " +
             $"tick={_match.World.Tick} entities={entities} orders={Script.Length} " +
             $"content_hash=sha256:{_match.Data.ContentHash} state_hash={stateHash}"));
