@@ -104,13 +104,21 @@
       "maximum": 1000
     },
     "match": {
-      "description": "Design 5.2. All tracks start at start_epoch and none may pass epoch_cap.",
+      "description": "Design 5.2 and 6. All tracks start at start_epoch and none may pass epoch_cap. \"lines\" and \"structures\" say what a match is played with.",
       "type": "object",
       "additionalProperties": false,
       "required": ["start_epoch", "epoch_cap"],
       "properties": {
         "start_epoch": { "type": "integer", "minimum": 1, "maximum": 20 },
-        "epoch_cap": { "type": "integer", "minimum": 1, "maximum": 20 }
+        "epoch_cap": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "lines": {
+          "description": "Optional. The lines of the roster a match is played with. Each needs its data file, a chassis for every epoch up to epoch_cap, and a structure listed here that trains it.",
+          "$ref": "#/definitions/idList"
+        },
+        "structures": {
+          "description": "Optional. The structures of the roster a match is played with, the one every player starts with among them. Each needs its data file and must unlock no later than epoch_cap.",
+          "$ref": "#/definitions/idList"
+        }
       }
     },
     "start": {

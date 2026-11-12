@@ -39,7 +39,22 @@ public sealed record PerStepRules(DataNumber QualityCost, DataNumber Manufacturi
 public sealed record SupplyCapRules(int Base, int PerLogisticsTier);
 
 /// <summary>Design 5.2: the match settings of the first playable.</summary>
-public sealed record MatchRules(int StartEpoch, int EpochCap);
+public sealed record MatchRules(int StartEpoch, int EpochCap)
+{
+    /// <summary>
+    /// The lines a match is played with (design 6), as roster indexes in rising order, or null
+    /// when <c>rules.jsonc</c> does not list them. The loader requires a data file for each, with
+    /// a chassis for every epoch up to <see cref="EpochCap"/> and a structure that trains it.
+    /// </summary>
+    public IReadOnlyList<int>? Lines { get; init; }
+
+    /// <summary>
+    /// The structures a match is played with (design 6), as roster indexes in rising order, or
+    /// null when <c>rules.jsonc</c> does not list them. The loader requires a data file for each,
+    /// which unlocks no later than <see cref="EpochCap"/>.
+    /// </summary>
+    public IReadOnlyList<int>? Structures { get; init; }
+}
 
 /// <summary>Design 5.2: what every player starts with, besides a Capitol.</summary>
 public sealed record StartRules(int Workers, int Materials, int Energy);

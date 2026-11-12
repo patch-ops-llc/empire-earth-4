@@ -66,6 +66,16 @@ internal static class RulesReader
             epochCapValue.Error($"must not be below start_epoch ({startEpoch}), found {epochCap}");
         }
 
+        var matchLines = ReadPlayedWith(match.Optional("lines"), lines, "line");
+        var matchStructuresValue = match.Optional("structures");
+        var matchStructures = ReadPlayedWith(matchStructuresValue, structures, "structure");
+        if (matchStructures is not null
+            && structures.Contains(DataRules.StartStructure)
+            && !matchStructures.Contains(structures.IndexOf(DataRules.StartStructure)))
+        {
+            matchStructuresValue!.Value.Error($"must list '{DataRules.StartStructure}': every player starts with it");
+        }
+
         match.End();
 
         var start = file.Required("start").Object();
@@ -93,7 +103,7 @@ internal static class RulesReader
             accentSlots,
             supplyCap,
             wallCrossingCost,
-            new MatchRules(startEpoch, epochCap),
+            new MatchRules(startEpoch, epochCap) { Lines = matchLines, Structures = matchStructures },
             startRules,
             mapRules,
             debugRules);
@@ -121,6 +131,37 @@ internal static class RulesReader
         }
 
         return [.. ids];
+    }
+
+    /// <summary>
+    /// Reads the lines or the structures a match is played with: IDs of the roster, each once.
+    /// Null when the key is not there.
+    /// </summary>
+    private static List<int>? ReadPlayedWith(JsonValue? value, List<string> roster, string what)
+    {
+        if (value is not { } list)
+        {
+            return null;
+        }
+
+        var indexes = new SortedSet<int>();
+        foreach (var item in list.Array(1))
+        {
+            var id = item.Id();
+            if (id.Length == 0)
+            {
+                continue;
+            }
+
+            var errorsBefore = item.ErrorCount;
+            var index = item.IndexIn(id, roster, what, "the roster in rules.jsonc");
+            if (item.ErrorCount == errorsBefore && !indexes.Add(index))
+            {
+                item.Error($"{what} '{id}' is listed twice");
+            }
+        }
+
+        return [.. indexes];
     }
 
     private static PriceMultiplier ReadPriceMultiplier(JsonValue value)
