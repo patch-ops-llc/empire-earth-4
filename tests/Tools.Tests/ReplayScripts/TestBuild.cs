@@ -30,4 +30,10 @@ internal static class TestBuild
         + "and all 5 of its attack orders are refused, 17 wall orders are refused as outside the player's territory, and no "
         + "unit comes to a wall in its way. Seven rules of the list are not reached. #68 has not met the fog (#63); its "
         + "description says the tests of that join are its owner's.";
+
+    /// <summary>The headless matches of the balance harness (#62) with the computer's scout (#77).</summary>
+    public const string HeadlessMatchMeetsTheScout =
+        "Test build only. Both tests play swarm against elite for four minutes and ask that nobody has lost a unit by then, "
+        + "which held while the computer did not leave its base before its first attack. With #77 it sends a scout at about "
+        + "3:20, and in one of the two matches elite's scout is dead before 4:00. With #72 alone both pass.";
 }

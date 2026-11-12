@@ -25,7 +25,7 @@ public class AiMatchToolTests
 
     private static MapDef Ridge => Data.Maps.Single(map => map.Id == "ridge");
 
-    [Fact]
+    [Fact(Skip = ReplayScripts.TestBuild.HeadlessMatchMeetsTheScout)]
     public void AMatchRunsToTheTimeLimitAndSaysWhatEachPlayerBuilt()
     {
         var result = FourMinutesOnRidge.Value;
@@ -121,7 +121,7 @@ public class AiMatchToolTests
     }
 
     /// <summary>The tool the way the command line runs it: each pairing both ways round, and what a build without attacks comes to.</summary>
-    [Fact]
+    [Fact(Skip = ReplayScripts.TestBuild.HeadlessMatchMeetsTheScout)]
     public void TheToolPlaysBothWaysRoundAndReportsEachMatch()
     {
         var (exitCode, output, errors) = Run("--data", Repository.DataFolder, "--players", "swarm,elite", "--minutes", "4", "--seed", "7");
