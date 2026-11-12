@@ -310,4 +310,29 @@ public class ReservesTests
         Assert.Equal([(old, 12L), (pair[0], 11L)], Refunds(match).Select(simEvent => (simEvent.Entity, simEvent.Amount)));
         Assert.Equal(before.Materials + 23, match.Stock(0).Materials);
     }
+
+    /// <summary>
+    /// The refund is for a unit that dies. One that leaves the match in another way, with hit
+    /// points left, gives nothing; no rule does that to a unit today, and this keeps it so for
+    /// the one that will.
+    /// </summary>
+    [Fact]
+    public void AUnitThatIsTakenAwayWithHitPointsLeftRefundsNothing()
+    {
+        var match = WithABarracks(Standardized, out var barracks);
+        var pair = Train(match, barracks, Peltast);
+        var before = match.Stock(0);
+
+        match.World.Entities.Destroy(pair[0]);
+        match.Simulation.Tick();
+
+        Assert.False(match.PerkCounts.Contains(pair[0]));
+        Assert.Equal(before, match.Stock(0));
+        Assert.Empty(Refunds(match));
+
+        // Its partner dies as units do, and refunds.
+        match.Kill([pair[1]]);
+        match.Simulation.Tick();
+        Assert.Equal(8L, Assert.Single(Refunds(match)).Amount);
+    }
 }
