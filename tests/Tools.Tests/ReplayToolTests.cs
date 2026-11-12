@@ -16,7 +16,7 @@ namespace Tools.Tests;
 public class ReplayToolTests
 {
     private static readonly string[] GoldenNames =
-        ["ridge-skirmish.replay", "switchback-crossing.replay", "switchback-research.replay", "switchback-three-players.replay", "switchback-workers.replay"];
+        ["ridge-skirmish.replay", "switchback-crossing.replay", "switchback-refresh.replay", "switchback-research.replay", "switchback-three-players.replay", "switchback-workers.replay"];
 
     private static GameData GoldenData { get; } = Load(Repository.GoldenDataFolder);
 
@@ -35,7 +35,7 @@ public class ReplayToolTests
             Assert.Matches($"^ok      {GoldenNames[i]}  map=[a-z]+ players=[23] ticks=[0-9]+ commands=[0-9]+ hashes=[0-9]+ final=[0-9a-f]{{16}}$", lines[i]);
         }
 
-        Assert.Equal("replay: 5 replays reproduced.", lines[^1]);
+        Assert.Equal("replay: 6 replays reproduced.", lines[^1]);
     }
 
     /// <summary>
@@ -89,8 +89,8 @@ public class ReplayToolTests
 
         Assert.Equal(ExitCodes.Failed, exitCode);
         Assert.All(Lines(output), line => Assert.Matches("^FAILED  [a-z-]+\\.replay  The match was made with other data: its content hash is [0-9a-f]{64} and this data has [0-9a-f]{64}\\.$", line));
-        Assert.Equal(5, Lines(output).Length);
-        Assert.Contains("replay: 5 of 5 replays did not reproduce.", errors, StringComparison.Ordinal);
+        Assert.Equal(6, Lines(output).Length);
+        Assert.Contains("replay: 6 of 6 replays did not reproduce.", errors, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -126,13 +126,6 @@ public class ReplayToolTests
                 match.Simulation.Commands.Enqueue(tick, command);
             }
 
-            match.Research.Reported += reported => seen.Add(reported.Kind switch
-            {
-                ResearchEventKind.Started => "a research started and paid for",
-                ResearchEventKind.Cancelled => "a research cancelled and refunded",
-                ResearchEventKind.Finished => "a research finished and the tier raised",
-                _ => $"research event {reported.Kind}",
-            });
             var due = replay.Commands.ToLookup(entry => entry.Tick, entry => entry.Command);
             var waited = new int[match.Movers.Count];
             var workers = new Worker[match.Workers.Count];
@@ -141,6 +134,20 @@ public class ReplayToolTests
             {
                 seen.UnionWith(ResearchOrdersRefused(match, due[tick]));
                 match.Simulation.Tick();
+                foreach (var reported in match.Simulation.Events)
+                {
+                    if (ResearchEvent.IsResearch(reported.Kind))
+                    {
+                        seen.Add(reported.Kind switch
+                        {
+                            SimEventKind.ResearchStarted => "a research started and paid for",
+                            SimEventKind.ResearchCancelled => "a research cancelled and refunded",
+                            SimEventKind.ResearchFinished => "a research finished and the tier raised",
+                            _ => $"research event {reported.Kind}",
+                        });
+                    }
+                }
+
                 seen.UnionWith(WhatTheWorkersDid(match, workers, materials));
                 for (var i = 0; i < match.Movers.Count; i++)
                 {
@@ -228,16 +235,17 @@ public class ReplayToolTests
 
         Assert.Equal(ExitCodes.Failed, exitCode);
         var lines = Lines(output);
-        Assert.Equal(5, lines.Length);
+        Assert.Equal(6, lines.Length);
         Assert.StartsWith("ok      ridge-skirmish.replay", lines[0], StringComparison.Ordinal);
         Assert.Matches(
             $"^FAILED  switchback-crossing.replay  map=switchback players=2 ticks=140 commands=[0-9]+ hashes=8 final={recorded.Hash:x16}  "
             + $"The state differs from the recording after 140 ticks: recorded {recorded.Hash ^ 1:x16}, computed {recorded.Hash:x16}\\.$",
             lines[1]);
-        Assert.StartsWith("ok      switchback-research.replay", lines[2], StringComparison.Ordinal);
-        Assert.StartsWith("ok      switchback-three-players.replay", lines[3], StringComparison.Ordinal);
-        Assert.StartsWith("ok      switchback-workers.replay", lines[4], StringComparison.Ordinal);
-        Assert.Equal("replay: 1 of 5 replays did not reproduce.", errors.Trim());
+        Assert.StartsWith("ok      switchback-refresh.replay", lines[2], StringComparison.Ordinal);
+        Assert.StartsWith("ok      switchback-research.replay", lines[3], StringComparison.Ordinal);
+        Assert.StartsWith("ok      switchback-three-players.replay", lines[4], StringComparison.Ordinal);
+        Assert.StartsWith("ok      switchback-workers.replay", lines[5], StringComparison.Ordinal);
+        Assert.Equal("replay: 1 of 6 replays did not reproduce.", errors.Trim());
     }
 
     /// <summary>A changed command changes the match: the first hash after it differs.</summary>
@@ -520,7 +528,7 @@ public class ReplayToolTests
 
         Assert.Equal(ExitCodes.Failed, exitCode);
         Assert.Equal("replay: text.replay: The data is not a replay: it does not start with RPLY.", errors.Trim());
-        Assert.Equal(5, Lines(output).Length);
+        Assert.Equal(6, Lines(output).Length);
         Assert.Equal("This is not a replay.", File.ReadAllText(path));
     }
 

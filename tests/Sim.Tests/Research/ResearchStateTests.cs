@@ -53,16 +53,16 @@ public class ResearchStateTests
 
         Assert.Equal(
             [
-                (ResearchEventKind.Started, 0, 0, Firepower),
-                (ResearchEventKind.Started, 5, 0, Protection),
-                (ResearchEventKind.Started, 10, 1, Manufacturing),
-                (ResearchEventKind.Started, 10, 0, Mobility),
-                (ResearchEventKind.Cancelled, 300, 1, Manufacturing),
-                (ResearchEventKind.Started, 320, 1, Logistics),
-                (ResearchEventKind.Lost, HolderFallsInTick, 0, Protection),
-                (ResearchEventKind.Finished, 899, 0, Firepower),
-                (ResearchEventKind.Finished, 909, 0, Mobility),
-                (ResearchEventKind.Finished, 1219, 1, Logistics),
+                (SimEventKind.ResearchStarted, 0, 0, Firepower),
+                (SimEventKind.ResearchStarted, 5, 0, Protection),
+                (SimEventKind.ResearchStarted, 10, 1, Manufacturing),
+                (SimEventKind.ResearchStarted, 10, 0, Mobility),
+                (SimEventKind.ResearchCancelled, 300, 1, Manufacturing),
+                (SimEventKind.ResearchStarted, 320, 1, Logistics),
+                (SimEventKind.ResearchLost, HolderFallsInTick, 0, Protection),
+                (SimEventKind.ResearchFinished, 899, 0, Firepower),
+                (SimEventKind.ResearchFinished, 909, 0, Mobility),
+                (SimEventKind.ResearchFinished, 1219, 1, Logistics),
             ],
             events.Select(reported => (reported.Kind, reported.Tick, reported.Player, reported.Track)));
         Assert.Equal([2, 1, 2, 1, 1, 1], match.Research.State.Tiers(0).ToArray());

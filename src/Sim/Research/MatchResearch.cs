@@ -26,12 +26,18 @@ namespace Sim.Research;
 /// A slot holds one research at a time and there is no queue: an order to research while no slot
 /// is free is dropped, and the player gives it again when one is.
 /// </para>
+/// <para>
+/// Everything that happens to a research, and a change of epoch, is reported on the event list
+/// of the simulation, for whatever shows the match: see <see cref="ResearchEvent"/>. What a
+/// method here reports when it is called between ticks is gone when the next tick starts.
+/// </para>
 /// </remarks>
 public sealed class MatchResearch : IPlayerTechSource
 {
     private readonly GameData _data;
     private readonly World _world;
     private readonly Stockpiles _stockpiles;
+    private readonly SimEventList _events;
     private readonly PlayerTech[] _tech;
     private readonly List<ITechChangeHandler> _handlers = [];
 
@@ -40,12 +46,14 @@ public sealed class MatchResearch : IPlayerTechSource
     /// <param name="state">The store with the tiers and the slots, already registered with the world.</param>
     /// <param name="stockpiles">The store prices are paid from and refunded to.</param>
     /// <param name="epochCap">The match's epoch cap: no track may pass it.</param>
-    public MatchResearch(GameData data, World world, ResearchState state, Stockpiles stockpiles, int epochCap)
+    /// <param name="events">The event list of the match's simulation, which research reports to.</param>
+    public MatchResearch(GameData data, World world, ResearchState state, Stockpiles stockpiles, int epochCap, SimEventList events)
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(stockpiles);
+        ArgumentNullException.ThrowIfNull(events);
         if (state.TrackCount != data.Tracks.Count || stockpiles.PlayerCount != state.PlayerCount)
         {
             throw new ArgumentException("The research state, the stockpiles and the data do not belong together.", nameof(state));
@@ -55,6 +63,7 @@ public sealed class MatchResearch : IPlayerTechSource
         _world = world;
         State = state;
         _stockpiles = stockpiles;
+        _events = events;
         EpochCap = epochCap;
         _tech = new PlayerTech[state.PlayerCount];
         for (var player = 0; player < _tech.Length; player++)
@@ -62,13 +71,6 @@ public sealed class MatchResearch : IPlayerTechSource
             _tech[player] = Resolve(player);
         }
     }
-
-    /// <summary>
-    /// Raised inside a tick for everything that happens to a research, and for a change of epoch.
-    /// It is for showing the match. A listener must not change the match, and nothing in the
-    /// simulation may depend on whether anyone listens.
-    /// </summary>
-    public event Action<ResearchEvent>? Reported;
 
     /// <summary>The tiers and the slots of every player.</summary>
     public ResearchState State { get; }
@@ -254,7 +256,7 @@ public sealed class MatchResearch : IPlayerTechSource
         slot.Materials = price.Materials;
         slot.Energy = price.Energy;
 
-        Report(ResearchEventKind.Started, player, track, offer.Tier);
+        Report(SimEventKind.ResearchStarted, player, track, offer.Tier, slot.Holder);
         return true;
     }
 
@@ -275,7 +277,7 @@ public sealed class MatchResearch : IPlayerTechSource
         ref var slot = ref State.SlotRef(player, number);
         var tier = slot.Tier;
         Refund(player, ref slot);
-        Report(ResearchEventKind.Cancelled, player, track, tier);
+        Report(SimEventKind.ResearchCancelled, player, track, tier, slot.Holder);
         return true;
     }
 
@@ -313,6 +315,7 @@ public sealed class MatchResearch : IPlayerTechSource
     {
         var track = slot.Track;
         var tier = slot.Tier;
+        var holder = slot.Holder;
         Empty(ref slot);
         State.SetTier(player, track, tier);
 
@@ -324,10 +327,10 @@ public sealed class MatchResearch : IPlayerTechSource
             handler.TechChanged(_world, player, before, after);
         }
 
-        Report(ResearchEventKind.Finished, player, track, tier);
+        Report(SimEventKind.ResearchFinished, player, track, tier, holder);
         if (after.Epoch != before.Epoch)
         {
-            Report(ResearchEventKind.EpochChanged, player, track, tier);
+            Report(SimEventKind.EpochChanged, player, track, tier);
         }
     }
 
@@ -339,7 +342,7 @@ public sealed class MatchResearch : IPlayerTechSource
             var track = slot.Track;
             var tier = slot.Tier;
             Refund(player, ref slot);
-            Report(ResearchEventKind.Lost, player, track, tier);
+            Report(SimEventKind.ResearchLost, player, track, tier, slot.Holder);
         }
 
         slot.IsOpen = false;
@@ -377,6 +380,6 @@ public sealed class MatchResearch : IPlayerTechSource
 
     private PlayerTech Resolve(int player) => TechResolver.Resolve(_data, State.Tiers(player).ToArray(), EpochCap);
 
-    private void Report(ResearchEventKind kind, int player, int track, int tier) =>
-        Reported?.Invoke(new ResearchEvent(kind, _world.Tick, player, track, tier, _tech[player].Epoch));
+    private void Report(SimEventKind kind, int player, int track, int tier, EntityId holder = default) =>
+        ResearchEvent.Add(_events, kind, player, track, tier, _tech[player].Epoch, holder);
 }
