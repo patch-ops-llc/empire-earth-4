@@ -32,8 +32,30 @@ internal static class AiReader
         var lines = ReadLines(army.Required("lines"), rules);
         army.End();
 
+        var fight = ReadFight(file.Required("fight"), rules);
+
         file.End();
-        return new AiPersonalityDef(id, name, workerTargets, expandAtMaterials, weights, lines);
+        return new AiPersonalityDef(id, name, workerTargets, expandAtMaterials, weights, lines, fight);
+    }
+
+    private static AiFightDef ReadFight(JsonValue value, RuleSet rules)
+    {
+        var fight = value.Object();
+        var attackRatio = fight.Required("attack_ratio").Number(DataNumber.FromInteger(1), DataNumber.FromInteger(DataRules.MaxAiRatio));
+        var assumedEnemyValue = fight.Required("assumed_enemy_value").Integer(0, DataRules.MaxPrice);
+        var retreatLosses = fight.Required("retreat_losses").Share();
+        var reinforceUnits = fight.Required("reinforce_units").Integer(1, DataRules.MaxAiUnits);
+        var passage = MapReader.ReadMarkerKind(fight.Required("passage"));
+
+        var raid = fight.Required("raid").Object();
+        var lineValue = raid.Required("line");
+        var raidLine = lineValue.IndexIn(lineValue.Id(), rules.Lines, "line", Roster);
+        var raidParty = raid.Required("party").Integer(1, DataRules.MaxAiUnits);
+        raid.End();
+
+        var reactionTicks = fight.Required("reaction_seconds").SecondsAsTicks();
+        fight.End();
+        return new AiFightDef(attackRatio, assumedEnemyValue, retreatLosses, reinforceUnits, passage, raidLine, raidParty, reactionTicks);
     }
 
     private static List<AiWorkerTarget> ReadWorkerTargets(JsonValue value, int tierCount)

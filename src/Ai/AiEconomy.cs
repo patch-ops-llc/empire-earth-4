@@ -127,7 +127,7 @@ internal sealed class AiEconomy
         var working = 0;
         foreach (var worker in _sight.Workers)
         {
-            if (worker.IsBuilding)
+            if (worker.IsBuilding || worker.Entity == _sight.Explorer)
             {
                 continue;
             }
@@ -166,7 +166,7 @@ internal sealed class AiEconomy
         for (var i = 0; i < _sight.Workers.Count; i++)
         {
             var worker = _sight.Workers[i];
-            if (worker.State != WorkerState.Idle || worker.IsBuilding)
+            if (worker.State != WorkerState.Idle || worker.IsBuilding || worker.Entity == _sight.Explorer)
             {
                 continue;
             }
@@ -251,7 +251,11 @@ internal sealed class AiEconomy
         for (var i = 0; i < _sight.Workers.Count; i++)
         {
             var worker = _sight.Workers[i];
-            if (worker.IsBuilding || worker.State == WorkerState.Idle || SiteOf(worker.Site) is not { } site || site.Kind != from)
+            if (worker.IsBuilding
+                || worker.Entity == _sight.Explorer
+                || worker.State == WorkerState.Idle
+                || SiteOf(worker.Site) is not { } site
+                || site.Kind != from)
             {
                 continue;
             }

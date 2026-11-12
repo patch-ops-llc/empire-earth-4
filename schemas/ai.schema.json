@@ -1,10 +1,10 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ai/<id>.jsonc",
-  "description": "One personality of the computer player (game design 5.5): the workers it keeps, when it expands, which tracks it researches first and which lines its army is made of.",
+  "description": "One personality of the computer player (game design 5.5): the workers it keeps, when it expands, which tracks it researches first, which lines its army is made of and when that army attacks.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "name", "economy", "research", "army"],
+  "required": ["id", "name", "economy", "research", "army", "fight"],
   "properties": {
     "$schema": { "type": "string" },
     "id": { "description": "The personality's ID. It must equal the file name.", "$ref": "#/definitions/id" },
@@ -69,6 +69,30 @@
           }
         }
       }
+    },
+    "fight": {
+      "description": "Item 5 of game design 5.5. The value of an army is the price of its units, Materials and Energy added.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attack_ratio", "assumed_enemy_value", "retreat_losses", "reinforce_units", "passage", "raid", "reaction_seconds"],
+      "properties": {
+        "attack_ratio": { "description": "It attacks when its army's value is this many times its estimate of the enemy's, or when it is at its supply cap. From 1 to 100.", "$ref": "#/definitions/number" },
+        "assumed_enemy_value": { "description": "The least it takes the enemy's army to be worth. Its estimate is the value of the enemy units it has seen and has not seen die, and never less than this.", "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "retreat_losses": { "description": "It retreats when it has lost this share of the value of the force it attacked with. Above 0 and at most 1, such as \"0.4\".", "$ref": "#/definitions/number" },
+        "reinforce_units": { "description": "The fewest units it sends after a force that is already attacking.", "type": "integer", "minimum": 1, "maximum": 200 },
+        "passage": { "description": "The kind of map marker its army goes through on the way to the enemy. A raid goes through the other kind.", "enum": ["chokepoint", "open_field"] },
+        "raid": {
+          "description": "The raids on the enemy's workers and Generators.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["line", "party"],
+          "properties": {
+            "line": { "description": "The line it raids with: a line ID from the roster in rules.jsonc. It raids only when its army has units of this line.", "$ref": "#/definitions/id" },
+            "party": { "description": "The units of that line it sends on one raid.", "type": "integer", "minimum": 1, "maximum": 200 }
+          }
+        },
+        "reaction_seconds": { "description": "The seconds a reason to attack, retreat, defend or raid must hold before it acts on it. Above 0, at most 3600 and a whole number of ticks.", "$ref": "#/definitions/number" }
+      }
     }
   },
   "definitions": {
@@ -77,6 +101,13 @@
       "type": "string",
       "pattern": "^[a-z][a-z0-9_]{0,39}$"
     },
-    "weight": { "type": "integer", "minimum": 1, "maximum": 1000 }
+    "weight": { "type": "integer", "minimum": 1, "maximum": 1000 },
+    "number": {
+      "description": "A whole number, or text in plain decimal notation such as \"2.6\". A bare number with a fraction is not accepted, so that every value is read exactly.",
+      "anyOf": [
+        { "type": "integer" },
+        { "type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$" }
+      ]
+    }
   }
 }

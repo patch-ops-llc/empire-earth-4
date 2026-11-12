@@ -136,8 +136,14 @@ public class MatchSettingsTests
     }
 
     // The data with one personality, "swarm". The data of the tests has none.
-    private static GameData WithSwarm() => TestData.Data with
+    private static GameData WithSwarm()
     {
-        Personalities = [new AiPersonalityDef("swarm", "Swarm", [new AiWorkerTarget(1, 6)], 600, [.. TestData.Data.Tracks.Select(_ => 1)], [])],
-    };
+        Assert.True(DataNumber.TryParse("1.3", out var attackRatio));
+        Assert.True(DataNumber.TryParse("0.4", out var retreatLosses));
+        var fight = new AiFightDef(attackRatio, 400, retreatLosses, 6, MarkerKind.OpenField, 0, 4, 0);
+        return TestData.Data with
+        {
+            Personalities = [new AiPersonalityDef("swarm", "Swarm", [new AiWorkerTarget(1, 6)], 600, [.. TestData.Data.Tracks.Select(_ => 1)], [], fight)],
+        };
+    }
 }

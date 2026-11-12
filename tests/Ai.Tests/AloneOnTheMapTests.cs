@@ -68,6 +68,24 @@ public class AloneOnTheMapTests
         }
     }
 
+    /// <summary>
+    /// Under the fog it knows no deposit but those of its start. It still claims another: a
+    /// worker looks first, and no order of the whole match is refused.
+    /// </summary>
+    [Theory]
+    [InlineData("swarm")]
+    [InlineData("elite")]
+    public void ItClaimsAnotherDepositUnderTheFog(string personality)
+    {
+        var run = new AiMatch(GameFiles.Data, "ridge", playerCount: 1, commandDelay: 2);
+        run.Add(0, personality);
+
+        var claimed = run.RunUntil(_ => run.TerritoryStructuresOf(0) >= 3, MostTicks);
+
+        Assert.True(claimed, $"After {run.Match.World.Tick} ticks it holds {run.TerritoryStructuresOf(0)} structures with territory.");
+        Assert.Equal(0, run.Match.Simulation.DroppedCommandCount);
+    }
+
     [Fact]
     public void TheSameMatchGivesTheSameCommandsAndTheSameState()
     {
@@ -82,7 +100,8 @@ public class AloneOnTheMapTests
             var run = new AiMatch(GameFiles.Data, "ridge", playerCount: 2, commandDelay: 2);
             run.Add(0, "swarm");
             run.Add(1, "elite");
-            for (var tick = 0; tick < 6 * 60 * SimInfo.TicksPerSecond; tick++)
+            // Long enough that both have attacked, retreated and attacked again.
+            for (var tick = 0; tick < 8 * 60 * SimInfo.TicksPerSecond; tick++)
             {
                 run.Tick();
             }

@@ -62,6 +62,8 @@ internal static class DataRules
     public const int MaxFullRateAmount = 100_000_000;
     public const int MaxAiWorkers = 200;
     public const int MaxAiWeight = 1_000;
+    public const int MaxAiRatio = 100;
+    public const int MaxAiUnits = 200;
 
     public static readonly DataNumber Zero = DataNumber.FromInteger(0);
     public static readonly DataNumber One = DataNumber.FromInteger(1);
