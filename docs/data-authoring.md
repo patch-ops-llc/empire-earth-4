@@ -100,7 +100,7 @@ The values the design says to tune first. Each block carries a comment naming it
 | `match.start_epoch`, `epoch_cap` | The tier all tracks start at and the tier none may pass. | 5.2 |
 | `start.workers`, `materials`, `energy` | What every player starts with, besides a Capitol. | 5.2 |
 | `map` | The map rules below. | 5.3, 5.4 |
-| `vision.refresh_ticks` | Every how many ticks the game works out again which tiles each player sees, from 1 to 1,000; there are 20 ticks in a second. In between, a player sees what the last time found. The design says 4. A unit's sight is in its line file, a worker's in `resources.jsonc`. | 5.3, 8.4 |
+| `vision.refresh_ticks` | Every how many ticks the game works out again which tiles each player sees, from 1 to 1,000; there are 20 ticks in a second. In between, a player sees what the last time found. The design says 4. A unit's sight is in its line file, a worker's in `resources.jsonc`, a structure's in its own file. | 5.3, 8.4 |
 | `debug.spawn` | `true` or `false`: whether a match carries out the development spawn, a command that makes units of any chassis from nothing for the player who sends it. It is not in the design. It is on in `game/data/` until units can be trained in a match, and stays on in `tests/golden/data/`, whose replay with a fight needs it. Both players of a match have the same data, so they have the same switch. | |
 
 The footprint and the territory radius of a start are not here: they are the `footprint` and `territory_radius` of `structures/capitol.jsonc`, which every data folder must have. The map checks read them from that file, and a match places that structure, finished, at each player's start.
@@ -202,7 +202,7 @@ Game design 2.5. One file for each structure that is built so far: the eight of 
 | `hp` | Hit points at Protection tier 1. Each Protection tier of the owner multiplies them by `per_tier.hp`. |
 | `cost.materials`, `energy` | The price, in whole resources. For the wall, of one tile. |
 | `build_seconds` | The time the structure builds itself in once its foundation is laid. No track changes it. |
-| `sight` | Sight in tiles when finished, measured from the center. No track changes it. |
+| `sight` | Sight in tiles when finished, measured from the center of the footprint: a tile is seen when its center is within that distance, the distance itself included. No track changes it. While the structure is building itself it sees only the tiles under it. |
 | `territory_radius` | Optional. The radius in tiles of the territory it gives when finished. |
 | `research_slots` | Optional. Research slots it gives when finished. |
 | `max_per_player` | Optional. The most a player may have, counting those under way. |
