@@ -64,7 +64,11 @@ public class FogScriptTests
     /// The match was recorded before a shell had a blast and before Towers (16a, 16b). Under those
     /// rules its fights go another way, and the one unit its owner sent away from a shot is no
     /// longer under fire in the tick it is sent. What that order was for is still reached: a shot
-    /// that lands on a target its owner no longer sees.
+    /// that lands on a target its owner no longer sees. Nor does a target of an attack order die
+    /// in it any more while the order stands, so "a unit whose attack order ends where it stands
+    /// because its target died" is not reached here: the replay of the script <c>combat-perks</c>
+    /// reaches it, and <see cref="CombatPerkScriptTests"/> has it on its list. An existing replay
+    /// is never recorded again, so this one keeps the orders it has.
     /// </remarks>
     [Fact]
     public void ItsGoldenReplayReachesTheRulesItGuards()
