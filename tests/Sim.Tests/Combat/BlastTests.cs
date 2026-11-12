@@ -158,14 +158,19 @@ public class BlastTests
     {
         var match = Field();
         var air = CombatMatches.Data.Chassis.First(chassis => chassis.Line == Line("air")).Id;
-        var ballista = match.Spawn(0, Ballista, "2.5", "5.5");
-        var target = match.SpawnWorker(1, "9.5", "5.5");
-        var flyer = match.Spawn(1, air, "9.5", "5.5");
+        var ballista = match.Spawn(0, Ballista, "2.5", "2.5");
+        var target = match.SpawnWorker(1, "2.5", "6");
+        var flyer = match.Spawn(1, air, "2.5", "6.5");
         var flyerBefore = match.HitPointsOf(flyer);
         match.OrderAttack(0, target, ballista);
         RunToBlast(match);
 
-        // Artillery cannot hit Air, so its blast passes a flyer by, even one at its center.
+        // The flyer is still inside the blast: it has the Ballista in range from where it was
+        // made, so it fires from there.
+        Assert.Equal(TestMatches.Point("2.5", "6.5"), match.PositionOf(flyer));
+        Assert.True(match.DistanceSquared(target, flyer) <= Squared("1.5"));
+
+        // Artillery cannot hit Air, so its blast passes a flyer by.
         Assert.Equal(WorkerHitPoints - Shell, match.HitPointsOf(target));
         Assert.Equal(flyerBefore, match.HitPointsOf(flyer));
         Assert.Equal(target, Assert.Single(match.EventsOf(SimEventKind.ShotHit)).Entity);
