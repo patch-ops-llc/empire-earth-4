@@ -49,6 +49,16 @@ public class ScriptReachTests
     }
 
     [Fact]
+    public void WhatAMatchMayAlsoReachIsNeitherAskedNorCountedAgainstIt()
+    {
+        var reach = new ScriptReach(Rules[..1], replay => Told(replay, []), [Short], [Short, Long]).MayAlsoReach("a long match");
+
+        reach.MustHoldOnARecordingMadeNow();
+        new ScriptReach(Rules[..1], replay => Told(replay, []), [Short, Long]).MayAlsoReach("a long match").MustHoldOnARecordingMadeNow();
+        Assert.Throws<EmptyException>(() => new ScriptReach(Rules, replay => Told(replay, []), [Short]).MayAlsoReach("a long match"));
+    }
+
+    [Fact]
     public void AStoredReplayThatReachesEveryRuleIsNotReported()
     {
         var reach = new ScriptReach(Rules[..1], replay => Told(replay, []), [Short]);
