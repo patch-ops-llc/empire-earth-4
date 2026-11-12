@@ -34,6 +34,10 @@ public partial class MatchMenu : CanvasLayer
     private Page _page = Page.Start;
     private string _joinedAddress = string.Empty;
 
+    // On the page of a match that is over: the button that shows the file to send, and that file.
+    private Button _showFileButton = null!;
+    private string? _endedFile;
+
     private Control _screen = null!;
     private Control _startPage = null!;
     private Control _waitingPage = null!;
@@ -42,8 +46,6 @@ public partial class MatchMenu : CanvasLayer
     private Label _waitingTitle = null!;
     private Label _waitingStatus = null!;
     private Label _endedText = null!;
-    private Button _showFileButton = null!;
-    private string? _endedFile;
     private Button _startButton = null!;
     private LineEdit _hostPort = null!;
     private LineEdit _joinAddress = null!;
