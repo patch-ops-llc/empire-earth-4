@@ -102,7 +102,7 @@ If joining fails, the menu says why in orange:
 | Go back from placing to the menu, and from the menu to the match | Right-click or Escape |
 | Cancel a build order or a structure that is not finished | Select the worker or the structure and press Delete, or the Cancel build button in the panel at the bottom |
 | Send the selected units somewhere | Right-click the ground. On a trackpad that is a click with two fingers, unless you have set it otherwise |
-| Train a unit | Click your Capitol, then click a button in the panel at the bottom, or press the key the button names. The first button is Q |
+| Train a unit | Click your Capitol, a Barracks or a Works, then click a button in the panel at the bottom, or press the key the button names. The first button is Q |
 | Cancel an order in the queue | Click it. Backspace cancels the last one |
 | Set where new units go | Right-click while the structure that trains them is selected |
 | Open or close the research panel | R, or the Research button in the bar at the top. Escape closes it too |
@@ -112,7 +112,7 @@ If joining fails, the menu says why in orange:
 | Set the speed of the match, as the host or alone | The 0.5x, 1x, 2x and 4x buttons under the bar at the top, or ] for faster and [ for slower |
 | Concede or leave the match | The Leave button in the bar at the top, or F10. It asks first |
 | Show or hide the readout in the corner | F3 |
-| Attack a unit of the other player | Right-click it |
+| Attack a unit or a structure of the other player | Right-click it, with fighting units selected |
 | Go somewhere and fight whatever is met on the way | Hold Ctrl and right-click the place |
 | Stop | X, or the Stop button in the panel at the bottom |
 | Development aid: make units where the pointer is | G for yours. Alone, H for the other player's. See Trying a fight |
@@ -150,7 +150,7 @@ The brown blocks on the map are deposits. Select workers and right-click a depos
 - If the other player leaves or closes the game, a line under the top bar says why, and they have conceded: you win. If the host leaves, the match ends for both, and the host has conceded. See How a match ends.
 - Each player has a Capitol where they start, on the square their workers stand around: a stone hall with a keep and a pointed roof in the player's color. Nobody can stand on it, and units walk round it.
 - The ground a player holds is tinted in the player's color, with a line along its edge. It reaches 16 tiles from the middle of the Capitol. The line follows the sides of the tiles, so it has steps: a tile is either held or it is not. A deposit pays only when all of it is inside, and every structure but a Capitol and an Outpost has to stand inside.
-- Click your Capitol to select it. A green line runs round it, and the panel at the bottom of the window names it and its hit points. Nothing can damage a structure yet, so they stay full.
+- Click your Capitol to select it. A green line runs round it, and the panel at the bottom of the window names it and its hit points. A structure that has lost hit points carries a bar, as a unit does.
 - Structures and units are not selected together. A box takes units only, and a structure leaves the selection as soon as a unit joins it. A right-click with a structure selected sets its rally point: see the next lines.
 - With your Capitol selected, the panel at the bottom offers a worker. The button says the price, 50 Materials, shown as "50 M", the supply it takes and how long it takes. Click it or press Q, and the worker joins the queue under the buttons. You pay when you order. The match starts with 400 Materials and room for 49 more supply.
 - The queue holds five orders. Each says what was paid for it. The first is the one being made: a green line fills along its lower edge and it counts the seconds down. A worker takes 12 seconds. When it is done, the worker appears beside the Capitol.
@@ -180,7 +180,7 @@ You are shown only what your own units see. Each unit sees a circle round itself
 
 Click Play against the computer on the menu. The computer takes Player 2, in red, on the other side of the map. Nothing is opened to the network.
 
-- **This is the first part of the computer opponent. It builds up its base, researches and trains an army. It does not attack yet**, so nothing comes for you. In this build you can go for it: its units fight back when yours come near, and when its Capitol and every Outpost of its are destroyed it is out and you have won.
+- **This is the first part of the computer opponent. It builds up its base, researches and trains an army. It does not attack yet**, so nothing comes for you. **In this build it also does not expand:** it claims no more ground than its Capitol holds, because its order for an Outpost on ground it has not seen is refused. That is known and is being fixed. In this build you can go for it: its units fight back when yours come near, and when its Capitol and every Outpost of its are destroyed it is out and you have won.
 - It has two personalities, chosen in the list beside the button. Swarm keeps more workers, researches Manufacturing and Logistics first and trains line infantry with some cavalry. Elite keeps a few workers fewer, researches Firepower and Protection first and trains guards with some artillery.
 - To watch it, lift the fog with the development switch (F4, see The fog of war) and move the camera across the map to its base; without the switch you see of it only what your units see. You will see its workers go to the deposits, more workers come out of its Capitol, Generators and then a Barracks or a Works go up, and units gather beside them. A banner says when it reaches a new epoch. The speed buttons under the bar at the top make the wait shorter.
 - It plays by the rules you play by: it pays for everything, its orders are commands like yours, and they are in the replay.
@@ -226,7 +226,7 @@ Select one or more workers and press B, or click Build in the panel at the botto
 - Hold Shift while you click to place the same structure again. Each order takes another of the selected workers, so select as many workers as you want sites.
 - Cancel with Delete, or the Cancel build button. For a worker on its way, you get the whole price back. For a structure that is not finished, you get three quarters back and it is taken away.
 - If the worker cannot lay the foundation when it arrives, because something stands in the way or the rules no longer allow it, a line under the top bar says why and the whole price comes back.
-- What the structures do so far: an Outpost claims the ground 12 tiles round it once it is finished, so that you can build and work deposits there. A Generator is where workers earn Energy: select workers and right-click a finished Generator. Each earns 30 Energy a minute, and a Generator has room for four. An Academy gives you a second research at a time. A second Capitol claims ground like the first. The Barracks, the Works and the Tower can be built but do nothing yet: no match can train units yet.
+- What the structures do so far: an Outpost claims the ground 12 tiles round it once it is finished, so that you can build and work deposits there. A Generator is where workers earn Energy: select workers and right-click a finished Generator. Each earns 30 Energy a minute, and a Generator has room for four. An Academy gives you a second research at a time. A second Capitol claims ground like the first. A Barracks and a Works train fighting units: select one and the panel at the bottom offers what it trains, as the Capitol offers workers. A Tower shoots at enemies that come near it.
 - A worker that was working at a deposit or a Generator goes back to it once the foundation is laid. A worker that had no work stays beside the site.
 
 ## What your units are
