@@ -17,10 +17,10 @@ public partial class ResourceReadout : InterfacePart
     /// <summary>The color of the word before a number, quieter than the number.</summary>
     private static readonly Color NameColor = new(0.68f, 0.72f, 0.8f);
 
-    // The widest number a readout keeps room for, so that the readouts beside it stand still
-    // while it grows.
-    private const string WidestAmount = "00,000";
-    private const string WidestSupply = "000 / 000";
+    // The number a readout keeps room for, so that the readouts beside it stand still while it
+    // grows. A larger number still fits: the readout is then as wide as the number.
+    private const string RoomForAmount = "0,000";
+    private const string RoomForSupply = "00 / 00";
 
     private Label _materials = null!;
     private Label _energy = null!;
@@ -32,9 +32,9 @@ public partial class ResourceReadout : InterfacePart
 
     protected override void Attach()
     {
-        _materials = AddReadout("Materials", WidestAmount);
-        _energy = AddReadout("Energy", WidestAmount);
-        _supply = AddReadout("Supply", WidestSupply);
+        _materials = AddReadout("Materials", RoomForAmount);
+        _energy = AddReadout("Energy", RoomForAmount);
+        _supply = AddReadout("Supply", RoomForSupply);
     }
 
     public override void AfterTick()
@@ -77,7 +77,7 @@ public partial class ResourceReadout : InterfacePart
     }
 
     // A word and the number after it. Returns the label of the number.
-    private Label AddReadout(string name, string widest)
+    private Label AddReadout(string name, string roomFor)
     {
         var row = UiStyle.Row(6);
         row.Name = name;
@@ -89,7 +89,7 @@ public partial class ResourceReadout : InterfacePart
 
         var number = new Label { Name = "Number" };
         row.AddChild(number);
-        var room = number.GetThemeFont("font").GetStringSize(widest, fontSize: number.GetThemeFontSize("font_size"));
+        var room = number.GetThemeFont("font").GetStringSize(roomFor, fontSize: number.GetThemeFontSize("font_size"));
         number.CustomMinimumSize = new Vector2(Mathf.Ceil(room.X), 0f);
         return number;
     }
