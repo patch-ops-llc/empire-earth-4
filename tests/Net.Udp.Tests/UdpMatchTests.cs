@@ -6,6 +6,9 @@ namespace Net.Udp.Tests;
 /// </summary>
 public class UdpMatchTests
 {
+    /// <summary>How many commands of each player must run for a match to count as played.</summary>
+    private const int CommandsEach = 20;
+
     private static readonly RelayConditions BadNetwork = RelayConditions.Milliseconds(20, jitter: 20, loss: 0.05);
 
     /// <summary>
@@ -20,6 +23,8 @@ public class UdpMatchTests
         MaxLagTicks = maxLagTicks,
     };
 
+    private static int RanOf(ToyGame game, int player) => game.Log.Count(executed => executed.Player == player);
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -28,7 +33,13 @@ public class UdpMatchTests
         using var match = new UdpMatch(2, Options(), badNetwork ? BadNetwork : null);
         match.Start();
 
+        // The match is as long as it takes for every client to have run 120 ticks and 20 commands
+        // of each player. How many commands get through in a given number of ticks depends on
+        // the clock: a client that waits for a lost bundle gives none meanwhile, and what is
+        // still on its way when the host ends the match never runs. So the commands are counted
+        // as they run, not hoped for at the end.
         var lastCommandTick = new int[2];
+        var given = new List<int>[] { [], [] };
         var commands = 0;
         match.Until(
             () =>
@@ -38,14 +49,15 @@ public class UdpMatchTests
                     if (client.Session.Phase == SessionPhase.Running && client.Tick >= lastCommandTick[client.Seat] + 4)
                     {
                         lastCommandTick[client.Seat] = client.Tick;
-                        Assert.True(commands % 3 == 2 ? client.Cull() : client.Spawn(commands));
+                        Assert.True(commands % 3 == 2 ? client.Cull(commands) : client.Spawn(commands));
+                        given[client.Seat].Add(commands);
                         commands++;
                     }
                 }
 
-                return match.Clients.All(client => client.Tick >= 120);
+                return match.Clients.All(client => client.Tick >= 120 && RanOf(client.Game, 0) >= CommandsEach && RanOf(client.Game, 1) >= CommandsEach);
             },
-            "the clients have run 120 ticks");
+            "the clients have run 120 ticks and 20 commands of each player");
         var finalTick = match.Finish();
 
         Assert.True(finalTick >= 120);
@@ -61,9 +73,16 @@ public class UdpMatchTests
             Assert.Equal(replay.World.ComputeHash(), ToyGame.Replay(client.Bundles, finalTick).World.ComputeHash());
         }
 
-        Assert.Contains(replay.Log, executed => executed.Player == 0);
-        Assert.Contains(replay.Log, executed => executed.Player == 1);
-        Assert.True(replay.Log.Count >= 40, $"Only {replay.Log.Count} commands ran.");
+        // Equal hashes do not show a command that went missing or came twice on its way to the
+        // host: every client would run the same wrong match. So each player's commands are
+        // checked against what it gave: they ran once each and in that order. Only its last ones
+        // may be missing, those still on their way when the host ended the match.
+        for (var player = 0; player < 2; player++)
+        {
+            var ran = replay.Log.Where(executed => executed.Player == player).Select(executed => executed.ContentId).ToArray();
+            Assert.True(ran.Length >= CommandsEach, $"Only {ran.Length} commands of player {player} ran.");
+            Assert.Equal(given[player].Take(ran.Length), ran);
+        }
 
         if (badNetwork)
         {

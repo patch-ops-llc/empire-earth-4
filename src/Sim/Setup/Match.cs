@@ -1,8 +1,10 @@
 using Sim.Core;
 using Sim.Data;
+using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
+using Sim.Research;
 
 namespace Sim.Setup;
 
@@ -40,18 +42,31 @@ public sealed class Match
     /// <summary>Speed, facing and move order of everything that can move.</summary>
     public required ComponentStore<Mover> Movers { get; init; }
 
+    /// <summary>
+    /// Every player's tiers and research slots, and what follows from the tiers: the table of
+    /// blueprints per player. The table is not state: see <see cref="MatchResearch"/>.
+    /// </summary>
+    public required MatchResearch Research { get; init; }
+
     /// <summary>The routes found so far. Not state: see <see cref="RouteCache"/>.</summary>
     public required RouteCache Routes { get; init; }
 
     /// <summary>Which entities are near a place. Not state: see <see cref="Map.SpatialIndex"/>.</summary>
     public required SpatialIndex SpatialIndex { get; init; }
 
+    /// <summary>Every player's Materials and Energy.</summary>
+    public required Stockpiles Stockpiles { get; init; }
+
     /// <summary>
     /// Brings everything that is worked out from the state, and is not state itself, in line with
     /// the world as it is now. Call it after the world has been changed from outside a tick: after
     /// restoring a snapshot, and after a fixture has placed things.
     /// </summary>
-    public void RefreshDerivedState() => SpatialIndex.Rebuild();
+    public void RefreshDerivedState()
+    {
+        Research.RefreshTech();
+        SpatialIndex.Rebuild();
+    }
 
     /// <summary>
     /// Places a unit that can move: an entity with a <see cref="Body"/> and a <see cref="Mover"/>.

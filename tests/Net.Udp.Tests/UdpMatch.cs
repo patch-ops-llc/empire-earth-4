@@ -161,7 +161,8 @@ internal sealed class MatchClient
 
     public bool Spawn(int contentId) => Session.Submit(new Command(ToyGame.Spawn, Seat, contentId: contentId));
 
-    public bool Cull() => Session.Submit(new Command(ToyGame.Cull, Seat));
+    /// <param name="contentId">The toy game ignores it for a cull. A test can tell its commands apart by it.</param>
+    public bool Cull(int contentId = 0) => Session.Submit(new Command(ToyGame.Cull, Seat, contentId: contentId));
 
     public void Step()
     {

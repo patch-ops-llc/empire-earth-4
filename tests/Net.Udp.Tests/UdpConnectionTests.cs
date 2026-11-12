@@ -75,24 +75,50 @@ public class UdpConnectionTests
 
     /// <summary>
     /// The loopback's test of this lowers the latency between two messages. Here the network
-    /// holds the first message's datagram, and every repeat of it, while the second message's
-    /// passes at once: the second is at the receiver a quarter of a second before the first.
+    /// keeps back the first message's datagram, and every repeat of it, while the second
+    /// message's passes: the second is at the receiver while the first is still on its way.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// No clock decides the outcome. The first message is kept back until the test lets it go,
+    /// so a machine that stops for a while makes the test slower and nothing else. An earlier
+    /// form held the first message for 250 ms and looked after 150: a pause of 100 ms on a busy
+    /// machine let the first message arrive in time to be mistaken for the second.
+    /// </para>
+    /// <para>
+    /// The first message is 1000 bytes so that it travels alone. The library puts messages
+    /// sent in the same breath into one datagram when they fit, 1024 bytes at most, and a second
+    /// message that shares the first's datagram arrives with it and proves nothing. The test
+    /// waits until the network has seen the second go by on its own.
+    /// </para>
+    /// </remarks>
     [Fact]
     public void ALaterMessageThatArrivesFirstDoesNotOvertake()
     {
-        using var link = new UdpLink(new RelayConditions(BulkyLatency: TimeSpan.FromMilliseconds(250)));
-        var first = Pattern(RelayConditions.BulkySize, 1);
+        using var link = new UdpLink(new RelayConditions(KeepBulky: true));
+        var relay = link.Relay!;
+        var first = Pattern(1000, 1);
+        var second = Pattern(200, 2);
 
-        var clock = Stopwatch.StartNew();
         link.HostEnd.Send(first);
-        link.HostEnd.SendMessage(new Ping(2));
-        link.For(150);
+        link.HostEnd.Send(second);
 
-        Assert.False(link.ClientEnd.TryReceive(out _), "The second message was handed over before the first had arrived.");
+        // The only datagrams of 200 bytes or more are those that carry one of the two messages,
+        // and the first message's are kept back. So one of that size that was passed on while
+        // another was kept carries the second message, and it is at the receiver's socket.
+        link.Until(() => relay.LargestPassedAKept >= second.Length, "the second message's datagram has passed the first's");
+        link.For(100);
+
+        if (link.ClientEnd.TryReceive(out var early))
+        {
+            Assert.Fail(early.Span.SequenceEqual(second)
+                ? "The second message was handed over while the first was still on its way."
+                : $"A message of {early.Length} bytes that is not the second was handed over while the network kept the first back.");
+        }
+
+        relay.Conditions = new RelayConditions();
         Assert.Equal(first, link.Receive(link.ClientEnd).ToArray());
-        Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(250), "The first message was not held, so the second had nothing to overtake.");
-        Assert.Equal(new Ping(2), link.ReceiveMessage(link.ClientEnd));
+        Assert.Equal(second, link.Receive(link.ClientEnd).ToArray());
     }
 
     [Fact]
