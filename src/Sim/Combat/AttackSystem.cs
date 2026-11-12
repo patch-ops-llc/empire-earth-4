@@ -549,7 +549,7 @@ public sealed class AttackSystem : ISystem
         // the target. When there is none because its own side has them all, it waits where it
         // stands: walking up again would only get it stepped away again.
         // The places are round a unit. A structure has none: units sent at one stand as they come.
-        var settled = profile.Melee && !mark.IsStructure && !retargeted && unit.Engaged && unit.AimedAt == target.Position;
+        var settled = profile.Melee && !retargeted && unit.Engaged && unit.AimedAt == target.Position;
         if (settled && arrived)
         {
             if (!turn.TurnToLook)
