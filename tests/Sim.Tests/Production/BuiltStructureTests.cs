@@ -103,14 +103,42 @@ public class BuiltStructureTests
         var match = Create(TestMaps.Open(24, 24));
         var barracks = match.Place(0, "barracks", 10, 10);
         match.MakeRich(0);
+        match.OrderTrain(0, barracks, Peltast);
+        match.Simulation.Tick();
+        Assert.Equal(2, match.Production.SupplyUsedBy(0));
         Assert.Equal(TrainCheck.Allowed, match.Production.CheckTrain(0, barracks, Peltast));
 
         match.World.Entities.Destroy(barracks);
 
         Assert.True(match.Production.Producers.Contains(barracks));
+        Assert.Equal(0, match.Production.SupplyUsedBy(0));
         Assert.Equal(TrainCheck.NoProducer, match.Production.CheckTrain(0, barracks, Peltast));
         Assert.Equal(TrainCheck.NoProducer, match.Production.Train(0, barracks, Peltast));
         Assert.False(match.Production.SetRallyPoint(0, barracks, MapGrid.TileCenter(2, 2)));
         Assert.False(match.Production.Cancel(0, barracks, 0));
+    }
+
+    /// <summary>
+    /// A structure that is gone when production runs trains nothing more, even an order that
+    /// was due in that tick, and its orders are given back in the same tick.
+    /// </summary>
+    [Fact]
+    public void AStructureThatIsGoneWhenItsOrderIsDueTrainsNothingAndRefundsIt()
+    {
+        var match = Create(TestMaps.Open(24, 24));
+        var barracks = match.Place(0, "barracks", 10, 10);
+        match.Stockpiles.Add(0, 40, 0);
+        match.OrderTrain(0, barracks, Peltast);
+        match.Simulation.Run(239);
+        Assert.Equal(239, match.ProducerOf(barracks).Progress);
+
+        match.World.Entities.Destroy(barracks);
+        match.Simulation.Tick();
+
+        var refunded = Assert.Single(match.TrainEvents());
+        Assert.Equal((SimEventKind.TrainRefunded, Peltast), (refunded.Kind, refunded.Unit));
+        Assert.Equal(0, match.Combatants.Count);
+        Assert.Equal((40, 0), match.Stock(0));
+        Assert.Equal(0, match.Supply.Used(0));
     }
 }

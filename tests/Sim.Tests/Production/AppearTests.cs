@@ -146,6 +146,51 @@ public class AppearTests
         Assert.Equal(rally, match.PositionOf(unit));
     }
 
+    /// <summary>
+    /// Production runs before the routes are found, so a unit whose way to the rally point has to
+    /// be searched for also takes its first step in the tick it appears.
+    /// </summary>
+    [Fact]
+    public void AUnitWhoseWayNeedsARouteTakesItsFirstStepInTheSameTickToo()
+    {
+        var rows = Enumerable.Repeat(new string('.', 24), 24).ToArray();
+        for (var y = 6; y <= 17; y++)
+        {
+            rows[y] = "...............#........";
+        }
+
+        var match = WithBarracks(out var barracks, TestMaps.FromRows(rows));
+        var rally = TestMatches.Point("20.5", "11.5");
+        match.OrderRally(0, rally, barracks);
+
+        var unit = Assert.Single(Train(match, barracks, Hoplite));
+
+        var start = MapGrid.TileCenter(13, 11);
+        Assert.Equal(start, match.TrainEvents()[0].Position);
+        Assert.Equal(MoveState.Following, match.Movers.Get(unit).State);
+        Assert.NotEqual(start, match.PositionOf(unit));
+    }
+
+    [Fact]
+    public void AUnitBelongsToThePlayerWhoseStructureTrainedIt()
+    {
+        var match = Create(TestMaps.Open(24, 24));
+        match.Place(0, "barracks", 2, 2);
+        var barracks = match.Place(1, "barracks", 10, 10);
+        var capitol = match.Place(1, "capitol", 16, 16);
+        match.Stockpiles.Add(1, 90, 0);
+
+        match.Simulation.Commands.Enqueue(match.World.Tick, TrainCommand(1, barracks, Peltast));
+        match.Simulation.Commands.Enqueue(match.World.Tick, TrainCommand(1, capitol, AWorker));
+        match.RunUntilAppeared();
+
+        Assert.Equal(2, match.Appeared().Length);
+        Assert.All(match.Appeared(), unit => Assert.Equal(1, match.Bodies.Get(unit).Owner));
+        Assert.All(match.TrainEvents(), train => Assert.Equal(1, train.Player));
+        Assert.Equal((0, 3), (match.Supply.Used(0), match.Supply.Used(1)));
+        Assert.Equal((0, 0), match.Stock(1));
+    }
+
     [Fact]
     public void BothUnitsOfAPairGoToTheRallyPoint()
     {
@@ -272,6 +317,20 @@ public class AppearTests
 
         // (2, 2) is 9.5 tiles off on both axes, (11, 20) is 9 off on one: the nearer wins, not the lower y.
         Assert.Equal([MapGrid.TileCenter(11, 20)], Train(match, barracks, Hoplite).Select(match.PositionOf));
+    }
+
+    /// <summary>The search goes on past the first ring with ground: a tile farther out in a straight line can be nearer than a corner.</summary>
+    [Fact]
+    public void ATileFartherOutMayBeNearerThanACornerCloserIn()
+    {
+        var rows = Enumerable.Repeat(new string('#', 24), 24).ToArray();
+        rows[10] = rows[11] = rows[12] = "##########...###########";
+        rows[8] = "########.###############";
+        rows[7] = "###########.############";
+        var match = WithBarracks(out var barracks, TestMaps.FromRows(rows));
+
+        // (8, 8) is 3 tiles off on both axes, (11, 7) is 4 off on one.
+        Assert.Equal([MapGrid.TileCenter(11, 7)], Train(match, barracks, Hoplite).Select(match.PositionOf));
     }
 
     [Fact]
