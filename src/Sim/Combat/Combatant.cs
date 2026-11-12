@@ -59,6 +59,12 @@ public struct Combatant : IStateValue
     /// </summary>
     public FixedVector2 Stood { get; set; }
 
+    /// <summary>
+    /// Where it stood when it last attacked. A melee unit that still stands there and waits for
+    /// its next attack is fighting: it holds its ground among its own side (<see cref="Fighters"/>).
+    /// </summary>
+    public FixedVector2 Fought { get; set; }
+
     public void Walk(IStateWalker walker)
     {
         ArgumentNullException.ThrowIfNull(walker);
@@ -70,5 +76,6 @@ public struct Combatant : IStateValue
         AimedAt = new FixedVector2(walker.Field(AimedAt.X), walker.Field(AimedAt.Y));
         Wait = walker.Field(Wait);
         Stood = new FixedVector2(walker.Field(Stood.X), walker.Field(Stood.Y));
+        Fought = new FixedVector2(walker.Field(Fought.X), walker.Field(Fought.Y));
     }
 }
