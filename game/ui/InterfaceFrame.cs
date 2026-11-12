@@ -38,10 +38,12 @@ public partial class InterfaceFrame : CanvasLayer
     // The height of the top bar, which the message line and the full-screen panel start under.
     private const float BarHeight = 44f;
 
-    // The room above the message line and between it and a full-screen panel, the room between
-    // a full-screen panel and the other edges of the window, and the room inside the panel's
-    // edge. They are small, so that the line kept for a message costs the panel no height.
-    private const int MessageGap = 6;
+    // The room above the message line, measured from BarHeight, of which a top bar with a button
+    // in it covers a little; the room between the message line and a full-screen panel; the room
+    // between a full-screen panel and the other edges of the window; and the room inside the
+    // panel's edge. They are small, so that the line kept for a message costs the panel no height.
+    private const int MessageTop = 8;
+    private const int MessageBottom = 4;
     private const int PanelMargin = 12;
     private const float PanelPadding = 12f;
 
@@ -438,7 +440,7 @@ public partial class InterfaceFrame : CanvasLayer
         column.OffsetTop = BarHeight;
 
         var messagePlace = new MarginContainer { Name = "MessagePlace", MouseFilter = Control.MouseFilterEnum.Ignore };
-        messagePlace.AddThemeConstantOverride("margin_top", MessageGap);
+        messagePlace.AddThemeConstantOverride("margin_top", MessageTop);
         column.AddChild(messagePlace);
         _messageLines = UiStyle.Column(4);
         _messageLines.Name = "Messages";
@@ -459,7 +461,7 @@ public partial class InterfaceFrame : CanvasLayer
             MouseFilter = Control.MouseFilterEnum.Stop,
             SizeFlagsVertical = Control.SizeFlags.ExpandFill,
         };
-        place.AddThemeConstantOverride("margin_top", MessageGap);
+        place.AddThemeConstantOverride("margin_top", MessageBottom);
         foreach (var side in new[] { "margin_left", "margin_right", "margin_bottom" })
         {
             place.AddThemeConstantOverride(side, PanelMargin);
