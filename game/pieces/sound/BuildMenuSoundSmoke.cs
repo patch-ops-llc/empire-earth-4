@@ -7,8 +7,9 @@ namespace Game;
 /// <summary>
 /// The smoke test's check that a build order placed in the build menu is answered with a sound:
 /// two seconds of play in which the local player selects a worker, opens the menu, places a
-/// structure some way off, and cancels the order while the worker is still walking, which gives
-/// the whole price back.
+/// structure where it cannot go, which is answered with the sound of a refusal, then places it
+/// some way off, and cancels the order while the worker is still walking, which gives the whole
+/// price back.
 /// </summary>
 /// <remarks>
 /// The cancel is given as the Cancel build command gives it. In a match that command is one of
@@ -97,6 +98,26 @@ public sealed class BuildMenuSoundSmoke : PanelSoundSmoke
             return;
         }
 
+        // First on a site the rules do not accept: the menu says why, sends nothing and goes
+        // on placing.
+        if (FindRefusedSite(view, _worker, structure) is not { } refused)
+        {
+            orders.Fail($"every tile within {FarthestSite} tiles of worker {_worker.Value} is a site for the {structure.Id}.");
+            return;
+        }
+
+        var turnedDown = TurnedDown(orders, $"placed a {structure.Id} in the build menu where it cannot go", () =>
+        {
+            if (menu.Place(structure, refused.X, refused.Y))
+            {
+                orders.Fail($"the build menu sent an order for the {structure.Id} on a site the rules do not accept.");
+            }
+        });
+        if (!turnedDown)
+        {
+            return;
+        }
+
         _placed = Answered(orders, $"placed a {structure.Id} in the build menu", () =>
         {
             if (!menu.Place(structure, x, y))
@@ -148,6 +169,35 @@ public sealed class BuildMenuSoundSmoke : PanelSoundSmoke
                         {
                             return (structure, nearX + dx, nearY + dy);
                         }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    // The nearest tile to the worker that the rules do not accept as a site for the structure.
+    private static (int X, int Y)? FindRefusedSite(MatchView view, EntityId worker, StructureDef structure)
+    {
+        var checks = BuildChecks.For(view);
+        if (!view.Match.Bodies.TryGet(worker, out var body))
+        {
+            return null;
+        }
+
+        var nearX = body.Position.X.FloorToInt();
+        var nearY = body.Position.Y.FloorToInt();
+        for (var away = 0; away <= FarthestSite; away++)
+        {
+            for (var dy = -away; dy <= away; dy++)
+            {
+                for (var dx = -away; dx <= away; dx++)
+                {
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dy)) == away
+                        && !Placement.Of(checks, structure, nearX + dx, nearY + dy).IsAccepted)
+                    {
+                        return (nearX + dx, nearY + dy);
                     }
                 }
             }

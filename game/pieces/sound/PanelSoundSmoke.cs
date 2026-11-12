@@ -70,4 +70,39 @@ public abstract class PanelSoundSmoke : SmokePart
             "A panel that sends an order calls SoundPart.Of(Frame)?.Acknowledge() as it goes.");
         return false;
     }
+
+    /// <summary>
+    /// Does what a click on a panel does, for an order the panel turns down itself, and checks
+    /// that the sound part was called for one sound of an order refused, and for none of an
+    /// order given. Returns false, having failed the test, when it was not.
+    /// </summary>
+    /// <param name="what">The click, as the rest of a sentence: "placed a Generator on a Capitol".</param>
+    protected static bool TurnedDown(SmokeOrders orders, string what, Action click)
+    {
+        ArgumentNullException.ThrowIfNull(orders);
+        ArgumentNullException.ThrowIfNull(click);
+        if (SoundPart.Of(orders.View.Interface) is not { } sound)
+        {
+            orders.Fail("the view of the match has no sound part.");
+            return false;
+        }
+
+        var given = sound.Asked(SoundCue.OrderGiven);
+        var refused = sound.Asked(SoundCue.OrderRefused);
+
+        click();
+
+        var nowGiven = sound.Asked(SoundCue.OrderGiven) - given;
+        var nowRefused = sound.Asked(SoundCue.OrderRefused) - refused;
+        if (nowGiven == 0 && nowRefused == 1)
+        {
+            return true;
+        }
+
+        orders.Fail(
+            $"the local player {what}, and the sound of an order refused was called for {nowRefused} times " +
+            $"and the sound of an order given {nowGiven} times. An order refused should be called for once, and an order given not at all. " +
+            "A panel that turns an order down with a sentence calls SoundPart.Of(Frame)?.Acknowledge(taken: false) beside it.");
+        return false;
+    }
 }
