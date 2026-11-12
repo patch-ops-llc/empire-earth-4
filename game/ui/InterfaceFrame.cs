@@ -85,6 +85,12 @@ public partial class InterfaceFrame : CanvasLayer
     /// <summary>The parts, in the order they were added.</summary>
     public IReadOnlyList<InterfacePart> Parts => _parts;
 
+    /// <summary>
+    /// Raised at once when a command for the selection was given, by its button or by its key.
+    /// It is for what answers the player before the command runs: a sound.
+    /// </summary>
+    public event Action<SelectionCommand>? CommandGiven;
+
     /// <summary>Builds the frame for a match. Call it once, when the frame is in the tree.</summary>
     public void Attach(MatchView view)
     {
@@ -275,6 +281,7 @@ public partial class InterfaceFrame : CanvasLayer
         {
             command.Run(view);
             _commandsStale = true;
+            CommandGiven?.Invoke(command);
         }
     }
 

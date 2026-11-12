@@ -141,6 +141,19 @@ Every match writes a replay, a small file with the orders both players gave. The
 
 A file is named after the time the match started, the map and the player: `2026-11-11_19-30-05_ridge_p0.replay` is the host's and `..._p1.replay` the other player's. When a match stops because the two games disagree, a second file with the same name and the ending `.snapshot` appears beside each.
 
+## Sound
+
+A match has sound: a few short sounds, all of them made by the game itself as it starts. None is a recording.
+
+- A click as an order of yours is taken, and two low notes when one cannot be: a right-click that means nothing for what is selected, or an order the game turns down.
+- A clash when a unit is hit hand to hand, and a thud when a shot lands.
+- A falling note when a unit dies.
+- In builds that have the parts they belong to: two rising notes when a structure of yours is finished, a crash when a structure is destroyed, three bright notes when a research of yours is finished, and a short fanfare when any player reaches a new epoch.
+
+A fight far from where your camera looks is fainter, and never silent. A large fight does not get louder with every unit in it: many hits at one moment are one sound.
+
+The Sound button in the bar across the top opens a page with a volume slider and a box that mutes everything. Both are remembered the next time you start the game. The page also has a button for each sound, to hear it on its own.
+
 ## Reporting a problem
 
 Send this to whoever gave you the build:

@@ -32,5 +32,8 @@ public static class ViewPieces
         // 17v. Fog of war.
 
         // Later pieces.
+
+        // Sound: what a fight, a finished structure or research, a new epoch and the player's own orders sound like.
+        new SoundPiece(),
     ];
 }

@@ -87,6 +87,9 @@ public sealed class SmokeTest
         // 17v. Fog of war.
 
         // Later pieces.
+
+        // Sound: what the match so far has played, and an order answered. 1 second of play.
+        new SoundSmoke(),
     ];
 
     /// <summary>

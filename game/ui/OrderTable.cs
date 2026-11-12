@@ -62,6 +62,13 @@ public sealed class OrderTable
     public IReadOnlyList<OrderRow> Rows => _rows;
 
     /// <summary>
+    /// Raised at once when the table was asked for an order and the selection was not empty:
+    /// with the row that gave the order, or with null when no row had one. It is for what
+    /// answers the player before the order runs, a tick or more later: a sound.
+    /// </summary>
+    public event Action<OrderRow?>? Answered;
+
+    /// <summary>
     /// The kinds of target some row names, beside the ground. The pointer is asked for these on
     /// an order click, so that what no order is about never hides what one is about: a deposit
     /// is found under the player's own units standing on it, as long as no row names those.
@@ -103,11 +110,13 @@ public sealed class OrderTable
             {
                 if (RoundOf(row) == round && row.Give(request))
                 {
+                    Answered?.Invoke(row);
                     return row;
                 }
             }
         }
 
+        Answered?.Invoke(null);
         return null;
 
         int RoundOf(OrderRow row)
