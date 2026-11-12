@@ -17,6 +17,7 @@ public enum CommandType
     Attack = 4,
     AttackMove = 5,
     CancelResearch = 2,
+    DebugPlace = 16,
     DebugSpawn = 8,
     Gather = 7,
     Move = 1,

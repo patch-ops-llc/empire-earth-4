@@ -132,6 +132,12 @@ public static class StructureSetup
                 new WorkSite { Kind = WorkSiteKind.Generator, Owner = body.Owner, X = structure.X, Y = structure.Y, Size = structure.Size });
         }
 
+        if (def.Attack is not null)
+        {
+            // A Tower's attack comes with completion (design 2.5): ready, and with no target yet.
+            match.Turrets.Add(entity, default);
+        }
+
         if (def.ResearchSlots > 0)
         {
             if (def.Id == DataRules.StartStructure)

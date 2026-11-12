@@ -8,8 +8,8 @@ namespace Tools.Replay.Scripts;
 /// <summary>
 /// Orders at the starting Capitols (15b): units sent onto a Capitol, whose tiles they cannot
 /// stand on, to a tile right beside one, and past one to its far side, so that their way leads
-/// round it; and orders to attack a Capitol, which the simulation refuses until structures can be
-/// attacked.
+/// round it; and orders to attack a Capitol, which the simulation refuses for a player's own
+/// Capitol and for units that cannot attack, as the workers of the start cannot.
 /// </summary>
 /// <remarks>
 /// A match has no structures but the Capitols of its start until workers build, so these are the
@@ -93,7 +93,8 @@ internal sealed class CapitolOrders : OrderScript
         }
         else if (kind < 90)
         {
-            // An order to attack a Capitol, the player's own or another's. Refused either way.
+            // An order to attack a Capitol, the player's own or another's. One's own is refused,
+            // and so is another's for units that cannot attack.
             PickSome(_random);
             commands.Add(new Command(CommandType.Attack, player, [.. Picked], targetEntity: capitol));
         }

@@ -26,6 +26,46 @@ public sealed class Approach
         _grid = grid;
     }
 
+    /// <summary>
+    /// Starts or redirects a walk from <paramref name="position"/> up to a structure: to the
+    /// center of the tile beside its footprint that is nearest to the unit, of those the unit can
+    /// walk to. Every tile round a footprint, the corners too, has the footprint within melee
+    /// reach of its center, and a unit that shoots is stopped on the way as soon as it is in range.
+    /// </summary>
+    /// <remarks>
+    /// Of two tiles equally near, the one with the lower y wins, then the lower x. When the unit
+    /// can walk to no tile beside the footprint, it goes toward the nearest point of the
+    /// footprint as toward any place it cannot reach (design 2.4).
+    /// </remarks>
+    public void WalkToStructure(ref Mover mover, FixedVector2 position, TileSquare tiles)
+    {
+        var region = _grid.RegionOf(position);
+        var found = false;
+        var nearest = long.MaxValue;
+        var beside = default(FixedVector2);
+        for (var y = tiles.Y - 1; region != 0 && y <= tiles.Y + tiles.Size; y++)
+        {
+            for (var x = tiles.X - 1; x <= tiles.X + tiles.Size; x++)
+            {
+                if (tiles.Covers(x, y) || _grid.RegionOf(x, y) != region)
+                {
+                    continue;
+                }
+
+                var center = MapGrid.TileCenter(x, y);
+                var distance = FixedVector2.DistanceSquaredRaw(position, center);
+                if (distance < nearest)
+                {
+                    found = true;
+                    nearest = distance;
+                    beside = center;
+                }
+            }
+        }
+
+        WalkTo(ref mover, position, found ? beside : tiles.NearestPointTo(position));
+    }
+
     /// <summary>Starts or redirects a walk from <paramref name="position"/> toward <paramref name="target"/>, a point on the map.</summary>
     public void WalkTo(ref Mover mover, FixedVector2 position, FixedVector2 target)
     {

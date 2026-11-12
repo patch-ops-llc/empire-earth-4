@@ -21,6 +21,12 @@ namespace Sim.Combat;
 /// gone is not lost: it flies on to where the target last stood and lands there.
 /// </para>
 /// <para>
+/// A shot at a structure flies to the center of its footprint, and a structure is inside a blast
+/// when its center is (design 2.4). What a structure takes is worked out when the shot lands,
+/// from the effective Firepower the shot was fired with and the Protection tier the structure's
+/// owner has then (design 2.5, the fortification rule).
+/// </para>
+/// <para>
 /// A shot fired in one tick flies for the first time in the next, so it is in the air for the
 /// distance divided by its speed, rounded up to whole ticks, and for one tick at least.
 /// </para>
@@ -90,7 +96,7 @@ public sealed class ShotSystem : ISystem
             }
             else
             {
-                var damage = _targeting.Hit(shot.Target, shot.Damage, shot.Line);
+                var damage = _targeting.Hit(shot.Target, shot.Damage, shot.Line, shot.Firepower);
                 _events.Add(SimEventKind.ShotHit, shot.Owner, shot.Target, entity, shot.Aim, damage);
             }
 
@@ -105,7 +111,7 @@ public sealed class ShotSystem : ISystem
         _targeting.ReachedByBlast(world, shell.Owner, shell.Line, shell.Aim, shell.Blast, _reached);
         foreach (var reached in _reached)
         {
-            var damage = _targeting.Hit(reached, shell.Damage, shell.Line);
+            var damage = _targeting.Hit(reached, shell.Damage, shell.Line, shell.Firepower);
             _events.Add(SimEventKind.ShotHit, shell.Owner, reached, entity, _bodies.Get(reached).Position, damage);
         }
     }
