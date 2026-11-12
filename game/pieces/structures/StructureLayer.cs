@@ -21,6 +21,11 @@ namespace Game;
 /// structure's condition is drawn as the player last saw it.
 /// </para>
 /// <para>
+/// A structure that has lost hit points (16b) is drawn darker, as if scorched, by how many it
+/// has lost: <see cref="Worn"/>. What else shows its condition, as the bar of its hit points,
+/// is drawn over it by other layers from <see cref="CollectDrawn"/>.
+/// </para>
+/// <para>
 /// A structure that is still building itself (15c) is drawn unfinished, as
 /// <see cref="FoundationLook"/> has it, for as long as <see cref="SeenStructure.IsFinished"/>
 /// is false, and as far built as <see cref="SeenStructure.Built"/> says. For another player's
@@ -42,6 +47,12 @@ public partial class StructureLayer : WorldLayer
     // A memory loses this much of its color, and then takes the share of the fog that lies on
     // explored ground, so that it is as dim as the forest beside it and grayer.
     private const float MemoryGray = 0.45f;
+
+    // What the walls and the roof of a structure with no hit points left would be drawn as, and
+    // how far each goes toward it. The roof keeps more of its color, which says whose it is.
+    private static readonly Color Soot = new(0.1f, 0.09f, 0.08f);
+    private const float WallSoot = 0.7f;
+    private const float RoofSoot = 0.4f;
 
     private readonly Dictionary<EntityId, StructureNode> _structures = [];
     private readonly Dictionary<int, ArrayMesh> _meshes = [];
@@ -81,6 +92,44 @@ public partial class StructureLayer : WorldLayer
         }
     }
 
+    /// <summary>
+    /// Adds every structure that is drawn to a list, as it is drawn, for what is drawn over one
+    /// or beside it, as the bar of its hit points: nothing then shows of a structure what this
+    /// layer does not.
+    /// </summary>
+    public void CollectDrawn(List<DrawnStructure> into)
+    {
+        foreach (var (entity, node) in _structures)
+        {
+            var drawn = node.Drawn;
+            into.Add(new DrawnStructure(
+                entity,
+                drawn.Owner,
+                drawn.Type,
+                node.Body.Position,
+                drawn.Size,
+                node.Height,
+                HealthOf(in drawn),
+                drawn.IsFinished,
+                drawn.IsRemembered,
+                node.Dimmed));
+        }
+    }
+
+    /// <summary>The share of its hit points a structure has, from 0 to 1, as the player knows it.</summary>
+    public static float HealthOf(in SeenStructure seen) =>
+        seen.MaxHitPoints > 0 ? Mathf.Clamp(seen.HitPoints / (float)seen.MaxHitPoints, 0f, 1f) : 1f;
+
+    /// <summary>
+    /// A color of a structure that has this share of its hit points left: darker the fewer they
+    /// are, as if scorched.
+    /// </summary>
+    public static Color Worn(Color color, float health, bool roof = false) =>
+        color.Lerp(Soot, (roof ? RoofSoot : WallSoot) * (1f - Mathf.Clamp(health, 0f, 1f)));
+
+    /// <summary>The color of the walls of a structure of this owner's: stone with some of the owner's color.</summary>
+    public static Color WallColorOf(int owner) => Stone.Lerp(PlayerColors.Of(owner), WallTint);
+
     protected override void Attach() => View.Selection.Changed += ShowSelection;
 
     // Draws what the player knows of and nothing else, whatever was drawn before.
@@ -104,8 +153,14 @@ public partial class StructureLayer : WorldLayer
             if (node is not null)
             {
                 ShowProgress(node, in seen);
+                var worn = node.Drawn.HitPoints != seen.HitPoints || node.Drawn.MaxHitPoints != seen.MaxHitPoints;
                 node.Drawn = seen;
                 node.Pass = _pass;
+                if (worn)
+                {
+                    Paint(node);
+                }
+
                 _settled &= node.Dimmed == Wanted(seen);
             }
         }
@@ -233,7 +288,7 @@ public partial class StructureLayer : WorldLayer
 
         // Each structure has materials of its own, because each dims by itself.
         var color = PlayerColors.Of(seen.Owner);
-        var walls = PlaceholderMeshes.Flat(Stone.Lerp(color, WallTint));
+        var walls = PlaceholderMeshes.Flat(WallColorOf(seen.Owner));
         var roof = PlaceholderMeshes.Flat(color);
         FoundationLook? unfinished = null;
         if (seen.IsFinished)
@@ -259,7 +314,13 @@ public partial class StructureLayer : WorldLayer
         AddChild(body);
 
         // A structure that is first drawn as a memory, as after the development switch, is dim from the start.
-        var node = new StructureNode(body, line, walls, roof, walls.AlbedoColor, color) { Dimmed = Wanted(seen), Unfinished = unfinished };
+        var node = new StructureNode(body, line, walls, roof, walls.AlbedoColor, color)
+        {
+            Drawn = seen,
+            Height = StructureShapes.HeightOf(structure),
+            Dimmed = Wanted(seen),
+            Unfinished = unfinished,
+        };
         Paint(node);
         return node;
     }
@@ -267,8 +328,9 @@ public partial class StructureLayer : WorldLayer
     private static void Paint(StructureNode node)
     {
         node.Unfinished?.Dim(node.Dimmed);
-        node.Walls.AlbedoColor = Dim(node.WallColor, node.Dimmed);
-        node.Roof.AlbedoColor = Dim(node.RoofColor, node.Dimmed);
+        var health = HealthOf(node.Drawn);
+        node.Walls.AlbedoColor = Dim(Worn(node.WallColor, health), node.Dimmed);
+        node.Roof.AlbedoColor = Dim(Worn(node.RoofColor, health, roof: true), node.Dimmed);
     }
 
     /// <summary>A color of a structure as a memory shows it, by how far the structure has dimmed: 0 for seen now, 1 for remembered.</summary>
@@ -299,6 +361,9 @@ public partial class StructureLayer : WorldLayer
         /// <summary>What the node was last made or checked against.</summary>
         public SeenStructure Drawn { get; set; }
 
+        /// <summary>How tall its shape is, in tiles.</summary>
+        public float Height { get; init; }
+
         /// <summary>How far it has dimmed, from 0 for a structure seen now to 1 for a memory.</summary>
         public float Dimmed { get; set; }
 
@@ -313,3 +378,26 @@ public partial class StructureLayer : WorldLayer
 /// <param name="Built">How much of it is drawn as built, from 0 to 1.</param>
 /// <param name="Dimmed">How far it is drawn as a memory, from 0 for a structure seen now to 1 for one remembered.</param>
 public readonly record struct UnfinishedStructure(EntityId Entity, Vector3 Middle, float Height, float Built, float Dimmed);
+
+/// <summary>A structure as the <see cref="StructureLayer"/> draws it.</summary>
+/// <param name="Entity">The structure.</param>
+/// <param name="Owner">The player it belongs to.</param>
+/// <param name="Type">Its place in the roster.</param>
+/// <param name="Middle">The middle of its footprint, on the ground.</param>
+/// <param name="Size">The tiles it covers along each side.</param>
+/// <param name="Height">How tall its shape is, in tiles.</param>
+/// <param name="Health">The share of its hit points it is drawn with, from 0 to 1: for a memory, what it had when last seen.</param>
+/// <param name="IsFinished">False for one that is drawn unfinished.</param>
+/// <param name="IsRemembered">True for one drawn as a memory.</param>
+/// <param name="Dimmed">How far it is drawn as a memory, from 0 for a structure seen now to 1 for one remembered.</param>
+public readonly record struct DrawnStructure(
+    EntityId Entity,
+    int Owner,
+    int Type,
+    Vector3 Middle,
+    int Size,
+    float Height,
+    float Health,
+    bool IsFinished,
+    bool IsRemembered,
+    float Dimmed);

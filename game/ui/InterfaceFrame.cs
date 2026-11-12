@@ -34,7 +34,7 @@ namespace Game;
 /// room kept for one message, so that the panel moves only when two are shown at once.
 /// </item>
 /// <item>
-/// <b>The development aids</b>, at the left edge, half way down: <see cref="DevelopmentAids"/>
+/// <b>The development aids</b>, at the left edge, a little above half way down: <see cref="DevelopmentAids"/>
 /// for what a tester needs and the game does not have, each in a box of its own that says so.
 /// They stand one under another, clear of the message line and of the corners.
 /// </item>
@@ -58,6 +58,10 @@ public partial class InterfaceFrame : CanvasLayer
     private const float PanelPadding = 12f;
 
     private const float AidsLeft = 8f;
+
+    // How far above the middle of the window the middle of the development aids is: they stand
+    // between the message line under the top bar and what is in the bottom left corner.
+    private const float AidsRaised = 28f;
 
     private const int MessageLimit = 5;
     private const double MessageFadeSeconds = 1.0;
@@ -513,8 +517,8 @@ public partial class InterfaceFrame : CanvasLayer
         DevelopmentAids.GrowVertical = Control.GrowDirection.Both;
         DevelopmentAids.OffsetLeft = AidsLeft;
         DevelopmentAids.OffsetRight = AidsLeft;
-        DevelopmentAids.OffsetTop = 0f;
-        DevelopmentAids.OffsetBottom = 0f;
+        DevelopmentAids.OffsetTop = -AidsRaised;
+        DevelopmentAids.OffsetBottom = -AidsRaised;
     }
 
     // Under the top bar the message line and the full-screen panel stand in one column, the

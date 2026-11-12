@@ -131,10 +131,12 @@ What a structure shows beyond its shape is read in one place, `game/pieces/looks
 | Cancel a research | In the research panel, the Cancel button beside its progress bar |
 | Show or hide the overlay | F3 |
 | Attack a unit of the other player | Right click on it |
+| Attack a structure of the other player | Right click on it, seen or remembered |
 | Go somewhere and fight what is met on the way | Hold Ctrl and right click on the place |
 | Stop | X, or the Stop button in the selection panel |
 | Development aid, while `debug.spawn` is on in `rules.jsonc`: make units at the pointer | G for your own. Alone, H for the other player's. The orange panel at the left edge chooses which and how many |
-| Development aid, alone and while `debug.spawn` is on: lift the fog of war from the screen, and lay it back | F4, or the button in the orange panel under the first. Only the screen changes: the simulation has no such switch |
+| Development aid, while `debug.spawn` is on: lay a finished structure at the pointer | N for your own. Alone, M for the other player's. The orange panel "lay a structure" chooses which |
+| Development aid, alone and while `debug.spawn` is on: lift the fog of war from the screen, and lay it back | F4, or the button in the lowest orange panel. Only the screen changes: the simulation has no such switch |
 
 ## Test builds
 

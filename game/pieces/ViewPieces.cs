@@ -41,6 +41,8 @@ public static class ViewPieces
 
         // Structure looks, of M20: the tier a structure shows, and the banner of the track in research.
         new LooksPiece(),
+        // 16bv. Structures in combat: damage shown on structures, Towers shooting, the attack order on a structure.
+        new SiegePiece(),
 
         // 17v. Fog of war.
         new FogPiece(),
