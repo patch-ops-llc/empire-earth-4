@@ -99,6 +99,9 @@ public partial class InterfaceFrame : CanvasLayer
 
     // The mark of an announcement that stands for as long as something holds: see Announce.
     private static readonly StringName StandingAnnouncement = "standing_announcement";
+
+    // The mark of an announcement the frame has hidden for want of room.
+    private static readonly StringName HiddenForRoom = "hidden_for_room";
     private const double MessageFadeSeconds = 1.0;
 
     private readonly List<InterfacePart> _parts = [];
@@ -162,8 +165,9 @@ public partial class InterfaceFrame : CanvasLayer
     /// <remarks>
     /// The messages leave the announcements the height they need above the bottom panel, by
     /// giving up their oldest. When that is not enough with one message left, the announcements
-    /// that pass, as a new epoch does, give way too: the frame hides the oldest of them, for
-    /// good, until those that are left fit. An announcement that stands for as long as
+    /// that pass, as a new epoch does, give way too: the frame hides the oldest of them until
+    /// those that are left fit, and shows them again, the newest first, when there is room
+    /// while they last. An announcement that stands for as long as
     /// something holds, as the one that the match is paused does, is never hidden by the frame,
     /// and stands above those that pass.
     /// </remarks>
@@ -608,11 +612,17 @@ public partial class InterfaceFrame : CanvasLayer
         }
 
         // With one message left and still no room, the announcements that pass give way too,
-        // the oldest first.
+        // the oldest first. They come back, the newest first, when there is room again.
+        var gaveWay = false;
         while (_messages.Count <= 1
             && HasVisibleChild(UnderMessages)
             && _messageLines.GlobalPosition.Y + _messageLines.GetCombinedMinimumSize().Y + EdgeGap + UnderMessages.GetCombinedMinimumSize().Y > MiddleEnd
             && HideOldestPassingAnnouncement())
+        {
+            gaveWay = true;
+        }
+
+        while (!gaveWay && ShowNewestHiddenAnnouncement())
         {
         }
     }
@@ -625,8 +635,38 @@ public partial class InterfaceFrame : CanvasLayer
             if (child is Control { Visible: true } announcement && !announcement.HasMeta(StandingAnnouncement))
             {
                 announcement.Visible = false;
+                announcement.SetMeta(HiddenForRoom, true);
                 return true;
             }
+        }
+
+        return false;
+    }
+
+    // Shows the newest of the announcements the frame has hidden, when it fits under what is
+    // shown now. False when none is hidden or the newest does not fit.
+    private bool ShowNewestHiddenAnnouncement()
+    {
+        var children = UnderMessages.GetChildren();
+        for (var i = children.Count - 1; i >= 0; i--)
+        {
+            if (children[i] is not Control { Visible: false } announcement || !announcement.HasMeta(HiddenForRoom))
+            {
+                continue;
+            }
+
+            var shown = HasVisibleChild(UnderMessages)
+                ? UnderMessages.GetCombinedMinimumSize().Y + UnderMessages.GetThemeConstant("separation")
+                : 0f;
+            var end = _messageLines.GlobalPosition.Y + _messageLines.GetCombinedMinimumSize().Y + EdgeGap + shown + announcement.GetCombinedMinimumSize().Y;
+            if (end > MiddleEnd)
+            {
+                return false;
+            }
+
+            announcement.RemoveMeta(HiddenForRoom);
+            announcement.Visible = true;
+            return true;
         }
 
         return false;

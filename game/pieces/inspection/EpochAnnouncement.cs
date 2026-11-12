@@ -14,7 +14,9 @@ namespace Game;
 /// (<see cref="Sim.Vision.PlayerView.CollectEvents"/>), which hold every player's change of
 /// epoch, another player's with the epoch alone. It asks nothing of the true state of the
 /// match, so it shows on a machine that joined what that player is told and no more. A player
-/// whose epoch rises more than once in a tick gets one banner, for the epoch reached.
+/// whose epoch rises more than once in a tick gets one banner, for the epoch reached. Where
+/// there is no room for every banner the frame hides the oldest for as long
+/// (<see cref="InterfaceFrame.Announce"/>), so the local player's own is announced last.
 /// The banner stands in the frame's place for announcements
 /// (<see cref="InterfaceFrame.UnderMessages"/>): in the middle of the window, under the
 /// messages, over a full-screen panel, because the research panel is where the player is likely
@@ -65,13 +67,21 @@ public partial class EpochAnnouncement : InterfacePart
             return;
         }
 
+        // The other players' first and the local player's own last: where there is room for
+        // fewer, the frame keeps the newest, and the player's own epoch is the one to keep.
         for (var player = 0; player < _reached.Length; player++)
         {
-            if (_reached[player] > 0)
+            if (_reached[player] > 0 && player != View.Player)
             {
                 Announce(player, _reached[player]);
                 _reached[player] = 0;
             }
+        }
+
+        if (_reached[View.Player] > 0)
+        {
+            Announce(View.Player, _reached[View.Player]);
+            _reached[View.Player] = 0;
         }
     }
 

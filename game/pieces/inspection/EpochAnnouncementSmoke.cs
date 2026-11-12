@@ -162,8 +162,9 @@ public sealed class EpochAnnouncementSmoke : SmokePart
             return;
         }
 
-        // The newest banners are the last, in the order of the players.
-        _raised.Sort();
+        // The newest banners are the last: the other players' in their order, then the local
+        // player's own, which is the one the frame keeps where there is no room for all.
+        _raised.Sort((one, other) => (one.Player == orders.Player, one.Player).CompareTo((other.Player == orders.Player, other.Player)));
         var middle = frame.MiddleWidth;
         var window = frame.GetViewport().GetVisibleRect().Size.X;
         for (var i = 0; i < _raised.Count; i++)
@@ -182,6 +183,18 @@ public sealed class EpochAnnouncementSmoke : SmokePart
             if (says != $"{title} / {sentence}")
             {
                 orders.Fail($"the banner for {who} says '{says}' and should say '{title} / {sentence}'.");
+            }
+
+            // A banner the frame has hidden for want of room says the same and has no place.
+            // The local player's own is never the one.
+            if (!banner.Visible)
+            {
+                if (player == orders.Player)
+                {
+                    orders.Fail($"the banner for {who}, the local player, is hidden.");
+                }
+
+                continue;
             }
 
             var place = banner.GetGlobalRect();
@@ -207,7 +220,7 @@ public sealed class EpochAnnouncementSmoke : SmokePart
 
         // The frame's look is at the banners too: each is one of its boxes.
         var boxes = frame.Boxes();
-        foreach (var banner in shown.Skip(shown.Count - _raised.Count))
+        foreach (var banner in shown.Skip(shown.Count - _raised.Count).Where(banner => banner.Visible))
         {
             var place = banner.GetGlobalRect();
             if (!boxes.Any(box => box.Rect.IsEqualApprox(place)))
