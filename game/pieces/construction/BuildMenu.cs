@@ -28,6 +28,11 @@ namespace Game;
 /// simulation judges it again on the tick it runs.
 /// </para>
 /// <para>
+/// What is not placed with one click has an entry of its own kind, a <see cref="BuildTool"/>,
+/// which another piece adds: a run of wall tiles is drawn by pressing on its first tile and
+/// letting go on its last. While such an entry is chosen the same buttons are the tool's.
+/// </para>
+/// <para>
 /// Everything this part and the preview ask of the rules, they ask through
 /// <see cref="BuildChecks"/>, which is where a fogged view gets its answers from the player's
 /// own picture of the match in place of the true state.
@@ -86,8 +91,51 @@ public partial class BuildMenu : InterfacePart
     /// <summary>The structure being placed, or null.</summary>
     public StructureDef? Placing => _placing?.Structure;
 
-    /// <summary>The number of entries.</summary>
-    public int EntryCount => _entries.Count;
+    /// <summary>The tool that is chosen, or null.</summary>
+    public BuildTool? Tool => _placing?.Tool;
+
+    /// <summary>The number of structures the menu lists. Its tools are entries too, and are not counted here.</summary>
+    public int EntryCount => _entries.Count - ToolCount;
+
+    /// <summary>The number of tools the menu lists after its structures.</summary>
+    public int ToolCount { get; private set; }
+
+    /// <summary>What the menu last showed as in the way of using a tool, or null for one it does not list.</summary>
+    public BuildProblem? ProblemShownFor(BuildTool tool) => EntryOf(tool)?.Problem;
+
+    /// <summary>What the menu's line of advice says now.</summary>
+    public string HintShown => _hint.Text;
+
+    /// <summary>
+    /// Lists a tool after the structures and the tools added before it. Its key is the action
+    /// "build_" and its ID, if the input map has one.
+    /// </summary>
+    public void AddTool(BuildTool tool)
+    {
+        var entry = MakeEntry(tool.Id, tool.Name, null, tool);
+        _entries.Add(entry);
+        _grid.AddChild(entry.Button);
+        ToolCount++;
+        if (IsOpen)
+        {
+            Refresh();
+        }
+    }
+
+    /// <summary>The tool of a kind that the menu offers, or null when it has none.</summary>
+    public T? ToolOf<T>()
+        where T : BuildTool
+    {
+        foreach (var entry in _entries)
+        {
+            if (entry.Tool is T tool)
+            {
+                return tool;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>What the menu last showed as in the way of ordering a structure, or null for one it does not list.</summary>
     public BuildProblem? ProblemShownFor(StructureDef structure) => EntryOf(structure)?.Problem;
@@ -123,6 +171,7 @@ public partial class BuildMenu : InterfacePart
     /// <summary>Hides the menu and stops placing.</summary>
     public void Close()
     {
+        LeaveTool();
         IsOpen = false;
         _placing = null;
         _hovered = null;
@@ -149,9 +198,57 @@ public partial class BuildMenu : InterfacePart
             return false;
         }
 
+        LeaveTool();
         _placing = entry;
         Refresh();
         return true;
+    }
+
+    /// <summary>
+    /// Chooses a tool: the pointer is the tool's from now on. Returns false, and says why, for
+    /// one that cannot be used now.
+    /// </summary>
+    public bool Choose(BuildTool tool)
+    {
+        if (!IsOpen || EntryOf(tool) is not { } entry)
+        {
+            return false;
+        }
+
+        if (tool.WhyNot(View, tool.Problem(View)) is { } why)
+        {
+            Frame.Say($"{tool.Name}: {why}");
+            return false;
+        }
+
+        LeaveTool();
+        _placing = entry;
+        _site = null;
+        _preview.Clear();
+        Refresh();
+        return true;
+    }
+
+    /// <summary>
+    /// Places with the chosen tool as a press at one point of the ground, a drag to another and
+    /// a release there do. The points are map x and y in tiles. Returns true when an order was
+    /// sent.
+    /// </summary>
+    /// <param name="from">Where the select button goes down.</param>
+    /// <param name="to">Where it is let go.</param>
+    /// <param name="more">True to go on with the same tool, false to close the menu.</param>
+    public bool PlaceWithTool(Vector2 from, Vector2 to, bool more = false)
+    {
+        if (_placing?.Tool is not { } tool)
+        {
+            return false;
+        }
+
+        ReadWorkers();
+        tool.Point(View, from, _workers);
+        tool.Press(View);
+        tool.Point(View, to, _workers);
+        return ReleaseTool(tool, more);
     }
 
     /// <summary>
@@ -254,10 +351,22 @@ public partial class BuildMenu : InterfacePart
             return;
         }
 
-        _site = _placing is { } entry ? SiteUnderPointer(entry.Structure) : null;
-        if (_placing is not null && _site is { } site)
+        if (_placing?.Tool is { } tool)
         {
-            _preview.Show(_placing.Structure, site);
+            // A release over the interface, or while another window had the focus, never arrives.
+            if (tool.IsHeld && !Input.IsActionPressed(PlaceAction))
+            {
+                tool.Back(View);
+            }
+
+            ReadWorkers();
+            tool.Point(View, GroundUnderPointer(), _workers);
+        }
+
+        _site = _placing?.Structure is { } placing ? SiteUnderPointer(placing) : null;
+        if (_placing?.Structure is { } structure && _site is { } site)
+        {
+            _preview.Show(structure, site);
         }
         else
         {
@@ -280,13 +389,17 @@ public partial class BuildMenu : InterfacePart
         {
             if (entry.Action is { } action && @event.IsActionPressed(action))
             {
-                Choose(entry.Structure);
+                ChooseEntry(entry);
                 GetViewport().SetInputAsHandled();
                 return;
             }
         }
 
-        if (@event.IsActionPressed(InterfaceFrame.ClosePanelAction))
+        if (_placing?.Tool is { } tool)
+        {
+            ToolInput(tool, @event);
+        }
+        else if (@event.IsActionPressed(InterfaceFrame.ClosePanelAction))
         {
             if (_placing is null)
             {
@@ -299,22 +412,79 @@ public partial class BuildMenu : InterfacePart
 
             GetViewport().SetInputAsHandled();
         }
-        else if (_placing is { } placing && @event.IsActionPressed(BackAction))
+        else if (_placing is not null && @event.IsActionPressed(BackAction))
         {
             StopPlacing();
             GetViewport().SetInputAsHandled();
         }
-        else if (_placing is not null && @event.IsActionPressed(PlaceAction))
+        else if (_placing?.Structure is { } placing && @event.IsActionPressed(PlaceAction))
         {
             // A click that places nothing is still the menu's: it must not clear the selection.
-            if (SiteUnderPointer(_placing.Structure) is { } site)
+            if (SiteUnderPointer(placing) is { } site)
             {
-                Place(_placing.Structure, site.X, site.Y, more: Input.IsActionPressed(PlaceMoreAction));
+                Place(placing, site.X, site.Y, more: Input.IsActionPressed(PlaceMoreAction));
             }
 
             GetViewport().SetInputAsHandled();
         }
     }
+
+    // The buttons while a tool is chosen: the tool says what each does.
+    private void ToolInput(BuildTool tool, InputEvent @event)
+    {
+        if (@event.IsActionPressed(InterfaceFrame.ClosePanelAction) || @event.IsActionPressed(BackAction))
+        {
+            if (!tool.Back(View))
+            {
+                StopPlacing();
+            }
+
+            GetViewport().SetInputAsHandled();
+        }
+        else if (@event.IsActionPressed(PlaceAction))
+        {
+            // A press that begins nothing is still the menu's: it must not clear the selection.
+            ReadWorkers();
+            tool.Point(View, GroundUnderPointer(), _workers);
+            tool.Press(View);
+            GetViewport().SetInputAsHandled();
+        }
+        else if (@event.IsActionReleased(PlaceAction) && tool.IsHeld)
+        {
+            ReadWorkers();
+            tool.Point(View, GroundUnderPointer(), _workers);
+            ReleaseTool(tool, Input.IsActionPressed(PlaceMoreAction));
+            GetViewport().SetInputAsHandled();
+        }
+    }
+
+    private bool ReleaseTool(BuildTool tool, bool more)
+    {
+        ReadWorkers();
+        if (_workers.Count == 0)
+        {
+            Close();
+            return false;
+        }
+
+        if (!tool.Release(View, _workers))
+        {
+            return false;
+        }
+
+        if (!more)
+        {
+            Close();
+        }
+
+        return true;
+    }
+
+    private bool ChooseEntry(Entry entry) =>
+        entry.Tool is { } tool ? Choose(tool) : entry.Structure is { } structure && Choose(structure);
+
+    // The tool that was chosen shows nothing more.
+    private void LeaveTool() => _placing?.Tool?.Leave(View);
 
     private static bool IsOwnWorker(MatchView view, EntityId entity) =>
         view.Match.World.Entities.IsAlive(entity)
@@ -337,6 +507,7 @@ public partial class BuildMenu : InterfacePart
     // Back from placing to the menu.
     private void StopPlacing()
     {
+        LeaveTool();
         _placing = null;
         _site = null;
         _preview.Clear();
@@ -365,7 +536,20 @@ public partial class BuildMenu : InterfacePart
     {
         foreach (var entry in _entries)
         {
-            if (entry.Structure.Index == structure.Index)
+            if (entry.Structure?.Index == structure.Index)
+            {
+                return entry;
+            }
+        }
+
+        return null;
+    }
+
+    private Entry? EntryOf(BuildTool tool)
+    {
+        foreach (var entry in _entries)
+        {
+            if (entry.Tool == tool)
             {
                 return entry;
             }
@@ -376,7 +560,12 @@ public partial class BuildMenu : InterfacePart
 
     // The site a click would place the structure at, or null while the pointer is over a part
     // of the interface or not over the ground.
-    private Placement? SiteUnderPointer(StructureDef structure)
+    private Placement? SiteUnderPointer(StructureDef structure) =>
+        GroundUnderPointer() is { } ground ? Placement.At(BuildChecks.For(View), structure, ground) : null;
+
+    // The point of the ground under the pointer, as map x and y in tiles, or null while the
+    // pointer is over a part of the interface or not over the ground.
+    private Vector2? GroundUnderPointer()
     {
         var viewport = GetViewport();
         if (viewport.GuiGetHoveredControl() is not null
@@ -386,7 +575,7 @@ public partial class BuildMenu : InterfacePart
             return null;
         }
 
-        return Placement.At(BuildChecks.For(View), structure, ground);
+        return ground;
     }
 
     private void Refresh()
@@ -394,11 +583,11 @@ public partial class BuildMenu : InterfacePart
         var checks = BuildChecks.For(View);
         foreach (var entry in _entries)
         {
-            var problem = checks.Structure(entry.Structure);
+            var problem = entry.Tool is { } tool ? tool.Problem(View) : checks.Structure(entry.Structure!);
             entry.Problem = problem;
             entry.Button.Disabled = problem != BuildProblem.None;
             entry.Name.AddThemeColorOverride("font_color", problem == BuildProblem.None ? ResearchColors.Ink : ResearchColors.Faint);
-            entry.Line.Text = BuildWords.EntryLine(checks, entry.Structure, problem);
+            entry.Line.Text = entry.Tool is { } named ? named.EntryLine(View, problem) : BuildWords.EntryLine(checks, entry.Structure!, problem);
             entry.Line.AddThemeColorOverride("font_color", problem == BuildProblem.CannotAfford ? UiStyle.Warning : ResearchColors.Faint);
             entry.Mark.Visible = entry == _placing;
         }
@@ -412,9 +601,13 @@ public partial class BuildMenu : InterfacePart
         {
             text = "Pick a structure to place.";
         }
+        else if (entry.Tool is { } tool)
+        {
+            (text, warn) = tool.Hint(View);
+        }
         else if (_site is not { } site)
         {
-            text = $"Point at the ground where the {StructureWords.NameOf(entry.Structure)} should stand.";
+            text = $"Point at the ground where the {entry.Title} should stand.";
         }
         else if (!site.IsAccepted)
         {
@@ -445,9 +638,15 @@ public partial class BuildMenu : InterfacePart
             return;
         }
 
+        if (entry.Tool is { } tool)
+        {
+            _detail.Text = $"{tool.Name}: {tool.WhyNot(View, entry.Problem) ?? tool.Detail(View)}";
+            return;
+        }
+
         // What is in the way of ordering it takes the place of where it may stand, which does
         // not matter until it can be ordered, so that the line stays as short as its room.
-        var structure = entry.Structure;
+        var structure = entry.Structure!;
         var where = structure.TerritoryRadius is { } radius
             ? $"It can stand outside your territory and claims the ground {radius} tiles round it."
             : "It stands inside your territory.";
@@ -499,7 +698,7 @@ public partial class BuildMenu : InterfacePart
         column.AddChild(_grid);
         foreach (var structure in ListedStructures())
         {
-            var entry = MakeEntry(structure);
+            var entry = MakeEntry(structure.Id, StructureWords.NameOf(structure), structure, null);
             _entries.Add(entry);
             _grid.AddChild(entry.Button);
         }
@@ -540,11 +739,11 @@ public partial class BuildMenu : InterfacePart
         }
     }
 
-    private Entry MakeEntry(StructureDef structure)
+    // An entry for a structure, or for a tool.
+    private Entry MakeEntry(string id, string name, StructureDef? structure, BuildTool? tool)
     {
-        StringName action = EntryActionStart + structure.Id;
+        StringName action = EntryActionStart + id;
         var key = InterfaceFrame.KeyOf(action);
-        var name = StructureWords.NameOf(structure);
 
         var button = UiStyle.FrameButton(string.Empty);
         button.Name = $"Build{name}";
@@ -571,8 +770,8 @@ public partial class BuildMenu : InterfacePart
         button.AddChild(mark);
         mark.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
-        var entry = new Entry(structure, key is null ? null : action, button, title, line, mark);
-        button.Pressed += () => Choose(structure);
+        var entry = new Entry(name, structure, tool, key is null ? null : action, button, title, line, mark);
+        button.Pressed += () => ChooseEntry(entry);
         button.MouseEntered += () => _hovered = entry;
         button.MouseExited += () =>
         {
@@ -584,9 +783,16 @@ public partial class BuildMenu : InterfacePart
         return entry;
     }
 
-    private sealed class Entry(StructureDef structure, StringName? action, Button button, Label name, Label line, Panel mark)
+    private sealed class Entry(string title, StructureDef? structure, BuildTool? tool, StringName? action, Button button, Label name, Label line, Panel mark)
     {
-        public StructureDef Structure { get; } = structure;
+        /// <summary>What the entry is called in a sentence.</summary>
+        public string Title { get; } = title;
+
+        /// <summary>The structure the entry places, or null for a tool.</summary>
+        public StructureDef? Structure { get; } = structure;
+
+        /// <summary>The tool the entry is, or null for a structure.</summary>
+        public BuildTool? Tool { get; } = tool;
 
         public StringName? Action { get; } = action;
 

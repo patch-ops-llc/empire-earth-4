@@ -86,11 +86,12 @@ public static class StructureShapes
             new(0.72f, 0.72f, 1.70f, 1.95f, Roof: true),
         ],
 
-        // The whole tile, so that walls side by side are one wall.
+        // A post. A wall tile is drawn with the shapes of WallShapes, which join it to the
+        // tiles round it. This is the tile alone, as tall as those, for whatever asks here.
         ["wall"] =
         [
-            new(1f, 1f, 0f, 0.55f, Roof: false),
-            new(1f, 1f, 0.55f, 0.62f, Roof: true),
+            new(0.68f, 0.68f, 0f, 0.66f, Roof: false),
+            new(0.76f, 0.76f, 0.66f, WallShapes.Height, Roof: true),
         ],
     };
 

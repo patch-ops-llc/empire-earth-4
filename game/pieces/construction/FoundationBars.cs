@@ -23,6 +23,12 @@ public partial class FoundationBars : WorldLayer
     /// <summary>How wide a bar is, in tiles.</summary>
     public const float Width = 1.3f;
 
+    /// <summary>
+    /// The width of the bar over a structure of one tile, in tiles: narrower than the tile, so
+    /// that the bars of tiles side by side, as those of a wall, are told apart.
+    /// </summary>
+    public const float WidthOnOneTile = 0.72f;
+
     /// <summary>How tall a bar is, in tiles.</summary>
     public const float Height = 0.12f;
 
@@ -70,11 +76,12 @@ public partial class FoundationBars : WorldLayer
             foreach (var structure in _unfinished)
             {
                 var middle = structure.Middle + (Vector3.Up * (structure.Height + Lift));
-                AddQuad(basis, middle, -Edge, Width + Edge, Height + (2f * Edge), Back);
+                var width = structure.Size == 1 ? WidthOnOneTile : Width;
+                AddQuad(basis, middle, width, -Edge, width + Edge, Height + (2f * Edge), Back);
                 if (structure.Built > 0f)
                 {
                     // A remembered foundation keeps the bar it had when last seen, dimmed with it.
-                    AddQuad(basis, middle, 0f, Width * Mathf.Min(structure.Built, 1f), Height, StructureLayer.Dim(Built, structure.Dimmed));
+                    AddQuad(basis, middle, width, 0f, width * Mathf.Min(structure.Built, 1f), Height, StructureLayer.Dim(Built, structure.Dimmed));
                 }
 
                 BarCount++;
@@ -85,9 +92,9 @@ public partial class FoundationBars : WorldLayer
     }
 
     // A quad that faces the camera, from one distance to another along the bar, measured from its left end.
-    private void AddQuad(Basis camera, Vector3 middle, float from, float to, float height, Color color)
+    private void AddQuad(Basis camera, Vector3 middle, float width, float from, float to, float height, Color color)
     {
-        var left = middle - (camera.X * (Width / 2f));
+        var left = middle - (camera.X * (width / 2f));
         var center = left + (camera.X * ((from + to) / 2f));
         _quads.Add(new Transform3D(new Basis(camera.X * (to - from), camera.Y * height, camera.Z), center), color);
     }

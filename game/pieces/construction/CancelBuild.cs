@@ -5,9 +5,10 @@ namespace Game;
 
 /// <summary>
 /// The command that cancels construction (design 2.5): for the selected workers of the player's
-/// own that are on their way to build, whose whole price comes back, and for the selected
-/// structures of the player's own that are still building themselves, which are taken away for
-/// three quarters of their price.
+/// own that are on their way to build, whose whole price comes back, for those that are laying
+/// a run of wall, whose tiles not yet laid are paid back, and for the selected structures of
+/// the player's own that are still building themselves, a tile of wall among them, which are
+/// taken away for three quarters of their price.
 /// </summary>
 public static class CancelBuild
 {
@@ -43,7 +44,7 @@ public static class CancelBuild
         return view.Client.Submit(new Command(CommandType.CancelBuild, view.Player, [.. entities]));
     }
 
-    // The workers with a build order and the unfinished structures of the player's own in the selection.
+    // The workers with a build order or a wall order and the unfinished structures of the player's own in the selection.
     private static int Count(MatchView view, List<EntityId>? into)
     {
         var match = view.Match;
@@ -53,7 +54,7 @@ public static class CancelBuild
             if (match.World.Entities.IsAlive(entity)
                 && match.Bodies.TryGet(entity, out var body)
                 && body.Owner == view.Player
-                && (match.BuildOrders.Contains(entity) || match.Foundations.Contains(entity)))
+                && (match.BuildOrders.Contains(entity) || match.Foundations.Contains(entity) || match.Walls.Has(entity)))
             {
                 count++;
                 into?.Add(entity);

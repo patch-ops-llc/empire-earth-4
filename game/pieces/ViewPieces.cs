@@ -42,6 +42,9 @@ public static class ViewPieces
         // Inspection: what the selected units are, accent badges, the epoch announcement.
         new InspectionPiece(),
 
+        // 18v. Walls: laying a run, the wall as one line, what a tile is.
+        new WallsPiece(),
+
         // Later pieces.
     ];
 }

@@ -28,6 +28,9 @@ public partial class MinimapPicture : Control
     private const float SelectedRim = 1f;
     private const float SmallestDeposit = 4f;
     private const float SmallestStructure = 5f;
+
+    // A tile of wall is drawn at least this many pixels wide, so that a wall is seen on a large map.
+    private const float SmallestWall = 2f;
     private const double MarkSeconds = 0.7;
 
     private static readonly Color GroundColor = new(0.33f, 0.45f, 0.26f);
@@ -181,8 +184,28 @@ public partial class MinimapPicture : Control
     private void DrawStructures(MatchView view)
     {
         _sight.CollectStructures(view, _structures);
+
+        // A tile of wall is drawn as its own tile and without an edge, so that a wall is a line
+        // across the map and not a row of blocks. It is drawn first: what stands beside a wall is over it.
+        var walls = view.Match.WallMap;
+        var wallSide = Math.Max(SmallestWall, _geometry.PixelsPerTile);
         foreach (var structure in _structures)
         {
+            if (walls.IsWall(structure.Type))
+            {
+                var middle = _geometry.ToMinimap(new Vector2(structure.X + 0.5f, structure.Y + 0.5f));
+                var square = new Rect2(middle - (Vector2.One * (wallSide / 2f)), Vector2.One * wallSide);
+                DrawRect(square, StructureLayer.Dim(PlayerColors.Of(structure.Owner), structure.IsRemembered ? 1f : 0f));
+            }
+        }
+
+        foreach (var structure in _structures)
+        {
+            if (walls.IsWall(structure.Type))
+            {
+                continue;
+            }
+
             // Round its own middle and at least this large, as a deposit is.
             var middle = _geometry.ToMinimap(new Vector2(structure.X + (structure.Size / 2f), structure.Y + (structure.Size / 2f)));
             var side = Math.Max(SmallestStructure, structure.Size * _geometry.PixelsPerTile);

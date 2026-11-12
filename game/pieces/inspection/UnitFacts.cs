@@ -41,6 +41,9 @@ public readonly record struct UnitFacts
     /// <summary>The roster index of the structure the unit is on its way to build, or null when it has no build order.</summary>
     public int? Builds { get; init; }
 
+    /// <summary>The number of tiles of wall the unit has still to lay, or 0 when it has no wall order.</summary>
+    public int WallTilesLeft { get; init; }
+
     /// <summary>Hit points now, in thousandths. Zero with <see cref="Maximum"/> zero for a unit that cannot be damaged.</summary>
     public long HitPoints { get; init; }
 
@@ -89,11 +92,28 @@ public readonly record struct UnitFacts
             Work = worker.State,
             AtGenerator = isWorker && match.WorkSites.TryGet(worker.Site, out var site) && site.Kind == WorkSiteKind.Generator,
             Builds = match.BuildOrders.TryGet(entity, out var order) ? order.Type : null,
+            WallTilesLeft = match.Walls.Has(entity) ? WallTilesOf(match, entity) : 0,
             HitPoints = health.HitPoints,
             Maximum = health.Maximum,
             SpeedPerTick = mover.Speed,
         };
         return true;
+    }
+
+    // The tiles of a wall order that are paid for and not yet laid.
+    private static int WallTilesOf(Match match, EntityId worker)
+    {
+        var plans = match.WallPlans;
+        var tiles = 0;
+        for (var i = 0; i < plans.Count; i++)
+        {
+            if (plans.ValueAt(i).Worker == worker && match.World.Entities.IsAlive(plans.EntityAt(i)))
+            {
+                tiles++;
+            }
+        }
+
+        return tiles;
     }
 }
 

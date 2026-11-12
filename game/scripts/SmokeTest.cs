@@ -100,6 +100,9 @@ public sealed class SmokeTest
         // Inspection: what the panel shows for a selection.
         new InspectionSmoke(),
 
+        // 18v. Walls: a run laid through the build menu, a tile left out, a wall not seen.
+        new WallsSmoke(),
+
         // Later pieces.
     ];
 
