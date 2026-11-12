@@ -1,4 +1,5 @@
 using Sim.Combat;
+using Sim.Construction;
 using Sim.Core;
 using Sim.Data;
 using Sim.Economy;
@@ -43,11 +44,23 @@ public sealed class Match
     /// <summary>Owner and position of everything on the map.</summary>
     public required ComponentStore<Body> Bodies { get; init; }
 
+    /// <summary>The build orders under way, each a value of the worker that carries it out.</summary>
+    public required ComponentStore<BuildOrder> BuildOrders { get; init; }
+
     /// <summary>The combat numbers of the match and of each player's tech. Not state: see <see cref="CombatRules"/>.</summary>
     public required CombatRules Combat { get; init; }
 
     /// <summary>Chassis, order and target of every unit of a chassis.</summary>
     public required ComponentStore<Combatant> Combatants { get; init; }
+
+    /// <summary>
+    /// The rules of construction: where a structure may be placed, and what a build menu and a
+    /// placement preview ask. Not state: see <see cref="ConstructionRules"/>.
+    /// </summary>
+    public required ConstructionRules Construction { get; init; }
+
+    /// <summary>The structures that are building themselves. A structure that is not here is finished.</summary>
+    public required ComponentStore<Foundation> Foundations { get; init; }
 
     /// <summary>Hit points of everything that can be damaged.</summary>
     public required ComponentStore<Health> Health { get; init; }
@@ -78,6 +91,9 @@ public sealed class Match
 
     /// <summary>Every player's Materials and Energy.</summary>
     public required Stockpiles Stockpiles { get; init; }
+
+    /// <summary>Lays structures and finishes them. Not state: see <see cref="Sim.Structures.StructureFactory"/>.</summary>
+    public required StructureFactory StructureFactory { get; init; }
 
     /// <summary>
     /// Keeps the tiles of <see cref="Grid"/> in line with <see cref="Structures"/>. Not state: see

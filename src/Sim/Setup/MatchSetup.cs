@@ -1,4 +1,5 @@
 using Sim.Combat;
+using Sim.Construction;
 using Sim.Core;
 using Sim.Data;
 using Sim.Economy;
@@ -41,7 +42,9 @@ public static class MatchSetup
         // here changes nothing. A name is never changed once it has merged: it places the store in
         // the state hash.
         var bodies = world.AddStore(new ComponentStore<Body>(Body.StoreName));
+        var buildOrders = world.AddStore(new ComponentStore<BuildOrder>(BuildOrder.StoreName));
         var combatants = world.AddStore(new ComponentStore<Combatant>(Combatant.StoreName));
+        var foundations = world.AddStore(new ComponentStore<Foundation>(Foundation.StoreName));
         var health = world.AddStore(new ComponentStore<Health>(Health.StoreName));
         var movers = world.AddStore(new ComponentStore<Mover>(Mover.StoreName));
         var producers = world.AddStore(new ComponentStore<Producer>(Producer.StoreName));
@@ -83,15 +86,28 @@ public static class MatchSetup
         var work = new WorkAssignments(data.Resources, grid, bodies, workers, workSites, move);
         var orders = new OrderCommandHandler(move, grid, bodies, movers, combatants, targeting, approach, simulation.Events, players.Count);
         var walkOrders = new LeaveWorkHandler(orders, bodies, work);
+
+        // A worker walks to the site of its build order by the move order too, and any other
+        // order it is given ends the build order: the handlers of those orders are wrapped once
+        // more. An attack order is not, because a worker never takes one.
+        var structureFactory = new StructureFactory(
+            data, world, bodies, health, structures, territories, workSites, structureTiles, research, production, simulation.Events, players.Count);
+        var construction = new ConstructionRules(
+            data, world, grid, bodies, buildOrders, combatants, foundations, movers, structures, territories, workers,
+            stockpiles, research, work, structureFactory, spatialIndex, move, simulation.Events, players.Count);
         simulation.SetCommandHandler(CommandType.Attack, orders);
-        simulation.SetCommandHandler(CommandType.AttackMove, walkOrders);
+        simulation.SetCommandHandler(CommandType.AttackMove, new OtherOrderHandler(walkOrders, construction));
+        simulation.SetCommandHandler(CommandType.Build, new BuildCommandHandler(construction));
+        simulation.SetCommandHandler(CommandType.CancelBuild, new CancelBuildCommandHandler(construction));
         simulation.SetCommandHandler(CommandType.CancelResearch, new CancelResearchHandler(research));
         simulation.SetCommandHandler(CommandType.CancelTrain, new CancelTrainHandler(production, simulation.Events));
-        simulation.SetCommandHandler(CommandType.Gather, new GatherCommandHandler(bodies, workSites, work, players.Count));
-        simulation.SetCommandHandler(CommandType.Move, walkOrders);
+        simulation.SetCommandHandler(
+            CommandType.Gather,
+            new OtherOrderHandler(new GatherCommandHandler(bodies, workSites, work, players.Count), construction));
+        simulation.SetCommandHandler(CommandType.Move, new OtherOrderHandler(walkOrders, construction));
         simulation.SetCommandHandler(CommandType.SetRallyPoint, new SetRallyPointHandler(production, grid, simulation.Events));
         simulation.SetCommandHandler(CommandType.StartResearch, new StartResearchHandler(research));
-        simulation.SetCommandHandler(CommandType.Stop, orders);
+        simulation.SetCommandHandler(CommandType.Stop, new OtherOrderHandler(orders, construction));
         simulation.SetCommandHandler(CommandType.Train, new TrainHandler(production));
 
         // Systems. Their order is a rule of the game: a pull request that adds one says where it
@@ -112,8 +128,12 @@ public static class MatchSetup
         // Structures leave the map right after the deaths: a structure destroyed in this tick
         // frees its tiles in this tick, so income, research and the orders of the next tick see
         // the tiles, the territory and the research slots as they are without it.
-        // The orders of a production structure destroyed in this tick are given back right after
-        // that, before income and research, so the stockpile has them when the tick ends.
+        // Construction comes after movement, the deaths and the structures that leave: a worker
+        // lays its foundation in the tick it arrives, on the tiles as they are in this tick, and
+        // the order of a worker killed in this tick ends in it. It comes before income and
+        // research, which see what a structure finished in this tick gives.
+        // The orders of a production structure destroyed in this tick are given back after that,
+        // before income and research, so the stockpile has them when the tick ends.
         // Income comes after movement, so that a worker that reaches its place in this tick has
         // arrived in this tick; after the deaths, so that a worker killed in this tick earns
         // nothing in it and its place is given out in it; and before research, so that a tier
@@ -129,7 +149,8 @@ public static class MatchSetup
         simulation.AddSystem(new ShotSystem(bodies, shots, targeting, simulation.Events));
         simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, simulation.Events));
         simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
-        simulation.AddSystem(new StructureSystem(data, bodies, structures, structureTiles, research, simulation.Events));
+        simulation.AddSystem(new StructureSystem(data, bodies, structures, foundations, structureTiles, research, simulation.Events));
+        simulation.AddSystem(new ConstructionSystem(construction, data));
         simulation.AddSystem(new ProductionRefundSystem(production, bodies));
         simulation.AddSystem(new IncomeSystem(data, grid, bodies, movers, workers, workSites, territories, stockpiles, work, research));
         simulation.AddSystem(new ResearchSystem(research));
@@ -143,8 +164,11 @@ public static class MatchSetup
             Simulation = simulation,
             Grid = grid,
             Bodies = bodies,
+            BuildOrders = buildOrders,
             Combat = combat,
             Combatants = combatants,
+            Construction = construction,
+            Foundations = foundations,
             Health = health,
             Movers = movers,
             Production = production,
@@ -153,6 +177,7 @@ public static class MatchSetup
             Shots = shots,
             SpatialIndex = spatialIndex,
             Stockpiles = stockpiles,
+            StructureFactory = structureFactory,
             StructureTiles = structureTiles,
             Structures = structures,
             Supply = supply,
