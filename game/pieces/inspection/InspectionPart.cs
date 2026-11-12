@@ -187,7 +187,7 @@ public partial class InspectionPart : InterfacePart
             // A research that finishes replaces every blueprint of its player, so the blueprint
             // itself stands for everything in it.
             var blueprint = first.Blueprint is null ? 0 : RuntimeHelpers.GetHashCode(first.Blueprint);
-            text.Append(CultureInfo.InvariantCulture, $"|{first.Owner},{first.Kind},{group.Count},{blueprint},{first.SpeedPerTick.Raw},{(int)first.Work},{first.Builds ?? -1},{first.HasHealth}");
+            text.Append(CultureInfo.InvariantCulture, $"|{first.Owner},{first.Kind},{group.Count},{blueprint},{first.SpeedPerTick.Raw},{(int)first.Work},{first.Builds ?? -1},{first.AtGenerator},{first.HasHealth}");
             if (first.IsWorker)
             {
                 text.Append(CultureInfo.InvariantCulture, $",{ProtectionOf(first.Owner)}");
@@ -364,7 +364,7 @@ public partial class InspectionPart : InterfacePart
         // Where another player means to build is that player's to know.
         var doing = !enemy && unit.Builds is { } builds && View.Match.Data.StructureOf(builds) is { } structure
             ? $"On its way to build the {StructureWords.NameOf(structure)}"
-            : InspectionWords.Work(unit.Work);
+            : InspectionWords.Work(unit.Work, unit.AtGenerator);
         _root.AddChild(InspectionUi.Text(Mode == InspectionMode.Group ? facts : $"{doing} · {facts}", ResearchColors.Faint, 13));
 
         var why = enemy

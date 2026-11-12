@@ -35,6 +35,9 @@ public readonly record struct UnitFacts
     /// <summary>What a worker is doing. Meaningful while <see cref="IsWorker"/>.</summary>
     public WorkerState Work { get; init; }
 
+    /// <summary>True for a worker whose place of work is a Generator and not a deposit.</summary>
+    public bool AtGenerator { get; init; }
+
     /// <summary>The roster index of the structure the unit is on its way to build, or null when it has no build order.</summary>
     public int? Builds { get; init; }
 
@@ -84,6 +87,7 @@ public readonly record struct UnitFacts
             Blueprint = blueprint,
             IsWorker = isWorker,
             Work = worker.State,
+            AtGenerator = isWorker && match.WorkSites.TryGet(worker.Site, out var site) && site.Kind == WorkSiteKind.Generator,
             Builds = match.BuildOrders.TryGet(entity, out var order) ? order.Type : null,
             HitPoints = health.HitPoints,
             Maximum = health.Maximum,

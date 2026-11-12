@@ -1,6 +1,6 @@
 # Running a test build
 
-This is an early build of a hobby real-time strategy prototype, and the first one two people can play together. Each player has six workers on a map with forest and a ridge of cliffs, and can select them and send them round it. There is nothing to build yet, and no match can train a fighting unit, so for now a development aid makes them from nothing: see Trying a fight below. Its job for now is to show that the game starts on your machine, that selecting units, moving them and fighting with them works, and that two machines can share one match.
+This is an early build of a hobby real-time strategy prototype, and the first one two people can play together. Each player has six workers on a map with forest and a ridge of cliffs, and can select them and send them round it. Workers can build structures, a Generator among them for Energy: see Building below. No match can train a fighting unit yet, so for now a development aid makes them from nothing: see Trying a fight below. Its job for now is to show that the game starts on your machine, that selecting units, moving them and fighting with them works, and that two machines can share one match.
 
 The builds are not signed, because signing costs money and this is a hobby project. Windows and macOS both warn about that the first time you start the game. The steps below get past the warning.
 
@@ -84,6 +84,12 @@ If joining fails, the menu says why in orange:
 | Clear the selection | Click the ground |
 | See what another player's unit is | Click it. A pale ring marks it and the panel at the bottom describes it. It cannot be given orders |
 | Send the selected workers to work at a deposit | Right-click the deposit |
+| Send the selected workers to work at a Generator of yours | Right-click the Generator, once it is finished |
+| Open or close the build menu | B, or the Build button in the panel at the bottom, with a worker selected |
+| Choose a structure in the build menu | Click it, or press the key beside its name: C Capitol, O Outpost, E Generator, B Barracks, K Works, Y Academy, T Tower |
+| Place the chosen structure | Click the ground. Hold Shift to go on placing the same structure |
+| Go back from placing to the menu, and from the menu to the match | Right-click or Escape |
+| Cancel a build order or a structure that is not finished | Select the worker or the structure and press Delete, or the Cancel build button in the panel at the bottom |
 | Send the selected units somewhere | Right-click the ground. On a trackpad that is a click with two fingers, unless you have set it otherwise |
 | Open or close the research panel | R, or the Research button in the bar at the top. Escape closes it too |
 | Start a research | In the research panel, click a bright cell |
@@ -105,7 +111,7 @@ The brown blocks on the map are deposits. Select workers and right-click a depos
 - A worker stops earning when you send it somewhere else. Send it back to a deposit and it starts again.
 - Nobody can walk through a deposit.
 - Materials and Energy are shown as whole numbers. Supply is what you use out of what you may use: each worker uses 1.
-- Nothing earns Energy yet. Research spends both: see Research below.
+- Energy comes from workers at a Generator, which you build: see Building below. Research spends both: see Research below.
 
 ## What you will see
 
@@ -117,10 +123,27 @@ The brown blocks on the map are deposits. Select workers and right-click a depos
 - When you play alone, the other player's workers never move. Nothing controls them.
 - In a shared match, both players see the same workers in the same places. An order takes a moment longer to start than it does alone, because it travels to the host first.
 - If the other player leaves or closes the game, a line under the top bar says why, the bar says from then on that they are out, and your match goes on without them. If the host leaves, the match ends for both.
-- Each player has a Capitol where they start, on the square their workers stand around: a stone hall with a keep and a pointed roof in the player's color. Nobody can stand on it, and units walk round it. Nothing can be built yet.
-- The ground a player holds is tinted in the player's color, with a line along its edge. It reaches 16 tiles from the middle of the Capitol. The line follows the sides of the tiles, so it has steps: a tile is either held or it is not. A deposit pays only when all of it is inside, and structures will have to stand inside.
+- Each player has a Capitol where they start, on the square their workers stand around: a stone hall with a keep and a pointed roof in the player's color. Nobody can stand on it, and units walk round it.
+- The ground a player holds is tinted in the player's color, with a line along its edge. It reaches 16 tiles from the middle of the Capitol. The line follows the sides of the tiles, so it has steps: a tile is either held or it is not. A deposit pays only when all of it is inside, and every structure but a Capitol and an Outpost has to stand inside.
 - Click your Capitol to select it. A green line runs round it, and the panel at the bottom of the window names it and its hit points. Nothing can damage a structure yet, so they stay full.
 - Structures and units are not selected together. A box takes units only, and a structure leaves the selection as soon as a unit joins it. A selected structure takes no orders yet, so a right-click does nothing while one is selected.
+
+## Building
+
+Select one or more workers and press B, or click Build in the panel at the bottom. The build menu opens above that panel and lists the seven structures a worker places.
+
+- Each entry has the structure's name, the key that chooses it and its price: M is Materials and E is Energy. Point at an entry and the line under the entries says what it costs, how many tiles it takes, how long it builds itself and whether it must stand in your territory.
+- An entry is dark when you cannot order the structure now. Its price is orange when you lack the resources, and the line under the entries says how much you lack. An entry says `Limit 2 of 2` when you have as many as you may have: you may have two Academies. A structure that waits for a research says which.
+- Choose a structure and its shape follows the pointer. Green is a place it can go. Red is a place it cannot: the red tiles are the ones in the way, because they are outside your territory, not open ground, or under a deposit or a structure. The top line of the menu says which.
+- Amber is a warning, for a Capitol or an Outpost only: its territory would overlap an enemy's. You can still place it there, but the worker will be turned away when it arrives unless the enemy's Capitol or Outpost is gone by then.
+- Click to place it. You pay the whole price at once. The nearest selected worker walks to the site, which is drawn as a pale shape of the structure with a line round its tiles. Only you see your sites.
+- When the worker arrives it lays the foundation and goes back to what it was doing. The structure then builds itself: nobody has to stay. It fills from the ground up, and a blue bar over it shows how far it is. Select it and the panel at the bottom says how long it has left.
+- A foundation is in the way like a finished structure and has all its hit points from the start, but it does nothing until it is finished.
+- Hold Shift while you click to place the same structure again. Each order takes another of the selected workers, so select as many workers as you want sites.
+- Cancel with Delete, or the Cancel build button. For a worker on its way, you get the whole price back. For a structure that is not finished, you get three quarters back and it is taken away.
+- If the worker cannot lay the foundation when it arrives, because something stands in the way or the rules no longer allow it, a line under the top bar says why and the whole price comes back.
+- What the structures do so far: an Outpost claims the ground 12 tiles round it once it is finished, so that you can build and work deposits there. A Generator is where workers earn Energy: select workers and right-click a finished Generator. Each earns 30 Energy a minute, and a Generator has room for four. An Academy gives you a second research at a time. A second Capitol claims ground like the first. The Barracks, the Works and the Tower can be built but do nothing yet: no match can train units yet.
+- A worker that was working at a deposit or a Generator goes back to it once the foundation is laid. A worker that had no work stays beside the site.
 
 ## What your units are
 
@@ -135,7 +158,7 @@ Select units and the panel at the bottom of the window says what they are.
 - When a player's epoch rises, a banner under the top bar says which epoch they reached. Your own is larger and says how high your tracks may now go.
 - Only workers start a match. Fighting units, which have the cards, tiers, accents and badges, come from the development aid for now: see Trying a fight.
 - A unit made before a Protection or Mobility research keeps the hit points and speed it was made with for now, though its card already shows the new tier. Damage, range and accents follow the research at once.
-- No match can raise an epoch yet: it takes three tracks at a tier, and the Energy you start with pays for one research.
+- An epoch rises when three tracks have reached its tier. The Energy you start with pays for one research, so the rest has to come from a Generator.
 
 ## Research
 
@@ -147,7 +170,7 @@ Press R, or click Research in the bar at the top. The panel shows your six track
 - While a research runs, its cell fills up, and the top of the panel shows a progress bar with the time left and a Cancel button. Cancelling gives the whole price back. The bar at the top of the window shows the same progress when the panel is closed: the track and its tier, a bar and the time left.
 - When a research finishes, a line under the top bar says so and the track's row has one more filled cell.
 - You have one research slot, so one research runs at a time.
-- You start with 400 Materials and 100 Energy. Workers at deposits earn more Materials, but nothing earns Energy yet, so a match still has room for one research: a tier 2 costs 100 of each. After it you have no Energy, and every next tier shows as too expensive however many Materials you have.
+- You start with 400 Materials and 100 Energy. Workers at deposits earn more Materials, and workers at a Generator earn Energy: build one early if you mean to research more than once, since a tier 2 costs 100 of each.
 - Tiers 5 to 9 are closed. A match stops at epoch 4 for now.
 
 ## What to know about multiplayer

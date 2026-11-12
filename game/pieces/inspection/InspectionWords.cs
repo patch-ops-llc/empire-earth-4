@@ -135,14 +135,18 @@ public static class InspectionWords
         return ResearchWords.Perks(applied);
     }
 
-    /// <summary>What a worker is doing.</summary>
-    public static string Work(WorkerState state) => state switch
+    /// <summary>What a worker is doing, at a deposit or at a Generator.</summary>
+    public static string Work(WorkerState state, bool atGenerator = false)
     {
-        WorkerState.Walking => "Walking to its place at a deposit",
-        WorkerState.Working => "Working at a deposit",
-        WorkerState.Waiting => "Waiting for a place at a deposit",
-        _ => "Has no work",
-    };
+        var place = atGenerator ? "a Generator" : "a deposit";
+        return state switch
+        {
+            WorkerState.Walking => $"Walking to its place at {place}",
+            WorkerState.Working => $"Working at {place}",
+            WorkerState.Waiting => $"Waiting for a place at {place}",
+            _ => "Has no work",
+        };
+    }
 
     /// <summary>The headline of an epoch announcement: "Epoch 2: Romans".</summary>
     public static string EpochTitle(GameData data, int epoch) =>

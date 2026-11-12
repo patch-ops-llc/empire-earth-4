@@ -32,6 +32,11 @@ public partial class PlacementPreview : WorldLayer
     private const float ShapeAlpha = 0.5f;
     private const float TileAlpha = 0.42f;
 
+    // Over a site that is refused the shape is fainter and the tiles stronger, so that the
+    // tiles that are the trouble are told from the others through it.
+    private const float RefusedShapeAlpha = 0.16f;
+    private const float RefusedTileAlpha = 0.62f;
+
     private readonly Dictionary<int, ArrayMesh> _meshes = [];
     private MeshInstance3D _shape = null!;
     private StandardMaterial3D _material = null!;
@@ -101,8 +106,8 @@ public partial class PlacementPreview : WorldLayer
             var color = ColorOf(_site);
             _shape.Mesh = MeshOf(structure);
             _shape.Position = new Vector3(_site.X + (structure.Footprint / 2f), 0f, _site.Y + (structure.Footprint / 2f));
-            _material.AlbedoColor = new Color(color, ShapeAlpha);
-            MarkTiles(structure, color);
+            _material.AlbedoColor = _site.IsAccepted ? new Color(color, ShapeAlpha) : new Color(color.Lerp(Colors.White, 0.5f), RefusedShapeAlpha);
+            MarkTiles(structure, _site.IsAccepted ? color : Good);
         }
 
         _tiles.End();
@@ -130,7 +135,7 @@ public partial class PlacementPreview : WorldLayer
                 BlockedTiles += free ? 0 : 1;
                 _tiles.Add(
                     new Transform3D(Basis.Identity, new Vector3(x + 0.5f, TileLift, y + 0.5f)),
-                    new Color(free ? good : Blocked, TileAlpha));
+                    new Color(free ? good : Blocked, _site.IsAccepted ? TileAlpha : RefusedTileAlpha));
             }
         }
     }
