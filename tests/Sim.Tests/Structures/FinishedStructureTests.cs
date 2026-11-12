@@ -112,6 +112,11 @@ public class FinishedStructureTests
     public void WhenTheLastCapitolFallsItsResearchIsCancelledAndThePriceComesBack()
     {
         var match = DesignMatch();
+
+        // A Capitol still being built keeps the player in the match when the first one falls
+        // (design 5.1), and opens no slot.
+        var second = match.LayStructure(0, match.Data.StartStructure, 8, 12);
+        match.Foundations.Add(second, default);
         var before = (match.Stockpiles.Materials(0), match.Stockpiles.Energy(0));
         match.OrderResearch(0, ResearchMatches.Firepower);
         match.Simulation.Run(5);
@@ -130,7 +135,8 @@ public class FinishedStructureTests
         match.OrderResearch(0, ResearchMatches.Firepower);
         match.Simulation.Tick();
         Assert.False(match.Slot(0).IsBusy);
-        match.PlaceStructure(0, "capitol", 8, 12);
+        match.Simulation.Run(match.Data.StartStructure.BuildTicks);
+        Assert.False(match.Foundations.Contains(second));
         match.OrderResearch(0, ResearchMatches.Firepower);
         match.Simulation.Tick();
         Assert.True(match.Slot(0).IsBusy);

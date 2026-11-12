@@ -19,6 +19,19 @@ public interface ICommandHandler
 }
 
 /// <summary>
+/// Decides, before any handler sees it, whether a command is run at all: the one rule that holds
+/// for every type of command, such as that a player who is out of the match gives no orders.
+/// </summary>
+public interface ICommandGate
+{
+    /// <summary>
+    /// False drops the command. Like a handler's check, the answer must depend only on the world
+    /// and the command, so that every machine drops the same commands, and it must change nothing.
+    /// </summary>
+    bool Admits(World world, in Command command);
+}
+
+/// <summary>
 /// The tick loop. It owns the order in which everything happens, which is the same on every
 /// machine: the event list is emptied, then the commands scheduled for the tick in the order they
 /// were queued, then each system in the order it was added, then the removal of destroyed
@@ -33,6 +46,7 @@ public sealed class Simulation
     private readonly List<ISystem> _systems = [];
     private readonly List<Command> _due = [];
     private ICommandHandler?[] _handlers = [];
+    private ICommandGate? _gate;
     private bool _started;
 
     public Simulation(World world)
@@ -56,8 +70,9 @@ public sealed class Simulation
     public SimEventList Events { get; }
 
     /// <summary>
-    /// How many commands have been dropped, because their type had no handler or their handler
-    /// found them invalid. For diagnostics and tests; it is not part of the state hash.
+    /// How many commands have been dropped, because the gate turned them away, their type had no
+    /// handler or their handler found them invalid. For diagnostics and tests; it is not part of
+    /// the state hash.
     /// </summary>
     public long DroppedCommandCount { get; private set; }
 
@@ -91,6 +106,22 @@ public sealed class Simulation
         _handlers[index] = handler;
     }
 
+    /// <summary>
+    /// Sets the gate every command passes before its handler is asked. One gate, and only before
+    /// the first tick. Without one every command reaches its handler.
+    /// </summary>
+    public void SetCommandGate(ICommandGate gate)
+    {
+        ArgumentNullException.ThrowIfNull(gate);
+        ThrowIfStarted();
+        if (_gate is not null)
+        {
+            throw new InvalidOperationException("The simulation already has a command gate.");
+        }
+
+        _gate = gate;
+    }
+
     /// <summary>Runs one tick.</summary>
     public void Tick()
     {
@@ -104,7 +135,7 @@ public sealed class Simulation
         {
             var index = (int)command.Type;
             var handler = index >= 0 && index < _handlers.Length ? _handlers[index] : null;
-            if (handler is null || !handler.Execute(world, in command))
+            if ((_gate is { } gate && !gate.Admits(world, in command)) || handler is null || !handler.Execute(world, in command))
             {
                 DroppedCommandCount++;
             }
