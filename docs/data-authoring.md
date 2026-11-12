@@ -40,6 +40,58 @@ dotnet run --project src/Tools -- balance-report swarm=1,1,2,4,4,2 elite=4,4,2,1
 
 Hit points, damage and distances are shown to three decimal places and times in seconds. The game keeps hit points and damage in thousandths, distances in 1/65,536 of a tile and times in ticks.
 
+## See how the armies fight
+
+```sh
+dotnet run --project src/Tools -- battles
+```
+
+`battles` fights the four acceptance battles the design sets as its tuning targets (design 3.1), with the data as it is, and prints for each who won, how much of its army value the winner kept, and whether the target was met. Nobody plays: each army gets its one order and the simulation does the rest, so a run takes a few seconds and prints the same on every machine.
+
+| Battle | Mass army | Elite army | Where | Target |
+| --- | --- | --- | --- | --- |
+| 1 | 80 Auxiliaries | 20 Grenadiers | Open field | Mass wins and keeps 30% to 60% of its army value. |
+| 2 | 40 Auxiliaries | 20 Grenadiers | Open field | Elite wins and keeps at least 70%. |
+| 3 | 80 Auxiliaries | 20 Grenadiers | A chokepoint 6 tiles wide | Elite wins. |
+| 4 | 80 Auxiliaries | 14 Grenadiers and 2 Onagers | Open field | Either side may win, and keeps at most 35%. |
+
+The mass player has tiers 1, 1, 2, 4, 4, 2 and the elite player 4, 4, 2, 1, 1, 2, in the order of `tracks.jsonc`: example B of design 2.6 at the tiers of the first playable. Each army starts as a block in a square grid at its line's spacing, 10 units wide, or 6 in the chokepoint, with the Onagers in one row behind the Grenadiers and the front ranks 15 tiles apart, and gets one attack-move order onto where the other block stands. The fight ends when one army is gone. Army value kept is the price of the surviving units, Materials and Energy added up, over the price of the army at the start; a damaged unit counts in full.
+
+Every battle is fought twice, the second time with the armies' sides of the map and their players swapped. A target is met only when both fights meet it, and the report gives the difference between the two.
+
+Under each fight the report has two more lines to tune by:
+
+- **Attacks made of those its units had time for.** From the first attack of the fight, how many attacks each army made, against how many its units could have made had each attacked at every chance while it lived. A unit attacks only while it stands still with an enemy in range, so a low share means an army that spent the fight walking, waiting behind its own front rank, or being pushed about. The share of the first 10 seconds is given apart, because that is when a large army is still arriving.
+- **Shells.** In a fight with Artillery, how many shells landed and how many units a shell caught, on average and at most.
+
+A missed target is not an error: the targets are what the numbers are tuned toward, and the design expects some to be missed with its starting numbers. `battles` exits with 1 only when a battle cannot be fought with the data, for example because a chassis of an army is gone or no longer unlocked at the army's tiers.
+
+| Option | Meaning |
+| --- | --- |
+| `--battle <number>` | Fight only this battle. May be given more than once. |
+| `--seconds <number>` | The longest a fight may take, in seconds of game time. The default is 600. A fight that runs out of time has no winner and meets no target. |
+| `--data <folder>` | Read another data folder. The default is `game/data`. |
+
+To see what an edit does to the battles, run it before and after and compare the two reports.
+
+```sh
+dotnet run -c Release --project src/Tools -- ai-match
+```
+
+`ai-match` plays a whole match between computer players with nobody watching, as fast as the machine allows, and prints how it ended, how long it took, and what each player had by the end: its epoch and when it reached each, its tiers, supply, workers, fighting units by chassis and their price, structures, losses and stockpile. It plays the match twice, the second time with the personalities in each other's seats and starts. The same seed gives the same match on every machine, which the state hash in the report shows; only the times differ. Run it with `-c Release` for times that mean something.
+
+| Option | Meaning |
+| --- | --- |
+| `--players <list>` | The personality of each player, by its ID in `ai/`, separated by commas, in the order of the seats. The default is the first two personalities. |
+| `--map <id>` | The map. The default is `ridge`. |
+| `--minutes <number>` | The longest a match may take, in minutes of game time. The default is 20. |
+| `--seed <number>` | The seed of the match. The default is 1. |
+| `--data <folder>` | Read another data folder. The default is `game/data`. |
+
+A match ends at the time limit, or when only one player has a worker, a fighting unit or a structure left. The computer player does not attack yet, so for now every match runs to the time limit without a winner, and the report shows how each personality builds up.
+
+CI runs both tools every night and with every pull request that changes the data or the simulation, and puts what they print in the summary of the `Determinism` run, under "Balance report".
+
 ## Files
 
 | File | Holds | Schema |
