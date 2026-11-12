@@ -466,7 +466,8 @@ public sealed class PlayerView
     /// </summary>
     /// <remarks>
     /// The player knows of every event whose <see cref="SimEvent.Player"/> it is. It knows of a
-    /// death, a melee hit, a shot fired, a shot that lands and a shot that is lost also when it is
+    /// death, a melee hit, a shot fired, a shot that lands, a shot that is lost, an attack made
+    /// with Charge, a unit that regenerates and a unit that comes out of a structure also when it is
     /// another player's and happened on a tile the player sees now, and of a structure that is
     /// laid, finished or removed when it sees a tile of the structure's footprint now. A
     /// structure whose hit points ran out is reported by a death as well, which goes by the tile
@@ -501,7 +502,7 @@ public sealed class PlayerView
     /// </summary>
     public static bool IsSeenWhereItHappens(SimEventKind kind) =>
         kind is SimEventKind.Death or SimEventKind.MeleeHit or SimEventKind.ShotFired or SimEventKind.ShotHit or SimEventKind.ShotLost
-            or SimEventKind.SplashHit
+            or SimEventKind.SplashHit or SimEventKind.ChargedAttack or SimEventKind.Regenerated or SimEventKind.UnitTrained
         || IsOfAStructure(kind)
         || IsOfAnArea(kind);
 

@@ -6,6 +6,8 @@ using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
+using Sim.Perks;
+using Sim.Production;
 using Sim.Research;
 using Sim.Structures;
 using Sim.Vision;
@@ -67,6 +69,19 @@ public sealed class Match
 
     /// <summary>Speed, facing, spacing and move order of everything that can move.</summary>
     public required ComponentStore<Mover> Movers { get; init; }
+
+    /// <summary>
+    /// What every unit of a chassis keeps count of for Regeneration, Reserves and Charge (design
+    /// 2.3): the tick of its last damage, the Materials paid for it and the distance it has walked
+    /// since its last attack.
+    /// </summary>
+    public required ComponentStore<PerkCounts> PerkCounts { get; init; }
+
+    /// <summary>
+    /// The rules of production, with the orders, progress and rally point of every structure that
+    /// trains in <see cref="MatchProduction.Producers"/>.
+    /// </summary>
+    public required MatchProduction Production { get; init; }
 
     /// <summary>
     /// Every player's tiers and research slots, and what follows from the tiers: the table of
