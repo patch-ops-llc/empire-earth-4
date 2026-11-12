@@ -122,14 +122,14 @@ The brown blocks on the map are deposits. Select workers and right-click a depos
 
 Select units and the panel at the bottom of the window says what they are.
 
-- **One unit** is shown in detail: its name, its line and epoch, its hit points as a bar and as numbers, and a card for each thing your research changes. A card names the track behind it in the track's color, the tier the unit fights with, and how far that tier is from the unit's own epoch: `Firepower 2 +1` is one tier ahead. Damage is given for a second of fighting, speed in tiles a second. Under the cards are its range or reach, how often it strikes and how far it sees.
+- **One unit** is shown in detail: its name, its line and epoch, at the right its hit points as a bar and as numbers, and a card for each thing your research changes. A card names the track behind it in the track's color, the tier the unit fights with, and how far that tier is from the unit's own epoch: `Firepower 2 +1` is one tier ahead. Damage is given for a second of fighting, speed in tiles a second. Under the cards are its range or reach, how often it strikes and how far it sees.
 - **Accents** are listed under that with what each does. A track one tier ahead of a unit's epoch gives the unit that track's accent at level I, two tiers ahead at level II. A unit carries two at most, from its two tracks furthest ahead, and the panel says so when a third track is ahead.
 - **Several units** are summed up, one row for each kind: how many, their hit points together, the Firepower (FP), Protection (PR) and Mobility (MO) tiers they fight with, and their accents. Point at an accent to read what it does.
 - **A worker** shows its hit points, what it is doing, its speed and sight. A worker has no tiers and no accents.
 - **Another player's unit**, when you click it, shows its hit points, its Firepower, Protection and Mobility tiers and its accents. Its price and supply are the owner's to know.
-- Units with accents carry small square badges over their heads, in the color of the track, with one white mark for level I and two for level II. Every player's units show them.
+- Units with accents carry small square badges over their heads, in the color of the track, with one white mark for level I and two for level II. Every player's units show them. They sit just over the place of a unit's hit point bar.
 - When a player's epoch rises, a banner under the top bar says which epoch they reached. Your own is larger and says how high your tracks may now go.
-- Only workers start a match and nothing in the game makes fighting units yet, so for now the panel has workers to show. The cards, tiers, accents and badges appear once fighting units can be placed or built.
+- Only workers start a match. Fighting units, which have the cards, tiers, accents and badges, come from the development aid for now: see Trying a fight.
 - A unit made before a Protection or Mobility research keeps the hit points and speed it was made with for now, though its card already shows the new tier. Damage, range and accents follow the research at once.
 - No match can raise an epoch yet: it takes three tracks at a tier, and the Energy you start with pays for one research.
 

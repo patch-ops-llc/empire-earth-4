@@ -19,7 +19,8 @@ namespace Game;
 /// </para>
 /// <para>
 /// A badge stands <see cref="LiftPixels"/> above a point <see cref="AnchorHeight"/> over the
-/// unit's top. The room between the unit's top and the badges is left for a health bar.
+/// unit's top, which is the upper edge of the combat view's health bar. So the badges sit on
+/// the bar when a unit has one, at every zoom, and a little above the unit when it has none.
 /// </para>
 /// </remarks>
 public partial class AccentBadges : WorldLayer
@@ -30,11 +31,15 @@ public partial class AccentBadges : WorldLayer
     public const float MinPixels = 9f;
     public const float MaxPixels = 22f;
 
-    /// <summary>How far over the top of a unit the badges are anchored, in tiles.</summary>
-    public const float AnchorHeight = 0.2f;
+    /// <summary>
+    /// How far over the top of a unit the badges are anchored, in tiles: just over the health
+    /// bar of the combat view, whose middle is 0.62 above the unit and which is 0.15 tall with
+    /// its edge.
+    /// </summary>
+    public const float AnchorHeight = 0.72f;
 
     /// <summary>How far above the anchor the lower edge of a badge is, in pixels.</summary>
-    public const float LiftPixels = 9f;
+    public const float LiftPixels = 2f;
 
     /// <summary>The room between two badges of one unit, in pixels.</summary>
     public const float GapPixels = 2f;

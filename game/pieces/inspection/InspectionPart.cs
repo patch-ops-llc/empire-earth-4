@@ -53,7 +53,8 @@ public partial class InspectionPart : InterfacePart
     private const float ClickSlack = 6f;
 
     private const float DetailWidth = 600f;
-    private const float EnemyWidth = 400f;
+    private const float EnemyWidth = 520f;
+    private const float WorkerWidth = 420f;
 
     private readonly InspectedMark? _mark;
     private readonly List<HealthLine> _health = [];
@@ -103,7 +104,7 @@ public partial class InspectionPart : InterfacePart
         _root = UiStyle.Column(6);
         _root.Name = "Inspection";
         _root.Visible = false;
-        Frame.SelectionArea.AddChild(_root);
+        Frame.SelectionDetail.AddChild(_root);
         View.Selection.Changed += Refresh;
     }
 
@@ -224,7 +225,7 @@ public partial class InspectionPart : InterfacePart
     {
         var data = View.Match.Data;
         var first = group.First;
-        _root.CustomMinimumSize = new Vector2(enemy || first.Blueprint is null ? EnemyWidth : DetailWidth, 0f);
+        _root.CustomMinimumSize = new Vector2(first.Blueprint is null ? WorkerWidth : enemy ? EnemyWidth : DetailWidth, 0f);
 
         var header = UiStyle.Row(8);
         header.Name = "Header";
@@ -238,18 +239,18 @@ public partial class InspectionPart : InterfacePart
 
         if (enemy)
         {
-            var owner = InspectionUi.Text(InspectionWords.Owner(first.Owner), PlayerColors.Of(first.Owner).Lightened(0.25f), 13);
-            owner.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-            owner.HorizontalAlignment = HorizontalAlignment.Right;
-            header.AddChild(owner);
+            header.AddChild(InspectionUi.Text(InspectionWords.Owner(first.Owner), PlayerColors.Of(first.Owner).Lightened(0.25f), 13));
         }
 
+        // The hit points stand at the right end of the headline, which keeps the panel a row lower.
         if (first.HasHealth)
         {
             var health = UiStyle.Row(8);
             health.Name = "Health";
-            _root.AddChild(health);
-            _health.Add(HealthLine.AddTo(health, barWidth: 200f, withNote: true));
+            health.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            health.Alignment = BoxContainer.AlignmentMode.End;
+            header.AddChild(health);
+            _health.Add(HealthLine.AddTo(health, barWidth: 130f, withNote: true));
         }
 
         if (first.Blueprint is not { } blueprint)
@@ -382,7 +383,13 @@ public partial class InspectionPart : InterfacePart
         grid.AddThemeConstantOverride("h_separation", 14);
         grid.AddThemeConstantOverride("v_separation", 5);
         _root.AddChild(grid);
-        foreach (var heading in new[] { "Units", "Hit points", "Tiers in use", "Accents" })
+        var units = 0;
+        foreach (var group in _groups)
+        {
+            units += group.Count;
+        }
+
+        foreach (var heading in new[] { string.Create(CultureInfo.InvariantCulture, $"{units} units"), "Hit points", "Tiers in use", "Accents" })
         {
             grid.AddChild(InspectionUi.Text(heading, ResearchColors.Faint, 11));
         }

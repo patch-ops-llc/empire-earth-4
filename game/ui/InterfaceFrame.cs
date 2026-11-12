@@ -18,8 +18,9 @@ namespace Game;
 /// </item>
 /// <item>
 /// <b>The bottom panel</b>, for the selection and its commands: <see cref="SelectionArea"/> for
-/// what is selected, and beside it a button for every <see cref="SelectionCommand"/> that applies.
-/// It is shown while there is something in it.
+/// what is selected, <see cref="SelectionDetail"/> for the one part that describes it in full,
+/// and beside them a button for every <see cref="SelectionCommand"/> that applies. It is shown
+/// while there is something in it.
 /// </item>
 /// <item>
 /// <b>The full-screen panel</b>: one of the panels added with <see cref="AddPanel"/> at a time,
@@ -79,6 +80,14 @@ public partial class InterfaceFrame : CanvasLayer
 
     /// <summary>The left of the bottom panel: what is selected. A part adds a control of its own and shows it while it has something to say.</summary>
     public VBoxContainer SelectionArea { get; private set; } = null!;
+
+    /// <summary>
+    /// The place of the part that describes the selection in full. While it shows something, the
+    /// short lines of <see cref="SelectionArea"/> are not shown, because it says what they say:
+    /// a piece that knows only its own line about the selection keeps adding it there, and it is
+    /// seen where nothing says more.
+    /// </summary>
+    public VBoxContainer SelectionDetail { get; private set; } = null!;
 
     /// <summary>The full-screen panel that is open, or null.</summary>
     public FramePanel? OpenPanel { get; private set; }
@@ -232,7 +241,10 @@ public partial class InterfaceFrame : CanvasLayer
         }
 
         // A full-screen panel covers the bottom panel, which is not shown round its edge.
-        _bottom.Visible = !IsPanelOpen && (HasVisibleChild(SelectionArea) || HasVisibleChild(_commandArea));
+        var detailed = HasVisibleChild(SelectionDetail);
+        SelectionDetail.Visible = detailed;
+        SelectionArea.Visible = !detailed;
+        _bottom.Visible = !IsPanelOpen && (detailed || HasVisibleChild(SelectionArea) || HasVisibleChild(_commandArea));
         FadeMessages(delta);
     }
 
@@ -440,6 +452,11 @@ public partial class InterfaceFrame : CanvasLayer
         SelectionArea.Name = "SelectionArea";
         SelectionArea.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
         bottomRow.AddChild(SelectionArea);
+        SelectionDetail = UiStyle.Column(4);
+        SelectionDetail.Name = "SelectionDetail";
+        SelectionDetail.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        SelectionDetail.Visible = false;
+        bottomRow.AddChild(SelectionDetail);
         _commandArea = UiStyle.Row(8);
         _commandArea.Name = "Commands";
         bottomRow.AddChild(_commandArea);
