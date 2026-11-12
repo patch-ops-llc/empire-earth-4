@@ -1,3 +1,4 @@
+using Sim.Construction;
 using Sim.Core;
 using Sim.Data;
 using Sim.Map;
@@ -16,7 +17,8 @@ namespace Sim.Economy;
 /// first comes one second after it arrived. A payment is made when its conditions hold in that
 /// tick and skipped when they do not, and the count runs on either way. A deposit pays a worker
 /// whose owner has all of the deposit's tiles inside territory, and a Generator pays its owner's
-/// workers.
+/// workers once it is finished: a worker sent to one that is still building itself stands at its
+/// place, counts its ticks and earns nothing.
 /// </para>
 /// <para>
 /// A deposit pays the whole rate until the Materials it has delivered reach the full-rate amount,
@@ -37,6 +39,7 @@ public sealed class IncomeSystem : ISystem
     private readonly ComponentStore<Worker> _workers;
     private readonly ComponentStore<WorkSite> _sites;
     private readonly ComponentStore<Territory> _territories;
+    private readonly ComponentStore<Foundation> _foundations;
     private readonly Stockpiles _stockpiles;
     private readonly WorkAssignments _work;
     private readonly IPlayerTechSource _tech;
@@ -50,6 +53,7 @@ public sealed class IncomeSystem : ISystem
         ComponentStore<Worker> workers,
         ComponentStore<WorkSite> sites,
         ComponentStore<Territory> territories,
+        ComponentStore<Foundation> foundations,
         Stockpiles stockpiles,
         WorkAssignments work,
         IPlayerTechSource tech)
@@ -61,6 +65,7 @@ public sealed class IncomeSystem : ISystem
         ArgumentNullException.ThrowIfNull(workers);
         ArgumentNullException.ThrowIfNull(sites);
         ArgumentNullException.ThrowIfNull(territories);
+        ArgumentNullException.ThrowIfNull(foundations);
         ArgumentNullException.ThrowIfNull(stockpiles);
         ArgumentNullException.ThrowIfNull(work);
         ArgumentNullException.ThrowIfNull(tech);
@@ -71,6 +76,7 @@ public sealed class IncomeSystem : ISystem
         _workers = workers;
         _sites = sites;
         _territories = territories;
+        _foundations = foundations;
         _stockpiles = stockpiles;
         _work = work;
         _tech = tech;
@@ -133,7 +139,7 @@ public sealed class IncomeSystem : ISystem
             if (worker.Timer >= SimInfo.TicksPerSecond)
             {
                 worker.Timer = 0;
-                Pay(world, body.Owner, ref _sites.ValueAt(siteIndex));
+                Pay(world, body.Owner, worker.Site, ref _sites.ValueAt(siteIndex));
             }
         }
 
@@ -141,9 +147,9 @@ public sealed class IncomeSystem : ISystem
     }
 
     /// <summary>Makes the payment a worker of <paramref name="owner"/> is due at a site, if its conditions hold.</summary>
-    private void Pay(World world, int owner, ref WorkSite site)
+    private void Pay(World world, int owner, EntityId entity, ref WorkSite site)
     {
-        if (!CanEarn(world, owner, site))
+        if (!CanEarn(world, owner, entity, site))
         {
             return;
         }
@@ -158,11 +164,12 @@ public sealed class IncomeSystem : ISystem
     }
 
     /// <summary>
-    /// The conditions of a payment. A Generator that is still being built, once structures are
-    /// built by workers, is one more condition here.
+    /// The conditions of a payment (design 4.1): a deposit lies in the territory of the worker's
+    /// owner, and a Generator is the owner's and finished. A structure is unfinished exactly while
+    /// it has a <see cref="Foundation"/>.
     /// </summary>
-    private bool CanEarn(World world, int owner, in WorkSite site) =>
+    private bool CanEarn(World world, int owner, EntityId entity, in WorkSite site) =>
         site.Kind == WorkSiteKind.Deposit
             ? Territory.Holds(_territories, world.Entities, owner, site.X, site.Y, site.Size)
-            : site.Owner == owner;
+            : site.Owner == owner && !_foundations.Contains(entity);
 }

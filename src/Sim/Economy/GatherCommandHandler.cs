@@ -17,10 +17,11 @@ namespace Sim.Economy;
 /// </para>
 /// <para>
 /// Any deposit may be the target, also one outside the player's territory: the workers stand at
-/// their places and earn nothing until it is inside. The workers are assigned in the order the
-/// command lists them, and each takes its place as <see cref="WorkAssignments"/> says. A worker
-/// already at the site gives up its place and its count of ticks like any other and takes a place
-/// anew.
+/// their places and earn nothing until it is inside. So may a Generator of the player's that is
+/// still building itself: the workers stand at their places and earn nothing until it is
+/// finished. The workers are assigned in the order the command lists them, and each takes its
+/// place as <see cref="WorkAssignments"/> says. A worker already at the site gives up its place
+/// and its count of ticks like any other and takes a place anew.
 /// </para>
 /// </remarks>
 public sealed class GatherCommandHandler : ICommandHandler

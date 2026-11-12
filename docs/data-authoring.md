@@ -50,9 +50,10 @@ Hit points, damage and distances are shown to three decimal places and times in 
 | `accents.jsonc` | The accent each track gives a unit, and the perks of its two levels. | `schemas/accents.schema.json` |
 | `resources.jsonc` | What a worker earns at a deposit or a Generator, how many workers each takes, and the worker itself. | `schemas/resources.schema.json` |
 | `lines/<id>.jsonc` | One line of units: its tracks, tier-1 values, attack, counters and chassis. | `schemas/line.schema.json` |
+| `structures/<id>.jsonc` | One structure: its footprint, price, hit points, build time and sight, and what it does. | `schemas/structure.schema.json` |
 | `maps/<id>.jsonc` | One map: terrain, starting positions, deposits and markers. | `schemas/map.schema.json` |
 
-The loader reads exactly these, and the first five are required. Any other file in the folder is an error, so a misnamed file is noticed and not skipped. Files and folders whose names start with a dot are ignored.
+The loader reads exactly these, and the first five are required. It needs at least one line and one map. Structure files are optional: a structure of the roster may have no file yet, and a data folder may have none at all. Any other file in the folder is an error, so a misnamed file is noticed and not skipped. Files and folders whose names start with a dot are ignored.
 
 More kinds of file arrive with the milestones that need them. Adding a kind means adding its reader in `src/Sim/Data/`, its schema in `schemas/`, a row in the table above and tests.
 
@@ -99,8 +100,9 @@ The values the design says to tune first. Each block carries a comment naming it
 | `match.start_epoch`, `epoch_cap` | The tier all tracks start at and the tier none may pass. | 5.2 |
 | `start.workers`, `materials`, `energy` | What every player starts with, besides a Capitol. | 5.2 |
 | `map` | The map rules below. | 5.3, 5.4 |
+| `debug.spawn` | `true` or `false`: whether a match carries out the development spawn, a command that makes units of any chassis from nothing for the player who sends it. It is not in the design. It is on in `game/data/` until units can be trained in a match, and stays on in `tests/golden/data/`, whose replay with a fight needs it. Both players of a match have the same data, so they have the same switch. | |
 
-`map.start_territory` repeats the Capitol's footprint and territory radius, because structures have no data files yet. When the Capitol gets one, the two must agree.
+The footprint and the territory radius of a start are not here: they are the `footprint` and `territory_radius` of `structures/capitol.jsonc`, which every data folder must have. The map checks read them from that file, and a match places that structure, finished, at each player's start.
 
 ## research.jsonc
 
@@ -164,6 +166,8 @@ Game design 4.1. Income is a fixed rate: a worker standing at its place at a dep
 
 One payment is the rate for a minute divided by 60, times the Extraction multiplier (`per_tier.income` in `rules.jsonc`, once per tier above the first), times `depleted_rate` for a deposit that had delivered its `full_rate_amount` before the payment. The product is exact and is rounded once, half up, to a thousandth of a resource, which is what stockpiles count in. At the design's numbers a worker is paid 0.75 Materials or 0.5 Energy a second at tier 1.
 
+A worker is paid only while the conditions of its site hold: a deposit lies whole inside its owner's territory, and a Generator is its owner's and finished. A worker sent to a deposit outside its owner's territory, or to a Generator that is still building itself, stands at its place and is paid nothing; its count of ticks runs on, so its first payment comes at its own next moment after the condition holds.
+
 A deposit has as many places as tiles share a side with it, eight for the 2 by 2 of `map.deposit_size`, and a Generator has the same eight. `workers_per_deposit` and `workers_per_generator` say how many workers may use them, so a number above eight changes nothing for a deposit of that size.
 
 The worker is not a chassis: it has no tiers, no accents and no counters, and its speed and sight never change. Only the speed and the supply are in use so far; hit points, sight, spacing, the price and the training time wait for the milestones that fight, see and train.
@@ -185,6 +189,36 @@ Game design 2.2 and 2.4.
 | `cannot_hit` | Optional. Lines this line cannot attack. A line cannot be here and in `counters`. |
 | `chassis` | The line's model for each epoch, listed by rising epoch, at most one per epoch. Gaps are allowed. Chassis IDs are unique across all lines. |
 | `chassis[].attack` | Optional. Keys of `attack` that this chassis replaces. If it changes `kind`, the line's `range`, `projectile_speed`, `min_range` and `blast_radius` are not carried over. Each chassis states its own override; nothing is inherited from the chassis before it. |
+
+## structures/&lt;id&gt;.jsonc
+
+Game design 2.5. One file for each structure that is built so far: the eight of the first playable. The Airfield and the two strategic structures are in the roster and get their files with the milestones that build them.
+
+| Key | Meaning |
+| --- | --- |
+| `id` | The structure's ID. It must be in `roster.structures`. |
+| `track` | Optional. The track whose tier the structure's look shows. Leave it out for a structure that shows none, such as the Outpost and the Academy. |
+| `unlock_tier` | Optional, needs `track`. The tier of that track the owner needs to place the structure, from 2. Without it the structure is there from the start, as all eight are. |
+| `footprint` | The side of the square of tiles it stands on, 1 to 8. |
+| `hp` | Hit points at Protection tier 1. Each Protection tier of the owner multiplies them by `per_tier.hp`. |
+| `cost.materials`, `energy` | The price, in whole resources. For the wall, of one tile. |
+| `build_seconds` | The time the structure builds itself in once its foundation is laid. No track changes it. |
+| `sight` | Sight in tiles when finished, measured from the center. No track changes it. |
+| `territory_radius` | Optional. The radius in tiles of the territory it gives when finished. |
+| `research_slots` | Optional. Research slots it gives when finished. |
+| `max_per_player` | Optional. The most a player may have, counting those under way. |
+| `trains` | Optional. What it trains, in the order it is offered: `worker`, or a line ID from `roster.lines`. |
+| `work_site` | Optional. `energy` makes it a place where workers earn Energy. How many it holds and what each earns are in `resources.jsonc`. |
+| `attack` | Optional. `dps` at Firepower tier 1, `interval_seconds`, `range` and `projectile_speed`. The attack is always ranged. Each Firepower tier of the owner multiplies the damage by `per_tier.damage`. Range is measured from the nearest edge of the footprint. |
+| `attack.cannot_hit` | Optional. Lines the attack cannot hit. |
+| `attack.can_hit_all_from_protection` | Optional, needs `cannot_hit`. The owner's Protection tier from which `cannot_hit` no longer applies. |
+| `wall.gate` | Makes the structure the wall, which is laid tile by tile and needs a `footprint` of 1. The gate is a wall tile with a `cost` and `build_seconds` of its own; it has the wall's hit points and sight. |
+
+A line's file names the structure that trains it in `built_at`, and that structure's file lists the line in `trains`. Where both files exist the two must say the same. A structure may list a line that has no file yet, as the Works lists `support`.
+
+`worker` is a reserved word in `trains`, because the worker is not a line; its price and training time are in `resources.jsonc`.
+
+The files are read and checked, and each player has a blueprint for every structure. Nothing in a match places a structure yet.
 
 ## maps/&lt;id&gt;.jsonc
 
@@ -210,15 +244,16 @@ Besides the shape of each file:
 
 | Check | Rule |
 | --- | --- |
-| References | A line's `id`, `primary`, `secondary`, `built_at`, `counters` and `cannot_hit` must name a track in `tracks.jsonc` or an ID in the roster. |
+| References | A line's `id`, `primary`, `secondary`, `built_at`, `counters` and `cannot_hit` must name a track in `tracks.jsonc` or an ID in the roster. So must a structure's `id`, `track`, `trains` and `attack.cannot_hit`. |
+| Structures | `trains` and the lines' `built_at` agree. `structures/capitol.jsonc` exists and has a `territory_radius`: it is what the map checks and the start of a match use. A wall has a footprint of 1. An unlock tier, or the tier from which an attack hits every line, is a tier a track can reach above the first. |
 | Tiers | Counts of tracks and tiers in `rules.jsonc` must fit `tracks.jsonc`; `epoch_cap` is not below `start_epoch`; every track names one tier per epoch. |
 | Tracks | The six tracks the rules name are all defined. |
 | Research | `research.jsonc` has exactly one entry for each tier from 2 to the last, in order. |
 | Accents | Every accent belongs to a track in `tracks.jsonc`. No kind of perk appears twice. |
 | Chassis | An epoch outside the tiers could never unlock and is an error. Epochs rise and do not repeat. IDs are unique. |
-| Times | Attack intervals, build times, research times and perk delays are whole numbers of ticks. |
+| Times | Attack intervals, build times of units, structures and gates, research times and perk delays are whole numbers of ticks. |
 | Income | A worker's payment for one second can be computed exactly at every Extraction tier and never rounds to nothing, at the whole rate and at the depleted one. |
-| Formulas | Every stat and price of every chassis can be computed exactly at every tier mix. The game multiplies exact fractions, and a multiplier with many decimal places raised to a high power no longer fits. `1.15` is fine at any tier; `1.123456789` is not. The error names the chassis. |
+| Formulas | Every stat and price of every chassis can be computed exactly at every tier mix. The game multiplies exact fractions, and a multiplier with many decimal places raised to a high power no longer fits. `1.15` is fine at any tier; `1.123456789` is not. The error names the chassis. The same holds for a structure's hit points at every Protection tier and its damage at every Firepower tier. |
 | Stat bounds | Hit points, damage, speed, sight, supply, spacing, prices, ranges and multipliers must be positive where zero makes no sense and inside wide sanity limits, listed in `src/Sim/Data/DataRules.cs`. The limits catch slips such as a missing decimal point; they are not balance rules. |
 | Map symmetry | Terrain, starts, deposits and markers must all mirror under the map's `symmetry`. |
 | Map footprints | Starting Capitols, deposits and markers stand on open ground inside the map. Deposits overlap neither each other nor a Capitol. |
@@ -239,7 +274,7 @@ The hash is the SHA-256, written as 64 lowercase hex digits, of a canonical text
 1. The line `content-hash-v1`, ended by a line feed.
 2. For each file, in ordinal order of its path: the path with `/` separators, a line feed, the file's canonical JSON and a line feed.
 
-Canonical JSON has no spaces or line breaks. Object keys are in ordinal order (by UTF-16 code unit) and the top-level `$schema` key is left out. Strings escape only `"` and `\` with a backslash and characters below U+0020 as `\u00xx` in lowercase hex; everything else is written as it is. Whole numbers are written in decimal without a sign unless negative.
+Canonical JSON has no spaces or line breaks. Object keys are in ordinal order (by UTF-16 code unit) and the top-level `$schema` key is left out. Strings escape only `"` and `\` with a backslash and characters below U+0020 as `\u00xx` in lowercase hex; everything else is written as it is. Whole numbers are written in decimal without a sign unless negative, and `true` and `false` as they are.
 
 A change to this form changes every hash, so it needs a new version line.
 
@@ -248,6 +283,7 @@ A change to this form changes every hash, so it needs a new version line.
 - The loader is `Sim.Data.DataLoader.Load(IDataFiles)`. It returns `GameData`, or the list of errors. `IDataFiles` is the only way it reaches files: the tools read from disk (`Tools.DiskDataFiles`), tests read from memory (`Sim.Data.InMemoryDataFiles`) and the game will read from its packed export.
 - Numbers arrive as `DataNumber`, an integer and a count of decimal places. Converting them to the simulation's fixed-point and fraction types belongs to the code that uses them.
 - The rules that use the data are in `Sim.Tech`. `TechResolver.Resolve(data, tiers)` is a pure function from a player's track tiers to a `PlayerTech`: their epoch, supply cap, income multiplier, the price of each track's next tier and a `ChassisBlueprint` for every chassis. `TechRules` has the rules that need no chassis, each by itself.
+- `PlayerTech.Structures` has a `StructureBlueprint` for every structure with a file, in the order of `GameData.Structures`: its hit points in thousandths at the player's Protection tier and, for one that attacks, its damage at the player's Firepower tier and the lines it cannot hit. A structure has no epoch, so the player's actual tiers count, with no window. `GameData.StructureOf` and `PlayerTech.StructureOf` find a structure by its roster index, and return nothing for one that has no file.
 - A `ChassisBlueprint` has the chassis's stats, price, accents and perks, each value rounded once. It is computed for locked chassis too; `Unlocked` says whether the player may build it. `Perks` holds only the perks that apply to the chassis, as typed records with the numbers from `accents.jsonc`.
 - `TechResolver.Preview(data, tiers, track)` resolves the tiers with one track raised and lists the chassis that would unlock and every accent that would appear, disappear or change level.
 - The economy is in `Sim.Economy`. `GameData.Resources` holds `resources.jsonc`, and `IncomeRules.Payment` is the one place a payment is worked out.
