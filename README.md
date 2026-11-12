@@ -104,6 +104,9 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | Clear the selection | Left click on the ground |
 | Send the selected workers to work at a deposit | Right click on the deposit |
 | Send the selected units somewhere | Right click on the ground |
+| Open or close the research panel | R, or the Research button in the top bar. Escape closes it too |
+| Start a research | In the research panel, left click on a bright cell |
+| Cancel a research | In the research panel, the Cancel button beside its progress bar |
 | Show or hide the overlay | F3 |
 
 ## Test builds
