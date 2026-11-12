@@ -202,12 +202,56 @@ public class MeleePlacesTests
         {
             match.Simulation.Tick();
             watch.AssertNoPairCameTooClose();
+            AssertEveryPlaceIsByWhereTheTargetStands(match, units, target);
         }
 
         Assert.Equal(MoveState.Idle, match.Movers.Get(target).State);
         Assert.All(units, unit => Assert.True(IsFighting(match, unit)));
         Assert.All(units, unit => Assert.True(match.UnitOf(unit).HasPlace));
         match.AssertKeepTheirSpacing(units);
+    }
+
+    /// <summary>
+    /// A unit on its way to its place gives it up in the tick the target moves, and does not
+    /// walk on to where the place was.
+    /// </summary>
+    [Fact]
+    public void AUnitOnItsWayToItsPlaceGivesItUpWhenTheTargetMoves()
+    {
+        var (match, units, target) = Siege(Hoplite, Worker, 7, sides: 1, attackOrder: true);
+        var walking = 0;
+        for (var tick = 0; tick < 400 && walking < 3; tick++)
+        {
+            match.Simulation.Tick();
+            walking = units.Count(unit => match.UnitOf(unit).HasPlace && match.PositionOf(unit) != match.UnitOf(unit).Place);
+        }
+
+        Assert.InRange(walking, 3, 7);
+        match.OrderMove(1, Point("36", "15.5"), target);
+        var moved = 0;
+        for (var tick = 0; tick < 60; tick++)
+        {
+            var before = match.PositionOf(target);
+            match.Simulation.Tick();
+            moved += match.PositionOf(target) != before ? 1 : 0;
+            AssertEveryPlaceIsByWhereTheTargetStands(match, units, target);
+        }
+
+        Assert.InRange(moved, 10, 60);
+    }
+
+    /// <summary>A place is by one target. When the target is gone, so is the place.</summary>
+    [Fact]
+    public void WhenTheTargetIsGoneSoAreThePlaces()
+    {
+        var (match, units, target) = Siege(Hoplite, Worker, 4, sides: 1, attackOrder: true);
+        match.Run(300);
+        Assert.All(units, unit => Assert.Equal(target, match.UnitOf(unit).PlaceFor));
+
+        match.World.Entities.Destroy(target);
+        match.Run(2);
+        Assert.All(units, unit => Assert.Equal(EntityId.None, match.UnitOf(unit).PlaceFor));
+        Assert.All(units, unit => Assert.False(match.UnitOf(unit).HasPlace));
     }
 
     /// <summary>
@@ -464,6 +508,92 @@ public class MeleePlacesTests
         match.World.Entities.Destroy(bystander);
     }
 
+    /// <summary>
+    /// A unit that enemy units have stopped on its way looks only for a place it can walk
+    /// straight to: not one on the far side of the target, which it would have to walk through,
+    /// and not one that another enemy stands in front of.
+    /// </summary>
+    [Fact]
+    public void AUnitThatEnemiesHaveStoppedTakesOnlyAPlaceItCanWalkStraightTo()
+    {
+        // Five units have the places on the near side. What is left is behind the target.
+        var (match, units, target) = Siege(Hoplite, Worker, 5, sides: 1, attackOrder: true);
+        match.Run(300);
+        Assert.All(units, unit => Assert.True(match.UnitOf(unit).HasPlace));
+        var late = match.Spawn(0, Hoplite, "19", "15.6");
+        match.RefreshDerivedState();
+        var places = PlacesOf(match);
+        var at = match.PositionOf(target);
+        var hard = SpacingRule.Between(match.Movers.Get(late), match.Movers.Get(target));
+
+        Assert.True(Find(match, places, late, target, direct: false, out var behind, out _));
+        Assert.False(SpacingRule.AllowsStep(match.PositionOf(late), behind, at, hard));
+        if (Find(match, places, late, target, direct: true, out var straight, out _))
+        {
+            Assert.True(SpacingRule.AllowsStep(match.PositionOf(late), straight, at, hard));
+        }
+
+        // One unit has a place, and the seeker's is beside it. An enemy that stands on the way
+        // there, further from the place than their spacing, is in the way of a straight walk only.
+        var (open, some, worker) = Siege(Hoplite, Worker, 1, sides: 1, attackOrder: true);
+        open.Run(300);
+        Assert.True(open.UnitOf(some[0]).HasPlace);
+        var seeker = open.Spawn(0, Hoplite, "21", "11");
+        open.RefreshDerivedState();
+        Assert.True(Find(open, PlacesOf(open), seeker, worker, direct: true, out var place, out _));
+        var from = open.PositionOf(seeker);
+        var way = place - from;
+        var length = Distance(place, from);
+        var onTheWay = new FixedVector2(
+            Fixed.FromRaw((int)(place.X.Raw - (way.X.Raw * (Fixed.RawOne * 5L / 4) / length))),
+            Fixed.FromRaw((int)(place.Y.Raw - (way.Y.Raw * (Fixed.RawOne * 5L / 4) / length))));
+        var enemy = open.SpawnChassis(1, Chassis(Hoplite), onTheWay);
+        open.RefreshDerivedState();
+        Assert.InRange(length, Fixed.RawOne * 5L / 2, long.MaxValue);
+        Assert.False(SpacingRule.AllowsStep(from, place, open.PositionOf(enemy), Fixed.One));
+
+        Assert.True(Find(open, PlacesOf(open), seeker, worker, direct: false, out var anyway, out _));
+        Assert.Equal(place, anyway);
+        if (Find(open, PlacesOf(open), seeker, worker, direct: true, out var other, out _))
+        {
+            Assert.NotEqual(place, other);
+            Assert.True(SpacingRule.AllowsStep(from, other, open.PositionOf(enemy), Fixed.One));
+        }
+    }
+
+    /// <summary>
+    /// A unit in reach takes where it stands as its place only when that is no closer than
+    /// their spacing to a place a unit of its side has, the place of one still on its way too.
+    /// </summary>
+    [Fact]
+    public void WhereAUnitStandsIsItsPlaceOnlyWhenNoPlaceOfItsSideIsTooClose()
+    {
+        var match = Create(TestMaps.Open(40, 20));
+        var stands = match.Spawn(0, Hoplite, "18.8", "10");
+        var walker = match.Spawn(0, Hoplite, "17.5", "8.5");
+        var worker = match.SpawnWorker(1, "20", "10");
+        match.RefreshDerivedState();
+        var places = PlacesOf(match);
+        var attack = match.Combat.ProfileOf(0, Chassis(Hoplite));
+        Assert.True(places.IsFreeWhereItStands(stands, match.Bodies.Get(stands), attack, worker, match.PositionOf(worker)));
+
+        ref var walking = ref match.Combatants.Get(walker);
+        walking.Target = worker;
+        walking.PlaceFor = worker;
+        walking.Place = Point("18.9", "10.7");
+        Assert.False(places.IsFreeWhereItStands(stands, match.Bodies.Get(stands), attack, worker, match.PositionOf(worker)));
+
+        walking.Place = Point("19", "11");
+        Assert.True(places.IsFreeWhereItStands(stands, match.Bodies.Get(stands), attack, worker, match.PositionOf(worker)));
+
+        // A unit on its way that is further from the target than the search looks is missed. The
+        // unit that finds its place taken when it gets there looks again.
+        walking.Place = Point("18.9", "10.7");
+        match.Bodies.Get(walker).Position = Point("14", "4");
+        match.RefreshDerivedState();
+        Assert.True(places.IsFreeWhereItStands(stands, match.Bodies.Get(stands), attack, worker, match.PositionOf(worker)));
+    }
+
     /// <summary>Seven places round an infantry target and no eighth, whoever asks and from wherever.</summary>
     [Fact]
     public void WhenEveryPlaceIsTakenThereIsNone()
@@ -620,6 +750,17 @@ public class MeleePlacesTests
         }
 
         return (match, units, target);
+    }
+
+    /// <summary>A unit has a place only by where its target stands now, never by where it stood.</summary>
+    private static void AssertEveryPlaceIsByWhereTheTargetStands(Match match, EntityId[] units, EntityId target)
+    {
+        var at = match.PositionOf(target);
+        Assert.All(units, unit =>
+        {
+            var combatant = match.UnitOf(unit);
+            Assert.True(!combatant.HasPlace || combatant.AimedAt == at, $"Tick {match.World.Tick}: {unit} has a place by where the target stood.");
+        });
     }
 
     private static MeleePlaces PlacesOf(Match match)
