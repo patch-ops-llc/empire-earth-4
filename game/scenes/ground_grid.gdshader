@@ -33,13 +33,29 @@ float grid_coverage(vec2 position, float spacing, float width) {
 	return max(covered.x, covered.y) * fade;
 }
 
+// The fog's color, and the share of it that lies on a point of the ground. The share is taken
+// as the mean round the point, half a tile out, so that the edge of what a unit sees is a
+// soft curve and not the steps of the tiles.
+vec4 fog_color(vec2 position) {
+	return texture(fog, position / map_size);
+}
+
+float fog_share(vec2 position) {
+	const float reach = 0.5;
+	float share = texture(fog, position / map_size).a * 2.0;
+	share += texture(fog, (position + vec2(reach, 0.0)) / map_size).a;
+	share += texture(fog, (position - vec2(reach, 0.0)) / map_size).a;
+	share += texture(fog, (position + vec2(0.0, reach)) / map_size).a;
+	share += texture(fog, (position - vec2(0.0, reach)) / map_size).a;
+	return share / 6.0;
+}
+
 void fragment() {
 	float minor = grid_coverage(tile_position, 1.0, minor_line_width);
 	float major = grid_coverage(tile_position, major_every, major_line_width);
 	vec3 color = mix(ground_color, minor_line_color, minor);
 	color = mix(color, major_line_color, major);
-	vec4 shade = texture(fog, tile_position / map_size);
-	ALBEDO = mix(color, shade.rgb, shade.a);
+	ALBEDO = mix(color, fog_color(tile_position).rgb, fog_share(tile_position));
 	ROUGHNESS = 1.0;
 	SPECULAR = 0.0;
 }

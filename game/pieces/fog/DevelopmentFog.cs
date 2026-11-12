@@ -4,7 +4,7 @@ namespace Game;
 
 /// <summary>
 /// A development aid, not part of the game: a switch that lifts the fog of war from the screen,
-/// by a key and by a tick box in a panel marked as an aid. A tester who plays alone makes units
+/// by a key and by a button in a panel marked as an aid. A tester who plays alone makes units
 /// for the other seat and has to see them, and with the fog they are out of sight.
 /// </summary>
 /// <remarks>
@@ -24,7 +24,8 @@ public partial class DevelopmentFog : InterfacePart
     /// <summary>Turns the fog off and on again, alone. Named in the input map of project.godot.</summary>
     public static readonly StringName ToggleAction = "fog_dev_toggle";
 
-    private CheckBox? _box;
+    private Button? _button;
+    private Label? _state;
 
     /// <summary>True when the switch is offered in this match: one played alone.</summary>
     public bool IsOffered => View.Run is LocalRun;
@@ -59,7 +60,7 @@ public partial class DevelopmentFog : InterfacePart
         }
 
         View.Sight.FogOff = fogOff;
-        _box?.SetPressedNoSignal(fogOff);
+        ShowState();
         Frame.Say(fogOff
             ? "Development: the fog is off on this screen. The units still see only what they see."
             : "Development: the fog is on again.");
@@ -87,13 +88,29 @@ public partial class DevelopmentFog : InterfacePart
             return;
         }
 
-        column.AddChild(Small("Not part of the game. Shows the whole map and every\nunit on this screen. The units still see only\nwhat they see, and attack only that."));
+        column.AddChild(Small("Not part of the game. Shows the whole map and\nevery unit on this screen. The units still see\nonly what they see, and attack only that."));
 
-        // It never takes the keyboard, so that the keys keep moving the camera after a click on it.
-        _box = new CheckBox { Text = $"Fog off ({KeyOf(ToggleAction)})", FocusMode = Control.FocusModeEnum.None };
-        _box.AddThemeFontSizeOverride("font_size", 13);
-        _box.Toggled += Set;
-        column.AddChild(_box);
+        _state = Small(string.Empty);
+        column.AddChild(_state);
+        _button = UiStyle.FrameButton(string.Empty);
+        _button.AddThemeFontSizeOverride("font_size", 13);
+        _button.Pressed += () => Set(!View.Sight.FogOff);
+        column.AddChild(_button);
+        ShowState();
+    }
+
+    private void ShowState()
+    {
+        if (_button is null || _state is null)
+        {
+            return;
+        }
+
+        var off = View.Sight.FogOff;
+        var key = KeyOf(ToggleAction);
+        _state.Text = off ? "The fog is OFF on this screen." : "The fog is on, as in the game.";
+        _state.AddThemeColorOverride("font_color", off ? UiStyle.Warning : Colors.White);
+        _button.Text = off ? $"Lay the fog back ({key})" : $"Lift the fog ({key})";
     }
 
     private static Label Small(string text)
