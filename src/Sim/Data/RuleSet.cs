@@ -18,7 +18,9 @@ public sealed record RuleSet(
     int WallCrossingCost,
     MatchRules Match,
     StartRules Start,
-    MapRules Map);
+    MapRules Map,
+    DebugRules Debug,
+    VisionRules Vision);
 
 /// <summary>Design 1.4: the epoch is the tier that <see cref="TracksNeeded"/> tracks have reached.</summary>
 public sealed record EpochRules(int TracksNeeded, int Reach);
@@ -42,6 +44,23 @@ public sealed record MatchRules(int StartEpoch, int EpochCap);
 
 /// <summary>Design 5.2: what every player starts with, besides a Capitol.</summary>
 public sealed record StartRules(int Workers, int Materials, int Energy);
+
+/// <summary>
+/// Switches for development, which the design does not have. Both players of a match have the
+/// same data, so they have the same switches, and a switch is part of the content hash.
+/// </summary>
+/// <param name="Spawn">
+/// Whether a match carries out <see cref="Core.CommandType.DebugSpawn"/>, which makes units from
+/// nothing. With it off the command is dropped like any command without a handler.
+/// </param>
+public sealed record DebugRules(bool Spawn);
+
+/// <summary>Design 5.3: the fog of war.</summary>
+/// <param name="RefreshTicks">
+/// What each player sees is worked out again in every tick whose number is a multiple of this, so
+/// it may be up to one tick less than this old.
+/// </param>
+public sealed record VisionRules(int RefreshTicks);
 
 /// <summary>Design 5.3 and 5.4: what every map must satisfy.</summary>
 public sealed record MapRules(

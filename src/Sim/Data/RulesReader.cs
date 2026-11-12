@@ -77,6 +77,14 @@ internal static class RulesReader
 
         var mapRules = ReadMapRules(file.Required("map"));
 
+        var vision = file.Required("vision").Object();
+        var visionRules = new VisionRules(vision.Required("refresh_ticks").Integer(1, 1_000));
+        vision.End();
+
+        var debug = file.Required("debug").Object();
+        var debugRules = new DebugRules(debug.Required("spawn").Boolean());
+        debug.End();
+
         file.End();
         return new RuleSet(
             lines,
@@ -91,7 +99,9 @@ internal static class RulesReader
             wallCrossingCost,
             new MatchRules(startEpoch, epochCap),
             startRules,
-            mapRules);
+            mapRules,
+            debugRules,
+            visionRules);
     }
 
     private static List<string> ReadRoster(JsonValue value, string what)

@@ -34,7 +34,9 @@ godot --headless --path game --import --build-solutions
 godot --headless --path game --quit-after 600 -- --smoke-test
 ```
 
-The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, gives it a fixed script of four move orders through the session, runs it for 600 ticks, prints one line that starts with `SMOKE_TEST_OK` and quits. It takes about a second. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, gives it a fixed script of orders through the session, runs it to the script's end, prints one line that starts with `SMOKE_TEST_OK` and quits. It takes about a second. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+
+The script is made of parts that run one after another, one for each kind of order the view can give: `game/scripts/SmokeTest.cs` lists them, and the line's `tick` and `orders` say how many ticks and orders they came to.
 
 The line carries two hashes. `content_hash` is the hash of the data files as the game read them, and it must equal the one `datacheck` prints. `state_hash` is the hash of the match's state after the script, and it must be the same on every system. `ci.yml` checks the first. `export.yml` checks both for every build it makes, and an exported build takes the same argument:
 
@@ -85,10 +87,12 @@ What the player sees and does in a match is put together from pieces, each in a 
 
 | What | Where | A piece adds |
 | --- | --- | --- |
-| The world view | `game/scripts/WorldView.cs` | A `WorldLayer` for each kind of thing it draws. The world view draws the units and calls every layer after every tick and in every frame. |
+| The world view | `game/scripts/WorldView.cs` | A `WorldLayer` for each kind of thing it draws. The world view draws the units the local player sees and the fog of war, and calls every layer after every tick and in every frame. |
 | The frame of the interface | `game/ui/InterfaceFrame.cs` | An `InterfacePart` that puts controls into the top bar or the bottom panel, a full-screen panel, a command for the selection, or a sentence in the message line. |
 | What is under the pointer | `game/ui/UnderPointer.cs` | A `PointerPicker` for each kind of thing that can be pointed at. The answer is one of: a unit of the player's, an enemy unit, a deposit, a structure, the ground. |
 | The order table | `game/ui/OrderTable.cs` | An `OrderRow`: for a kind of target, and a modifier or none, the command the selection is given. |
+
+The player is shown their own picture of the match, the fog of war (design 5.3). `MatchView.Sight` (`game/scripts/PlayerSight.cs`) answers what that is, from the simulation's `PlayerView`: a piece draws another player's unit, shot or event only when the sight says so. What follows the units the world view draws needs no test of its own, since those are the units the player sees. The fog itself is one picture of the map (`game/scripts/FogPicture.cs`), which the ground, the forest and the cliffs, and the minimap are shaded with; a piece that draws something on the ground that the fog should dim, as a deposit or a structure, shades it with the same picture.
 
 Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own that runs after the parts before it. The smoke test shows its match through every piece, and it fails on the first error the engine logs while it runs: a piece that throws, when it is added or later, fails it. Warnings do not. Three files are shared by all pieces: `ViewPieces.cs`, the list of parts in `game/scripts/SmokeTest.cs`, and the input map in `game/project.godot`. In each, every piece of the plan has a comment line, and a piece adds its lines directly under its own. Pieces built at the same time then never add at the same place, and their pull requests merge in either order.
 
@@ -96,12 +100,19 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | --- | --- |
 | Pan | W A S D or the arrow keys, or move the pointer to a window edge |
 | Zoom | Mouse wheel, `=` and `-`, or a trackpad pinch or two-finger scroll |
+| Look somewhere else on the map | Left click on the minimap, or hold the button on it and drag |
+| Send the selected units somewhere on the minimap | Right click on the minimap |
 | Select a unit of your own | Left click on it |
 | Select several | Drag a box round them with the left button |
 | Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is in |
 | Clear the selection | Left click on the ground |
 | Send the selected units somewhere | Right click on the ground |
 | Show or hide the overlay | F3 |
+| Attack a unit of the other player | Right click on it |
+| Go somewhere and fight what is met on the way | Hold Ctrl and right click on the place |
+| Stop | X, or the Stop button in the selection panel |
+| Development aid, while `debug.spawn` is on in `rules.jsonc`: make units at the pointer | G for your own. Alone, H for the other player's. The orange panel at the left edge chooses which and how many |
+| Development aid, alone and while `debug.spawn` is on: lift the fog of war from the screen, and lay it back | F, or the button in the orange panel under the first. Only the screen changes: the simulation has no such switch |
 
 ## Test builds
 
@@ -121,7 +132,7 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 
 | Path | Contents |
 | --- | --- |
-| `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) `Serialization/` (the byte format, the encoding of a command, and snapshots) and `Economy/` (stockpiles, territories, deposits and Generators, workers and their places, income and supply). |
+| `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) `Serialization/` (the byte format, the encoding of a command, and snapshots), `Economy/` (stockpiles, territories, deposits and Generators, workers and their places, income and supply), `Combat/` (hit points, attacks, shots, target picking, the four orders and death) and `Vision/` (the fog of war: what each player has explored and sees, and `PlayerView`, through which the view asks what one player may know). |
 | `src/Net/` | The lockstep network session. A plain .NET library that references only `Sim`: `Protocol/` (the messages and their bytes), `Session/` (the host, the client, and the two in one process for single-player), `Transport/` (the connection interface, and the loopback used by single-player and tests), `Lobby/` (a hosted match and a joining player: the description of the match, the version and data check, the draw of starts) and `Files/` (the replay a session writes while it runs). |
 | `src/Net.Udp/` | The real network under the session: a connection over UDP, a listener for the host and a connector for a client. A plain .NET library that references `Net` and the LiteNetLib package. Sockets, the package and the thread that keeps connections alive live here and nowhere else. |
 | `src/Tools/` | The console tools, as one program: `dotnet run --project src/Tools -- <tool> [arguments]`. Each tool is a folder. So far: `datacheck` checks a data folder, `balance-report` prints what the tech rules make of tier mixes, `replay` runs recorded matches again and checks their state hashes, and `desync-diff` takes the replays and snapshots two players wrote when their match came apart and names the tick and the values that differ. |

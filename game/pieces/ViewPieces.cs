@@ -21,6 +21,7 @@ public static class ViewPieces
         new UnitsPiece(),
 
         // 11v. Combat: health bars, shots and hits, the fighting orders.
+        new CombatPiece(),
 
         // 13v. Economy: resources and supply, deposits, the work order.
 
@@ -29,6 +30,10 @@ public static class ViewPieces
         // 15v. Construction and production: structures, the build menu, the production panel.
 
         // 17v. Fog of war.
+        new FogPiece(),
+
+        // 24v. Minimap.
+        new MinimapPiece(),
 
         // Later pieces.
     ];
