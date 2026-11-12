@@ -56,6 +56,12 @@ namespace Sim.Combat;
 /// then goes on to where its order ends. A unit on an attack order follows its target anywhere,
 /// and is idle where it stands once the target is destroyed.
 /// </para>
+/// <para>
+/// <b>Fog.</b> A unit fights only what its owner sees (design 5.3). A target that an idle unit or a
+/// unit on an attack-move picked is given up in the tick its owner stops seeing it, like one out
+/// of range. A unit on an attack order then walks to where the target was last seen and is idle
+/// there. A shot already in the air still lands.
+/// </para>
 /// </remarks>
 public sealed class AttackSystem : ISystem
 {
@@ -149,8 +155,16 @@ public sealed class AttackSystem : ISystem
                 return false;
 
             case UnitOrder.Attack:
-                if (!_targeting.IsEnemy(turn.World, owner, unit.Target, out var named))
+                if (!_targeting.IsEnemyThere(turn.World, owner, unit.Target, out var named))
                 {
+                    // A structure its owner remembers and has not seen gone: the owner cannot
+                    // know, so the unit goes on to where the structure stood (design 5.3).
+                    if (_targeting.IsRememberedGone(turn.World, owner, unit.Target, out _))
+                    {
+                        GoWhereLastSeen(ref unit, in turn);
+                        return false;
+                    }
+
                     if (turn.Mover >= 0)
                     {
                         _movers.ValueAt(turn.Mover).Stop();
@@ -160,6 +174,16 @@ public sealed class AttackSystem : ISystem
                     return false;
                 }
 
+                // Losing sight ends the order for a unit, which may have walked on. A structure
+                // stands where it was seen, so the order on one holds while it is out of sight.
+                if (!_targeting.IsStructure(unit.Target) && !_targeting.Sees(owner, unit.Target, in named))
+                {
+                    GoWhereLastSeen(ref unit, in turn);
+                    return false;
+                }
+
+                // While its owner sees the target, the unit notes where: the point the order is tied to.
+                unit.Anchor = named.Position;
                 return Fight(ref unit, in turn, in named, retargeted: false);
         }
 
@@ -289,6 +313,34 @@ public sealed class AttackSystem : ISystem
         else
         {
             _approach.WalkTo(ref mover, turn.Body.Position, unit.Anchor);
+        }
+    }
+
+    /// <summary>
+    /// Ends an attack order whose target its owner no longer sees (design 5.3): the unit walks to
+    /// where the target was last seen and is idle there. The same for a remembered structure that
+    /// is gone without its owner's enemy having seen it go.
+    /// </summary>
+    /// <remarks>
+    /// The walk is a move order, so the unit does not fight on the way, and does not take the
+    /// attack up again should the target come back into sight. Once idle it picks for itself.
+    /// </remarks>
+    private void GoWhereLastSeen(ref Combatant unit, in Turn turn)
+    {
+        var position = turn.Body.Position;
+        var lastSeen = unit.Anchor;
+        BecomeIdle(ref unit, position);
+        if (turn.Mover < 0 || lastSeen == position)
+        {
+            return;
+        }
+
+        ref var mover = ref _movers.ValueAt(turn.Mover);
+        _approach.WalkTo(ref mover, position, lastSeen);
+        if (mover.State != MoveState.Idle)
+        {
+            unit.Order = UnitOrder.Move;
+            unit.Anchor = mover.Destination;
         }
     }
 

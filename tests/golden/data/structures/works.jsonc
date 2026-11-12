@@ -1,0 +1,16 @@
+// Works: trains the vehicle lines (game design 2.5).
+{
+  "$schema": "../../../../schemas/structure.schema.json",
+  "id": "works",
+
+  "track": "mobility",
+
+  "footprint": 3,
+  "hp": 1000,
+  "cost": { "materials": 200, "energy": 50 },
+  "build_seconds": 45,
+  "sight": 6,
+
+  // In the order they are offered. Each line's file names this structure in "built_at".
+  "trains": ["cavalry_armor", "artillery", "support"]
+}

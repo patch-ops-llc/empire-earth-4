@@ -3,6 +3,7 @@ using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
 using Sim.Structures;
+using Sim.Vision;
 
 namespace Sim.Combat;
 
@@ -31,6 +32,7 @@ public sealed class Targeting
     private readonly ComponentStore<Health> _health;
     private readonly SpatialIndex _spatialIndex;
     private readonly CombatRules _rules;
+    private readonly MatchVision _vision;
 
     // Scratch for one search, emptied at its start. Not state.
     private readonly List<EntityId> _found = [];
@@ -41,7 +43,8 @@ public sealed class Targeting
         ComponentStore<Combatant> combatants,
         ComponentStore<Health> health,
         SpatialIndex spatialIndex,
-        CombatRules rules)
+        CombatRules rules,
+        MatchVision vision)
     {
         ArgumentNullException.ThrowIfNull(grid);
         ArgumentNullException.ThrowIfNull(bodies);
@@ -49,12 +52,14 @@ public sealed class Targeting
         ArgumentNullException.ThrowIfNull(health);
         ArgumentNullException.ThrowIfNull(spatialIndex);
         ArgumentNullException.ThrowIfNull(rules);
+        ArgumentNullException.ThrowIfNull(vision);
         _grid = grid;
         _bodies = bodies;
         _combatants = combatants;
         _health = health;
         _spatialIndex = spatialIndex;
         _rules = rules;
+        _vision = vision;
     }
 
     public CombatRules Rules => _rules;
@@ -66,14 +71,24 @@ public sealed class Targeting
     public ComponentStore<PlacedStructure>? Structures { get; init; }
 
     /// <summary>
-    /// True when the entity can be attacked by a player: it is alive, on the map, has hit points, and
-    /// belongs to someone else. There is no friendly fire. A unit and a structure both can.
+    /// True when the entity can be attacked by a player: it is alive, on the map, has hit points,
+    /// belongs to someone else, and the player sees it (design 5.3). There is no friendly fire. A
+    /// unit and a structure both can; a structure is seen by any tile of its footprint.
     /// </summary>
     /// <remarks>
-    /// Fog of war adds its test here and in <see cref="Pick"/>: until it exists, a player sees
-    /// every enemy.
+    /// Units and Towers pick only targets their owner sees. <see cref="Pick"/> and
+    /// <see cref="PickForTurret"/> ask here, so both follow. What an attack order may name is
+    /// <see cref="IsKnownEnemy"/>.
     /// </remarks>
-    public bool IsEnemy(World world, int player, EntityId entity, out Body body)
+    public bool IsEnemy(World world, int player, EntityId entity, out Body body) =>
+        IsEnemyThere(world, player, entity, out body) && Sees(player, entity, in body);
+
+    /// <summary>
+    /// <see cref="IsEnemy"/> without the fog: true also for an enemy the player does not see. Only
+    /// for telling a target that is lost from sight from one that is gone, which end an attack
+    /// order differently.
+    /// </summary>
+    public bool IsEnemyThere(World world, int player, EntityId entity, out Body body)
     {
         ArgumentNullException.ThrowIfNull(world);
         body = default;
@@ -82,6 +97,44 @@ public sealed class Targeting
             && body.Owner != player
             && _health.Contains(entity);
     }
+
+    /// <summary>
+    /// True when an attack order of a player may name the entity (design 5.3): an enemy unit the
+    /// player sees, or an enemy structure it sees or remembers.
+    /// </summary>
+    public bool IsKnownEnemy(World world, int player, EntityId entity, out Body body) =>
+        IsEnemyThere(world, player, entity, out body)
+        && (IsStructure(entity) ? _vision.KnowsStructure(player, entity) : _vision.Sees(player, in body));
+
+    /// <summary>
+    /// True when the entity is gone and was a structure of another player that the player
+    /// remembers and has not seen gone (design 5.3). The player cannot know it is gone, so its
+    /// orders treat it as standing. <paramref name="tiles"/> is where it is remembered.
+    /// </summary>
+    public bool IsRememberedGone(World world, int player, EntityId entity, out TileSquare tiles)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        tiles = default;
+        if (world.Entities.IsAlive(entity) || !_vision.Remembers(player, entity, out var seen))
+        {
+            return false;
+        }
+
+        tiles = seen.Tiles;
+        return true;
+    }
+
+    /// <summary>
+    /// True when a player sees the entity whose body this is: its own always, an enemy unit on a
+    /// tile the player sees, an enemy structure while any tile of its footprint is seen.
+    /// </summary>
+    public bool Sees(int player, EntityId entity, in Body body) =>
+        Structures is { } structures && structures.TryGet(entity, out var structure)
+            ? _vision.SeesStructure(player, body.Owner, structure.Tiles)
+            : _vision.Sees(player, in body);
+
+    /// <summary>True when the entity is a structure.</summary>
+    public bool IsStructure(EntityId entity) => Structures is { } structures && structures.Contains(entity);
 
     /// <summary>The roster index of an entity's line, or <see cref="CombatRules.NoLine"/> when it is not a unit of a chassis.</summary>
     public int LineOf(EntityId entity) =>
