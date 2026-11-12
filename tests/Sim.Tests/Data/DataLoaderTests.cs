@@ -46,7 +46,7 @@ public class DataLoaderTests
         Assert.Equal(20, rules.WallCrossingCost);
         Assert.Equal(new MatchRules(1, 4), rules.Match);
         Assert.Equal(new StartRules(6, 400, 100), rules.Start);
-        Assert.Equal(new MapRules(2, 6, 2, 1, 1, 2, 2, 4, 6), rules.Map);
+        Assert.Equal(new MapRules(2, 1, 1, 2, 2, 4, 6), rules.Map);
     }
 
     [Fact]
@@ -153,7 +153,8 @@ public class DataLoaderTests
     [InlineData("tracks.json")]
     [InlineData("notes.txt")]
     [InlineData("lines/old/guard.jsonc")]
-    [InlineData("structures/capitol.jsonc")]
+    [InlineData("structures/old/capitol.jsonc")]
+    [InlineData("weapons/v_rocket.jsonc")]
     public void AFileTheLoaderDoesNotKnowIsAnError(string path)
     {
         var files = SampleData.Files().Set(path, "{}");
@@ -266,7 +267,7 @@ public class DataLoaderTests
                 "lines/guard.jsonc: $.base.hp: must be above 0 and at most 1000000, found 0",
                 "lines/guard.jsonc: $.base.sight: must be between 1 and 64, found 0",
                 "maps/arena.jsonc: $.symmetry: unknown symmetry 'rotate'; use mirror_x or mirror_y",
-                "notes.txt: unexpected file; the loader reads tracks.jsonc, rules.jsonc, research.jsonc, resources.jsonc, accents.jsonc, lines/<id>.jsonc and maps/<id>.jsonc",
+                "notes.txt: unexpected file; the loader reads tracks.jsonc, rules.jsonc, research.jsonc, resources.jsonc, accents.jsonc, lines/<id>.jsonc, structures/<id>.jsonc and maps/<id>.jsonc",
             ],
             result.Errors.Select(error => error.ToString()));
     }

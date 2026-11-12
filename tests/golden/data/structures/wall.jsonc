@@ -1,0 +1,19 @@
+// Wall: blocks all movement, tile by tile; a gate lets its owner's units through (game design 2.5).
+{
+  "$schema": "../../../../schemas/structure.schema.json",
+  "id": "wall",
+
+  "track": "protection",
+
+  // Price, build time and hit points are those of one tile.
+  "footprint": 1,
+  "hp": 400,
+  "cost": { "materials": 20, "energy": 0 },
+  "build_seconds": 5,
+  "sight": 2,
+
+  // A gate is a wall tile with the same hit points and a price and build time of its own.
+  "wall": {
+    "gate": { "cost": { "materials": 40, "energy": 0 }, "build_seconds": 10 }
+  }
+}

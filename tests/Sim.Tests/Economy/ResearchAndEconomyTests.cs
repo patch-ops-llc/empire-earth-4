@@ -1,6 +1,5 @@
 using Sim.Core;
 using Sim.Economy;
-using Sim.Research;
 using Sim.Setup;
 using Sim.Tests.Map;
 using static Sim.Tests.Economy.EconomyMatches;
@@ -91,13 +90,6 @@ public class ResearchAndEconomyTests
         var extraction = Track(match, "extraction");
         match.Research.OpenPlayerSlot(0);
         var finished = -1;
-        match.Research.Reported += reported =>
-        {
-            if (reported.Kind == ResearchEventKind.Finished)
-            {
-                finished = reported.Tick;
-            }
-        };
         var miner = match.WorkerAt(0, 8, 10);
         match.OrderGather(0, deposit, miner);
         var arrival = match.RunUntilWorking(miner);
@@ -119,6 +111,11 @@ public class ResearchAndEconomyTests
 
             var before = match.Stockpiles.Materials(0);
             match.Simulation.Tick();
+            if (match.Simulation.Events.Any(reported => reported.Kind == SimEventKind.ResearchFinished))
+            {
+                finished = tick;
+            }
+
             var paid = match.Stockpiles.Materials(0) - before + (tick == order ? price.Materials * Stockpiles.PerResource : 0);
             if (paid != 0)
             {
