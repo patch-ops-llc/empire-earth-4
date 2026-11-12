@@ -1,4 +1,6 @@
 using Godot;
+using Sim.Core;
+using Sim.Research;
 
 namespace Game;
 
@@ -8,8 +10,11 @@ namespace Game;
 /// banner also says what the epoch changes: how high a track may now go.
 /// </summary>
 /// <remarks>
-/// It finds a new epoch by comparing each player's epoch with that of the tick before, so it
-/// works the same alone, hosting and joined, and needs nothing from the simulation but the tiers.
+/// It hears of a new epoch as the player does: from the events the local player may know of
+/// (<see cref="Sim.Vision.PlayerView.CollectEvents"/>), which hold every player's change of
+/// epoch, another player's with the epoch alone. It asks nothing of the true state of the
+/// match, so it shows on a machine that joined what that player is told and no more. A player
+/// whose epoch rises more than once in a tick gets one banner, for the epoch reached.
 /// The banner stands in the frame's place for announcements
 /// (<see cref="InterfaceFrame.UnderMessages"/>): in the middle of the window, under the
 /// messages, over a full-screen panel, because the research panel is where the player is likely
@@ -24,7 +29,10 @@ public partial class EpochAnnouncement : InterfacePart
     private const double FadeSeconds = 1.5;
 
     private readonly List<(PanelContainer Banner, double Left, float Width)> _banners = [];
-    private int[] _epochs = [];
+    private readonly List<SimEvent> _known = [];
+
+    // The epoch each player reached in the tick that is looked at, or zero.
+    private int[] _reached = [];
     private VBoxContainer _place = null!;
 
     /// <summary>The number of announcements made since the match was shown.</summary>
@@ -35,28 +43,35 @@ public partial class EpochAnnouncement : InterfacePart
 
     protected override void Attach()
     {
-        var match = View.Match;
-        _epochs = new int[match.Players.Count];
-        for (var player = 0; player < _epochs.Length; player++)
-        {
-            _epochs[player] = match.Research.Tech(player).Epoch;
-        }
-
+        _reached = new int[View.Match.Players.Count];
         _place = Frame.UnderMessages;
     }
 
     public override void AfterTick()
     {
-        var match = View.Match;
-        for (var player = 0; player < _epochs.Length; player++)
+        View.Sight.Seen.CollectEvents(_known);
+        var any = false;
+        foreach (var happened in _known)
         {
-            var epoch = match.Research.Tech(player).Epoch;
-            if (epoch > _epochs[player])
+            if (happened.Kind == SimEventKind.EpochChanged && ResearchEvent.TryRead(in happened, out var research))
             {
-                Announce(player, epoch);
+                _reached[research.Player] = Math.Max(_reached[research.Player], research.Epoch);
+                any = true;
             }
+        }
 
-            _epochs[player] = epoch;
+        if (!any)
+        {
+            return;
+        }
+
+        for (var player = 0; player < _reached.Length; player++)
+        {
+            if (_reached[player] > 0)
+            {
+                Announce(player, _reached[player]);
+                _reached[player] = 0;
+            }
         }
     }
 
