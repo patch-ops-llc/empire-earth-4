@@ -220,7 +220,10 @@ public class AppearTests
             "##########...##",
             "###############"), pairs: true);
 
-        Assert.Equal([MapGrid.TileCenter(13, 11), MapGrid.TileCenter(13, 11)], Train(match, barracks, Peltast).Select(match.PositionOf));
+        Train(match, barracks, Peltast);
+
+        // Where they appear, which the events say: units on one tile step apart from the same tick on.
+        Assert.Equal([MapGrid.TileCenter(13, 11), MapGrid.TileCenter(13, 11)], match.TrainEvents().Select(train => train.Position));
     }
 
     [Theory]
