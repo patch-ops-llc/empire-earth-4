@@ -83,7 +83,7 @@ internal sealed class AiRaid
         {
             case RaidPhase.None:
                 var raiders = CountRaiders(home);
-                var whole = _launchReaction.Holds(!isDefending && raiders >= _fight.RaidParty, _sight.Tick, _fight.ReactionTicks);
+                var whole = _launchReaction.Holds(!_fight.IsNone && !isDefending && raiders >= _fight.RaidParty, _sight.Tick, _fight.ReactionTicks);
 
                 // With its army, a party of any size: but the army is never left without a unit.
                 if (whole || (isAttacking && raiders > 0 && raiders < home.Count))
