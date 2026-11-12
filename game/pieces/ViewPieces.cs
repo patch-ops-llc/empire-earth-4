@@ -20,6 +20,9 @@ public static class ViewPieces
         // Units: selection, the move order and its mark.
         new UnitsPiece(),
 
+        // Control groups: the numbered groups and the other keys that select.
+        new ControlGroupsPiece(),
+
         // 11v. Combat: health bars, shots and hits, the fighting orders.
 
         // 13v. Economy: resources and supply, deposits, the work order.

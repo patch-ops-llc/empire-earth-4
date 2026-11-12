@@ -27,8 +27,13 @@ namespace Game;
 public partial class UnitControl : Node
 {
     // Named in the input map of project.godot. No button or key is read here.
-    private static readonly StringName SelectAction = "unit_select";
-    private static readonly StringName SelectAddAction = "unit_select_add";
+
+    /// <summary>The button that selects. A piece that selects in a way of its own reads the same one.</summary>
+    public static readonly StringName SelectAction = "unit_select";
+
+    /// <summary>Held while selecting, it adds to the selection what would otherwise replace it.</summary>
+    public static readonly StringName SelectAddAction = "unit_select_add";
+
     private static readonly StringName OrderAction = "unit_order";
 
     // A press that moves less than this many pixels before its release is a click and not a box.
