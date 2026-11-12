@@ -26,7 +26,7 @@ internal static class AppearTiles
     /// Fills <paramref name="tiles"/> with one tile for each unit of an order. Returns false,
     /// with nothing filled, only when no unit can stand anywhere on the map.
     /// </summary>
-    /// <param name="grid">The map grid.</param>
+    /// <param name="grid">The map grid as the units of the structure's owner walk it.</param>
     /// <param name="footprint">The tiles of the structure.</param>
     /// <param name="center">The center of the structure.</param>
     /// <param name="toward">The point the tiles are ranked by.</param>

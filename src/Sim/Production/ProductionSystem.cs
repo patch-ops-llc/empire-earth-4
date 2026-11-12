@@ -19,11 +19,12 @@ namespace Sim.Production;
 /// units on the map in tick t + n - 1, and the order behind it begins in tick t + n.
 /// </para>
 /// <para>
-/// <b>Where.</b> <see cref="AppearTiles"/> says on which tiles the units appear. A worker is
-/// placed by <see cref="EconomySetup.SpawnWorker"/> and a unit of a chassis by
-/// <see cref="CombatSpawn.SpawnChassis"/>, so each has its full hit points and the stats of its
-/// owner's tech in this tick. The units of a pair are created one after the other, the first on
-/// the better tile.
+/// <b>Where.</b> <see cref="AppearTiles"/> says on which tiles the units appear, on the grid as the
+/// owner's units walk it: the owner's own finished gate is a tile to appear on (design 2.5), and
+/// nobody else's is. A worker is placed by <see cref="EconomySetup.SpawnWorker"/> and a unit of a
+/// chassis by <see cref="CombatSpawn.SpawnChassis"/>, so each has its full hit points and the
+/// stats of its owner's tech in this tick. The units of a pair are created one after the other,
+/// the first on the better tile.
 /// </para>
 /// <para>
 /// <b>Rally point.</b> While none is set, the units stay where they appear. Once one is set, a
@@ -123,7 +124,7 @@ public sealed class ProductionSystem : ISystem
     {
         Span<(int X, int Y)> tiles = stackalloc (int X, int Y)[order.Count];
         var footprint = match.Structures.Get(structure).Tiles;
-        if (!AppearTiles.Find(match.Grid, footprint, body.Position, rallySet ? rallyPoint : body.Position, tiles))
+        if (!AppearTiles.Find(match.Grid.For(body.Owner), footprint, body.Position, rallySet ? rallyPoint : body.Position, tiles))
         {
             return false;
         }
