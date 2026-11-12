@@ -11,9 +11,10 @@ internal static class TestBuild
 {
     /// <summary>Combat perks (#63) with the pieces it has not met.</summary>
     public const string CombatPerksMeetTheRest =
-        "Test build only. The test asks that every attack order of switchback-combat-perks.replay names what its player sees "
-        + "when it is given. With melee places (#54) the match takes another course from tick 126, and here 154 of its 156 "
-        + "attack orders are refused. #63 takes #54 in, changes the script and adds a second recording that carries the test.";
+        "Test build only. switchback-combat-perks.replay as #63 recorded it again at 5881e13, on top of melee places (#54, #66), "
+        + "reaches all but two rules of its list with every piece in: a Tower's shot on a plated unit at equal levels, and a "
+        + "splash on a Hardened unit. Its attack orders are no longer refused. Which of the pieces #63 has not met moves it "
+        + "(live refresh #37, production #46, conquest #56, the perks of #69, walls #68) was not found out.";
 
     /// <summary>The accent perks (#61, joined in #69) with the pieces #69 has not met.</summary>
     public const string PerksMeetTheRest =
