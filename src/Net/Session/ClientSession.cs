@@ -69,6 +69,9 @@ public sealed class ClientSession
     /// <summary>Another player left, its connection is gone, or the host dropped it. The match goes on.</summary>
     public event Action<int, SessionEndReason>? PlayerLeft;
 
+    /// <summary>The host paused the match, let it go on or changed its speed: <see cref="IsPaused"/> or <see cref="TickInterval"/> changed.</summary>
+    public event Action? PaceChanged;
+
     /// <summary>The session is over. No tick runs after this.</summary>
     public event Action<SessionEndInfo>? Stopped;
 
@@ -94,8 +97,17 @@ public sealed class ClientSession
     /// <summary>The state hash is reported before every tick this divides. 0 until the match starts.</summary>
     public int HashInterval { get; private set; }
 
-    /// <summary>The time between two ticks, as the host set it. Zero until the match starts.</summary>
+    /// <summary>
+    /// The time between two ticks, as the host set it at the start or since
+    /// (<see cref="SpeedNotice"/>). Zero until the match starts.
+    /// </summary>
     public TimeSpan TickInterval { get; private set; }
+
+    /// <summary>
+    /// True while the host holds the match (<see cref="PauseNotice"/>). The ticks whose bundles
+    /// are here still run; after them the client waits, as it does for any bundle.
+    /// </summary>
+    public bool IsPaused { get; private set; }
 
     /// <summary>The first tick whose bundle has not arrived. The simulation can run up to it.</summary>
     public int NextBundleTick { get; private set; }
@@ -253,6 +265,29 @@ public sealed class ClientSession
 
             case PeerLeft left:
                 PlayerLeft?.Invoke(left.Player, left.Reason);
+                break;
+
+            case PauseNotice pause when Phase == SessionPhase.Running:
+                if (IsPaused != pause.Paused)
+                {
+                    IsPaused = pause.Paused;
+                    PaceChanged?.Invoke();
+                }
+
+                break;
+
+            case SpeedNotice speed when Phase == SessionPhase.Running && speed.TickInterval > TimeSpan.Zero:
+                if (TickInterval != speed.TickInterval)
+                {
+                    TickInterval = speed.TickInterval;
+                    if (_accumulator > TickInterval)
+                    {
+                        _accumulator = TickInterval;
+                    }
+
+                    PaceChanged?.Invoke();
+                }
+
                 break;
 
             // The match is over at a tick every peer can reach: run up to it, then stop.

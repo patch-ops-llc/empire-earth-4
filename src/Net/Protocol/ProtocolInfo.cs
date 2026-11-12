@@ -10,9 +10,10 @@ public static class ProtocolInfo
     /// </summary>
     /// <remarks>
     /// Version 2 added <see cref="MatchNotice"/> and <see cref="LeaveNotice"/>, and the reason
-    /// <see cref="SessionEndReason.SetupMismatch"/>.
+    /// <see cref="SessionEndReason.SetupMismatch"/>. Version 3 added <see cref="PauseNotice"/> and
+    /// <see cref="SpeedNotice"/>, the host's pause and speed.
     /// </remarks>
-    public const int Version = 2;
+    public const int Version = 3;
 
     /// <summary>The longest command delay a host may set, in ticks.</summary>
     public const int MaxCommandDelay = 20;

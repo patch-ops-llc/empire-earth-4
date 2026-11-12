@@ -46,7 +46,7 @@ public sealed record HostOptions
     /// </summary>
     public int HashInterval { get; init; } = SimInfo.TicksPerSecond;
 
-    /// <summary>The time between two ticks.</summary>
+    /// <summary>The time between two ticks when the match starts. <see cref="HostSession.SetTickInterval"/> changes it while the match runs.</summary>
     public TimeSpan TickInterval { get; init; } = SessionClock.DefaultTickInterval;
 
     /// <summary>
