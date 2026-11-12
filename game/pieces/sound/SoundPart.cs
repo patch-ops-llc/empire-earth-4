@@ -167,6 +167,14 @@ public partial class SoundPart : InterfacePart
     /// <summary>Plays a cue once, whatever the match is doing, for a player who wants to hear it or to judge the volume.</summary>
     public void Audition(SoundCue cue) => Begin(cue, SoundCues.Gain(cue), pitch: 1f);
 
+    /// <summary>
+    /// Answers an order of the local player's that a piece sent to the match itself, past the
+    /// order table and the frame's commands, as a panel with buttons of its own does. The piece
+    /// finds this part among <see cref="InterfaceFrame.Parts"/> and calls it as the order goes.
+    /// </summary>
+    /// <param name="taken">False when the order could not be sent.</param>
+    public void Acknowledge(bool taken = true) => Notice(taken ? SoundCue.OrderGiven : SoundCue.OrderRefused);
+
     // A sound for the local player alone, called for outside the events of a tick.
     private void Notice(SoundCue cue)
     {
