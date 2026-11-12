@@ -7,11 +7,19 @@ using Sim.Setup;
 namespace Game;
 
 /// <summary>
-/// Draws a match: the map's forest and cliff tiles, and one node for every unit, which is an
-/// entity that stands on the map and can move. It only reads the match. The nodes of units are
-/// created, moved and removed here and nowhere else, so no entity has a script of its own.
+/// Draws a match as the local player sees it: the map's forest and cliff tiles, the fog of war
+/// over them and the ground, and one node for every unit the player may see. A unit is an entity
+/// that stands on the map and can move. It only reads the match. The nodes of units are created,
+/// moved and removed here and nowhere else, so no entity has a script of its own.
 /// </summary>
 /// <remarks>
+/// <para>
+/// <b>The fog of war</b> (design 5.3). What may be drawn is asked of the view's
+/// <see cref="PlayerSight"/>: the player's own units always, and another player's only while the
+/// player sees it. A unit that goes out of sight loses its node, and so everything that follows
+/// the drawn units, as the health bars and the pointer do, loses it with it. The ground, the
+/// forest and the cliffs are shaded with the <see cref="Fog"/> picture.
+/// </para>
 /// <para>
 /// The simulation moves in ticks and the screen in frames. After each tick <see cref="AfterTick"/>
 /// records where everything stands now, and every frame a unit is drawn between where it stood
@@ -26,10 +34,14 @@ namespace Game;
 /// </remarks>
 public partial class WorldView : Node3D
 {
+    private const string TerrainShader = "res://scenes/terrain_fog.gdshader";
+
     private readonly Dictionary<EntityId, UnitView> _units = [];
     private readonly List<EntityId> _gone = [];
     private readonly List<WorldLayer> _layers = [];
     private MatchView? _view;
+    private PlayerSight? _sight;
+    private FogPicture? _fog;
     private Material[] _playerMaterials = [];
     private Mesh? _unitMesh;
     private Match? _match;
@@ -40,6 +52,9 @@ public partial class WorldView : Node3D
     /// match sets it once per frame.
     /// </summary>
     public float TickFraction { get; set; } = 1f;
+
+    /// <summary>The fog of war as a picture of the map, which everything on the ground is shaded with.</summary>
+    public FogPicture Fog => _fog ?? throw new InvalidOperationException("The world view draws no match yet.");
 
     /// <summary>The number of units drawn.</summary>
     public int UnitCount => _units.Count;
@@ -57,6 +72,8 @@ public partial class WorldView : Node3D
 
         _view = view;
         _match = view.Match;
+        _sight = view.Sight;
+        _fog = new FogPicture(view.Sight);
         _unitMesh = PlaceholderMeshes.Unit();
         _playerMaterials = [.. Enumerable.Range(0, PlayerColors.Count).Select(player => (Material)PlaceholderMeshes.Flat(PlayerColors.Of(player)))];
 
@@ -86,17 +103,18 @@ public partial class WorldView : Node3D
     }
 
     /// <summary>
-    /// Reads the match again. Call it after every tick: units that are new get a node, units that
-    /// are gone lose theirs, and the rest start gliding to where they stand now. Then every layer
-    /// reads the match in its turn.
+    /// Reads the match again. Call it after every tick: units that are new or have come into
+    /// sight get a node, units that are gone or out of sight lose theirs, and the rest start
+    /// gliding to where they stand now. Then every layer reads the match in its turn.
     /// </summary>
     public void AfterTick()
     {
-        if (_match is null)
+        if (_match is null || _sight is null || _fog is null)
         {
             return;
         }
 
+        _fog.AfterTick();
         _pass++;
         var bodies = _match.Bodies;
         for (var i = 0; i < bodies.Count; i++)
@@ -108,6 +126,11 @@ public partial class WorldView : Node3D
             }
 
             var body = bodies.ValueAt(i);
+            if (body.Owner != _sight.Player && !_sight.ShowsUnit(entity))
+            {
+                continue;
+            }
+
             var position = ToWorld(body.Position);
             var heading = ToHeading(mover.Facing);
 
@@ -168,6 +191,8 @@ public partial class WorldView : Node3D
 
     public override void _Process(double delta)
     {
+        _fog?.EveryFrame(delta);
+
         var fraction = Mathf.Clamp(TickFraction, 0f, 1f);
         foreach (var unit in _units.Values)
         {
@@ -211,7 +236,9 @@ public partial class WorldView : Node3D
     }
 
     // Forest and cliff tiles block movement, so a player has to see them. These are stand-ins: a
-    // tree on every forest tile and a block of rock on every cliff tile.
+    // tree on every forest tile and a block of rock on every cliff tile. Every tile of the map
+    // has its shape from the start, and the fog's shader leaves out those the player has not
+    // explored: the player learns the terrain as the units find it.
     private void BuildTerrain(MapDef map)
     {
         var trees = new List<Transform3D>();
@@ -241,13 +268,13 @@ public partial class WorldView : Node3D
             }
         }
 
-        AddTiles("Forest", PlaceholderMeshes.Tree(), trees);
-        AddTiles("Cliffs", PlaceholderMeshes.Rock(), rocks);
+        AddTiles("Forest", PlaceholderMeshes.Tree(), PlaceholderMeshes.TreeColor, trees);
+        AddTiles("Cliffs", PlaceholderMeshes.Rock(), PlaceholderMeshes.RockColor, rocks);
     }
 
-    private void AddTiles(string name, Mesh mesh, List<Transform3D> transforms)
+    private void AddTiles(string name, Mesh mesh, Color color, List<Transform3D> transforms)
     {
-        if (transforms.Count == 0)
+        if (transforms.Count == 0 || _fog is null)
         {
             return;
         }
@@ -263,7 +290,10 @@ public partial class WorldView : Node3D
             tiles.SetInstanceTransform(i, transforms[i]);
         }
 
-        AddChild(new MultiMeshInstance3D { Name = name, Multimesh = tiles });
+        var material = new ShaderMaterial { Shader = GD.Load<Shader>(TerrainShader) };
+        material.SetShaderParameter("color", color);
+        _fog.Shade(material);
+        AddChild(new MultiMeshInstance3D { Name = name, Multimesh = tiles, MaterialOverride = material });
     }
 
     // A number from 0 to 1 that depends only on the tile, so the forest looks the same every run.

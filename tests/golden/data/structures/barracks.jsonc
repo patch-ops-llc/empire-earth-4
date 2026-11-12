@@ -1,0 +1,16 @@
+// Barracks: trains the infantry lines (game design 2.5).
+{
+  "$schema": "../../../../schemas/structure.schema.json",
+  "id": "barracks",
+
+  "track": "manufacturing",
+
+  "footprint": 3,
+  "hp": 1000,
+  "cost": { "materials": 150, "energy": 0 },
+  "build_seconds": 35,
+  "sight": 6,
+
+  // In the order they are offered. Each line's file names this structure in "built_at".
+  "trains": ["line_infantry", "guard"]
+}
