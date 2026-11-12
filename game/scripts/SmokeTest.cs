@@ -40,6 +40,13 @@ public sealed class SmokeTest
 {
     public const string Marker = "SMOKE_TEST_OK";
 
+    /// <summary>
+    /// The runtime's name for the setting that game/Game.csproj puts at 0, so that code met for
+    /// the first time in a match is compiled properly within a tick or two. The line reports it
+    /// as <c>tier_delay_ms</c>.
+    /// </summary>
+    public const string TierDelaySetting = "System.Runtime.TieredCompilation.CallCountingDelayMs";
+
     /// <summary>The seed of the smoke test's match. Every machine uses this one.</summary>
     public const ulong Seed = 20261111;
 
@@ -152,9 +159,19 @@ public sealed class SmokeTest
         var simOptimized = IsOptimized(typeof(SimInfo).Assembly) ? "true" : "false";
         var stateHash = _match.World.ComputeHash().ToString("x16", CultureInfo.InvariantCulture);
 
+        // An exported game gets the setting from the runtime configuration it is published with.
+        // The editor starts the runtime its own way, without the game's configuration, so there it
+        // is unset and nothing is asked of it.
+        var tierDelay = AppContext.GetData(TierDelaySetting)?.ToString() ?? "unset";
+        if (OS.HasFeature("template") && tierDelay != "0")
+        {
+            GD.PrintErr($"Smoke test: this exported game runs with {TierDelaySetting} {tierDelay}, not 0 as game/Game.csproj sets it.");
+            return false;
+        }
+
         GD.Print(string.Create(CultureInfo.InvariantCulture,
             $"{Marker} game_version={GameInfo.Version} runtime={System.Environment.Version} game=[{gameFramework}] sim=[{simFramework}] " +
-            $"sim_optimized={simOptimized} ticks_per_second={SimInfo.TicksPerSecond} map={_match.Map.Id} " +
+            $"sim_optimized={simOptimized} tier_delay_ms={tierDelay} ticks_per_second={SimInfo.TicksPerSecond} map={_match.Map.Id} " +
             $"tick={_match.World.Tick} entities={entities} orders={_orders.Count} " +
             $"content_hash=sha256:{_match.Data.ContentHash} state_hash={stateHash}"));
         return true;
