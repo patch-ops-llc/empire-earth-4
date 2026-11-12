@@ -370,7 +370,7 @@ dotnet run --project src/Tools -- replay verify tests/golden/replays --data test
   replay record tests/golden/replays/switchback-siege.replay --data tests/golden/data --map switchback --starts 0,1 --seed 16 --orders 2 --ticks 8000 --script research,siege
   replay record tests/golden/replays/ridge-builders.replay --data tests/golden/data --map ridge --starts 0,1 --seed 7 --orders 70 --ticks 3600 --script build
   replay record tests/golden/replays/ridge-settlers.replay --data tests/golden/data --map ridge --starts 0,1 --seed 7 --orders 53 --ticks 6000 --script settle
-  replay record tests/golden/replays/switchback-combat-perks.replay --data tests/golden/data --map switchback --starts 0,1,- --seed 19 --orders 3 --ticks 6000 --script combat-perks
+  replay record tests/golden/replays/switchback-combat-perks.replay --data tests/golden/data --map switchback --starts 0,1,- --seed 19 --orders 5 --ticks 6000 --script combat-perks
   replay record tests/golden/replays/ridge-surround.replay --data tests/golden/data --map ridge --starts 0,1 --seed 7 --orders 32 --ticks 4800 --script gather,surround
   replay record tests/golden/replays/ridge-footprints.replay --data tests/golden/data --map ridge --starts 0,1 --seed 7 --orders 209 --ticks 4800 --script gather,surround
   ```
