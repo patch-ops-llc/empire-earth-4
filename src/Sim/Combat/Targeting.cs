@@ -2,6 +2,7 @@ using Sim.Core;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
+using Sim.Structures;
 
 namespace Sim.Combat;
 
@@ -58,6 +59,13 @@ public sealed class Targeting
     public CombatRules Rules => _rules;
 
     /// <summary>
+    /// The structures of the match, when it has any. Until units can attack structures, with the
+    /// rules design 2.5 gives for that, nothing in this store is an enemy to anyone: no unit picks
+    /// a structure, and an order to attack one is refused.
+    /// </summary>
+    public ComponentStore<PlacedStructure>? Structures { get; init; }
+
+    /// <summary>
     /// True when the entity can be attacked by a player: it is alive, on the map, has hit points, and
     /// belongs to someone else. There is no friendly fire.
     /// </summary>
@@ -72,7 +80,8 @@ public sealed class Targeting
         return world.Entities.IsAlive(entity)
             && _bodies.TryGet(entity, out body)
             && body.Owner != player
-            && _health.Contains(entity);
+            && _health.Contains(entity)
+            && !(Structures?.Contains(entity) ?? false);
     }
 
     /// <summary>The roster index of an entity's line, or <see cref="CombatRules.NoLine"/> when it is not a unit of a chassis.</summary>

@@ -118,7 +118,6 @@ public class TracksAndRulesTests
     [InlineData("\"min\": 2, \"max\": 4", "\"min\": 5, \"max\": 4", "$.map.chokepoint_width.max", "must not be below min (5), found 4")]
     [InlineData("\"open_field_min_width\": 6", "\"open_field_min_width\": 4", "$.map.open_field_min_width", "must be above the widest chokepoint (4), found 4")]
     [InlineData("\"deposit_size\": 2", "\"deposit_size\": 0", "$.map.deposit_size", "must be between 1 and 8, found 0")]
-    [InlineData("\"radius\": 6", "\"radius\": 0", "$.map.start_territory.radius", "must be between 1 and 256, found 0")]
     public void TheMapRulesMustMakeSense(string oldText, string newText, string location, string message)
     {
         var files = SampleData.With(SampleData.RulesPath, oldText, newText);

@@ -54,10 +54,11 @@ public sealed record StartRules(int Workers, int Materials, int Energy);
 /// </param>
 public sealed record DebugRules(bool Spawn);
 
-/// <summary>Design 5.3 and 5.4: what every map must satisfy.</summary>
+/// <summary>
+/// Design 5.3 and 5.4: what every map must satisfy. The footprint and territory radius of a start
+/// are not here: they are those of the starting Capitol, in its own file.
+/// </summary>
 public sealed record MapRules(
-    int StartFootprint,
-    int StartTerritoryRadius,
     int DepositSize,
     int MainDepositsPerPlayer,
     int NaturalDepositsPerPlayer,

@@ -6,6 +6,7 @@ using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
 using Sim.Research;
+using Sim.Structures;
 
 namespace Sim.Setup;
 
@@ -15,7 +16,8 @@ namespace Sim.Setup;
 /// reach the simulation through it.
 /// </summary>
 /// <remarks>
-/// Everything here except what is inside <see cref="World"/> is fixed for the whole match. A system
+/// Everything here except what is inside <see cref="World"/> is fixed for the whole match, apart
+/// from what is worked out from the world, which <see cref="RefreshDerivedState"/> names. A system
 /// that adds a store adds its property here, in alphabetical order.
 /// </remarks>
 public sealed class Match
@@ -70,6 +72,15 @@ public sealed class Match
     /// <summary>Every player's Materials and Energy.</summary>
     public required Stockpiles Stockpiles { get; init; }
 
+    /// <summary>
+    /// Keeps the tiles of <see cref="Grid"/> in line with <see cref="Structures"/>. Not state: see
+    /// <see cref="Sim.Structures.StructureTiles"/>.
+    /// </summary>
+    public required StructureTiles StructureTiles { get; init; }
+
+    /// <summary>Every structure standing on the map, with the tiles it blocks.</summary>
+    public required ComponentStore<PlacedStructure> Structures { get; init; }
+
     /// <summary>Each player's supply cap and used supply. Not state: see <see cref="SupplyAccount"/>.</summary>
     public required SupplyAccount Supply { get; init; }
 
@@ -90,8 +101,13 @@ public sealed class Match
     /// the world as it is now. Call it after the world has been changed from outside a tick: after
     /// restoring a snapshot, and after a fixture has placed things.
     /// </summary>
+    /// <remarks>
+    /// The order matters: the tiles under structures and the regions first, with the route cache,
+    /// whose routes belong to those tiles; then each player's blueprints; then the spatial index.
+    /// </remarks>
     public void RefreshDerivedState()
     {
+        StructureTiles.Rebuild();
         Research.RefreshTech();
         SpatialIndex.Rebuild();
     }

@@ -81,4 +81,20 @@ public enum SimEventKind
     /// and <see cref="SimEvent.Position"/> where the shot was.
     /// </summary>
     ShotLost,
+
+    /// <summary>
+    /// A structure was laid on the map and blocks its tiles from now on.
+    /// <see cref="SimEvent.Player"/> is its owner, <see cref="SimEvent.Entity"/> the structure,
+    /// <see cref="SimEvent.Position"/> the center of its footprint, and
+    /// <see cref="SimEvent.Amount"/> its place in the roster of structures.
+    /// </summary>
+    StructurePlaced,
+
+    /// <summary>
+    /// A structure is gone and its tiles are free again. <see cref="SimEvent.Player"/> is its
+    /// owner, <see cref="SimEvent.Entity"/> the structure, <see cref="SimEvent.Position"/> the
+    /// center of its footprint, and <see cref="SimEvent.Amount"/> its place in the roster of
+    /// structures. One whose hit points ran out is reported as a <see cref="Death"/> as well.
+    /// </summary>
+    StructureRemoved,
 }
