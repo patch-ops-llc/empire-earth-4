@@ -103,6 +103,9 @@ public sealed class SmokeTest
         // 16bv. Structures in combat: a remembered wall shelled from out of sight, a Tower destroyed in sight.
         new SiegeSmoke(),
 
+        // 19v. Perks: a refund shown to its player alone, healing, the run-up and the hit of Charge, splash.
+        new PerkSmoke(),
+
         // Later pieces.
     ];
 

@@ -45,6 +45,9 @@ public static class ViewPieces
         // Inspection: what the selected units are, accent badges, the epoch announcement.
         new InspectionPiece(),
 
+        // 19v. Perks: splash, Charge, Regeneration and Reserves as the player sees them.
+        new PerksPiece(),
+
         // Later pieces.
     ];
 }

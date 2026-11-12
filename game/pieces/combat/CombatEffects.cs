@@ -266,8 +266,8 @@ public partial class CombatEffects : WorldLayer
         _gone.Clear();
     }
 
-    // The turn about the vertical axis that points the unit shape along a facing, as the world view turns its units.
-    private static float HeadingOf(Angle facing)
+    /// <summary>The turn about the vertical axis that points the unit shape along a facing, as the world view turns its units.</summary>
+    public static float HeadingOf(Angle facing)
     {
         var angle = facing.Units * Mathf.Tau / Angle.UnitsPerTurn;
         return Mathf.Atan2(-Mathf.Cos(angle), -Mathf.Sin(angle));

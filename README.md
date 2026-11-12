@@ -117,6 +117,7 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | Development aid, while `debug.spawn` is on in `rules.jsonc`: make units at the pointer | G for your own. Alone, H for the other player's. The orange panel at the left edge chooses which and how many |
 | Development aid, while `debug.spawn` is on: lay a finished structure at the pointer | N for your own. Alone, M for the other player's. The orange panel "lay a structure" chooses which |
 | Development aid, alone and while `debug.spawn` is on: lift the fog of war from the screen, and lay it back | F4, or the button in the lowest orange panel. Only the screen changes: the simulation has no such switch |
+| Development aid, while `debug.spawn` is on: raise a track by a tier, at once and for nothing | U for your own. Alone, I for the other player's. The orange box "raise a track" at the right edge chooses which track, and has a button for each key |
 
 ## Test builds
 

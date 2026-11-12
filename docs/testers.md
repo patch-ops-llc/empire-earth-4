@@ -103,6 +103,7 @@ If joining fails, the menu says why in orange:
 | Stop | X, or the Stop button in the panel at the bottom |
 | Development aid: make units where the pointer is | G for yours. Alone, H for the other player's. See Trying a fight |
 | Development aid: lay a finished structure where the pointer is | N for yours. Alone, M for the other player's. See Structures in a fight |
+| Development aid: raise a track by a tier | U for yours. Alone, I for the other player's. The track is the one in the list of the orange box at the right edge. See Accents in a fight |
 | Development aid: lift the fog of war from your screen, and lay it back | F4, alone, or the button in the orange panel "Development aid: fog of war". See The fog of war |
 | Quit | Close the window |
 
@@ -254,6 +255,24 @@ What you will see:
 - You can right-click a structure you remember, and your units go and attack it. Artillery reaches a tile further than it sees, so it can shell a structure that stays a memory all the while: you see the shells fly and, at the edge of what you see, land, and the structure on your screen does not change.
 - When a structure you remember is destroyed out of your sight, nothing on your screen says so. It stays there, greyed, until you see one of its tiles, and then it is simply gone, with no fall. Units that destroyed it without seeing it walk on to where it stood, so they are usually the ones who find out.
 - A right-click on a remembered structure that is already gone is taken as it looks: the units walk to where it stood, see that it is gone, and stop.
+
+## Accents in a fight
+
+Four accents do something in a fight that you can see. To reach them without minutes of research, this build has one more development aid, the orange box "Development aid: raise a track" at the right edge of the window, under the top bar: choose a track in its list and press U, or click "Yours +1 (U)". The track goes up one tier at once and free of charge, as if its research had finished, up to tier 4. Alone, I or "The other's +1 (I)" does the same for the other player. Like the other aids, it is not part of the game.
+
+A unit of epoch 1 has a track's accent at level I when the track is at tier 2, and at level II at tier 3. It carries two accents at most: see What your units are. Units already on the map get the accent at once.
+
+1. Raise Firepower and Mobility to tier 3: choose each in the list and press U twice.
+2. Make a few Hoplites with G, and a few of the other player's some way off with H.
+3. Select yours and right-click with Ctrl held beyond the others.
+
+What you will see, each in the color of its track:
+
+- **Charge** (Mobility, level II). A unit that has walked four tiles or more since its last attack makes its next attack with half as much damage again. While that attack is ready, two pale green arrowheads point the way from the unit's nose: solid while it walks, faint while it stands. When the attack lands, a green streak runs from the unit to its target, with a green star on the target and a green ring round it on the ground. A unit that shoots sends its charged shot off with a green tail, and the star and ring are where it lands.
+- **Splash** (Firepower, level II). Each hit also hurts enemies within a tile of the target. A red wash spreads over the ground to the edge of the splash and is gone in under half a second, with red drops thrown outward, and each unit the splash reached flashes red. Units stand a tile apart, so the splash reaches another unit only when it stands right against the target: you will see the wash at every hit, and the flash on a neighbour now and then. A shell of artillery is different: a pale ring that stays at the edge of the blast, round a burst of fire. Artillery gets no splash; its blast is wider.
+- **Regeneration** (Logistics, level I). A unit that has taken no damage for five seconds gets hit points back. While it does, a small pale purple cross stands at the left end of its bar. The cross goes when the unit is hit or whole.
+- **Reserves** (Manufacturing, level II). When a unit you paid for dies, you get a quarter of its Materials back. An orange number, such as +8, rises where it fell, and the Materials in the top bar turn orange for a moment with the same number under them. Only you are told of your refunds: another player's unit dies like any other on your screen. Units made with the development aid cost nothing and give nothing back, so this shows only for units trained at a Barracks.
+- You are shown these for another player's units only where you see them. A charged shot fired from ground you do not see flies and lands like any other.
 
 ## The files of a match
 

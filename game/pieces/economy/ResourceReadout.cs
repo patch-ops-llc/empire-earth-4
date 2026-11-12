@@ -30,6 +30,9 @@ public partial class ResourceReadout : InterfacePart
     private int _shownUsed = -1;
     private int _shownCap = -1;
 
+    /// <summary>The number of Materials as it is shown, for a part that shows something happening to it.</summary>
+    public Label MaterialsNumber => _materials;
+
     protected override void Attach()
     {
         _materials = AddReadout("Materials", RoomForAmount);

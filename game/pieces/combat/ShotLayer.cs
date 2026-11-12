@@ -91,6 +91,25 @@ public partial class ShotLayer : WorldLayer
         return false;
     }
 
+    /// <summary>
+    /// Where a shot is drawn in this frame, and the way it flies. False for a shot that is not
+    /// drawn. A layer added after this one asks in its own <see cref="EveryFrame"/>, when the
+    /// shots of the frame have been placed.
+    /// </summary>
+    public bool TryGetDrawn(EntityId shot, out Vector3 position, out Vector3 along)
+    {
+        if (_shots.TryGetValue(shot, out var view))
+        {
+            position = view.Previous.Lerp(view.Position, Mathf.Clamp(View.World.TickFraction, 0f, 1f));
+            along = view.Direction.Normalized();
+            return true;
+        }
+
+        position = default;
+        along = default;
+        return false;
+    }
+
     protected override void Attach()
     {
         _streaks = InstancedShapes.Under(

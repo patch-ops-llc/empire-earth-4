@@ -33,6 +33,7 @@ public partial class RefusedOrders : InterfacePart
         CommandType.Stop => "The stop order was not carried out: the units ordered were gone.",
         CommandType.DebugSpawn => "Development spawn: no unit can stand there.",
         CommandType.DebugPlace => "Development placement: no structure can stand there, or a unit stands on its tiles.",
+        CommandType.DebugSetTier => "Development tier: the track is already that high, or the tier is above what this match allows.",
         _ => "An order was not carried out.",
     };
 }
