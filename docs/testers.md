@@ -105,7 +105,7 @@ Every player's machine runs the whole game and they exchange only commands. That
 - A player who drops out cannot rejoin the match.
 - A slow machine or connection on the host's side slows the match for everyone.
 
-The two games check each other all the time. If they ever disagree about the state of the match, both stop and say so. That is a fault in the game, and each game saves one file that finds it: see the next section.
+The two games check each other all the time. If they ever disagree about the state of the match, both stop and say so. That is a fault in the game, and its files are what finds it: see the next section.
 
 ## The files of a match
 
