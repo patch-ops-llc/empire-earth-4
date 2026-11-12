@@ -96,6 +96,7 @@ If joining fails, the menu says why in orange:
 - In a shared match, both players see the same workers in the same places. An order takes a moment longer to start than it does alone, because it travels to the host first.
 - If the other player leaves or closes the game, the bar at the top says so and your match goes on without them. If the host leaves, the match ends for both.
 - There is no Capitol and nothing to build.
+- You still see the whole map and all of the other player's workers. The game now works out what each player's units can see, but does not draw it yet.
 
 ## What to know about multiplayer
 
