@@ -37,7 +37,7 @@ public partial class MinimapPart : InterfacePart
         _geometry = MinimapGeometry.Fit(map.Width, map.Height, LongestSide);
 
         _picture = new MinimapPicture { Name = "Picture" };
-        _picture.Begin(View, _geometry, new MinimapSight());
+        _picture.Begin(View, _geometry, new FogOnMinimap(View));
         _picture.Looked += View.Camera.CenterOn;
         _picture.Ordered += Order;
 

@@ -12,6 +12,11 @@ namespace Game;
 /// </summary>
 /// <remarks>
 /// <para>
+/// The other force stands out of the local player's sight, and an attack order may name only a
+/// unit the player sees (design 5.3). So the whole local force sets out with an attack-move, and
+/// the ranged units are given their attack order in the tick the player first sees its target.
+/// </para>
+/// <para>
 /// The local player's force is the larger, and the part fails unless it destroys the other. So
 /// the parts after this one find no enemy that would attack the local player's workers; what is
 /// left of the local force stands idle in its corner, away from every worker of the other seat.
@@ -52,6 +57,7 @@ public sealed class FightSmoke : SmokePart
     private EntityId[] _melee = [];
     private EntityId[] _ranged = [];
     private EntityId[] _others = [];
+    private bool _attackGiven;
     private int _hits;
     private int _shots;
     private int _lost;
@@ -81,6 +87,9 @@ public sealed class FightSmoke : SmokePart
                 SendLocalForce(orders);
                 break;
 
+            case > OrdersAt and < StopAt when !_attackGiven:
+                AttackWhenSeen(orders);
+                break;
             case StopAt:
                 StopSurvivors(orders);
                 break;
@@ -215,11 +224,38 @@ public sealed class FightSmoke : SmokePart
             return;
         }
 
-        // The melee units walk into the other force and fight what they meet. The ranged units
-        // are told to kill one named unit, and pick for themselves once it is dead.
+        // The other force is out of sight, as the script placed it: were it not, the units would
+        // have begun the fight by themselves before any order.
+        if (orders.View.Sight.TrulySees(_others[0]))
+        {
+            orders.Fail("the local player sees the other force before the fight's orders. The script places it out of sight.");
+            return;
+        }
+
+        // Everyone walks at the other force and fights what they meet.
         var goal = match.Bodies.Get(_others[0]).Position;
-        orders.Submit(new Command(CommandType.AttackMove, orders.Player, _melee, goal.X, goal.Y));
-        orders.Submit(new Command(CommandType.Attack, orders.Player, _ranged, targetEntity: _others[0]));
+        orders.Submit(new Command(CommandType.AttackMove, orders.Player, [.. _melee, .. _ranged], goal.X, goal.Y));
+    }
+
+    // Once the player sees the first of the other force, the ranged units are told to kill that
+    // one unit, and pick for themselves once it is dead.
+    private void AttackWhenSeen(SmokeOrders orders)
+    {
+        var target = _others[0];
+        if (!orders.Match.World.Entities.IsAlive(target))
+        {
+            orders.Fail("the unit the ranged units were to be ordered to attack died before the local player saw it.");
+            return;
+        }
+
+        var ranged = Alive(orders, _ranged);
+        if (ranged.Length == 0 || !orders.View.Sight.TrulySees(target))
+        {
+            return;
+        }
+
+        _attackGiven = true;
+        orders.Submit(new Command(CommandType.Attack, orders.Player, ranged, targetEntity: target));
     }
 
     private void StopSurvivors(SmokeOrders orders)
@@ -239,6 +275,12 @@ public sealed class FightSmoke : SmokePart
         GD.Print(
             $"Smoke test, the fight: {_hits} hits, {_shots} shots fired and {_lost} lost, {_deaths} deaths, {_localDeaths} of them the local player's, " +
             $"the last at tick {_lastDeathAt} of the part.");
+        if (!_attackGiven)
+        {
+            orders.Fail("the local player never saw the unit the ranged units were to attack, so the attack order was never given.");
+            return;
+        }
+
         if (_hits == 0 || _deaths == 0)
         {
             orders.Fail($"the fight produced {_hits} hits, {_shots} shots and {_deaths} deaths in {Length - 1} ticks. It needs at least one hit and one death.");

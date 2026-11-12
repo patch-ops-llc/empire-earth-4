@@ -1,18 +1,21 @@
 using Godot;
 using Sim.Combat;
 using Sim.Core;
+using Sim.Vision;
 
 namespace Game;
 
 /// <summary>
-/// Draws every shot in flight: a short bright streak in a paler shade of its owner's color, and
+/// Draws every shot in flight that the player may see (design 5.3), which is the player's own and
+/// another player's while it is over ground the player sees: a short bright streak in a paler shade of its owner's color, and
 /// a thicker one for a shell of artillery. Like a unit, a shot is drawn between where it was one
 /// tick ago and where it is now.
 /// </summary>
 /// <remarks>
 /// A shot that lands is gone from the match in the tick it lands, so the simulation's event is
 /// what says where it ended: the streak flies its last stretch to the place of the hit and is
-/// taken away after it. A shot that is lost stops where it was.
+/// taken away after it. A shot that is lost stops where it was. A shot that lands where the
+/// player does not see ends where it was last drawn, since the player is not told of the hit.
 /// </remarks>
 public partial class ShotLayer : WorldLayer
 {
@@ -25,6 +28,7 @@ public partial class ShotLayer : WorldLayer
 
     private readonly Dictionary<EntityId, ShotView> _shots = [];
     private readonly List<EntityId> _gone = [];
+    private readonly List<SeenShot> _seen = [];
     private InstancedShapes _streaks = null!;
     private int _pass;
 
@@ -46,11 +50,15 @@ public partial class ShotLayer : WorldLayer
         var match = View.Match;
         _pass++;
 
-        var shots = match.Shots;
-        for (var i = 0; i < shots.Count; i++)
+        View.Sight.CollectShots(_seen);
+        foreach (var seen in _seen)
         {
-            var entity = shots.EntityAt(i);
-            var shot = shots.ValueAt(i);
+            var entity = seen.Entity;
+            if (!match.Shots.TryGet(entity, out var shot))
+            {
+                continue;
+            }
+
             var position = Lifted(WorldView.ToWorld(shot.Position));
             if (_shots.TryGetValue(entity, out var view))
             {
@@ -81,7 +89,7 @@ public partial class ShotLayer : WorldLayer
         // A shot that landed in this tick flies on to where it landed, and is gone after the next.
         foreach (var happened in match.Simulation.Events)
         {
-            if (happened.Kind == SimEventKind.ShotHit && _shots.TryGetValue(happened.Other, out var landed) && !landed.Landed)
+            if (happened.Kind == SimEventKind.ShotHit && View.Sight.Knows(happened) && _shots.TryGetValue(happened.Other, out var landed) && !landed.Landed)
             {
                 landed.Previous = landed.Position;
                 landed.Position = Lifted(WorldView.ToWorld(happened.Position));

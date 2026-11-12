@@ -43,14 +43,22 @@ public sealed class SmokeOrders
     private readonly ClientSession _client;
     private readonly HostSession _host;
 
-    internal SmokeOrders(Match match, ClientSession client, HostSession host)
+    internal SmokeOrders(Match match, MatchView view, ClientSession client, HostSession host)
     {
         Match = match;
+        View = view;
         _client = client;
         _host = host;
     }
 
     public Match Match { get; }
+
+    /// <summary>
+    /// The view of the match, as the main scene shows it. It has read every tick that has run,
+    /// so a part can test what the player is shown: which units are drawn, and what the local
+    /// player's <see cref="PlayerSight"/> answers.
+    /// </summary>
+    public MatchView View { get; }
 
     /// <summary>The local player's number.</summary>
     public int Player => _client.Player;

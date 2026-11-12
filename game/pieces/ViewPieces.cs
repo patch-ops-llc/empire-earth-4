@@ -30,6 +30,7 @@ public static class ViewPieces
         // 15v. Construction and production: structures, the build menu, the production panel.
 
         // 17v. Fog of war.
+        new FogPiece(),
 
         // 24v. Minimap.
         new MinimapPiece(),

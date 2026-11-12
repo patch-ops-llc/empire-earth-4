@@ -181,6 +181,12 @@ public partial class Main : Node3D
         AddChild(frame);
         _view = MatchView.Open(run, match, _world, _camera, _units, frame, leave);
 
+        // The fog of war lies on the ground as it lies on the forest and the cliffs.
+        if (ground.MaterialOverride is ShaderMaterial groundMaterial)
+        {
+            _world.Fog.Shade(groundMaterial);
+        }
+
         var overlay = GetNode<DebugOverlay>("DebugOverlay");
         overlay.Match = match;
         overlay.Selection = _view.Selection;
@@ -214,7 +220,10 @@ public partial class Main : Node3D
         // The smoke test plays its own script, so it takes no input.
         _camera.ProcessMode = ProcessModeEnum.Disabled;
         _units.ProcessMode = ProcessModeEnum.Disabled;
-        _smokeTest = new SmokeTest(_smokeRun.Match, _smokeRun.Session);
+        if (_view is { } view)
+        {
+            _smokeTest = new SmokeTest(_smokeRun.Match, view, _smokeRun.Session);
+        }
     }
 
     private void RunSmokeTest(SmokeLog log)

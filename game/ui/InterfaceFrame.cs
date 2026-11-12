@@ -3,8 +3,9 @@ using Godot;
 namespace Game;
 
 /// <summary>
-/// The frame of the interface round a match. It has four places, and it puts nothing of its own
-/// into them: every readout, button and panel belongs to an <see cref="InterfacePart"/>.
+/// The frame of the interface round a match. It has four places for the game and one for the
+/// aids of development, and it puts nothing of its own into them: every readout, button and
+/// panel belongs to an <see cref="InterfacePart"/>.
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
@@ -28,6 +29,11 @@ namespace Game;
 /// for a while. Nothing of the frame lies under it: a full-screen panel begins below it, with
 /// room kept for one message, so that the panel moves only when two are shown at once.
 /// </item>
+/// <item>
+/// <b>The development aids</b>, at the left edge, half way down: <see cref="DevelopmentAids"/>
+/// for what a tester needs and the game does not have, each in a box of its own that says so.
+/// They stand one under another, clear of the message line and of the corners.
+/// </item>
 /// </list>
 /// </remarks>
 public partial class InterfaceFrame : CanvasLayer
@@ -46,6 +52,8 @@ public partial class InterfaceFrame : CanvasLayer
     private const int MessageBottom = 4;
     private const int PanelMargin = 12;
     private const float PanelPadding = 12f;
+
+    private const float AidsLeft = 8f;
 
     private const int MessageLimit = 5;
     private const double MessageFadeSeconds = 1.0;
@@ -75,6 +83,12 @@ public partial class InterfaceFrame : CanvasLayer
 
     /// <summary>The left of the bottom panel: what is selected. A part adds a control of its own and shows it while it has something to say.</summary>
     public VBoxContainer SelectionArea { get; private set; } = null!;
+
+    /// <summary>
+    /// The column of the development aids, which are not part of the game: a part adds a box of
+    /// its own, marked as an aid. It is not shown while a full-screen panel is open.
+    /// </summary>
+    public VBoxContainer DevelopmentAids { get; private set; } = null!;
 
     /// <summary>The full-screen panel that is open, or null.</summary>
     public FramePanel? OpenPanel { get; private set; }
@@ -209,6 +223,7 @@ public partial class InterfaceFrame : CanvasLayer
 
         // A full-screen panel covers the bottom panel, which is not shown round its edge.
         _bottom.Visible = !IsPanelOpen && (HasVisibleChild(SelectionArea) || HasVisibleChild(_commandArea));
+        DevelopmentAids.Visible = !IsPanelOpen;
         FadeMessages(delta);
     }
 
@@ -373,9 +388,10 @@ public partial class InterfaceFrame : CanvasLayer
         root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(root);
 
-        // Each is drawn over those before it: the bottom panel, then what stands under the top
-        // bar, a full-screen panel among it, then the top bar.
+        // Each is drawn over those before it: the bottom panel, the development aids, then what
+        // stands under the top bar, a full-screen panel among it, then the top bar.
         BuildBottomPanel(root);
+        BuildDevelopmentAids(root);
         BuildUnderBar(root);
         BuildTopBar(root);
     }
@@ -419,6 +435,22 @@ public partial class InterfaceFrame : CanvasLayer
         _commandArea = UiStyle.Row(8);
         _commandArea.Name = "Commands";
         bottomRow.AddChild(_commandArea);
+    }
+
+    // The column grows up and down from the middle of the left edge as boxes are added. Only
+    // the boxes take clicks: between and beside them a click is the world's.
+    private void BuildDevelopmentAids(Control root)
+    {
+        DevelopmentAids = UiStyle.Column(8);
+        DevelopmentAids.Name = "DevelopmentAids";
+        DevelopmentAids.MouseFilter = Control.MouseFilterEnum.Ignore;
+        root.AddChild(DevelopmentAids);
+        DevelopmentAids.SetAnchorsPreset(Control.LayoutPreset.CenterLeft);
+        DevelopmentAids.GrowVertical = Control.GrowDirection.Both;
+        DevelopmentAids.OffsetLeft = AidsLeft;
+        DevelopmentAids.OffsetRight = AidsLeft;
+        DevelopmentAids.OffsetTop = 0f;
+        DevelopmentAids.OffsetBottom = 0f;
     }
 
     // Under the top bar the message line and the full-screen panel stand in one column, the

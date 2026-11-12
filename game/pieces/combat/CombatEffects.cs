@@ -6,7 +6,8 @@ namespace Game;
 
 /// <summary>
 /// What a fight looks like beside the units, the bars and the shots: every hit, shot and death the
-/// simulation reports for a tick becomes a short effect here.
+/// simulation reports for a tick that the player may know of (design 5.3) becomes a short effect
+/// here. A fight on ground the player does not see leaves nothing on the screen.
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
@@ -65,12 +66,18 @@ public partial class CombatEffects : WorldLayer
         var match = View.Match;
         foreach (var happened in match.Simulation.Events)
         {
+            if (!View.Sight.Knows(happened))
+            {
+                continue;
+            }
+
             var place = WorldView.ToWorld(happened.Position);
             switch (happened.Kind)
             {
                 case SimEventKind.MeleeHit:
                     HitsShown++;
-                    if (match.Bodies.TryGet(happened.Other, out var attacker))
+                    // The streak comes from the attacker only when the player sees the attacker too.
+                    if (View.Sight.ShowsUnit(happened.Other) && match.Bodies.TryGet(happened.Other, out var attacker))
                     {
                         Add(new Effect(EffectKind.Streak, place, 0.16) { From = WorldView.ToWorld(attacker.Position) });
                     }
