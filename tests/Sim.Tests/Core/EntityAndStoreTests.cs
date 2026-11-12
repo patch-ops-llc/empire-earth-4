@@ -143,6 +143,113 @@ public class EntityAndStoreTests
         }
     }
 
+    /// <summary>
+    /// Every lookup of a store and of the list of entities, against a walk over what they hold:
+    /// stores of every size from none, with IDs missing before, between and after the ones
+    /// there, and entities destroyed and not yet removed.
+    /// </summary>
+    [Theory]
+    [InlineData(1UL)]
+    [InlineData(2UL)]
+    [InlineData(3UL)]
+    public void ALookupFindsEveryEntityThatIsThereAndNoOther(ulong seed)
+    {
+        var random = new DeterministicRandom(seed);
+        for (var size = 0; size <= 70; size++)
+        {
+            var world = new World(0);
+            var health = world.AddStore(new ComponentStore<Health>("health"));
+            var created = Enumerable.Range(0, size).Select(_ => world.Entities.Create()).ToArray();
+            foreach (var entity in created.Where(_ => random.NextInt(3) > 0))
+            {
+                health.Add(entity, new Health { Points = entity.Value });
+            }
+
+            // Some are gone for good, which leaves gaps in both, and some are destroyed and still listed.
+            foreach (var entity in created.Where(_ => random.NextInt(4) == 0))
+            {
+                world.Entities.Destroy(entity);
+            }
+
+            world.FlushDestroyedEntities();
+            var destroyed = created.Where(entity => world.Entities.IsAlive(entity) && random.NextInt(4) == 0).ToArray();
+            foreach (var entity in destroyed)
+            {
+                world.Entities.Destroy(entity);
+            }
+
+            var stored = EntitiesOf(health);
+            var listed = EntitiesOf(world.Entities);
+            for (var value = -2; value <= size + 2; value++)
+            {
+                var entity = new EntityId(value);
+                var index = Array.IndexOf(stored, entity);
+                var position = Array.IndexOf(listed, entity);
+                var alive = position >= 0 && !destroyed.Contains(entity);
+
+                Assert.Equal(index, health.IndexOf(entity));
+                Assert.Equal(index >= 0, health.Contains(entity));
+                Assert.Equal(index >= 0, health.TryGet(entity, out var found));
+                Assert.Equal(index >= 0 ? value : 0, found.Points);
+                Assert.Equal(position, world.Entities.PositionOf(entity));
+                Assert.Equal(alive, world.Entities.IsAlive(entity));
+
+                // A hint changes how the answer is found and never the answer.
+                foreach (var hint in new[] { index, position, index - 1, index + 1, 0, -1, size, stored.Length, listed.Length, int.MaxValue, int.MinValue })
+                {
+                    Assert.Equal(index, health.IndexOf(entity, hint));
+                    Assert.Equal(alive, world.Entities.IsAlive(entity, hint));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// A hint is where a value was. What was added or removed since may have moved the value, or
+    /// taken it away: the lookup then searches, and answers as it does without a hint.
+    /// </summary>
+    [Fact]
+    public void AHintThatIsOutOfDateIsSafe()
+    {
+        var world = new World(0);
+        var health = world.AddStore(new ComponentStore<Health>("health"));
+        var a = world.Entities.Create();
+        var b = world.Entities.Create();
+        var c = world.Entities.Create();
+        health.Add(b, new Health { Points = 20 });
+        health.Add(c, new Health { Points = 30 });
+        var (hintOfB, hintOfC) = (health.IndexOf(b), health.IndexOf(c));
+        var (listedB, listedC) = (world.Entities.PositionOf(b), world.Entities.PositionOf(c));
+        Assert.Equal((0, 1, 1, 2), (hintOfB, hintOfC, listedB, listedC));
+
+        // A value added before them moves both up.
+        health.Add(a, new Health { Points = 10 });
+        Assert.Equal(1, health.IndexOf(b, hintOfB));
+        Assert.Equal(2, health.IndexOf(c, hintOfC));
+        Assert.Equal(30, health.ValueAt(health.IndexOf(c, hintOfC)).Points);
+
+        // One removed moves the later one down, and where it was there is now another entity or nothing.
+        health.Remove(b);
+        Assert.Equal(-1, health.IndexOf(b, 1));
+        Assert.Equal(1, health.IndexOf(c, 2));
+
+        // Destroyed: not alive at once, at the same place in the list until the flush, and then gone from it.
+        world.Entities.Destroy(b);
+        Assert.False(world.Entities.IsAlive(b, listedB));
+        Assert.True(world.Entities.IsAlive(c, listedC));
+        world.FlushDestroyedEntities();
+        Assert.False(world.Entities.IsAlive(b, listedB));
+        Assert.True(world.Entities.IsAlive(c, listedC));
+        Assert.Equal(1, world.Entities.PositionOf(c));
+        Assert.Equal(-1, world.Entities.PositionOf(b));
+
+        // The place b had in the list is c's now: a hint is never taken for the entity it names.
+        Assert.True(world.Entities.IsAlive(c, listedB));
+        world.Entities.Destroy(c);
+        Assert.False(world.Entities.IsAlive(c, listedB));
+        Assert.True(world.Entities.IsAlive(a, listedB));
+    }
+
     [Fact]
     public void ValuesAreReadAndChangedInPlace()
     {
