@@ -28,7 +28,7 @@ public sealed class Selection
         {
             _entities.Clear();
             _entities.UnionWith(chosen);
-            Changed?.Invoke();
+            Raise();
         }
     }
 
@@ -39,7 +39,7 @@ public sealed class Selection
         _entities.UnionWith(entities);
         if (_entities.Count != before)
         {
-            Changed?.Invoke();
+            Raise();
         }
     }
 
@@ -51,7 +51,7 @@ public sealed class Selection
             _entities.Add(entity);
         }
 
-        Changed?.Invoke();
+        Raise();
     }
 
     public void Clear()
@@ -59,7 +59,7 @@ public sealed class Selection
         if (_entities.Count > 0)
         {
             _entities.Clear();
-            Changed?.Invoke();
+            Raise();
         }
     }
 
@@ -68,7 +68,37 @@ public sealed class Selection
     {
         if (_entities.RemoveWhere(gone) > 0)
         {
-            Changed?.Invoke();
+            Raise();
+        }
+    }
+
+    private void Raise()
+    {
+        if (Changed is null)
+        {
+            return;
+        }
+
+        if (!FrameClock.On)
+        {
+            Changed.Invoke();
+            return;
+        }
+
+        // For the frame test each listener is called and timed by itself, in the same order.
+        foreach (var listener in Changed.GetInvocationList())
+        {
+            var span = FrameClock.Begin();
+            ((Action)listener).Invoke();
+
+            // A listener written in place belongs to the class it is written in.
+            var owner = listener.Method.DeclaringType;
+            while (owner is { IsNested: true, DeclaringType: not null })
+            {
+                owner = owner.DeclaringType;
+            }
+
+            FrameClock.End("selection", owner ?? typeof(Selection), span);
         }
     }
 }

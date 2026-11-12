@@ -109,6 +109,32 @@ The Export workflow (`export.yml`) makes the builds that testers get: a zip for 
 
 Godot builds every project as `ExportRelease` for an export. `Directory.Build.props` gives that configuration the optimization of a Release build, and the workflow fails if the exported simulation is not optimized.
 
+## The frame test
+
+The frame test is a command a person runs. It plays a large match as the game shows it, times every part of the game's own code in every frame, and holds the sum against the frame budget. CI builds it and does not run it.
+
+```sh
+godot --headless --fixed-fps 60 --path game -- --frame-test fight
+./Game.x86_64 --headless --fixed-fps 60 -- --frame-test fight
+```
+
+| Argument | What it does |
+| --- | --- |
+| `--frame-test <scenario>` | `fight`: two armies attack toward the middle of the map and meet. `own`: one army, all of it the player's and all of it selected, on the move. `march`: two armies that move past each other and do not fight. |
+| `--frame-units <n>` | The number of units in all. 500 if left out, which is what the budget is set for. |
+| `--frame-seconds <n>` | The seconds of play that are timed. 45 if left out. |
+
+The budget is for 60 frames a second with 500 units: all of the game's code outside the tick may take 4 ms of a frame on average and 8 ms at the 99th percentile. The tick has its own budget, 8 ms on average and 25 ms at worst. The test prints a table with a line for every part: each layer of the world view and each part of the interface, after a tick and in every frame, what hears of a change of the selection, and the session. Under it are the tick as the game ran it, the state hash of the match at the end, one line that puts the times beside the budget, and one that says `within the budget on this machine`, `over the budget on this machine` with what is over, or `measured, not held`. The last line is `FRAME_TEST_DONE`. Check for that line and not the exit code, as with the smoke test.
+
+Read the result with these in mind:
+
+- **Only an exported build has the game's times.** The editor builds the C# code unoptimized and with overflow checks, and the test then says `measured, not held`. To measure in the editor as an export builds, build first with `dotnet build game/Game.csproj -c Debug --no-incremental -p:Optimize=true -p:CheckForOverflowUnderflow=false`.
+- **A time over the budget does not fail the test**, because times depend on the machine. The test fails, with exit code 1 and no last line, when the match could not be played as scripted or the engine logged an error.
+- **It times the game's code, not the drawing.** Headless nothing is drawn. Run it without `--headless` to draw, and the test also prints what the renderer was asked for in a frame. The table's last line, the rest of the frame, is then the engine, the drawing and the wait for the screen.
+- **Keep `--fixed-fps 60` in a headless run.** With it the frames run as fast as they can and the test takes a few seconds. Without it the engine waits between frames and the rest of the frame is mostly that wait. The game's code is timed the same either way: every frame gives the match a sixtieth of a second, so a tick runs in every third frame.
+- **A part is timed without a line of its own** when it is a `WorldLayer` or an `InterfacePart`. Code that Godot calls directly, a node's own `_Process`, `_Draw` or input handler, times itself with `FrameClock.Begin` and `FrameClock.End`, or its time shows only in the rest of the frame.
+- The match is made with the development spawn, so the data must allow it. It writes a replay like any match played alone.
+
 ## Continuous integration
 
 | Workflow | Runs on | What it does |
@@ -121,7 +147,7 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 
 | Path | Contents |
 | --- | --- |
-| `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) `Serialization/` (the byte format, the encoding of a command, and snapshots) and `Economy/` (stockpiles, territories, deposits and Generators, workers and their places, income and supply). |
+| `src/Sim/` | The simulation. A plain .NET library that must not reference Godot or any package; a test enforces this. One folder per part: `Core/` (world, entities, tick loop, commands, state hash), `Math/` (fixed-point numbers, exact fractions, angles), `Data/` (the loader for `game/data/`) `Serialization/` (the byte format, the encoding of a command, and snapshots), `Economy/` (stockpiles, territories, deposits and Generators, workers and their places, income and supply) and `Combat/` (hit points, attacks, shots, target picking, the four orders and death). |
 | `src/Net/` | The lockstep network session. A plain .NET library that references only `Sim`: `Protocol/` (the messages and their bytes), `Session/` (the host, the client, and the two in one process for single-player), `Transport/` (the connection interface, and the loopback used by single-player and tests), `Lobby/` (a hosted match and a joining player: the description of the match, the version and data check, the draw of starts) and `Files/` (the replay a session writes while it runs). |
 | `src/Net.Udp/` | The real network under the session: a connection over UDP, a listener for the host and a connector for a client. A plain .NET library that references `Net` and the LiteNetLib package. Sockets, the package and the thread that keeps connections alive live here and nowhere else. |
 | `src/Tools/` | The console tools, as one program: `dotnet run --project src/Tools -- <tool> [arguments]`. Each tool is a folder. So far: `datacheck` checks a data folder, `balance-report` prints what the tech rules make of tier mixes, `replay` runs recorded matches again and checks their state hashes, and `desync-diff` takes the replays and snapshots two players wrote when their match came apart and names the tick and the values that differ. |

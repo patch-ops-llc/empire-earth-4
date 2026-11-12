@@ -47,6 +47,13 @@ public partial class DebugOverlay : CanvasLayer
 
     public override void _Process(double delta)
     {
+        var span = FrameClock.Begin();
+        EveryFrame(delta);
+        FrameClock.End("every frame: the debug overlay", span);
+    }
+
+    private void EveryFrame(double delta)
+    {
         _frames++;
         _sinceRefresh += delta;
         _worstFrame = Math.Max(_worstFrame, delta);

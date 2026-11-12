@@ -82,6 +82,18 @@ public partial class UnitControl : Node
         }
     }
 
+    /// <summary>
+    /// Selects what a box dragged over the whole window selects, exactly as the drag does. The
+    /// frame test selects so, to time what a player does many times in a match.
+    /// </summary>
+    public void SelectWholeWindow()
+    {
+        if (_view is { } view)
+        {
+            SelectInBox(view, GetViewport().GetVisibleRect(), add: false);
+        }
+    }
+
     public override void _UnhandledInput(InputEvent @event)
     {
         if (_view is not { } view)

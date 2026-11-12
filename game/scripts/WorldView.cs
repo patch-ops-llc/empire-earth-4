@@ -146,7 +146,9 @@ public partial class WorldView : Node3D
 
         foreach (var layer in _layers)
         {
+            var span = FrameClock.Begin();
             layer.AfterTick();
+            FrameClock.End("after tick", layer, span);
         }
     }
 
@@ -166,7 +168,7 @@ public partial class WorldView : Node3D
         return false;
     }
 
-    public override void _Process(double delta)
+    private void EveryFrame(double delta)
     {
         var fraction = Mathf.Clamp(TickFraction, 0f, 1f);
         foreach (var unit in _units.Values)
@@ -178,8 +180,17 @@ public partial class WorldView : Node3D
         // The layers come after the units, so that what follows a unit is exactly on it.
         foreach (var layer in _layers)
         {
+            var span = FrameClock.Begin();
             layer.EveryFrame(delta);
+            FrameClock.End("every frame", layer, span);
         }
+    }
+
+    public override void _Process(double delta)
+    {
+        var span = FrameClock.Begin();
+        EveryFrame(delta);
+        FrameClock.End("every frame: the world view itself", span);
     }
 
     /// <summary>A point on the map as a point on the ground: map x is world X and map y is world Z.</summary>
