@@ -1,13 +1,9 @@
 using Sim.Combat;
 using Sim.Core;
-using Sim.Economy;
-using Sim.Map;
-using Sim.Numerics;
 using Sim.Setup;
 using Sim.Tests.Combat;
 using Sim.Tests.Serialization;
 using Sim.Tests.Setup;
-using Sim.Tests.Tech;
 using static Sim.Tests.Research.ResearchMatches;
 
 namespace Sim.Tests.Research;

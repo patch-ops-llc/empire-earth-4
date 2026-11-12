@@ -1,6 +1,5 @@
 using Sim.Core;
 using Sim.Economy;
-using Sim.Research;
 using Sim.Setup;
 using Sim.Tests.Map;
 using static Sim.Tests.Economy.EconomyMatches;

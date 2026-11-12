@@ -81,7 +81,7 @@ Nothing reads a clock. The caller decides when a tick runs; there are `SimInfo.T
 | 5 | `AttackSystem` | Each unit of a chassis, oldest first: counts down its wait, picks or gives up a target as its order says, attacks if the target is in reach and the unit has not moved in this tick, and otherwise stops in reach or walks after the target. | After movement and the spatial index, because a unit attacks only in a tick in which it does not move, and it finds targets where they stand now. It changes no position, so the index stays right for whatever follows. The walks it orders begin in the next tick. |
 | 6 | `DeathSystem` | Destroys every entity whose hit points are at zero. | After every attack of the tick, melee hits and landing shots alike, so that every attack due in a tick is made before any death of that tick takes effect: two units that kill each other in one tick both die, and the lower ID gets no first strike. A system that deals damage goes before it. |
 | 7 | `IncomeSystem` | Notes which workers have reached their places, counts each working worker's ticks and pays those that are due, oldest worker first, and then gives free places to waiting workers in the order they began to wait. | After movement, so that a worker that reaches its place in this tick has arrived in this tick. It moves nobody, and it reads tiers and territories as they are when it runs. A system that destroys units goes before it, so that a place freed by a death is given out in the same tick; one that changes tiers goes after it, so that a new tier pays from the next tick on. |
-| 8 | `ResearchSystem` | Closes every research slot whose holder is no longer alive, with a refund, and takes every other research one tick further. A research that reaches its last tick raises its track. | Last, after everything that can destroy an entity, so that a research cannot finish in the tick its building falls. A system that destroys entities goes before it. A new tier is therefore in effect from the next tick on. |
+| 8 | `ResearchSystem` | Closes every research slot whose holder is no longer alive, with a refund, and takes every other research one tick further. A research that reaches its last tick raises its track, and the units and workers of its player are brought up to date in the same tick: each keeps its fraction of hit points under its new maximum, and a unit of a chassis gets its blueprint's new speed (`UnitRefresh`, registered on `ITechChangeHandler`). | Last, after everything that can destroy an entity, so that a research cannot finish in the tick its building falls. A system that destroys entities goes before it. A new tier is therefore in effect from the next tick on: the first step at a new speed and the first blow against the new hit points are the next tick's. |
 
 The order is a rule of the game: moving a system changes results, on every machine alike, and so changes every recorded hash. A pull request that adds a system adds a row here, says where the system goes and why, and updates the golden replays.
 
@@ -95,7 +95,7 @@ A `Command` is the only way anything outside the simulation changes it. It is im
 
 ## Events
 
-Commands go in; events come out. `Simulation.Events` is the list of what happened in the last tick that the state alone does not show afterwards: a hit, a shot fired, a death. The view, sound and tools read it after every tick.
+Commands go in; events come out. `Simulation.Events` is the list of what happened in the last tick that the state alone does not show afterwards: a hit, a shot fired, a death, a research finished. The view, sound and tools read it after every tick.
 
 - A `SimEvent` is immutable data: a kind (`SimEventKind`), the tick, a player, up to two entities, a point and a number. Which of those a kind fills is written at the kind. An event carries the place it happened at, because an entity it names may be gone when it is read: destroyed entities leave the stores at the end of the tick.
 - A command handler or a system is handed the list when the match is set up (`simulation.Events`) and calls `Add`, which stamps the tick. The events of a tick stand in the order they were added: those of the commands, then those of each system.
@@ -103,6 +103,7 @@ Commands go in; events come out. `Simulation.Events` is the list of what happene
 - **The list is output, not state.** It is not walked, so it is in neither the state hash nor a snapshot, and restoring a snapshot empties it. A match runs to the same state whether or not anything is reported: `SimEventTests` runs the toy match with and without a system that reports, and compares every hash and the snapshots.
 - **Nothing in the simulation reads the list.** What a rule needs to know goes in a store. Adding an event draws nothing from the random generator and changes nothing in the world. Enforced by review.
 - A piece that reports something adds its kinds to `SimEventKind`, in alphabetical order and without numbers. The number of a kind is recorded nowhere, unlike that of a command type, so it may change from one build to the next and nothing may store one.
+- An event has one number. A piece that has more to say packs it and gives the reader a way to take it apart: research puts track, tier and epoch in the number, and `ResearchEvent.TryRead` gives them back.
 
 ## The state hash
 
@@ -314,9 +315,10 @@ dotnet run --project src/Tools -- replay verify tests/golden/replays --data test
   replay record tests/golden/replays/switchback-three-players.replay --data tests/golden/data --map switchback --starts 0,-,1 --seed 3 --orders 5 --ticks 2410
   replay record tests/golden/replays/switchback-research.replay --data tests/golden/data --map switchback --starts 1,-,0 --seed 4 --orders 8 --ticks 4800
   replay record tests/golden/replays/switchback-workers.replay --data tests/golden/data --map switchback --starts 0,1 --seed 5 --orders 13 --ticks 4800
+  replay record tests/golden/replays/switchback-refresh.replay --data tests/golden/data --map switchback --starts 0,1 --seed 9 --orders 9 --ticks 4800
   ```
 
-  Recording again with the same arguments gives the same file only while `ScriptedOrders` and the rules are unchanged. Each was recorded before `ScriptedOrders` gave the orders of the pieces that came after it, so recording any of them again gives another match: the first three have neither research nor gather orders, the fourth has research, and the fifth has workers at deposits and no research. An existing replay is therefore only ever updated.
+  Recording again with the same arguments gives the same file only while `ScriptedOrders` and the rules are unchanged. Each was recorded before `ScriptedOrders` gave the orders of the pieces that came after it, so recording any of them again gives another match: the first three have neither research nor gather orders, the fourth has research, the fifth has workers at deposits and no research, and the sixth has both, with a Protection research that finishes and raises the hit points of its player's workers. An existing replay is therefore only ever updated.
 
 ## Adding a system
 

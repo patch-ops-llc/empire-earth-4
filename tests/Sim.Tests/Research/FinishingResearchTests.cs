@@ -1,6 +1,4 @@
 using Sim.Core;
-using Sim.Map;
-using Sim.Numerics;
 using Sim.Research;
 using Sim.Setup;
 using Sim.Tech;
