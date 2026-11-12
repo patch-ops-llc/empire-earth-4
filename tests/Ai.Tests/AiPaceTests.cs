@@ -48,14 +48,14 @@ public class AiPaceTests
 
         run.Play(5 * 60 * SimInfo.TicksPerSecond);
 
-        // The second round is the tick the first one's orders were carried out in, and no sooner.
+        // The second round comes two ticks after the first one's orders were carried out, and no sooner.
         Assert.Equal(1, run.Rounds[0]);
-        Assert.Equal(1 + Math.Max(delay, AiPlayer.ThinkInterval), run.Rounds[1]);
+        Assert.Equal(1 + delay + AiPace.Margin, run.Rounds[1]);
         Assert.Equal(delay, run.Ai.Pace.OrderTicks);
         Assert.Equal(Math.Max(AiPlayer.ThinkInterval, delay + AiPace.Margin), run.Ai.Pace.Interval);
         for (var i = 2; i < run.Rounds.Count; i++)
         {
-            Assert.True(run.Rounds[i] - run.Rounds[i - 1] >= delay, $"rounds at ticks {run.Rounds[i - 1]} and {run.Rounds[i]}");
+            Assert.True(run.Rounds[i] - run.Rounds[i - 1] >= delay + AiPace.Margin, $"rounds at ticks {run.Rounds[i - 1]} and {run.Rounds[i]}");
         }
 
         // So nothing it orders is ordered twice: no command is dropped and none is refused.
@@ -82,7 +82,7 @@ public class AiPaceTests
 
     /// <summary>A worker it watches that dies is not waited for.</summary>
     [Fact]
-    public void ItDoesNotWaitForAWorkerThatIsGone()
+    public void ItDoesNotWaitForWorkersThatAreGone()
     {
         var run = new Run(delay: -1, "swarm");
         run.Play(1);
@@ -90,12 +90,39 @@ public class AiPaceTests
         Assert.NotEmpty(workers);
         Assert.True(run.Ai.Pace.IsWaiting);
 
-        ref var health = ref run.Match.Health.ValueAt(run.Match.Health.IndexOf(workers[0]));
-        health.HitPoints = 0;
+        foreach (var worker in workers)
+        {
+            ref var health = ref run.Match.Health.ValueAt(run.Match.Health.IndexOf(worker));
+            health.HitPoints = 0;
+        }
+
         run.Play(2);
 
         Assert.False(run.Ai.Pace.IsWaiting);
         Assert.Equal(0, run.Ai.Pace.OrderTicks);
+    }
+
+    /// <summary>
+    /// The orders of one round cross the network one by one, and the host may schedule the later
+    /// ones a tick or two after the first. It waits for the last worker it sent and two ticks
+    /// more, so that it does not read a match in which half of them have run.
+    /// </summary>
+    [Theory]
+    [InlineData(12, 1)]
+    [InlineData(12, 2)]
+    [InlineData(18, 2)]
+    public void OrdersOfOneRoundThatRunInDifferentTicksAreAllWaitedFor(int delay, int spread)
+    {
+        var run = new Run(delay, "elite", spread);
+
+        run.Play(5 * 60 * SimInfo.TicksPerSecond);
+
+        // The workers' orders are the first of a round. The second round comes when the last order of the first has run.
+        Assert.InRange(run.Rounds[1], 1 + delay + spread, 1 + delay + spread + AiPace.Margin);
+        Assert.InRange(run.Ai.Pace.OrderTicks, delay, delay + spread);
+        Assert.True(run.Rounds.Count >= 30, $"{run.Rounds.Count} rounds gave orders");
+        Assert.Equal(0, run.Match.Simulation.DroppedCommandCount);
+        Assert.Equal(0, run.Refusals);
     }
 
     /// <summary>
@@ -140,12 +167,17 @@ public class AiPaceTests
     private sealed class Run
     {
         private readonly int _delay;
+        private readonly int _spread;
         private readonly List<Command> _commands = [];
 
-        public Run(int delay, string personality)
+        /// <param name="delay">The ticks after which an order is carried out, or -1 for never.</param>
+        /// <param name="personality">Who plays.</param>
+        /// <param name="spread">The orders of a round are carried out over this many ticks more, the first of them first.</param>
+        public Run(int delay, string personality, int spread = 0)
         {
             var data = GameFiles.Data;
             _delay = delay;
+            _spread = spread;
             Match = MatchSetup.Create(data, data.Maps.Single(map => map.Id == "ridge"), seed: 1, [new PlayerSetup(0)]);
             Ai = new AiPlayer(Match, 0, data.PersonalityOf(personality)!);
         }
@@ -183,12 +215,11 @@ public class AiPaceTests
                     Given.AddRange(_commands);
                 }
 
-                foreach (var command in _commands)
+                for (var order = 0; order < _commands.Count && _delay > 0; order++)
                 {
-                    if (_delay > 0)
-                    {
-                        Match.Simulation.Commands.Enqueue(Match.World.Tick + _delay - 1, command);
-                    }
+                    // In the order they were given, the last of them the whole spread later.
+                    var late = _commands.Count > 1 ? order * _spread / (_commands.Count - 1) : 0;
+                    Match.Simulation.Commands.Enqueue(Match.World.Tick + _delay - 1 + late, _commands[order]);
                 }
             }
         }

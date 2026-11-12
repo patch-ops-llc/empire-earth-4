@@ -9,29 +9,34 @@ namespace Ai;
 /// of the round before have been carried out gives them again, and the second of each is refused.
 /// </summary>
 /// <remarks>
-/// Nobody tells it the delay, so it measures: when a round sends a worker to a site, it watches
-/// that worker, and the tick in which the worker has the site is the tick the round's orders
-/// were carried out. Until then it does not think again. On the host, where an order takes at
-/// most a few ticks, that is always before <see cref="AiPlayer.ThinkInterval"/> has passed and
-/// nothing changes. It measures only while it is called after every tick, as
-/// <see cref="AiPlayer.Think"/> asks: called less often, it cannot tell the tick.
+/// Nobody tells it the delay, so it measures: when a round sends workers to sites, it watches
+/// those workers, and the tick in which the last of them has its site is the tick the round's
+/// orders were carried out, give or take: the orders of one round cross the network one by one
+/// and need not all be scheduled for the same tick. Until <see cref="Margin"/> ticks after it
+/// does not think again. On the host, where an order takes at most a few ticks, that is always
+/// before <see cref="AiPlayer.ThinkInterval"/> has passed and nothing changes. It measures only
+/// while it is called after every tick, as <see cref="AiPlayer.Think"/> asks: called less often,
+/// it cannot tell the tick.
 /// </remarks>
 internal sealed class AiPace
 {
-    /// <summary>The ticks it allows on top of the longest time it has measured, for orders that take longer than that one did.</summary>
+    /// <summary>
+    /// The ticks it allows on top of the time it has measured, for the orders of a round that
+    /// are scheduled later than the one it saw carried out.
+    /// </summary>
     public const int Margin = 2;
 
     /// <summary>
-    /// The longest it waits for the worker it watches: twice the longest command delay the
+    /// The longest it waits for the workers it watches: twice the longest command delay the
     /// network protocol allows. An order can come to nothing, and it must not wait for ever.
     /// </summary>
     public const int LongestWait = 40;
 
     private readonly AiSight _sight;
-    private EntityId _worker = EntityId.None;
-    private EntityId _site = EntityId.None;
+    private readonly List<(EntityId Worker, EntityId Site)> _watched = [];
     private int _givenTick;
     private int _watchedTick;
+    private int _readyTick;
     private bool _watchedEveryTick;
 
     public AiPace(AiSight sight)
@@ -40,49 +45,53 @@ internal sealed class AiPace
         _sight = sight;
     }
 
-    /// <summary>The longest it has seen an order take, from the round that gave it to the tick its effect could be read. Zero before the first.</summary>
+    /// <summary>
+    /// The longest it has seen the orders of a round take, from the round that gave them to the
+    /// tick the effect of the last could be read. Zero before the first.
+    /// </summary>
     public int OrderTicks { get; private set; }
 
     /// <summary>The ticks between two rounds: <see cref="AiPlayer.ThinkInterval"/>, or longer when its orders take longer than that.</summary>
     public int Interval => Math.Max(AiPlayer.ThinkInterval, OrderTicks + Margin);
 
-    /// <summary>True while orders it has given have not been carried out, as far as it can tell.</summary>
-    public bool IsWaiting => _worker != EntityId.None;
+    /// <summary>True while orders it has given have not all been carried out, as far as it can tell.</summary>
+    public bool IsWaiting => _watched.Count > 0 || _sight.Tick < _readyTick;
 
-    /// <summary>Looks at the worker it watches. Called after every tick.</summary>
+    /// <summary>Looks at the workers it watches. Called after every tick.</summary>
     public void Watch()
     {
-        if (_worker == EntityId.None)
+        if (_watched.Count == 0)
         {
             return;
         }
 
-        // It can only say in which tick the worker got the site when it has looked after every one.
+        // It can only say in which tick a worker got its site when it has looked after every one.
         _watchedEveryTick &= _sight.Tick <= _watchedTick + 1;
         _watchedTick = _sight.Tick;
 
         var waited = _sight.Tick - _givenTick;
-        if (_sight.HasBeenSentTo(_worker, _site))
+        if (waited >= LongestWait)
         {
-            if (_watchedEveryTick)
-            {
-                OrderTicks = Math.Max(OrderTicks, waited);
-            }
-
-            _worker = EntityId.None;
+            _watched.Clear();
+            return;
         }
-        else if (waited >= LongestWait || !_sight.IsOwnWorker(_worker))
+
+        // A worker that has died is not waited for.
+        var seen = _watched.RemoveAll(entry => _sight.HasBeenSentTo(entry.Worker, entry.Site));
+        _watched.RemoveAll(entry => !_sight.IsOwnWorker(entry.Worker));
+        if (_watched.Count == 0 && seen > 0 && _watchedEveryTick)
         {
-            _worker = EntityId.None;
+            OrderTicks = Math.Max(OrderTicks, waited);
+            _readyTick = _sight.Tick + Margin;
         }
     }
 
-    /// <summary>Takes the first worker the round sent to a site it is not at as the one to watch.</summary>
+    /// <summary>Takes the workers the round sent to a site they are not at as the ones to watch.</summary>
     /// <param name="orders">The orders of the round.</param>
     public void Note(List<Command> orders)
     {
         ArgumentNullException.ThrowIfNull(orders);
-        if (_worker != EntityId.None)
+        if (_watched.Count > 0)
         {
             return;
         }
@@ -93,13 +102,12 @@ internal sealed class AiPace
                 && order.Entities.Length > 0
                 && !_sight.HasBeenSentTo(order.Entities[0], order.TargetEntity))
             {
-                _worker = order.Entities[0];
-                _site = order.TargetEntity;
-                _givenTick = _sight.Tick;
-                _watchedTick = _sight.Tick;
-                _watchedEveryTick = true;
-                return;
+                _watched.Add((order.Entities[0], order.TargetEntity));
             }
         }
+
+        _givenTick = _sight.Tick;
+        _watchedTick = _sight.Tick;
+        _watchedEveryTick = true;
     }
 }
