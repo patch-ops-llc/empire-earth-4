@@ -34,7 +34,9 @@ godot --headless --path game --import --build-solutions
 godot --headless --path game --quit-after 600 -- --smoke-test
 ```
 
-The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, gives it a fixed script of four move orders through the session, runs it for 600 ticks, prints one line that starts with `SMOKE_TEST_OK` and quits. It takes about a second. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, gives it a fixed script of orders through the session, runs it to the script's end, prints one line that starts with `SMOKE_TEST_OK` and quits. It takes about a second. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+
+The script is made of parts that run one after another, one for each kind of order the view can give: `game/scripts/SmokeTest.cs` lists them, and the line's `tick` and `orders` say how many ticks and orders they came to.
 
 The line carries two hashes. `content_hash` is the hash of the data files as the game read them, and it must equal the one `datacheck` prints. `state_hash` is the hash of the match's state after the script, and it must be the same on every system. `ci.yml` checks the first. `export.yml` checks both for every build it makes, and an exported build takes the same argument:
 
@@ -79,29 +81,42 @@ godot --headless --path game -- --host --net-test 300
 godot --headless --path game -- --join 127.0.0.1 --net-test 300
 ```
 
-Selection works without physics. A click or a box is turned into an area of the ground, the simulation's spatial index names the units there, and each is tested again where it appears on screen. Started with Godot's `--verbose`, the game prints every selection, every order and every message to the player.
+Selection works without physics. A click or a box is turned into an area of the ground, the simulation's spatial index names the units there, and each is tested again where it appears on screen. A structure is found by the line from the camera through the pointer, tested against the box that stands on its tiles. Started with Godot's `--verbose`, the game prints every selection, every order and every message to the player.
 
 What the player sees and does in a match is put together from pieces, each in a folder of its own under `game/pieces/` and named in `game/pieces/ViewPieces.cs`. A piece adds what it has to four things the game gives it:
 
 | What | Where | A piece adds |
 | --- | --- | --- |
-| The world view | `game/scripts/WorldView.cs` | A `WorldLayer` for each kind of thing it draws. The world view draws the units and calls every layer after every tick and in every frame. |
+| The world view | `game/scripts/WorldView.cs` | A `WorldLayer` for each kind of thing it draws. The world view draws the units the local player sees and the fog of war, and calls every layer after every tick and in every frame. |
 | The frame of the interface | `game/ui/InterfaceFrame.cs` | An `InterfacePart` that puts controls into the top bar or the bottom panel, a full-screen panel, a command for the selection, or a sentence in the message line. |
 | What is under the pointer | `game/ui/UnderPointer.cs` | A `PointerPicker` for each kind of thing that can be pointed at. The answer is one of: a unit of the player's, an enemy unit, a deposit, a structure, the ground. |
 | The order table | `game/ui/OrderTable.cs` | An `OrderRow`: for a kind of target, and a modifier or none, the command the selection is given. |
 
-Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own that runs after the parts before it. The smoke test shows its match through every piece, and it fails on the first error the engine logs while it runs: a piece that throws, when it is added or later, fails it. Warnings do not. Three files are shared by all pieces: `ViewPieces.cs`, the list of parts in `game/scripts/SmokeTest.cs`, and the input map in `game/project.godot`. In each, every piece of the plan has a comment line, and a piece adds its lines directly under its own. Pieces built at the same time then never add at the same place, and their pull requests merge in either order.
+The player is shown their own picture of the match, the fog of war (design 5.3). `MatchView.Sight` (`game/scripts/PlayerSight.cs`) answers what that is, from the simulation's `PlayerView`: a piece draws another player's unit, structure, territory, shot or event only when the sight says so. What follows the units the world view draws needs no test of its own, since those are the units the player sees. The fog itself is one picture of the map (`game/scripts/FogPicture.cs`), which the ground, the forest and the cliffs, and the minimap are shaded with; a piece that draws something on the ground that the fog should dim, as a deposit, shades it with the same picture. Structures are not read from the match: `Sight.CollectStructures` lists the player's own, those of others that the player sees, and those the player remembers, each of the last as it was when last seen, and `Sight.CollectTerritories` the territories that follow. The structure layer, the picker for structures, the territory and the minimap all draw from those lists, so a structure the player has never seen is nowhere on the screen, and one that is remembered is drawn dimmed where it was last seen, a foundation as far built as it was then. Deposits are drawn and found under the pointer once `Sight.ShowsDeposit` says the player has explored a tile under them. The build menu and its placement preview ask `BuildChecks` (`game/pieces/construction/BuildChecks.cs`), which asks `Sight.Seen`, the simulation's `PlayerView`: a site is judged by what the player knows, as the order is, and not by the development switch. The inspection panel lets go of another player's unit that the player no longer sees.
+
+Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own that runs after the parts before it. A part that tests what a piece shows, and not only what it orders, reaches the view through `SmokeOrders.View`: it may select units and read a part of the interface, and reports what is wrong with `Fail`. The smoke test shows its match through every piece, and it fails on the first error the engine logs while it runs: a piece that throws, when it is added or later, fails it. Warnings do not. Three files are shared by all pieces: `ViewPieces.cs`, the list of parts in `game/scripts/SmokeTest.cs`, and the input map in `game/project.godot`. In each, every piece of the plan has a comment line, and a piece adds its lines directly under its own. Pieces built at the same time then never add at the same place, and their pull requests merge in either order.
 
 | Control | Keys and mouse |
 | --- | --- |
 | Pan | W A S D or the arrow keys, or move the pointer to a window edge |
 | Zoom | Mouse wheel, `=` and `-`, or a trackpad pinch or two-finger scroll |
+| Look somewhere else on the map | Left click on the minimap, or hold the button on it and drag |
+| Send the selected units somewhere on the minimap | Right click on the minimap |
 | Select a unit of your own | Left click on it |
+| Select a structure of your own | Left click on it. Structures and units are not selected together |
 | Select several | Drag a box round them with the left button |
 | Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is in |
 | Clear the selection | Left click on the ground |
+| Send the selected workers to work at a deposit | Right click on the deposit |
 | Send the selected units somewhere | Right click on the ground |
 | Show or hide the overlay | F3 |
+| Attack a unit of the other player | Right click on it |
+| Go somewhere and fight what is met on the way | Hold Ctrl and right click on the place |
+| Stop | X, or the Stop button in the selection panel |
+| Lay a wall | With a worker selected, B opens the build menu and L takes the wall in hand. Press the left button on the first tile, drag to the last and let go. A right click or Escape drops the run, and then goes back |
+| Development aid, while `debug.spawn` is on in `rules.jsonc`: make units at the pointer | G for your own. Alone, H for the other player's. The orange panel at the left edge chooses which and how many |
+| Development aid, alone and while `debug.spawn` is on: lift the fog of war from the screen, and lay it back | F4, or the button in the orange panel under the first. Only the screen changes: the simulation has no such switch |
+| Development aid, alone and while `debug.spawn` is on: lay a wall for the other player | The button in the small orange box under the second panel, then lay a wall as above. While it is on, the run is laid at once as finished wall of the other player, free of charge |
 
 ## Test builds
 
