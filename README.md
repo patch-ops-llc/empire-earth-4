@@ -132,7 +132,7 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 | `tests/Tools.Tests/` | Tests for the tools, for the data in `game/data/` and for the schemas. |
 | `game/` | The Godot project: `project.godot`, `Game.csproj`, `scenes/`, `scripts/`, `ui/`, `pieces/`. References `Sim` and `Net`. |
 | `game/export_presets.cfg` | The export presets: Windows x86_64, macOS universal, and Linux x86_64, which the export workflow uses for its first smoke test. Each packs the data files with the game. |
-| `game/data/` | The content of the game as JSON-with-comments files: tracks, rules, resources and the worker, unit lines and maps. |
+| `game/data/` | The content of the game as JSON-with-comments files: tracks, rules, resources and the worker, unit lines, structures and maps. |
 | `game/ui/` | What the player does to the match, as scripts: the menu and lobby where a match is started alone, hosted or joined; the frame of the interface round a match; the selection, the box and the rings that show it; the one answer to what is under the pointer; and the table that turns a click into an order, with the mark it leaves on the ground. Orders leave through the session of `Net`. |
 | `game/pieces/` | The pieces of the view, a folder each: what a piece draws in the world, shows in the interface, lets the pointer find and adds to the order table and to the smoke test. `ViewPieces.cs` lists them. |
 | `schemas/` | JSON Schemas for the files in `game/data/`. |

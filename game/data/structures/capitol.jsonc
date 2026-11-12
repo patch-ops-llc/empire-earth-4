@@ -1,0 +1,20 @@
+// Capitol: the structure every player starts with (game design 2.5 and 5.2).
+{
+  "$schema": "../../../schemas/structure.schema.json",
+  "id": "capitol",
+
+  // The track whose tier the structure's look shows.
+  "track": "logistics",
+
+  // The side of the square of tiles it stands on, and its hit points at Protection 1.
+  "footprint": 4,
+  "hp": 2000,
+  "cost": { "materials": 400, "energy": 0 },
+  "build_seconds": 90,
+  "sight": 10,
+
+  // rules.jsonc repeats the footprint and this radius under map.start_territory; they must agree.
+  "territory_radius": 16,
+  "research_slots": 1,
+  "trains": ["worker"]
+}
