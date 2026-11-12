@@ -110,7 +110,7 @@ public class PerkSnapshotTests
         Assert.Contains(CountsOf(fighting, 0), counts => counts.DamagedAt == 0);
         Assert.All(CountsOf(fighting, 1), counts => Assert.InRange(counts.DamagedAt, 300, 349));
 
-        // The first of the pair has died and given its refund; its partner fights on for a second.
+        // The first of the pair has died and given its refund; its partner lives five ticks more.
         var events = new List<SimEvent>();
         var halfGone = Run(377, events);
         Assert.Equal([376], events.Where(simEvent => simEvent.Kind == SimEventKind.ReservesRefunded).Select(simEvent => simEvent.Tick));
@@ -118,13 +118,13 @@ public class PerkSnapshotTests
 
         // The pair is gone, and both refunds are in the stockpile.
         events.Clear();
-        var refunded = Run(400, events);
-        Assert.Equal([376, 399], events.Where(simEvent => simEvent.Kind == SimEventKind.ReservesRefunded).Select(simEvent => simEvent.Tick));
+        var refunded = Run(382, events);
+        Assert.Equal([376, 381], events.Where(simEvent => simEvent.Kind == SimEventKind.ReservesRefunded).Select(simEvent => simEvent.Tick));
         Assert.Empty(CountsOf(refunded, 1));
 
         // Between the regenerations of two raiders, which count from different ticks.
         events.Clear();
-        var regenerating = Run(480, events);
+        var regenerating = Run(475, events);
         Assert.Single(events, simEvent => simEvent.Kind == SimEventKind.Regenerated);
         Assert.Equal(2, CountsOf(regenerating, 0).Select(counts => counts.DamagedAt).Where(tick => tick > 0).Distinct().Count());
 
@@ -146,9 +146,9 @@ public class PerkSnapshotTests
     [InlineData(350)]
     [InlineData(376)]
     [InlineData(377)]
-    [InlineData(399)]
-    [InlineData(400)]
-    [InlineData(480)]
+    [InlineData(381)]
+    [InlineData(382)]
+    [InlineData(475)]
     [InlineData(592)]
     [InlineData(650)]
     public void AMatchWithThePerksAtWorkRestoresAndContinues(int snapshotTick) =>
