@@ -102,7 +102,8 @@ public static class StructureSetup
 
     /// <summary>
     /// Gives a laid structure what comes with completion (design 2.5): the territory of a Capitol
-    /// or an Outpost, a research slot, the work site of a Generator. Call it once for a structure.
+    /// or an Outpost, a research slot, the work site of a Generator, the queue of a structure
+    /// that trains. Call it once for a structure.
     /// </summary>
     /// <exception cref="ArgumentException">The entity is no living structure.</exception>
     /// <exception cref="InvalidOperationException">
@@ -131,6 +132,8 @@ public static class StructureSetup
                 entity,
                 new WorkSite { Kind = WorkSiteKind.Generator, Owner = body.Owner, X = structure.X, Y = structure.Y, Size = structure.Size });
         }
+
+        match.Production.Open(entity);
 
         if (def.ResearchSlots > 0)
         {
