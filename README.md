@@ -96,6 +96,8 @@ The player is shown their own picture of the match, the fog of war (design 5.3).
 
 Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own that runs after the parts before it. A part that tests what a piece shows, and not only what it orders, reaches the view through `SmokeOrders.View`: it may select units and read a part of the interface, and reports what is wrong with `Fail`. The smoke test shows its match through every piece, and it fails on the first error the engine logs while it runs: a piece that throws, when it is added or later, fails it. Warnings do not. Three files are shared by all pieces: `ViewPieces.cs`, the list of parts in `game/scripts/SmokeTest.cs`, and the input map in `game/project.godot`. In each, every piece of the plan has a comment line, and a piece adds its lines directly under its own. Pieces built at the same time then never add at the same place, and their pull requests merge in either order.
 
+What a structure shows beyond its shape is read in one place, `game/pieces/looks/StructureLook.cs`: the tier of the track its look shows, and the track in research in the slot it gives, which is its banner. The tier's look and the banner draw from that list and from nothing else. Today the list is every structure of the match as it is now. When structures are under the fog of war it is the local player's view of them, and the two layers need no change. The territories on the minimap are the tiles the world's territory layer keeps, so the minimap shows the territories the world shows.
+
 | Control | Keys and mouse |
 | --- | --- |
 | Pan | W A S D or the arrow keys, or move the pointer to a window edge |
@@ -109,6 +111,12 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | Clear the selection | Left click on the ground |
 | Send the selected workers to work at a deposit | Right click on the deposit |
 | Send the selected units somewhere | Right click on the ground |
+| Train a unit | Select one finished structure of your own that trains. The bottom panel offers its units: click one, or press its key, which the button names: Q, E, F, T, Y, Z, C, V in the order of the buttons |
+| Cancel an order | Click it in the queue. Backspace cancels the last one |
+| Set the rally point | Right click with structures that train selected |
+| Open or close the research panel | R, or the Research button in the top bar. Escape closes it too |
+| Start a research | In the research panel, left click on a bright cell |
+| Cancel a research | In the research panel, the Cancel button beside its progress bar |
 | Show or hide the overlay | F3 |
 | Attack a unit of the other player | Right click on it |
 | Go somewhere and fight what is met on the way | Hold Ctrl and right click on the place |

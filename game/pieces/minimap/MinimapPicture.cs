@@ -51,6 +51,9 @@ public partial class MinimapPicture : Control
     private Vector2 _markAt;
     private double _markLeft;
 
+    /// <summary>The territories as the picture shows them.</summary>
+    public MinimapTerritory Territory { get; } = new();
+
     /// <summary>The view is asked to look at a point of the ground, as map x and y in tiles.</summary>
     public event Action<Vector2>? Looked;
 
@@ -139,6 +142,7 @@ public partial class MinimapPicture : Control
 
         var whole = new Rect2(Vector2.Zero, _geometry.Size);
         DrawTextureRect(_terrain, whole, tile: false);
+        Territory.Draw(this, view, _geometry);
         DrawDeposits(view);
         if (_sight.Shade is { } shade)
         {

@@ -33,6 +33,12 @@ public static class ViewPieces
         new StructuresPiece(),
         new BuildPiece(),
 
+        // 15v, second half. Production: the panel, the queue, the rally point.
+        new ProductionPiece(),
+
+        // Structure looks, of M20: the tier a structure shows, and the banner of the track in research.
+        new LooksPiece(),
+
         // 17v. Fog of war.
         new FogPiece(),
 
