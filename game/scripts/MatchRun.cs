@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using Net;
@@ -65,12 +66,19 @@ public sealed class LocalRun : MatchRun
 {
     private readonly Match _match;
 
-    public LocalRun(MatchDescription description, GameData data, int localPlayer)
+    /// <param name="description">The match: its map, seed and starts.</param>
+    /// <param name="data">The game data the match is built from.</param>
+    /// <param name="localPlayer">The seat of the player at this machine.</param>
+    /// <param name="keepFiles">False for a match that leaves no replay, as the smoke test's.</param>
+    public LocalRun(MatchDescription description, GameData data, int localPlayer, bool keepFiles = true)
     {
         Description = description;
         _match = description.CreateMatch(data);
         Session = new LocalSession(_match.Simulation, description.Players.Count, localPlayer);
-        Files = new MatchFiles(Session.Client, description, _match, localPlayer);
+        if (keepFiles)
+        {
+            Files = new MatchFiles(Session.Client, description, _match, localPlayer);
+        }
     }
 
     public LocalSession Session { get; }
@@ -156,6 +164,7 @@ public sealed class JoinRun : MatchRun
     /// <exception cref="IOException">No port could be opened.</exception>
     public JoinRun(GameData data, string host, int port, bool localOnly, bool readyWhenBuilt)
     {
+        HostAddress = string.Create(CultureInfo.InvariantCulture, $"{host}, port {port}");
         _connector = localOnly ? new UdpConnector(IPAddress.Loopback) : new UdpConnector();
         try
         {
@@ -175,6 +184,9 @@ public sealed class JoinRun : MatchRun
     }
 
     public MatchClient Player { get; }
+
+    /// <summary>Where the host is, as a sentence names it: its address and its port.</summary>
+    public string HostAddress { get; }
 
     /// <summary>The connection to the host, which knows why it closed when it has.</summary>
     public UdpConnection Connection { get; }

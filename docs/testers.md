@@ -41,11 +41,11 @@ If the button does not appear, open Terminal instead. Type `xattr -dr com.apple.
 
 The game opens on a menu with three choices.
 
-- **Play alone** starts a match at once. The other player's workers are there, and nothing controls them.
+- **Play alone** starts a match at once, on your machine only. Nothing is opened to the network, so the system asks no question about connections, and no second copy of the game or second player is needed. The other player's workers are there, and nothing controls them.
 - **Host a match** opens the match for one other player and waits. See the next section.
 - **Join** joins a match someone else hosts. Type their address into the box first.
 
-During a match, the panel in the top right corner says which player you are, and its button, Leave the match, takes you back to the menu.
+During a match, the bar across the top of the window says which player you are, and its button, Leave the match, takes you back to the menu. While units are selected, a panel at the bottom of the window says how many.
 
 ## Playing with someone else
 
@@ -88,13 +88,13 @@ If joining fails, the menu says why in orange:
 ## What you will see
 
 - The host's workers are blue and the other player's are red. Alone, yours are blue. Which side of the map each player starts on is chosen at random each time.
-- Selected units have a green ring under them. A right-click leaves a yellow ring that closes on the place they are going to.
+- Selected units have a green ring under them. A right-click leaves a yellow ring that closes on the place you clicked.
 - Units find their own way round the cliffs and the forest. A unit that needs a way round stands still for a moment while it works one out.
-- Nobody can stand on cliffs or among trees. If you send units there, they go to the nearest place they can reach, and the yellow ring jumps to it.
+- Nobody can stand on cliffs or among trees. If you send units there, they go to the nearest place they can reach. The yellow ring stays where you clicked.
 - Units sent to the same place end up standing inside each other, on one point. They do not make room for each other yet.
 - When you play alone, the other player's workers never move. Nothing controls them.
 - In a shared match, both players see the same workers in the same places. An order takes a moment longer to start than it does alone, because it travels to the host first.
-- If the other player leaves or closes the game, the panel in the corner says so and your match goes on without them. If the host leaves, the match ends for both.
+- If the other player leaves or closes the game, the bar at the top says so and your match goes on without them. If the host leaves, the match ends for both.
 - There is no Capitol and nothing to build.
 
 ## What to know about multiplayer

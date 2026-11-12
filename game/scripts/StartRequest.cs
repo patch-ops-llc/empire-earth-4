@@ -8,6 +8,9 @@ public enum StartKind
     /// <summary>It opens the menu.</summary>
     Menu,
 
+    /// <summary>It starts a match alone at once, as the menu's Play alone button does.</summary>
+    Alone,
+
     /// <summary>It hosts a match at once, as the menu's Host button does.</summary>
     Host,
 
@@ -25,6 +28,9 @@ public enum StartKind
 /// <param name="NetTestTicks">Above 0, the game plays the network test for this many ticks and quits. See <see cref="NetTest"/>.</param>
 public sealed record StartRequest(StartKind Kind, string Address, int Port, int NetTestTicks)
 {
+    /// <summary>This starts a match alone at once, with no network.</summary>
+    public const string AloneArgument = "--alone";
+
     /// <summary>Followed by an optional port, this hosts a match at once.</summary>
     public const string HostArgument = "--host";
 
@@ -48,6 +54,10 @@ public sealed record StartRequest(StartKind Kind, string Address, int Port, int 
             var hasValue = i + 1 < arguments.Count && !arguments[i + 1].StartsWith("--", StringComparison.Ordinal);
             switch (arguments[i])
             {
+                case AloneArgument:
+                    request = request with { Kind = StartKind.Alone };
+                    break;
+
                 case HostArgument:
                     var port = GameInfo.DefaultPort;
                     if (hasValue && !TryParsePort(arguments[++i], out port))
@@ -95,7 +105,7 @@ public sealed record StartRequest(StartKind Kind, string Address, int Port, int 
             }
         }
 
-        if (request.NetTestTicks > 0 && request.Kind == StartKind.Menu)
+        if (request.NetTestTicks > 0 && request.Kind is not (StartKind.Host or StartKind.Join))
         {
             problem = $"{NetTestArgument} needs {HostArgument} or {JoinArgument} with it.";
             return false;
