@@ -116,6 +116,27 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 | `ci.yml` | Every pull request, on Linux | Build with warnings as errors, format check, tests, `datacheck`, the golden replays, Godot import and build, a check that Godot changed or created no file in the working tree, the smoke test, and a network match between two copies of the game on the runner, which must end on the same tick with the same state hash and leave two replays that reproduce. |
 | `determinism.yml` | Every push to `main`, every night, a manual run, and pull requests that change anything it builds, runs or reads: `src/`, `tests/` (with the golden replays), `game/data/`, the workflow, `Directory.Build.props`, `global.json`, the solution file or `.gitattributes` | The tests on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build. The tests hold recorded values, so this is where a result that differs between systems shows up. The transport's tests use real sockets, which also differ between systems. Each of the eight jobs then runs the golden replays, and a last job fails unless all eight report the same final hashes. |
 | `export.yml` | Every tag that starts with `v`, a manual run, and pull requests that change the workflow, `game/export_presets.cfg` or `Directory.Build.props` | Exports the Windows build on Linux and the macOS build on macOS, and uploads both. Runs the smoke test in a Linux export, in the Windows build on Windows and in the macOS build as an Apple silicon and as an Intel program. Opens the Windows and the macOS build in a window for 300 frames. Fails unless every build reports the game version of the run, the content hash that `datacheck` prints and the same state hash as the others. |
+| `auto-merge.yml` | Whenever `ci.yml`, `determinism.yml` or `export.yml` finishes, when the description of a pull request is edited or a draft is marked ready, and a manual run | Squash-merges into `main` every pull request that is ready, as described below. After each merge it starts `determinism.yml` on `main`, because a merge made by a workflow does not start the workflows that run on a push. It checks out and runs nothing from a pull request. |
+
+### Pull requests that merge themselves
+
+A pull request is squash-merged into `main` by `auto-merge.yml`, with nobody pressing the button, once its description has a line that reads exactly:
+
+```text
+Auto-merge: yes
+```
+
+and all of this is true:
+
+- Its branch is in this repository. A pull request from a fork is never merged this way.
+- Whoever opened it may write to this repository.
+- It is not a draft, and it merges into `main` without a conflict.
+- Every workflow that ran on its head commit has finished and passed, and `ci.yml` is one of them.
+- It changes no file under `.github/workflows/`. Those a person merges.
+
+To keep a pull request out, leave the line out or write something else after the colon, such as `Auto-merge: after #21`. A pull request that still carries the work of another open one should stay out until that one has merged. The summary of each run of the workflow, in the Actions tab, says for every open pull request why it was merged or what it waits for. Started by hand with "Merge nothing" ticked, it only says what it would do.
+
+The workflow needs no repository setting beyond squash merging being allowed, which it is. If `main` ever gets a ruleset or branch protection, GitHub Actions must be allowed past it, or the merges stop.
 
 ## Layout
 
@@ -137,7 +158,7 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 | `game/pieces/` | The pieces of the view, a folder each: what a piece draws in the world, shows in the interface, lets the pointer find and adds to the order table and to the smoke test. `ViewPieces.cs` lists them. |
 | `schemas/` | JSON Schemas for the files in `game/data/`. |
 | `docs/` | [determinism.md](docs/determinism.md): the rules that keep the simulation deterministic, the kernel, the byte format, snapshots, replays and the golden replays. [data-authoring.md](docs/data-authoring.md): how the data files are written and checked. [testers.md](docs/testers.md): how a tester gets a build and starts it. |
-| `.github/workflows/` | `ci.yml`, `determinism.yml` and `export.yml`, described above. |
+| `.github/workflows/` | `ci.yml`, `determinism.yml`, `export.yml` and `auto-merge.yml`, described above. |
 | `global.json` | Pins the .NET SDK and the Godot version, and selects the test runner. |
 | `Directory.Build.props` | C# settings shared by every project: target framework, nullable, warnings as errors, analyzers, overflow checking, and optimization for exports. |
 | `empire-earth-4.sln` | All projects. The Godot editor finds it through `dotnet/project/solution_directory` in `project.godot`. |

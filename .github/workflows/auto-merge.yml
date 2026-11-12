@@ -1,0 +1,185 @@
+name: Auto-merge
+
+# Squash-merges a pull request into main once it is ready, so that nobody has to press the
+# button. A pull request is ready when all of this is true:
+#
+#   1. Its branch is in this repository, never in a fork.
+#   2. Its description has a line that reads exactly:  Auto-merge: yes
+#   3. Whoever opened it may write to this repository.
+#   4. It is not a draft.
+#   5. It merges into main without a conflict.
+#   6. Every workflow that ran on its head commit has finished and passed, and ci.yml is one of
+#      them. determinism.yml and export.yml count when they ran. Of several runs of one workflow
+#      on the commit, the latest counts.
+#   7. It changes no file under .github/workflows/. A change to the automation, this file
+#      included, is merged by a person.
+#
+# Without the line of point 2 nothing is merged, so a pull request that still carries the work of
+# another open one stays out until its author adds the line.
+#
+# Why this is safe in a public repository. The triggers below are the kind that give a workflow
+# a token that can write, whoever set it off. That is dangerous for a workflow that runs or
+# trusts something a pull request brought. This one does not:
+#
+#   - It checks out nothing and uses no artifact, so no file of any pull request ever runs. The
+#     only code is the script below.
+#   - For workflow_run and pull_request_target GitHub takes this file from main, so a pull
+#     request cannot change what runs before it has merged.
+#   - The job is skipped when a pull request from a fork set it off: no step runs, and no
+#     token is handed out.
+#   - Nothing from the event reaches the script. It asks GitHub for the open pull requests and
+#     for the facts of each, and leaves every pull request from a fork alone (point 1).
+#   - Point 3 is there because anyone can open a pull request between two branches of a public
+#     repository, and so could ask for a branch here to be merged before its turn.
+#   - The merge names the commit that was checked. If the branch moved meanwhile, GitHub
+#     refuses it.
+on:
+  # A workflow finished on some commit: a pull request may have become ready.
+  workflow_run:
+    workflows:
+      - CI
+      - Determinism
+      - Export
+    types:
+      - completed
+  # The description changed (the line of point 2 may be new), or a draft was marked ready.
+  pull_request_target:
+    types:
+      - edited
+      - ready_for_review
+  # By hand from the Actions tab, to look again. With the box ticked it merges nothing and only
+  # says, in the summary of the run, what it would do with each open pull request.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Merge nothing, only say what would happen
+        type: boolean
+        default: false
+
+permissions: {}
+
+# One at a time. A run that waits behind another is replaced by a newer one, which is right,
+# because every run looks at every open pull request. A run that a fork set off does nothing,
+# so it gets a group of its own and cannot take the place of a run that waits. The condition is
+# the one of the job below.
+concurrency:
+  group: >-
+    auto-merge-${{
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.workflow_run.head_repository.full_name == github.repository ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+      && 'in-turn' || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    name: Merge the pull requests that are ready
+    # Not for a fork: the workflow that finished, or the pull request that was edited, must be
+    # of a branch in this repository. Every other run looks at every open pull request, also
+    # after a workflow failed or ran on main, which costs a few seconds and misses nothing.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.head_repository.full_name == github.repository ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # To merge.
+      contents: write
+      pull-requests: write
+      # To start the workflows of START_ON_MAIN after a merge, and to read the runs of a commit.
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      MARKER: "Auto-merge: yes"
+      # The workflow that must have passed on the head commit, and this one, which is not counted.
+      REQUIRED: .github/workflows/ci.yml
+      THIS: .github/workflows/auto-merge.yml
+      # A merge made with the token of a workflow starts no workflow that runs on a push to main.
+      # So the workflows that do are started here, after each merge. Each needs a
+      # workflow_dispatch trigger. A workflow that gains a push trigger for main belongs here.
+      START_ON_MAIN: determinism.yml
+      DRY_RUN: ${{ inputs.dry_run && 'yes' || '' }}
+    steps:
+      - name: Merge every pull request that is ready
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          note() { echo "- #$number $*" | tee -a "$GITHUB_STEP_SUMMARY"; }
+
+          numbers=$(gh pr list --state open --base main --limit 200 --json number --jq 'sort_by(.number)[].number')
+          for number in $numbers; do
+            pr=$(gh pr view "$number" --json title,body,isDraft,isCrossRepository,author,headRefOid)
+            head=$(jq -r .headRefOid <<<"$pr")
+            title=$(jq -r .title <<<"$pr")
+            author=$(jq -r .author.login <<<"$pr")
+
+            if [ "$(jq -r .isCrossRepository <<<"$pr")" != false ]; then
+              note "is left alone: its branch is in a fork."
+              continue
+            fi
+
+            if ! jq -e --arg marker "$MARKER" \
+              '[(.body // "") | split("\n")[] | gsub("^\\s+|\\s+$"; "")] | index($marker) != null' <<<"$pr" >/dev/null; then
+              note "is left alone: its description has no line \"$MARKER\"."
+              continue
+            fi
+
+            permission=$(gh api "repos/$GH_REPO/collaborators/$author/permission" --jq .permission 2>/dev/null || echo none)
+            if [ "$permission" != admin ] && [ "$permission" != write ]; then
+              note "is left alone: $author, who opened it, may not write to this repository."
+              continue
+            fi
+
+            if [ "$(jq -r .isDraft <<<"$pr")" != false ]; then
+              note "waits: it is a draft."
+              continue
+            fi
+
+            # GitHub works out in the background whether a pull request merges cleanly.
+            for _ in 1 2 3 4 5 6; do
+              mergeable=$(gh pr view "$number" --json mergeable --jq .mergeable)
+              [ "$mergeable" != UNKNOWN ] && break
+              sleep 5
+            done
+            if [ "$mergeable" != MERGEABLE ]; then
+              note "waits: it does not merge into main cleanly ($mergeable)."
+              continue
+            fi
+
+            runs=$(gh api "repos/$GH_REPO/actions/runs?head_sha=$head&per_page=100" |
+              jq --arg this "$THIS" '[.workflow_runs[] | select(.path != $this)] | group_by(.path) | map(max_by(.run_number))')
+            unfinished=$(jq -r '[.[] | select(.status != "completed" or (.conclusion != "success" and .conclusion != "skipped"))
+              | "\(.name) (\(.conclusion // .status))"] | join(", ")' <<<"$runs")
+            if [ -n "$unfinished" ]; then
+              note "waits: on ${head:0:7} these have not passed: $unfinished."
+              continue
+            fi
+            if ! jq -e --arg required "$REQUIRED" 'any(.[]; .path == $required and .conclusion == "success")' <<<"$runs" >/dev/null; then
+              note "waits: $REQUIRED has not run on ${head:0:7}."
+              continue
+            fi
+
+            files=$(gh api "repos/$GH_REPO/pulls/$number/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)')
+            if grep -q '^\.github/workflows/' <<<"$files"; then
+              note "is ready, but it changes a workflow, which only a person can merge."
+              continue
+            fi
+
+            if [ -n "$DRY_RUN" ]; then
+              note "is ready and would be merged at ${head:0:7} (dry run)."
+              continue
+            fi
+
+            if gh pr merge "$number" --squash --match-head-commit "$head" --subject "$title (#$number)"; then
+              note "is merged at ${head:0:7}."
+              for workflow in $START_ON_MAIN; do
+                gh workflow run "$workflow" --ref main
+              done
+            else
+              note "was ready at ${head:0:7}, but GitHub refused the merge."
+              echo "::warning::GitHub refused to merge #$number. The log of this step says why."
+            fi
+          done
