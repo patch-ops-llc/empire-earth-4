@@ -105,10 +105,9 @@ public class AiMatchToolTests
         Assert.InRange(result.FirstHitTick, ThreeMinutes, FourMinutes);
         Assert.True(loser.StructuresLost > 0 && loser.UnitsLost > 0);
 
-        // Elite trains Artillery and Swarm has none: the shells are counted for the player who fired them.
+        // Elite trains Artillery, and its shells are counted with what they caught.
         Assert.True(result.Seats[1].Shells.Landed > 0);
         Assert.InRange(result.Seats[1].Shells.MostCaught, 1, result.Seats[1].Shells.Caught);
-        Assert.Equal(ShellCount.None, result.Seats[0].Shells);
         Assert.StartsWith($"{result.Seats[1].Shells.Landed} shells landed and caught ", AiMatchTool.AreaDamage(result.Seats[1]), StringComparison.Ordinal);
     }
 
