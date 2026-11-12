@@ -1,21 +1,24 @@
 using Godot;
 using Net;
 using Sim.Data;
+using Sim.Serialization;
 using Sim.Setup;
-using Entropy = System.Security.Cryptography.RandomNumberGenerator;
 
 namespace Game;
 
 /// <summary>
-/// Root of <c>scenes/main.tscn</c>, the scene the game starts in. It loads the game data, builds one
-/// match on the map <see cref="MapId"/>, starts a session for it and hands both to the world view,
-/// the camera, the unit control and the overlay.
+/// Root of <c>scenes/main.tscn</c>, the scene the game starts in. It loads the game data and opens
+/// the menu, where a match is started alone, hosted or joined. Once there is a match it builds the
+/// <see cref="MatchView"/> of it: the world view, the frame of the interface and the unit control
+/// are given the match, and every piece of the view adds itself. The smoke test's match is shown
+/// the same way.
 /// </summary>
 /// <remarks>
 /// Code under <c>game/</c> reads the match and never changes it. Only commands change the
-/// simulation, and only the session runs its ticks: once a frame, here, it is given the time the
-/// frame took. The session is the one a network match uses, with the host and this player in one
-/// process.
+/// simulation, and only the session runs its ticks: once a frame, here, the match's
+/// <see cref="MatchRun"/> is given the time the frame took. It takes in what the network brought
+/// before it lets the session advance, and it is disposed before the game exits, so that the
+/// other players are told and the replay is closed.
 /// </remarks>
 public partial class Main : Node3D
 {
@@ -25,39 +28,136 @@ public partial class Main : Node3D
     /// </summary>
     public const string SmokeTestArgument = "--smoke-test";
 
-    /// <summary>The map every match is played on, until there is a lobby to choose one in.</summary>
+    /// <summary>The map every match is played on, until the lobby has a way to choose one.</summary>
     public const string MapId = "ridge";
 
-    /// <summary>The seat of the person at this machine.</summary>
-    public const int LocalPlayer = 0;
+    /// <summary>The number of players in every match, until the lobby has seats to fill.</summary>
+    public const int PlayerCount = 2;
 
-    private const int PlayerCount = 2;
+    // The seat of the local player in the smoke test's match.
+    private const int SmokeTestPlayer = 0;
 
     // The smoke test runs this many ticks in a frame, so that the view follows the match as it
     // does in play, and lets the view draw this many frames at the end before it reports.
     private const int SmokeTestTicksPerFrame = 20;
     private const int SmokeTestLastFrames = 3;
 
-    private Match? _match;
-    private LocalSession? _session;
+    private LocalRun? _smokeRun;
     private SmokeTest? _smokeTest;
+    private SmokeLog? _smokeLog;
+    private MatchMenu? _menu;
+    private NetTest? _netTest;
+    private MatchView? _view;
     private WorldView _world = null!;
+    private RtsCamera _camera = null!;
+    private UnitControl _units = null!;
     private int _lastFrames;
+    private bool _quitting;
 
     public override void _Ready()
     {
-        var smokeTest = OS.GetCmdlineUserArgs().Contains(SmokeTestArgument);
+        var arguments = OS.GetCmdlineUserArgs();
+        var smokeTest = arguments.Contains(SmokeTestArgument);
         _world = GetNode<WorldView>("World");
+        _camera = GetNode<RtsCamera>("CameraRig");
+        _units = GetNode<UnitControl>("UnitControl");
 
-        _match = CreateMatch(smokeTest, out var localStart);
-        if (_match is null)
+        var data = LoadData();
+        if (data is null)
         {
             // Without its data there is no game to show, and the smoke test fails for lack of its marker.
             GetTree().Quit(1);
             return;
         }
 
-        var map = _match.Map;
+        if (smokeTest)
+        {
+            StartSmokeTest(data);
+            return;
+        }
+
+        if (!StartRequest.TryRead(arguments, out var request, out var problem))
+        {
+            GD.PrintErr($"Command line: {problem}");
+            GetTree().Quit(1);
+            return;
+        }
+
+        _netTest = request.NetTestTicks > 0 ? new NetTest(request.NetTestTicks) : null;
+        _menu = new MatchMenu { Name = "MatchMenu" };
+        _menu.Open(data, request);
+        AddChild(_menu);
+    }
+
+    public override void _Process(double delta)
+    {
+        if (_quitting)
+        {
+            return;
+        }
+
+        if (_smokeLog is not null)
+        {
+            RunSmokeTest(_smokeLog);
+            return;
+        }
+
+        if (_menu is null)
+        {
+            return;
+        }
+
+        // While a page of the menu or a full-screen panel is up, the pointer and the keys are its own.
+        var playing = !_menu.IsOpen && _view is not { Interface.IsPanelOpen: true };
+        _camera.ProcessMode = playing ? ProcessModeEnum.Inherit : ProcessModeEnum.Disabled;
+        _units.ProcessMode = playing ? ProcessModeEnum.Inherit : ProcessModeEnum.Disabled;
+
+        var run = _menu.Run;
+        if (run is not null)
+        {
+            Advance(run, delta);
+        }
+
+        if (_netTest?.Update(run, _menu) is { } exitCode)
+        {
+            Quit(exitCode);
+        }
+    }
+
+    private void Advance(MatchRun run, double delta)
+    {
+        // The run takes in what the network brought and then advances the session.
+        run.Advance(TimeSpan.FromSeconds(delta));
+
+        // A guest has no match until the host has described it, which is before the first tick.
+        if (_view is null && run.Match is { } match)
+        {
+            Show(run, match, _menu!.LeaveMatch);
+        }
+
+        // The world view draws after this, in the same frame, this far between the last two ticks.
+        var client = run.Client;
+        _world.TickFraction = client.Phase == SessionPhase.Running && client.TickInterval > TimeSpan.Zero
+            ? (float)(client.TimeIntoTick / client.TickInterval)
+            : 1f;
+    }
+
+    public override void _Notification(int what)
+    {
+        // Closing the window ends the game without leaving the tree first.
+        if (what == NotificationWMCloseRequest)
+        {
+            _menu?.CloseRun();
+        }
+    }
+
+    public override void _ExitTree() => _menu?.CloseRun();
+
+    // Hands a match to everything that draws it or gives orders in it. The view reads the match
+    // again after every tick, before anything else hears of the tick.
+    private void Show(MatchRun run, Match match, Action? leave)
+    {
+        var map = match.Map;
         var size = new Vector2(map.Width, map.Height);
 
         // The map's corner is the world origin, so a tile's coordinates are its world position.
@@ -66,57 +166,73 @@ public partial class Main : Node3D
         ground.Position = new Vector3(size.X / 2f, 0f, size.Y / 2f);
 
         // The view opens on the player's own start: the middle of where the Capitol will stand.
-        var start = map.Starts[localStart];
-        var footprint = _match.Data.Rules.Map.StartFootprint;
-        var camera = GetNode<RtsCamera>("CameraRig");
-        camera.SetBounds(new Rect2(Vector2.Zero, size));
-        camera.CenterOn(new Vector2(start.X + (footprint / 2f), start.Y + (footprint / 2f)));
+        _camera.SetBounds(new Rect2(Vector2.Zero, size));
+        var setup = match.Players[run.Client.Player];
+        if (setup.HasStart)
+        {
+            var start = map.Starts[setup.Start];
+            var footprint = match.Data.Rules.Map.StartFootprint;
+            _camera.CenterOn(new Vector2(start.X + (footprint / 2f), start.Y + (footprint / 2f)));
+        }
 
-        _world.Attach(_match);
-
-        // The view reads the match again after every tick, before anything else hears of the tick.
-        _session = new LocalSession(_match.Simulation, PlayerCount, LocalPlayer);
-        _session.Client.TickCompleted += _ => _world.AfterTick();
-        _session.Client.Stopped += end => GD.PrintErr($"The session stopped: {end.Reason}.");
+        // The frame comes after the world view and the unit control in the tree, so that its
+        // parts are called in a frame once the units have been placed.
+        var frame = new InterfaceFrame { Name = "Interface" };
+        AddChild(frame);
+        _view = MatchView.Open(run, match, _world, _camera, _units, frame, leave);
 
         var overlay = GetNode<DebugOverlay>("DebugOverlay");
-        overlay.Match = _match;
-
-        if (smokeTest)
-        {
-            _smokeTest = new SmokeTest(_match, _session);
-        }
-        else
-        {
-            // The smoke test plays its own script, so it takes no input.
-            var units = GetNode<UnitControl>("UnitControl");
-            units.Attach(_match, _session.Client, _world);
-            overlay.Selection = units.Selection;
-        }
+        overlay.Match = match;
+        overlay.Selection = _view.Selection;
     }
 
-    public override void _Process(double delta)
+    private void StartSmokeTest(GameData data)
     {
-        if (_session is null)
+        // From here on an error the engine logs fails the smoke test: among them every exception
+        // that Godot catches and logs, after which the game would go on without what threw it.
+        _smokeLog = new SmokeLog();
+        OS.AddLogger(_smokeLog);
+
+        var map = data.Maps.First(candidate => candidate.Id == MapId);
+
+        // The smoke test fixes the seed and the starts so that every machine builds the same match.
+        var players = new PlayerSetup[PlayerCount];
+        for (var player = 0; player < PlayerCount; player++)
         {
+            var offset = (player - SmokeTestPlayer + PlayerCount) % PlayerCount;
+            players[player] = new PlayerSetup((SmokeTest.LocalStart + offset) % map.Starts.Count);
+        }
+
+        GD.Print($"Match on '{map.Id}' with seed {SmokeTest.Seed}. Player {SmokeTestPlayer} has start {SmokeTest.LocalStart}. Data sha256:{data.ContentHash}.");
+        var description = new MatchDescription(GameInfo.Version, data.ContentHash, map.Id, SmokeTest.Seed, players);
+
+        // The match is shown as any match is, and it leaves no replay.
+        _smokeRun = new LocalRun(description, data, SmokeTestPlayer, keepFiles: false);
+        _smokeRun.Client.Stopped += end => GD.PrintErr($"The session stopped: {end.Reason}.");
+        Show(_smokeRun, _smokeRun.Match, leave: null);
+
+        // The smoke test plays its own script, so it takes no input.
+        _camera.ProcessMode = ProcessModeEnum.Disabled;
+        _units.ProcessMode = ProcessModeEnum.Disabled;
+        _smokeTest = new SmokeTest(_smokeRun.Match, _smokeRun.Session);
+    }
+
+    private void RunSmokeTest(SmokeLog log)
+    {
+        if (log.Errors > 0)
+        {
+            GD.PrintErr($"Smoke test: the engine logged an error while the match was shown, {log.Errors} so far. The first: {log.First}");
+            Quit(1);
             return;
         }
 
-        if (_smokeTest is not null)
+        if (_smokeTest is not { } smokeTest)
         {
-            RunSmokeTest(_smokeTest);
+            GD.PrintErr("Smoke test: the match could not be shown.");
+            Quit(1);
             return;
         }
 
-        _session.Advance(TimeSpan.FromSeconds(delta));
-
-        // The world view draws after this, in the same frame, this far between the last two ticks.
-        var client = _session.Client;
-        _world.TickFraction = client.TickInterval > TimeSpan.Zero ? (float)(client.TimeIntoTick / client.TickInterval) : 1f;
-    }
-
-    private void RunSmokeTest(SmokeTest smokeTest)
-    {
         _world.TickFraction = 1f;
         if (!smokeTest.Run(SmokeTestTicksPerFrame))
         {
@@ -130,17 +246,18 @@ public partial class Main : Node3D
 
     private void Quit(int exitCode)
     {
-        _session = null;
+        _quitting = true;
+        if (_smokeLog is not null)
+        {
+            OS.RemoveLogger(_smokeLog);
+        }
+
+        _menu?.CloseRun();
         GetTree().Quit(exitCode);
     }
 
-    // The seed and the start each player gets are chosen here, outside the simulation, which rolls
-    // nothing by itself (design 5.2). The smoke test fixes both so that every machine builds the
-    // same match.
-    private static Match? CreateMatch(bool smokeTest, out int localStart)
+    private static GameData? LoadData()
     {
-        localStart = 0;
-
         DataLoadResult loaded;
         try
         {
@@ -170,18 +287,6 @@ public partial class Main : Node3D
             return null;
         }
 
-        var seed = smokeTest ? SmokeTest.Seed : BitConverter.ToUInt64(Entropy.GetBytes(sizeof(ulong)));
-        localStart = smokeTest ? SmokeTest.LocalStart : Entropy.GetInt32(map.Starts.Count);
-
-        // The local player takes the drawn start and the other players the ones after it.
-        var players = new PlayerSetup[PlayerCount];
-        for (var player = 0; player < PlayerCount; player++)
-        {
-            var offset = (player - LocalPlayer + PlayerCount) % PlayerCount;
-            players[player] = new PlayerSetup((localStart + offset) % map.Starts.Count);
-        }
-
-        GD.Print($"Match on '{map.Id}' with seed {seed}. Player {LocalPlayer} has start {localStart}. Data sha256:{data.ContentHash}.");
-        return MatchSetup.Create(data, map, seed, players);
+        return data;
     }
 }

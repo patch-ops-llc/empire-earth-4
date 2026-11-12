@@ -190,13 +190,21 @@ internal static class Scenarios
         return MatchSetup.Create(data, map, seed: 1, [PlayerSetup.WithoutStart, PlayerSetup.WithoutStart]);
     }
 
-    /// <summary>Places units in a square grid at one tile, row by row from a first tile.</summary>
+    /// <summary>
+    /// Places units in a square grid at one tile, row by row from a first tile. A tile no unit can
+    /// stand on, such as a deposit's, is left out, and the block is that much longer.
+    /// </summary>
     private static EntityId[] Block(Match match, int player, int firstX, int firstY, int columns, int count)
     {
         var units = new EntityId[count];
-        for (var i = 0; i < count; i++)
+        var placed = 0;
+        for (var tile = 0; placed < count; tile++)
         {
-            units[i] = match.SpawnUnit(player, MapGrid.TileCenter(firstX + (i % columns), firstY + (i / columns)), Speed);
+            var center = MapGrid.TileCenter(firstX + (tile % columns), firstY + (tile / columns));
+            if (match.Grid.IsPassable(center))
+            {
+                units[placed++] = match.SpawnUnit(player, center, Speed);
+            }
         }
 
         return units;

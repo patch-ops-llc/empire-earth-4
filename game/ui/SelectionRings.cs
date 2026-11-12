@@ -2,8 +2,12 @@ using Godot;
 
 namespace Game;
 
-/// <summary>A ring on the ground under every selected unit. All rings are one node.</summary>
-public partial class SelectionRings : MultiMeshInstance3D
+/// <summary>
+/// A ring on the ground under every selected unit. All rings are one node. This is a layer of the
+/// world view, which calls it once the units have been placed for the frame, so the rings go
+/// exactly under them.
+/// </summary>
+public partial class SelectionRings : WorldLayer
 {
     // Above the ground by enough not to flicker against it.
     private const float Lift = 0.04f;
@@ -12,7 +16,7 @@ public partial class SelectionRings : MultiMeshInstance3D
 
     private MultiMesh _rings = null!;
 
-    public override void _Ready()
+    protected override void Attach()
     {
         _rings = new MultiMesh
         {
@@ -21,26 +25,31 @@ public partial class SelectionRings : MultiMeshInstance3D
             InstanceCount = 16,
             VisibleInstanceCount = 0,
         };
-        Multimesh = _rings;
+
+        // Godot must be told the area the rings can be in, because they move every frame.
+        var map = View.Match.Map;
+        _rings.CustomAabb = new Aabb(Vector3.Zero, new Vector3(map.Width, 1f, map.Height));
+        AddChild(new MultiMeshInstance3D { Name = "Rings", Multimesh = _rings });
     }
 
-    /// <summary>The area the rings can be in. Godot must be told, because the rings move every frame.</summary>
-    public void SetArea(Vector2 size) => _rings.CustomAabb = new Aabb(Vector3.Zero, new Vector3(size.X, 1f, size.Y));
-
-    /// <summary>Puts a ring at each of these points on the ground, and shows no other.</summary>
-    public void Place(List<Vector3> points)
+    public override void EveryFrame(double delta)
     {
-        if (points.Count > _rings.InstanceCount)
+        var selected = View.Selection.Entities;
+        if (selected.Count > _rings.InstanceCount)
         {
             // Changing the count throws the old rings away, which is fine: all are placed again below.
-            _rings.InstanceCount = Math.Max(points.Count, _rings.InstanceCount * 2);
+            _rings.InstanceCount = Math.Max(selected.Count, _rings.InstanceCount * 2);
         }
 
-        for (var i = 0; i < points.Count; i++)
+        var placed = 0;
+        foreach (var entity in selected)
         {
-            _rings.SetInstanceTransform(i, new Transform3D(Flat, points[i] + (Vector3.Up * Lift)));
+            if (View.World.TryGetDrawnPosition(entity, out var position))
+            {
+                _rings.SetInstanceTransform(placed++, new Transform3D(Flat, position + (Vector3.Up * Lift)));
+            }
         }
 
-        _rings.VisibleInstanceCount = points.Count;
+        _rings.VisibleInstanceCount = placed;
     }
 }

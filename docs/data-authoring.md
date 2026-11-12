@@ -48,10 +48,11 @@ Hit points, damage and distances are shown to three decimal places and times in 
 | `rules.jsonc` | The constants of the rule set, the roster of line and structure IDs, and the rules every map must satisfy. | `schemas/rules.schema.json` |
 | `research.jsonc` | What each tier of a track costs to research and how long it takes. | `schemas/research.schema.json` |
 | `accents.jsonc` | The accent each track gives a unit, and the perks of its two levels. | `schemas/accents.schema.json` |
+| `resources.jsonc` | What a worker earns at a deposit or a Generator, how many workers each takes, and the worker itself. | `schemas/resources.schema.json` |
 | `lines/<id>.jsonc` | One line of units: its tracks, tier-1 values, attack, counters and chassis. | `schemas/line.schema.json` |
 | `maps/<id>.jsonc` | One map: terrain, starting positions, deposits and markers. | `schemas/map.schema.json` |
 
-The loader reads exactly these, and the first four are required. Any other file in the folder is an error, so a misnamed file is noticed and not skipped. Files and folders whose names start with a dot are ignored.
+The loader reads exactly these, and the first five are required. Any other file in the folder is an error, so a misnamed file is noticed and not skipped. Files and folders whose names start with a dot are ignored.
 
 More kinds of file arrive with the milestones that need them. Adding a kind means adding its reader in `src/Sim/Data/`, its schema in `schemas/`, a row in the table above and tests.
 
@@ -143,6 +144,30 @@ A kind of perk is a rule in the code with numbers from this file. Which accent g
 
 A multiplier is what the value is multiplied by: 15% more range is `"1.15"`, a quarter less area damage is `"0.75"` and 30% less damage is `"0.7"`.
 
+## resources.jsonc
+
+Game design 4.1. Income is a fixed rate: a worker standing at its place at a deposit or a Generator is paid once a second, and walks nowhere to deliver.
+
+| Key | Meaning |
+| --- | --- |
+| `materials.per_worker_per_minute` | What one worker at a deposit earns in a minute at Extraction tier 1. |
+| `materials.workers_per_deposit` | The workers that can work one deposit at once. Others wait beside it. |
+| `materials.full_rate_amount` | The Materials a deposit delivers at the whole rate, in whole resources, Extraction bonus included. |
+| `materials.depleted_rate` | The share of the rate a deposit pays after that, above 0 and at most 1. A deposit never runs dry. |
+| `energy.per_worker_per_minute` | What one worker at a Generator earns in a minute at Extraction tier 1. |
+| `energy.workers_per_generator` | The workers that can work one Generator at once. |
+| `worker.hp` | Hit points at Protection tier 1. |
+| `worker.speed`, `sight`, `spacing` | Tiles per second, and tiles. No tier changes them. |
+| `worker.supply` | The supply one worker uses. |
+| `worker.cost.materials`, `energy` | The price of a worker, in whole resources. |
+| `worker.build_seconds` | The time a Capitol takes to train one. |
+
+One payment is the rate for a minute divided by 60, times the Extraction multiplier (`per_tier.income` in `rules.jsonc`, once per tier above the first), times `depleted_rate` for a deposit that had delivered its `full_rate_amount` before the payment. The product is exact and is rounded once, half up, to a thousandth of a resource, which is what stockpiles count in. At the design's numbers a worker is paid 0.75 Materials or 0.5 Energy a second at tier 1.
+
+A deposit has as many places as tiles share a side with it, eight for the 2 by 2 of `map.deposit_size`, and a Generator has the same eight. `workers_per_deposit` and `workers_per_generator` say how many workers may use them, so a number above eight changes nothing for a deposit of that size.
+
+The worker is not a chassis: it has no tiers, no accents and no counters, and its speed and sight never change. Only the speed and the supply are in use so far; hit points, sight, spacing, the price and the training time wait for the milestones that fight, see and train.
+
 ## lines/&lt;id&gt;.jsonc
 
 Game design 2.2 and 2.4.
@@ -175,6 +200,8 @@ Game design 5.3. Tiles are `(x, y)` with `(0, 0)` at the first character of the 
 | `markers` | Authored chokepoints and open fields. Each has a `kind` (`chokepoint` or `open_field`), a position, `size_x` and `size_y`, and `across`. |
 | `terrain` | One text row per y and one character per x: `.` open ground, `F` forest, `#` cliff. |
 
+A deposit covers `map.deposit_size` tiles a side (`rules.jsonc`). No unit can stand on those tiles, so a deposit is an obstacle like a cliff, and the workers at it stand on the tiles that share a side with it. Leave those tiles open: a place on forest, on a cliff or off the map cannot be used.
+
 A marker is a rectangle covering the passage. `across` is the axis the passage's width runs along: with `"across": "y"` the width is `size_y`, and units pass through along x. Nothing in the game finds chokepoints by itself; the AI and the balance battles use these markers.
 
 ## What datacheck checks
@@ -190,6 +217,7 @@ Besides the shape of each file:
 | Accents | Every accent belongs to a track in `tracks.jsonc`. No kind of perk appears twice. |
 | Chassis | An epoch outside the tiers could never unlock and is an error. Epochs rise and do not repeat. IDs are unique. |
 | Times | Attack intervals, build times, research times and perk delays are whole numbers of ticks. |
+| Income | A worker's payment for one second can be computed exactly at every Extraction tier and never rounds to nothing, at the whole rate and at the depleted one. |
 | Formulas | Every stat and price of every chassis can be computed exactly at every tier mix. The game multiplies exact fractions, and a multiplier with many decimal places raised to a high power no longer fits. `1.15` is fine at any tier; `1.123456789` is not. The error names the chassis. |
 | Stat bounds | Hit points, damage, speed, sight, supply, spacing, prices, ranges and multipliers must be positive where zero makes no sense and inside wide sanity limits, listed in `src/Sim/Data/DataRules.cs`. The limits catch slips such as a missing decimal point; they are not balance rules. |
 | Map symmetry | Terrain, starts, deposits and markers must all mirror under the map's `symmetry`. |
@@ -198,7 +226,7 @@ Besides the shape of each file:
 | Deposits | Each start has `main_per_player` main deposits wholly inside its territory. Natural and contested deposits have no tile inside a starting territory. Each start has `natural_per_player` natural deposits nearest to it, and the map has `contested` contested ones. A tile is inside a territory when its center is within the radius of the Capitol's center. |
 | Markers | At least one chokepoint and one open field. A chokepoint is `chokepoint_width.min` to `max` tiles wide and spans the whole passage: the tiles just past both ends of its width are impassable or off the map. An open field is at least `open_field_min_width` wide. |
 
-Two things it does not check yet. A marker's passage must run along x or y, so a diagonal chokepoint cannot be marked. And it does not test that a chokepoint or open field lies between the bases; that stays with the map author.
+Three things it does not check yet. A marker's passage must run along x or y, so a diagonal chokepoint cannot be marked. It does not test that a chokepoint or open field lies between the bases; that stays with the map author. And it does not test the ground around a deposit: that workers can reach its places, and that a deposit in a narrow passage does not close it.
 
 ## Content hash
 
@@ -222,6 +250,7 @@ A change to this form changes every hash, so it needs a new version line.
 - The rules that use the data are in `Sim.Tech`. `TechResolver.Resolve(data, tiers)` is a pure function from a player's track tiers to a `PlayerTech`: their epoch, supply cap, income multiplier, the price of each track's next tier and a `ChassisBlueprint` for every chassis. `TechRules` has the rules that need no chassis, each by itself.
 - A `ChassisBlueprint` has the chassis's stats, price, accents and perks, each value rounded once. It is computed for locked chassis too; `Unlocked` says whether the player may build it. `Perks` holds only the perks that apply to the chassis, as typed records with the numbers from `accents.jsonc`.
 - `TechResolver.Preview(data, tiers, track)` resolves the tiers with one track raised and lists the chassis that would unlock and every accent that would appear, disappear or change level.
+- The economy is in `Sim.Economy`. `GameData.Resources` holds `resources.jsonc`, and `IncomeRules.Payment` is the one place a payment is worked out.
 - `DataNumber.ToFraction()` gives a data number as an exact `Fraction`. Multiply everything exactly and round once, at the end.
 - `GameData.TrackRoles` holds the index of each track the rules name, so code never searches for a track by ID.
 - IDs become dense integers at load. A position in `GameData.Tracks` is a track's index, in file order. A position in `RuleSet.Lines` or `RuleSet.Structures` is a line's or structure's index; those lists are sorted by ID. Lines refer to tracks, structures and other lines by these indexes. A position in `GameData.Chassis` is a chassis's index; that list is sorted by ID over all lines, and `PlayerTech.Blueprints` uses the same positions.

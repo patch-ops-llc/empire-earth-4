@@ -1,8 +1,11 @@
+using Sim.Combat;
 using Sim.Core;
 using Sim.Data;
+using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
+using Sim.Research;
 
 namespace Sim.Setup;
 
@@ -37,21 +40,61 @@ public sealed class Match
     /// <summary>Owner and position of everything on the map.</summary>
     public required ComponentStore<Body> Bodies { get; init; }
 
+    /// <summary>The combat numbers of the match and of each player's tech. Not state: see <see cref="CombatRules"/>.</summary>
+    public required CombatRules Combat { get; init; }
+
+    /// <summary>Chassis, order and target of every unit of a chassis.</summary>
+    public required ComponentStore<Combatant> Combatants { get; init; }
+
+    /// <summary>Hit points of everything that can be damaged.</summary>
+    public required ComponentStore<Health> Health { get; init; }
+
     /// <summary>Speed, facing, spacing and move order of everything that can move.</summary>
     public required ComponentStore<Mover> Movers { get; init; }
+
+    /// <summary>
+    /// Every player's tiers and research slots, and what follows from the tiers: the table of
+    /// blueprints per player. The table is not state: see <see cref="MatchResearch"/>.
+    /// </summary>
+    public required MatchResearch Research { get; init; }
 
     /// <summary>The routes found so far. Not state: see <see cref="RouteCache"/>.</summary>
     public required RouteCache Routes { get; init; }
 
+    /// <summary>Every shot in flight.</summary>
+    public required ComponentStore<Shot> Shots { get; init; }
+
     /// <summary>Which entities are near a place. Not state: see <see cref="Map.SpatialIndex"/>.</summary>
     public required SpatialIndex SpatialIndex { get; init; }
+
+    /// <summary>Every player's Materials and Energy.</summary>
+    public required Stockpiles Stockpiles { get; init; }
+
+    /// <summary>Each player's supply cap and used supply. Not state: see <see cref="SupplyAccount"/>.</summary>
+    public required SupplyAccount Supply { get; init; }
+
+    /// <summary>The ground each Capitol and Outpost holds for its owner.</summary>
+    public required ComponentStore<Territory> Territories { get; init; }
+
+    /// <summary>Assigns workers to work sites. Not state: see <see cref="WorkAssignments"/>.</summary>
+    public required WorkAssignments Work { get; init; }
+
+    /// <summary>What each worker is assigned to, with its place and its count of ticks.</summary>
+    public required ComponentStore<Worker> Workers { get; init; }
+
+    /// <summary>The deposits and Generators.</summary>
+    public required ComponentStore<WorkSite> WorkSites { get; init; }
 
     /// <summary>
     /// Brings everything that is worked out from the state, and is not state itself, in line with
     /// the world as it is now. Call it after the world has been changed from outside a tick: after
     /// restoring a snapshot, and after a fixture has placed things.
     /// </summary>
-    public void RefreshDerivedState() => SpatialIndex.Rebuild();
+    public void RefreshDerivedState()
+    {
+        Research.RefreshTech();
+        SpatialIndex.Rebuild();
+    }
 
     /// <summary>
     /// Places a unit that can move: an entity with a <see cref="Body"/> and a <see cref="Mover"/>.

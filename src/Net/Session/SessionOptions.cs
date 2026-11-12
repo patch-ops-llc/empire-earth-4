@@ -1,4 +1,5 @@
 using Sim;
+using Sim.Serialization;
 
 namespace Net;
 
@@ -23,6 +24,13 @@ public sealed record HostOptions
 
     /// <summary>The tick the match starts at: the tick of every peer's world when it reports ready.</summary>
     public int FirstTick { get; init; }
+
+    /// <summary>
+    /// The match every client is to build, with one player for each seat. The host sends it to a
+    /// client as soon as it has joined. Null when the peers agree on the match some other way, as
+    /// single-player and tests do.
+    /// </summary>
+    public MatchDescription? Match { get; init; }
 
     /// <summary>
     /// How many ticks after the host receives a command it runs: 1 or more. The technical plan sets
@@ -66,6 +74,11 @@ public sealed record HostOptions
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(TickInterval, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfLessThan(MaxLagTicks, checked(2 * HashInterval));
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(PingInterval, TimeSpan.Zero);
+        if (Match is not null && Match.Players.Count != PlayerCount)
+        {
+            throw new ArgumentException($"The match has {Match.Players.Count} players and the session has {PlayerCount} seats.");
+        }
+
         if (CommandDelay is { } delay)
         {
             ArgumentOutOfRangeException.ThrowIfLessThan(delay, 1, nameof(CommandDelay));
