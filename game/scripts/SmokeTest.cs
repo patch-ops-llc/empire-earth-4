@@ -80,6 +80,7 @@ public sealed class SmokeTest
         // 13v. Economy: a work order.
 
         // 14v. Research: one research.
+        new ResearchSmoke(),
 
         // 15v. Construction and production.
 

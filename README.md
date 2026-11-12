@@ -34,7 +34,7 @@ godot --headless --path game --import --build-solutions
 godot --headless --path game --quit-after 600 -- --smoke-test
 ```
 
-The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, gives it a fixed script of four move orders through the session, runs it for 600 ticks, prints one line that starts with `SMOKE_TEST_OK` and quits. It takes about a second. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
+The second command starts the game in its main scene with the argument `--smoke-test`. The game loads the data, builds a match with a fixed seed, gives it a fixed script of orders through the session (four move orders, then a research that is started, cancelled, and another that runs to its end), runs it for 1,600 ticks, prints one line that starts with `SMOKE_TEST_OK` and quits. It takes about a second. Check for that line and not the exit code: Godot exits with 0 even when the C# assembly or a script fails to load.
 
 The line carries two hashes. `content_hash` is the hash of the data files as the game read them, and it must equal the one `datacheck` prints. `state_hash` is the hash of the match's state after the script, and it must be the same on every system. `ci.yml` checks the first. `export.yml` checks both for every build it makes, and an exported build takes the same argument:
 
@@ -101,6 +101,9 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is in |
 | Clear the selection | Left click on the ground |
 | Send the selected units somewhere | Right click on the ground |
+| Open or close the research panel | R, or the Research button in the top bar. Escape closes it too |
+| Start a research | In the research panel, left click on a bright cell |
+| Cancel a research | In the research panel, the Cancel button beside its progress bar |
 | Show or hide the overlay | F3 |
 
 ## Test builds
