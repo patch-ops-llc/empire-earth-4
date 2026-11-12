@@ -18,6 +18,9 @@ public class BenchmarkToolTests
         "separate-orders",
         "search-ridge",
         "search-256",
+        "wall-breach",
+        "wall-breach-apart",
+        "gates",
     ];
 
     [Fact]
@@ -59,6 +62,15 @@ public class BenchmarkToolTests
         Assert.Matches(@"^one search across a map of 96 by 96: \d+ tiles expanded, a route of \d+ tiles; the worst tick is the search$", rows["search-ridge"].Findings);
         Assert.Matches(@"^one search across a map of \d+ by \d+: \d+ tiles expanded, a route of \d+ tiles; the worst tick is the search$", rows["search-256"].Findings);
 
+        // Walls and gates (design 2.5): no more searches for a wall in the tick of the orders than
+        // the orders of one player may run and the attacks of a tick may add, however many orders.
+        const string Breach = @"every unit had its wall at tick \d+; first hit on it at tick \d+, first tile down at \d+, \d+ down in all; first unit inside at \d+, (\d+) of \1 inside and at rest at \d+";
+        Assert.Matches("^one order into a closed camp: 1 searches for a wall in that tick, " + Breach + "$", rows["wall-breach"].Findings);
+        Assert.Matches(@"^\d+ orders in one tick into a closed camp: (?:\d|1\d) searches for a wall in that tick, " + Breach + "$", rows["wall-breach-apart"].Findings);
+        Assert.Matches(
+            "^one order into a closed camp: 1 searches for a wall in that tick, " + Breach + @"; each player has a gate, and the camp's \d+ workers were in through theirs at tick \d+$",
+            rows["gates"].Findings);
+
         Assert.Equal(1, rows["search-ridge"].Units);
         Assert.Equal(rows["chokepoint"].Units + 3, rows["chokepoint-held"].Units);
         Assert.All(rows.Values, row => Assert.True(row.Ticks > 0));
@@ -75,7 +87,7 @@ public class BenchmarkToolTests
     }
 
     [Theory]
-    [InlineData("benchmark: there is no scenario 'nope'. The scenarios are: chokepoint, chokepoint-held, march, crossing, separate-orders, search-ridge, search-256.", "--scenario", "nope")]
+    [InlineData("benchmark: there is no scenario 'nope'. The scenarios are: chokepoint, chokepoint-held, march, crossing, separate-orders, search-ridge, search-256, wall-breach, wall-breach-apart, gates.", "--scenario", "nope")]
     [InlineData("benchmark: unknown or incomplete argument '--fast'.", "--fast")]
     [InlineData("benchmark: unknown or incomplete argument '--scenario'.", "--quick", "--scenario")]
     [InlineData("benchmark: unknown or incomplete argument '--data'.", "--data")]

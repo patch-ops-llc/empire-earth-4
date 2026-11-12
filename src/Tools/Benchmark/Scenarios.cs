@@ -164,6 +164,7 @@ internal static class Scenarios
         new("separate-orders", data => new SeparateOrders(Ridge(data), quick ? 60 : 500, quick ? 60 : 400)),
         new("search-ridge", data => new WholeMapSearch(Ridge(data), 3)),
         new("search-256", data => new WholeMapSearch(Serpentine(data, quick ? 64 : 256), 3)),
+        .. WallScenarios.All(quick),
     ];
 
     private static Match Ridge(GameData data) =>
