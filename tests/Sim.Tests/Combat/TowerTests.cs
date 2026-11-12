@@ -273,6 +273,39 @@ public class TowerTests
         Assert.True(match.PositionOf(first).X > Fixed.FromInt(19));
     }
 
+    [Fact]
+    public void ATowerWhoseTargetHasLeftItsRangePicksAgainOnlyWhenItsWaitIsOver()
+    {
+        var match = WithTower(out var tower);
+        var first = match.SpawnWorker(0, "17.5", "11");
+        var standing = match.SpawnWorker(0, "11", "18.5");
+        match.Run(4);
+        Assert.Equal(first, match.Turrets.Get(tower).Target);
+
+        // The target walks out of range while the Tower waits for its next shot. Another enemy
+        // has been in range all along, further off than the target was.
+        match.OrderMove(0, TestMatches.Point("24.5", "11"), first);
+        while (match.PositionOf(first).X <= Fixed.FromInt(19))
+        {
+            match.Run(1);
+        }
+
+        Assert.InRange(match.Turrets.Get(tower).Wait, 2, 19);
+        Assert.Equal(first, match.Turrets.Get(tower).Target);
+
+        // A third comes nearer than that one before the wait is over. The Tower picks when it can
+        // fire again, and then it picks the nearest.
+        var late = match.SpawnWorker(0, "11", "15.5");
+        var events = match.RunAndCollect(match.Turrets.Get(tower).Wait);
+
+        Assert.Equal(late, match.Turrets.Get(tower).Target);
+        var shot = Assert.Single(ShotsOf(events, tower));
+        Assert.Equal(late, match.Shots.Get(shot.Entity).Target);
+        match.Run(40);
+        Assert.Equal(50_000, match.HitPointsOf(standing));
+        Assert.True(match.HitPointsOf(late) < 50_000);
+    }
+
     /// <summary>Design 2.4: every four ticks, on the ticks where the tick number plus the ID is a multiple of four.</summary>
     [Theory]
     [InlineData(0)]
