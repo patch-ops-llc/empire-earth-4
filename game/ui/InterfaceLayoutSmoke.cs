@@ -6,7 +6,7 @@ namespace Game;
 
 /// <summary>
 /// The smoke test's look at where the interface stands: the frame is filled as full as a match
-/// fills it, three times over, and asked each time whether a box reaches outside the window or
+/// fills it, four times over, and asked each time whether a box reaches outside the window or
 /// lies over another (<see cref="InterfaceFrame.LayoutProblems"/>).
 /// </summary>
 /// <remarks>
@@ -17,9 +17,11 @@ namespace Game;
 /// </para>
 /// <para>
 /// Each time, every control group is set, so that their row is as long as it gets, and the
-/// message line is given as many messages as it holds, none of which fits on one line. Then: the tallest detail the inspection panel has,
-/// with a fighting unit selected for its command; a worker with the build menu open; and the
-/// tallest summary of several kinds, with a selection that has every command. The detail and
+/// message line is given as many messages as it holds, none of which fits on one line. Then:
+/// the tallest detail the inspection panel has, with a fighting unit selected for its command;
+/// a worker with the build menu open; the tallest summary of several kinds, with a selection
+/// that has every command; and a structure of the player's own, with what a piece shows for
+/// one, as the buttons that train are. The detail and
 /// the summary are as wide as the panel may be (<see cref="InspectionPart.WidestShown"/>),
 /// which the inspection's own part holds every chassis to. The development aids and readouts
 /// are shown throughout, as they are for a tester, with one aid more that is taller than the
@@ -44,13 +46,14 @@ public sealed class InterfaceLayoutSmoke : SmokePart
 
     private readonly List<EntityId> _fighting = [];
     private readonly List<EntityId> _workers = [];
+    private EntityId _structure = EntityId.None;
     private bool _held;
     private Control? _aid;
     private Control? _row;
 
     public override string Name => "Interface layout";
 
-    public override int Ticks => (3 * Settle) + 10;
+    public override int Ticks => (4 * Settle) + 10;
 
     public override void GiveOrders(int tick, SmokeOrders orders)
     {
@@ -115,6 +118,21 @@ public sealed class InterfaceLayoutSmoke : SmokePart
                 Look(orders, "the widest summary of several kinds", _held || _fighting.Count + _workers.Count > 0 ? "BottomPanel" : null);
                 CheckHeldWidth(orders);
                 panel?.Release();
+                _held = false;
+                _structure = OwnStructure(orders);
+                if (_structure != EntityId.None)
+                {
+                    view.Selection.Set([_structure]);
+                }
+                else
+                {
+                    view.Selection.Clear();
+                }
+
+                break;
+
+            case 4 * Settle:
+                Look(orders, "a structure of the player's own", _structure != EntityId.None ? "BottomPanel" : null);
                 view.Selection.Clear();
                 EmptyGroups(frame);
                 frame.DropMessages();
@@ -124,6 +142,23 @@ public sealed class InterfaceLayoutSmoke : SmokePart
                 _row = null;
                 break;
         }
+    }
+
+    // The first structure of the local player's: what a selected structure shows, its card and
+    // whatever a piece adds for it, as the buttons that train are, stands in the bottom panel.
+    private static EntityId OwnStructure(SmokeOrders orders)
+    {
+        var match = orders.Match;
+        for (var i = 0; i < match.Structures.Count; i++)
+        {
+            var entity = match.Structures.EntityAt(i);
+            if (match.Bodies.TryGet(entity, out var body) && body.Owner == orders.Player)
+            {
+                return entity;
+            }
+        }
+
+        return EntityId.None;
     }
 
     /// <summary>
