@@ -110,12 +110,15 @@ public class PerkSnapshotTests
         Assert.Contains(CountsOf(fighting, 0), counts => counts.DamagedAt == 0);
         Assert.All(CountsOf(fighting, 1), counts => Assert.InRange(counts.DamagedAt, 300, 349));
 
-        // The pair has died and given its refunds, which are in the stockpile. The snapshot is
-        // taken two ticks after the last death, not in the tick after one: the spatial index of
-        // a match still lists a unit that died until the next tick makes it again, and a restored
-        // match makes it from the state, so the two indexes differ for that one tick.
+        // The first of the pair has died and given its refund; its partner fights on for a second.
         var events = new List<SimEvent>();
-        var refunded = Run(401, events);
+        var halfGone = Run(377, events);
+        Assert.Equal([376], events.Where(simEvent => simEvent.Kind == SimEventKind.ReservesRefunded).Select(simEvent => simEvent.Tick));
+        Assert.Single(CountsOf(halfGone, 1));
+
+        // The pair is gone, and both refunds are in the stockpile.
+        events.Clear();
+        var refunded = Run(400, events);
         Assert.Equal([376, 399], events.Where(simEvent => simEvent.Kind == SimEventKind.ReservesRefunded).Select(simEvent => simEvent.Tick));
         Assert.Empty(CountsOf(refunded, 1));
 
@@ -142,8 +145,9 @@ public class PerkSnapshotTests
     [InlineData(320)]
     [InlineData(350)]
     [InlineData(376)]
-    [InlineData(378)]
-    [InlineData(401)]
+    [InlineData(377)]
+    [InlineData(399)]
+    [InlineData(400)]
     [InlineData(480)]
     [InlineData(592)]
     [InlineData(650)]
