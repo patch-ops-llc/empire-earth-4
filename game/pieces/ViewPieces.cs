@@ -25,6 +25,7 @@ public static class ViewPieces
         // 13v. Economy: resources and supply, deposits, the work order.
 
         // 14v. Research: the grid.
+        new ResearchPiece(),
 
         // 15v. Construction and production: structures, the build menu, the production panel.
 
