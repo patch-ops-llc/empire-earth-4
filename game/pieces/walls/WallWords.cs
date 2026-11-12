@@ -16,7 +16,7 @@ public static class WallWords
 
     /// <summary>What a run lays and costs, as the tag beside the pointer says it: "12 tiles · 240 Materials".</summary>
     public static string Price(WallRunPlan plan) =>
-        plan.AidFor is not null ? $"{Tiles(plan.Laid)} · free"
+        plan.AidFor is { } seat ? $"{Tiles(plan.Laid)} for {MatchPanel.PlayerName(seat)} · free"
         : plan.Laid == 0 ? "No tile to lay"
         : $"{Tiles(plan.Laid)} · {ResearchWords.Price(plan.Materials, plan.Energy)}";
 

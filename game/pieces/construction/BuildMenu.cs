@@ -363,6 +363,10 @@ public partial class BuildMenu : InterfacePart
             tool.Point(View, GroundUnderPointer(), _workers);
         }
 
+        // While a tool is held, as while a run of wall is drawn, the menu is out of the way of
+        // the ground behind it. It is back when the tool is let go or its work is dropped.
+        _panel.Visible = _placing?.Tool is not { IsHeld: true };
+
         _site = _placing?.Structure is { } placing ? SiteUnderPointer(placing) : null;
         if (_placing?.Structure is { } structure && _site is { } site)
         {

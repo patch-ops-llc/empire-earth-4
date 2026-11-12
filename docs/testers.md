@@ -90,8 +90,10 @@ If joining fails, the menu says why in orange:
 | Open or close the build menu | B, or the Build button in the panel at the bottom, with a worker selected |
 | Choose a structure in the build menu | Click it, or press the key beside its name: C Capitol, O Outpost, E Generator, B Barracks, K Works, Y Academy, T Tower |
 | Place the chosen structure | Click the ground. Hold Shift to go on placing the same structure |
-| Go back from placing to the menu, and from the menu to the match | Right-click or Escape |
-| Cancel a build order or a structure that is not finished | Select the worker or the structure and press Delete, or the Cancel build button in the panel at the bottom |
+| Lay a wall | Press L in the build menu, or click Wall. Press the left button on the first tile, drag to the last tile and let go. Hold Shift to go on laying walls |
+| Go back from placing to the menu, and from the menu to the match | Right-click or Escape. While you drag a wall, the first right-click or Escape drops the run you have drawn |
+| Cancel a build order, a wall order or a structure that is not finished | Select the worker or the structure and press Delete, or the Cancel build button in the panel at the bottom |
+| See what another player's wall is | Click a tile of it. A pale line marks the tile and the panel at the bottom describes it |
 | Send the selected units somewhere | Right-click the ground. On a trackpad that is a click with two fingers, unless you have set it otherwise |
 | Open or close the research panel | R, or the Research button in the bar at the top. Escape closes it too |
 | Start a research | In the research panel, click a bright cell |
@@ -153,7 +155,7 @@ You are shown only what your own units see. Each unit sees a circle round itself
 
 ## Building
 
-Select one or more workers and press B, or click Build in the panel at the bottom. The build menu opens above that panel and lists the seven structures a worker places.
+Select one or more workers and press B, or click Build in the panel at the bottom. The build menu opens above that panel and lists the seven structures a worker places, and the wall, which is laid in another way: see [Walls](#walls).
 
 - Each entry has the structure's name, the key that chooses it and its price: M is Materials and E is Energy. Point at an entry and the line under the entries says what it costs, how many tiles it takes, how long it builds itself and whether it must stand in your territory.
 - An entry is dark when you cannot order the structure now. Its price is orange when you lack the resources, and the line under the entries says how much you lack. An entry says `Limit 2 of 2` when you have as many as you may have: you may have two Academies. A structure that waits for a research says which.
@@ -169,6 +171,31 @@ Select one or more workers and press B, or click Build in the panel at the botto
 - If the worker cannot lay the foundation when it arrives, because something stands in the way or the rules no longer allow it, a line under the top bar says why and the whole price comes back.
 - What the structures do so far: an Outpost claims the ground 12 tiles round it once it is finished, so that you can build and work deposits there. A Generator is where workers earn Energy: select workers and right-click a finished Generator. Each earns 30 Energy a minute, and a Generator has room for four. An Academy gives you a second research at a time. A second Capitol claims ground like the first. The Barracks, the Works and the Tower can be built but do nothing yet: no match can train units yet.
 - A worker that was working at a deposit or a Generator goes back to it once the foundation is laid. A worker that had no work stays beside the site.
+
+## Walls
+
+A wall is a line of tiles that no unit walks through, your own units neither: there are no gates yet. A tile costs 20 Materials and builds itself in 5 seconds.
+
+**Laying a wall.** Select a worker, press B and then L, or click Wall in the build menu. Press the left button on the tile where the wall begins, drag to the tile where it ends, and let go. A wall runs straight from the one tile to the other, also at a slant.
+
+- While you drag, the menu steps out of the way and the run is drawn on the ground. Green pieces are tiles that will be laid. A red tile with a cross is one where no wall can stand: it is outside your territory, not open ground, or under a deposit, a structure or another player's wall. It is left out, and you do not pay for it. A pale tile is one where your wall stands already. A wall stands only inside your territory.
+- A tag beside the pointer says how many tiles will be laid and what they cost together, and what is left out. The run is amber, and the tag says why, when the order would not be taken at all: no tile of it can be laid, or you cannot pay for it.
+- The run goes by the ground as it is, also on a part of your territory you have not seen yet: a red tile there tells you that something is in the way.
+- Let go, and you pay for every tile at once. The nearest selected worker walks to the run and lays it tile by tile. The tiles still to come are drawn as pale pieces of wall in your color. Only you see them. The worker's line in the panel at the bottom says how many tiles are to go.
+- A right-click or Escape while you drag drops the run and keeps the wall in hand. Another goes back to the menu. Hold Shift while you let go to lay another run afterwards. Each order is for one worker, and a new order for a worker that is laying a wall ends the old one, so select another worker for a second run.
+- Each tile builds itself once it is laid, like a structure: it fills from the ground up under a blue bar. It is in the way from the moment it is laid.
+- If the worker cannot lay a tile when it comes to it, because something stands there by then, it leaves the tile out and goes on. A red cross marks the tile for a few seconds, a line under the top bar says why, and the price of the tile comes back.
+- Cancel with Delete, or the Cancel build button. For a selected worker that is laying a wall, the tiles it has not laid are paid back and the tiles it has laid stay. For a selected tile that is not finished, you get three quarters back and the tile is taken away.
+
+**What a wall looks like.** The tiles of one player's wall that touch are drawn as one wall, round corners and at a slant. The top of a wall is in its owner's color, so that you can tell whose it is from as far out as the view goes, and on the minimap a wall is a thin line in that color. A wall that has been hit stands lower and loses its colored top piece by piece. A tile that is nearly gone is a low stump.
+
+**Selecting a wall.** Click a tile of your wall to select it. The panel at the bottom shows its hit points, whether it is finished, and how many tiles the wall it is a piece of has. Hold Shift and click to select more tiles. Click a tile of another player's wall to see the same about it.
+
+**Getting through a wall.** Units do not attack a wall they can walk round. Order units to a place they can only reach through another player's wall, and they attack the tile of it that is in their way, and walk on when it is gone. They never break your own wall: a place that only your own wall closes off cannot be reached.
+
+**Walls in the fog of war.** A wall is under the fog like every structure. You see another player's wall while a unit or a structure of yours sees it. Out of sight it stays on your screen and on the minimap as you last saw it, darker, also when it has been broken or built on since. A wall you have never seen is not drawn at all.
+
+**The development aid for walls.** Nobody plays the other seat when you play alone, so this build has a third development aid in an orange panel at the left edge: "Development aid: walls". Click its button, which then reads "Laid for Player 2: ON", and the next runs you lay are laid at once as finished wall of the other player, free of charge and anywhere on open ground. Click it again to lay your own. It is not part of the game. To see units break through a wall, close a place off with such walls, as both ends of the pass on the ridge, make units of your own inside with G, and order them out.
 
 ## What your units are
 

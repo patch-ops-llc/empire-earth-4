@@ -41,7 +41,9 @@ public partial class WallDevelopmentAid : InterfacePart
             _forOtherSeat = value && IsOffered;
             if (_button is not null)
             {
-                _button.Text = _forOtherSeat ? "Walls are laid for the other player. Back to yours" : "Lay walls for the other player";
+                var whose = MatchPanel.PlayerName(OtherSeat);
+                _button.Text = _forOtherSeat ? $"Laid for {whose}: ON" : $"Laid for {whose}: off";
+                _button.AddThemeColorOverride("font_color", _forOtherSeat ? UiStyle.Warning : ResearchColors.Ink);
             }
         }
     }
@@ -85,16 +87,17 @@ public partial class WallDevelopmentAid : InterfacePart
         panel.AddThemeStyleboxOverride("panel", box);
         Frame.DevelopmentAids.AddChild(panel);
 
-        var column = UiStyle.Column(4);
-        panel.AddChild(column);
-        var title = new Label { Text = "Development aid: an enemy wall" };
+        // One line, so that a third aid leaves the panel at the bottom its room in a small window.
+        var row = UiStyle.Row(8);
+        panel.AddChild(row);
+        var title = new Label { Text = "Development aid: walls", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         title.AddThemeColorOverride("font_color", UiStyle.Warning);
-        column.AddChild(title);
+        row.AddChild(title);
 
         _button = UiStyle.FrameButton(string.Empty);
         _button.AddThemeFontSizeOverride("font_size", 13);
         _button.Pressed += () => ForOtherSeat = !ForOtherSeat;
-        column.AddChild(_button);
+        row.AddChild(_button);
         ForOtherSeat = false;
     }
 }

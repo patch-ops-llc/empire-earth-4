@@ -251,10 +251,10 @@ public partial class WallInspection : InterfacePart
         _wall.Visible = _tiles.Count == 1;
         _wall.Text = PieceOf(first);
         _facts.Text = Mode == WallInspectionMode.Other
-            ? "No unit walks through it. Units you order past it break it down on their way."
+            ? "No unit of yours walks through it. Units ordered to a place they can only reach through it break it down."
             : string.Create(
                 CultureInfo.InvariantCulture,
-                $"No unit walks through it, yours neither. Sight {wall.Sight} · {ResearchWords.Price(wall.Materials, wall.Energy)} a tile.");
+                $"No unit walks through {(_tiles.Count == 1 ? "it" : "them")}, yours neither. Sight {wall.Sight} · {ResearchWords.Price(wall.Materials, wall.Energy)} a tile.");
     }
 
     private string StateOf(StructureDef wall, in SeenStructure first, int unfinished, int damaged)

@@ -238,6 +238,8 @@ public sealed class WallTool : BuildTool
         var plan = PlanOf(view, workers, first, _first is null ? first : _last);
         Plan = plan;
         _preview.Show(plan);
-        _tag.Show(WallWords.Price(plan), WallWords.Note(view.Match, plan), warn: !plan.IsAccepted);
+        // While a run is drawn the menu, and its line of what to do, are out of the way.
+        var note = WallWords.Note(view.Match, plan) ?? (_first is null ? null : "Let go to lay it. A right-click drops it.");
+        _tag.Show(WallWords.Price(plan), note, warn: !plan.IsAccepted);
     }
 }
