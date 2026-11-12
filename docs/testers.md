@@ -117,7 +117,7 @@ The two games check each other all the time. If they ever disagree about the sta
 
 No match can train a fighting unit yet. Until one can, this build has a development aid that makes them from nothing, free of charge. It is not part of the game and goes away once units can be trained. Its panel has an orange border and sits at the left edge of the window.
 
-1. In the panel, choose a unit and how many to make at a time. There are four lines of units, each in four epochs. Line infantry shoots. Guards fight hand to hand. Cavalry fights hand to hand and is larger. Artillery shoots far and cannot shoot at what stands close to it. Its shells do not yet hit what stands round the target.
+1. In the panel, choose a unit and how many to make at a time. There are four lines of units, each in four epochs. Line infantry shoots. Guards fight hand to hand. Cavalry fights hand to hand and is larger. Artillery shoots far, cannot shoot at what stands close to it, and its shell hits every enemy near where it lands.
 2. Point at open ground and press G. Your units appear there.
 3. Alone, point somewhere else and press H. Units of the other player appear there, and nothing but their own reflexes controls them. In a shared match H makes nothing: each player makes their own units with G.
 
@@ -127,7 +127,8 @@ What you will see:
 - Units fight on their own when an enemy comes near, and go back to where they stood afterwards.
 - A right-click on an enemy leaves a red ring, and the selected units go after that unit. A right-click with Ctrl held leaves an orange ring, and the units go there and fight what they meet. A plain right-click on the ground moves them, and on that walk they do not fight, even when attacked.
 - A unit that has lost hit points has a bar above it: green, yellow below half and red below a quarter. The pale part of a bar is what the unit has just lost. A selected unit shows its bar even when unhurt, and the panel at the bottom gives the number when one unit is selected.
-- A shot is a pale streak in its owner's color, and a shell of artillery is thicker. A unit that is hit flashes white. A shot whose target died or got away before it arrived ends in a grey puff.
+- A shot is a pale streak in its owner's color, and a shell of artillery is thicker. A unit that is hit flashes white. A shot whose target died before it arrived ends in a grey puff.
+- Where a shell lands there is a burst and a pale ring that spreads and fades. The ring is the edge of the blast: every enemy inside it is hit, and nobody on the side of the unit that fired. A shell whose target died on the way lands where the target last stood.
 - A unit that dies sinks into the ground and leaves a ring in its owner's color that spreads and fades.
 - Workers can be attacked and do not fight back.
 - If an order cannot be carried out, a line of text on screen says why.

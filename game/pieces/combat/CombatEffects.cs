@@ -14,6 +14,7 @@ namespace Game;
 /// <item>A shot fired: a flash where it was fired from. The shot itself is the <see cref="ShotLayer"/>'s.</item>
 /// <item>A shot that lands: a spark on the target, and the target flashes white.</item>
 /// <item>A shot that is lost, because its target died first: a grey puff where the shot was.</item>
+/// <item>A shell that lands: a burst at the place, inside a pale ring that spreads to the edge of the blast and stays there while it fades, so that the ring shows who was in reach. Each unit the blast reached is a shot that lands.</item>
 /// <item>A death: the unit's shape sinks into the ground and fades, inside a ring in its owner's color that spreads.</item>
 /// </list>
 /// An effect is drawn from what its event says, since the entities an event names may be gone by
@@ -30,6 +31,9 @@ public partial class CombatEffects : WorldLayer
     private static readonly Color PuffColor = new(0.7f, 0.7f, 0.72f);
     private static readonly Color StreakColor = new(1f, 1f, 1f);
 
+    // The part of a blast's life in which its ring and its burst grow to their full size.
+    private const float BlastGrowth = 0.3f;
+
     private readonly List<Effect> _effects = [];
 
     // The way each unit that can be damaged faced after the last tick, for the shape it leaves when it dies.
@@ -43,6 +47,9 @@ public partial class CombatEffects : WorldLayer
 
     /// <summary>The number of hits, melee and shot, shown since the match began.</summary>
     public int HitsShown { get; private set; }
+
+    /// <summary>The number of blasts shown since the match began.</summary>
+    public int BlastsShown { get; private set; }
 
     /// <summary>The number of deaths shown since the match began.</summary>
     public int DeathsShown { get; private set; }
@@ -91,6 +98,11 @@ public partial class CombatEffects : WorldLayer
 
                 case SimEventKind.ShotLost:
                     Add(new Effect(EffectKind.Puff, place, 0.45));
+                    break;
+
+                case SimEventKind.Blast:
+                    BlastsShown++;
+                    Add(new Effect(EffectKind.Blast, place, 0.6) { Radius = happened.Amount / (float)Fixed.RawOne });
                     break;
 
                 case SimEventKind.Death:
@@ -194,6 +206,14 @@ public partial class CombatEffects : WorldLayer
                 _bodies.Add(new Transform3D(sunk, effect.At), WithAlpha(effect.Color.Darkened(0.35f), 0.85f * left));
                 break;
 
+            case EffectKind.Blast:
+                // Both grow fast and slow down as they reach their size: the ring to the blast's own radius.
+                var grown = 1f - Mathf.Pow(1f - Mathf.Min(gone / BlastGrowth, 1f), 2f);
+                var reach = effect.Radius * Mathf.Lerp(0.2f, 1f, grown);
+                _rings.Add(new Transform3D(Basis.FromScale(new Vector3(reach, 0.25f, reach)), effect.At + (Vector3.Up * 0.06f)), WithAlpha(SparkColor, left));
+                AddBall(middle, effect.Radius * Mathf.Lerp(0.3f, 1.1f, grown), MuzzleColor, 0.6f * left * left);
+                break;
+
             case EffectKind.Ring:
                 var size = Mathf.Lerp(0.35f, 1.15f, gone);
                 _rings.Add(new Transform3D(Basis.FromScale(new Vector3(size, 0.25f, size)), effect.At + (Vector3.Up * 0.05f)), WithAlpha(effect.Color, left));
@@ -254,6 +274,7 @@ public partial class CombatEffects : WorldLayer
         Flash,
         Fallen,
         Ring,
+        Blast,
     }
 
     private sealed class Effect(EffectKind kind, Vector3 at, double life)
@@ -277,5 +298,8 @@ public partial class CombatEffects : WorldLayer
         public Color Color { get; init; }
 
         public float Heading { get; init; }
+
+        /// <summary>How far a blast reaches from its middle, in tiles.</summary>
+        public float Radius { get; init; }
     }
 }
