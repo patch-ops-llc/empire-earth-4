@@ -18,10 +18,11 @@ public class MatchSetupTests
 
     private static Match SampleMatch(ulong seed = 1) => MatchSetup.Create(TestMatches.Data, SampleMap, seed, TwoPlayers);
 
+    /// <summary>The tiles a player's units stand on, in the order of their IDs. A structure is not a unit.</summary>
     private static (int X, int Y)[] TilesOf(Match match, int player) =>
     [
-        .. Enumerable.Range(0, match.Bodies.Count)
-            .Select(index => match.Bodies.ValueAt(index))
+        .. Enumerable.Range(0, match.Movers.Count)
+            .Select(index => match.Bodies.Get(match.Movers.EntityAt(index)))
             .Where(body => body.Owner == player)
             .Select(body => (body.Position.X.FloorToInt(), body.Position.Y.FloorToInt())),
     ];
@@ -55,16 +56,15 @@ public class MatchSetupTests
         var match = SampleMatch();
 
         Assert.Equal(6, TestMatches.Data.Rules.Start.Workers);
-        Assert.Equal(12, match.Bodies.Count);
         Assert.Equal(12, match.Movers.Count);
         Assert.Equal([(3, 9), (4, 9), (5, 9), (6, 9), (3, 6), (4, 6)], TilesOf(match, 0));
         Assert.Equal([(36, 9), (35, 9), (34, 9), (33, 9), (36, 6), (35, 6)], TilesOf(match, 1));
 
-        for (var i = 0; i < match.Bodies.Count; i++)
+        for (var i = 0; i < match.Movers.Count; i++)
         {
-            var entity = match.Bodies.EntityAt(i);
-            var body = match.Bodies.ValueAt(i);
-            var mover = match.Movers.Get(entity);
+            var entity = match.Movers.EntityAt(i);
+            var body = match.Bodies.Get(entity);
+            var mover = match.Movers.ValueAt(i);
 
             // Player 0's workers are the oldest entities, then player 1's.
             Assert.Equal(i + 1, entity.Value);
@@ -118,7 +118,8 @@ public class MatchSetupTests
         var match = MatchSetup.Create(TestMatches.Data, SampleMap, 1, [PlayerSetup.WithoutStart, new(1), PlayerSetup.WithoutStart]);
 
         Assert.Equal(3, match.Players.Count);
-        Assert.Equal(6, match.Bodies.Count);
+        Assert.Equal(6, match.Movers.Count);
+        Assert.Equal(1, match.Structures.Count);
         Assert.Empty(TilesOf(match, 0));
         Assert.Equal(6, TilesOf(match, 1).Length);
         Assert.Empty(TilesOf(match, 2));

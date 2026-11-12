@@ -4,14 +4,18 @@ namespace Sim.Data;
 /// Checks one map against the design's map rules (design 5.3 and 5.4). All distances are compared as
 /// squares of doubled coordinates, so tile centers and footprint centers stay whole numbers.
 /// </summary>
+/// <remarks>
+/// The footprint and the territory radius of a start are those of the structure every player
+/// starts with, read from its own file.
+/// </remarks>
 internal static class MapChecker
 {
-    public static void Check(MapDef map, MapRules rules, Action<string, string> report)
+    public static void Check(MapDef map, MapRules rules, MapStartRules capitol, Action<string, string> report)
     {
         var startAreas = new List<TileRect>();
         foreach (var start in map.Starts)
         {
-            startAreas.Add(new TileRect(start.X, start.Y, rules.StartFootprint, rules.StartFootprint));
+            startAreas.Add(new TileRect(start.X, start.Y, capitol.Footprint, capitol.Footprint));
         }
 
         var depositAreas = new List<TileRect>();
@@ -52,8 +56,8 @@ internal static class MapChecker
 
         if (footprintsFit)
         {
-            CheckStartDistance(startAreas, rules, report);
-            CheckDeposits(map, startAreas, depositAreas, rules, report);
+            CheckStartDistance(startAreas, capitol, report);
+            CheckDeposits(map, startAreas, depositAreas, rules, capitol, report);
         }
     }
 
@@ -231,14 +235,14 @@ internal static class MapChecker
         }
     }
 
-    private static void CheckStartDistance(List<TileRect> startAreas, MapRules rules, Action<string, string> report)
+    private static void CheckStartDistance(List<TileRect> startAreas, MapStartRules capitol, Action<string, string> report)
     {
         // In doubled coordinates the needed distance, two radii, is four times the radius.
-        long needed = 4L * rules.StartTerritoryRadius;
+        long needed = 4L * capitol.TerritoryRadius;
         if (SquaredDoubledDistance(startAreas[0], startAreas[1]) < needed * needed)
         {
-            report("$.starts", $"the starting Capitols are too close: their centers must be at least {2 * rules.StartTerritoryRadius} tiles apart, "
-                + $"so that two territories of radius {rules.StartTerritoryRadius} do not overlap");
+            report("$.starts", $"the starting Capitols are too close: their centers must be at least {2 * capitol.TerritoryRadius} tiles apart, "
+                + $"so that two territories of radius {capitol.TerritoryRadius} do not overlap");
         }
     }
 
@@ -247,6 +251,7 @@ internal static class MapChecker
         List<TileRect> startAreas,
         List<TileRect> depositAreas,
         MapRules rules,
+        MapStartRules capitol,
         Action<string, string> report)
     {
         var mainDeposits = new int[startAreas.Count];
@@ -264,7 +269,7 @@ internal static class MapChecker
                 var owner = -1;
                 for (var s = 0; s < startAreas.Count; s++)
                 {
-                    if (TilesInsideTerritory(depositAreas[i], startAreas[s], rules.StartTerritoryRadius) == tileCount)
+                    if (TilesInsideTerritory(depositAreas[i], startAreas[s], capitol.TerritoryRadius) == tileCount)
                     {
                         owner = s;
                     }
@@ -272,7 +277,7 @@ internal static class MapChecker
 
                 if (owner < 0)
                 {
-                    report(location, $"a main deposit must lie wholly inside a starting territory (every tile center within {rules.StartTerritoryRadius} tiles of a starting Capitol's center)");
+                    report(location, $"a main deposit must lie wholly inside a starting territory (every tile center within {capitol.TerritoryRadius} tiles of a starting Capitol's center)");
                 }
                 else
                 {
@@ -285,7 +290,7 @@ internal static class MapChecker
             var isOutside = true;
             for (var s = 0; s < startAreas.Count; s++)
             {
-                var inside = TilesInsideTerritory(depositAreas[i], startAreas[s], rules.StartTerritoryRadius);
+                var inside = TilesInsideTerritory(depositAreas[i], startAreas[s], capitol.TerritoryRadius);
                 if (inside > 0)
                 {
                     report(location, $"a {Name(kind)} deposit must lie outside every starting territory, but {inside} of its {tileCount} tiles are inside the territory of start {s}");
@@ -391,3 +396,6 @@ internal static class MapChecker
         _ => "contested",
     };
 }
+
+/// <summary>What a map's starts are checked against: the footprint and territory radius of the starting Capitol.</summary>
+internal readonly record struct MapStartRules(int Footprint, int TerritoryRadius);

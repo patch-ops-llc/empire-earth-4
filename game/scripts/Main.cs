@@ -171,7 +171,7 @@ public partial class Main : Node3D
         if (setup.HasStart)
         {
             var start = map.Starts[setup.Start];
-            var footprint = match.Data.Rules.Map.StartFootprint;
+            var footprint = match.Data.StartStructure.Footprint;
             _camera.CenterOn(new Vector2(start.X + (footprint / 2f), start.Y + (footprint / 2f)));
         }
 
@@ -181,9 +181,16 @@ public partial class Main : Node3D
         AddChild(frame);
         _view = MatchView.Open(run, match, _world, _camera, _units, frame, leave);
 
+        // The fog of war lies on the ground as it lies on the forest and the cliffs.
+        if (ground.MaterialOverride is ShaderMaterial groundMaterial)
+        {
+            _world.Fog.Shade(groundMaterial);
+        }
+
         var overlay = GetNode<DebugOverlay>("DebugOverlay");
         overlay.Match = match;
         overlay.Selection = _view.Selection;
+        overlay.StandIn(frame.DevelopmentReadouts);
     }
 
     private void StartSmokeTest(GameData data)
@@ -214,7 +221,10 @@ public partial class Main : Node3D
         // The smoke test plays its own script, so it takes no input.
         _camera.ProcessMode = ProcessModeEnum.Disabled;
         _units.ProcessMode = ProcessModeEnum.Disabled;
-        _smokeTest = new SmokeTest(_smokeRun.Match, _smokeRun.Session);
+        if (_view is { } view)
+        {
+            _smokeTest = new SmokeTest(_smokeRun.Match, view, _smokeRun.Session);
+        }
     }
 
     private void RunSmokeTest(SmokeLog log)
@@ -253,6 +263,13 @@ public partial class Main : Node3D
         }
 
         _menu?.CloseRun();
+
+        // What the collector has taken and not yet released is released now. The engine
+        // releases the rest itself when it shuts down, but an object the collector's own
+        // thread is still releasing by then is released into an engine that is half gone,
+        // which ends the program with an error instead of the exit code.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
         GetTree().Quit(exitCode);
     }
 
