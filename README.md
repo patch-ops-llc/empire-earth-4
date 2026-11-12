@@ -107,7 +107,7 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | Attack a unit of the other player | Right click on it |
 | Go somewhere and fight what is met on the way | Hold Ctrl and right click on the place |
 | Stop | X, or the Stop button in the selection panel |
-| Development aid, while `debug.spawn` is on in `rules.jsonc`: make units at the pointer | G for your own. Alone, H for the other player's. The orange panel at the top left chooses which and how many |
+| Development aid, while `debug.spawn` is on in `rules.jsonc`: make units at the pointer | G for your own. Alone, H for the other player's. The orange panel at the left edge chooses which and how many |
 
 ## Test builds
 

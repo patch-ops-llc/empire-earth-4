@@ -39,8 +39,8 @@ public partial class DevelopmentSpawn : InterfacePart
     /// <summary>Makes units of the other seat at the pointer, alone. Named in the input map of project.godot.</summary>
     public static readonly StringName SpawnOtherAction = "combat_dev_spawn_other";
 
-    // The panel hangs under the top bar, at the left edge of the window.
-    private const float Top = 52f;
+    // The panel stands at the left edge of the window, half way down: clear of the frame's
+    // messages under the top bar, which are as wide as their sentences, and of the corners.
     private const float Left = 8f;
 
     private static readonly int[] Counts = [1, 3, 5, 10];
@@ -48,6 +48,7 @@ public partial class DevelopmentSpawn : InterfacePart
 
     private OptionButton _chassis = null!;
     private OptionButton _count = null!;
+    private Control? _panel;
     private bool _on;
 
     /// <summary>True when this match has a seat the development spawn can make units for beside the local player's: alone, with a second seat.</summary>
@@ -62,6 +63,15 @@ public partial class DevelopmentSpawn : InterfacePart
         if (_on)
         {
             Build();
+        }
+    }
+
+    public override void EveryFrame(double delta)
+    {
+        // A part is drawn over the frame, so the panel steps aside for a full-screen panel.
+        if (_panel is not null)
+        {
+            _panel.Visible = !Frame.IsPanelOpen;
         }
     }
 
@@ -170,8 +180,13 @@ public partial class DevelopmentSpawn : InterfacePart
         box.SetBorderWidthAll(1);
         panel.AddThemeStyleboxOverride("panel", box);
         AddChild(panel);
-        panel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopLeft);
-        panel.Position = new Vector2(Left, Top);
+        panel.SetAnchorsPreset(Control.LayoutPreset.CenterLeft);
+        panel.GrowVertical = Control.GrowDirection.Both;
+        panel.OffsetLeft = Left;
+        panel.OffsetRight = Left;
+        panel.OffsetTop = 0f;
+        panel.OffsetBottom = 0f;
+        _panel = panel;
 
         var column = UiStyle.Column(6);
         panel.AddChild(column);
