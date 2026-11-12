@@ -6,8 +6,10 @@ using Sim.Setup;
 namespace Game;
 
 /// <summary>
-/// Corner readout of frame time, the simulation tick, the camera and the number of selected units.
-/// The debug_toggle_overlay action shows and hides it.
+/// Readout of frame time, the simulation tick, the camera and the number of selected units, in
+/// the bottom left corner, away from the top bar and the message line under it. The
+/// debug_toggle_overlay action shows and hides it. It lies under the frame of the interface, so
+/// a full-screen panel and the pages of the menu cover it.
 /// </summary>
 public partial class DebugOverlay : CanvasLayer
 {
