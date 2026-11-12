@@ -14,7 +14,8 @@ namespace Game;
 /// is likely to be when a research raises the epoch. It takes no click. It stands in the middle
 /// of the window, under the messages, and is no wider than the development aids at the edges
 /// leave free (<see cref="InterfaceFrame.MiddleWidth"/>): a banner that is wider on one line is
-/// written on more.
+/// written on more. The messages give up their oldest when the banners would otherwise reach
+/// the bottom panel (<see cref="InterfaceFrame.RoomUnderMessages"/>).
 /// </remarks>
 public partial class EpochAnnouncement : InterfacePart
 {
@@ -70,13 +71,21 @@ public partial class EpochAnnouncement : InterfacePart
     {
         if (_banners.Count == 0)
         {
+            if (_top > 0f)
+            {
+                Frame.RoomUnderMessages = 0f;
+            }
+
             _top = 0f;
             return;
         }
 
         // Under the messages, however many there are. It moves down for a new message and does
-        // not jump back up when one goes away.
-        _top = Math.Max(_top, Frame.MessagesEnd + Gap);
+        // not jump back up when one goes away, unless it has to: the messages leave the banners
+        // their room above the bottom panel, and the banners move up into it.
+        var height = _place.GetCombinedMinimumSize().Y;
+        Frame.RoomUnderMessages = Gap + height;
+        _top = Math.Max(Frame.MessagesEnd + Gap, Math.Min(_top, Frame.MiddleEnd - height));
         _place.OffsetTop = _top;
 
         var middle = Frame.MiddleWidth;

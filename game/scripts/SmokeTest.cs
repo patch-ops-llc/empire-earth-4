@@ -107,6 +107,10 @@ public sealed class SmokeTest
         // inspection, whose units it selects.
         new InterfaceLayoutSmoke(),
 
+        // The epoch announcement: two epochs raised with the development command. The last
+        // part, because every chassis and price follows the epoch.
+        new EpochAnnouncementSmoke(),
+
         // Later pieces.
     ];
 

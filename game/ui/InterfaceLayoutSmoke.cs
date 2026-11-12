@@ -16,14 +16,15 @@ namespace Game;
 /// It stays so for the parts after this one.
 /// </para>
 /// <para>
-/// Each time, every control group is set, so that their row is as long as it gets, and a message
-/// is shown that does not fit on one line. Then: the tallest detail the inspection panel has,
+/// Each time, every control group is set, so that their row is as long as it gets, and the
+/// message line is given as many messages as it holds, none of which fits on one line. Then: the tallest detail the inspection panel has,
 /// with a fighting unit selected for its command; a worker with the build menu open; and the
 /// tallest summary of several kinds, with a selection that has every command. The detail and
 /// the summary are as wide as the panel may be (<see cref="InspectionPart.WidestShown"/>),
-/// which the inspection's own part holds every chassis to. The development aids and readouts are shown
-/// throughout, as they are for a tester. The part gives no order and leaves the selection and
-/// the groups empty.
+/// which the inspection's own part holds every chassis to. The development aids and readouts
+/// are shown throughout, as they are for a tester, with one aid more that is taller than the
+/// window. The part gives no order and leaves the selection, the groups and the message line
+/// empty.
 /// </para>
 /// <para>
 /// The smoke test plays 20 ticks in a frame, and what is shown takes its place over the frames
@@ -44,6 +45,7 @@ public sealed class InterfaceLayoutSmoke : SmokePart
     private readonly List<EntityId> _fighting = [];
     private readonly List<EntityId> _workers = [];
     private bool _held;
+    private Control? _aid;
 
     public override string Name => "Interface layout";
 
@@ -61,7 +63,14 @@ public sealed class InterfaceLayoutSmoke : SmokePart
                 UseNarrowestWindow(frame);
                 FindUnits(orders);
                 FillGroups(frame);
-                frame.Say(LongMessage, seconds: 30.0);
+                AddTallAid(frame);
+
+                // As many as the line holds: it has to give some up to stay above the panel.
+                for (var i = 0; i < 5; i++)
+                {
+                    frame.Say(LongMessage, seconds: 30.0);
+                }
+
                 if (_fighting.Count > 0)
                 {
                     view.Selection.Set([_fighting[0]]);
@@ -106,6 +115,9 @@ public sealed class InterfaceLayoutSmoke : SmokePart
                 panel?.Release();
                 view.Selection.Clear();
                 EmptyGroups(frame);
+                frame.DropMessages();
+                _aid?.QueueFree();
+                _aid = null;
                 break;
         }
     }
@@ -135,6 +147,19 @@ public sealed class InterfaceLayoutSmoke : SmokePart
                     $"the bottom panel is {rect.Size.X:F0} wide with the inspection panel held at {InspectionPart.WidestShown:F0}."));
             }
         }
+    }
+
+    // An aid that is taller than the window, so that the column of the aids has to end where
+    // the game's own things begin, whatever the aids of the match need.
+    private void AddTallAid(InterfaceFrame frame)
+    {
+        var lines = frame.AddDevelopmentAid("Development aid: smoke test", "Only the smoke test shows this. It is as tall as it is to fill the column.");
+        for (var line = 1; line <= 40; line++)
+        {
+            lines.AddChild(new Label { Text = string.Create(CultureInfo.InvariantCulture, $"Line {line} of 40") });
+        }
+
+        _aid = lines.GetParent<Control>();
     }
 
     private void FindUnits(SmokeOrders orders)

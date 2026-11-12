@@ -31,6 +31,7 @@ public partial class RefusedOrders : InterfacePart
         CommandType.AttackMove => "The attack-move order was not carried out.",
         CommandType.Move => "The move order was not carried out.",
         CommandType.Stop => "The stop order was not carried out: the units ordered were gone.",
+        CommandType.DebugSetTier => "Development tier: the track is already that high, or the tier is above the match's cap.",
         CommandType.DebugSpawn => "Development spawn: no unit can stand there.",
         _ => "An order was not carried out.",
     };

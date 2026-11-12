@@ -272,6 +272,49 @@ public partial class InterfaceFrame : CanvasLayer
     public float MiddleWidth => Mathf.Max(0f, _root.Size.X - (2f * Mathf.Max(RoomOf(DevelopmentAids), RoomOf(DevelopmentReadouts))));
 
     /// <summary>
+    /// How far down the middle of the window is free, in the interface's units: to a gap above
+    /// the first thing of the game that reaches into it from below, as the bottom panel and a
+    /// menu over it do, or to the window's lower edge.
+    /// </summary>
+    public float MiddleEnd
+    {
+        get
+        {
+            var window = _root.Size;
+            var side = (window.X - MiddleWidth) / 2f;
+            var end = window.Y - EdgeGap;
+            foreach (var taken in TakenByTheGame())
+            {
+                if (taken.End.X > side && taken.Position.X < window.X - side && taken.GetCenter().Y >= window.Y / 2f)
+                {
+                    end = Mathf.Min(end, taken.Position.Y - EdgeGap);
+                }
+            }
+
+            return end;
+        }
+    }
+
+    /// <summary>
+    /// The height a part needs under the messages for what it shows there, as the epoch banners
+    /// are: zero while it shows nothing. The messages leave that much room above the bottom
+    /// panel, by giving up their oldest. The part sets it every frame it shows something.
+    /// </summary>
+    public float RoomUnderMessages { get; set; }
+
+    /// <summary>Takes every sentence off the message line at once, as the end of a match does.</summary>
+    public void DropMessages()
+    {
+        foreach (var (label, _, _) in _messages)
+        {
+            Drop(label);
+        }
+
+        _messages.Clear();
+        KeepMessageRoom();
+    }
+
+    /// <summary>
     /// The width a control in the top bar can have before the bar is wider than the window, with
     /// everything else in the bar at the least width it needs. A part whose control can give
     /// way, as one that can say less, fits what it shows to this, so that the bar's buttons
@@ -482,7 +525,17 @@ public partial class InterfaceFrame : CanvasLayer
         {
             UiStyle.FitWidth(label, width, middle);
         }
+
+        // The messages end above what the game shows under them, with the room a part has asked
+        // for in between. The oldest go first, and the newest stays whatever its height.
+        var end = MiddleEnd - RoomUnderMessages;
+        while (_messages.Count > 1 && _messageLines.GlobalPosition.Y + _messageLines.GetCombinedMinimumSize().Y > end)
+        {
+            Drop(_messages[0].Label);
+            _messages.RemoveAt(0);
+        }
     }
+
 
     // The bottom panel stands in the middle of the window's lower edge. Where it would reach the
     // part in the bottom right corner it stands as far left as clears that part.
