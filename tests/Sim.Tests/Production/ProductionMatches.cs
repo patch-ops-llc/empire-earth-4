@@ -6,6 +6,7 @@ using Sim.Numerics;
 using Sim.Production;
 using Sim.Setup;
 using Sim.Structures;
+using Sim.Tech;
 using Sim.Tests.Data;
 using Sim.Tests.Economy;
 using Sim.Tests.Tech;
@@ -54,15 +55,18 @@ internal static class ProductionMatches
         }
         """;
 
-    private static readonly Lazy<GameData> Loaded = new(() => DataAssert.Valid(DesignData.Files()
-        .Set("structures/barracks.jsonc", Barracks)
-        .Set("structures/works.jsonc", Works)
-        .Set(EconomyMatches.GeneratorPath, EconomyMatches.Generator)));
+    private static readonly Lazy<GameData> Loaded = new(() => DataAssert.Valid(Files()));
 
     public static GameData Data => Loaded.Value;
 
-    public static Match Create(MapDef map, int players = 2) =>
-        MatchSetup.Create(Data, map, 1, [.. Enumerable.Repeat(PlayerSetup.WithoutStart, players)]);
+    /// <summary>The files of <see cref="Data"/>, for a test that changes a number in them.</summary>
+    public static InMemoryDataFiles Files() => DesignData.Files()
+        .Set("structures/barracks.jsonc", Barracks)
+        .Set("structures/works.jsonc", Works)
+        .Set(EconomyMatches.GeneratorPath, EconomyMatches.Generator);
+
+    public static Match Create(MapDef map, int players = 2, GameData? data = null) =>
+        MatchSetup.Create(data ?? Data, map, 1, [.. Enumerable.Repeat(PlayerSetup.WithoutStart, players)]);
 
     public static int Chassis(string id) => Data.Chassis.Single(chassis => chassis.Id == id).Index;
 
@@ -140,6 +144,29 @@ internal static class ProductionMatches
         throw new InvalidOperationException($"Nothing appeared in {limit} ticks.");
     }
 
+    /// <summary>Queues the order to research the next tier of a track, for the next tick to run.</summary>
+    public static void OrderResearch(this Match match, int player, string track) =>
+        match.Simulation.Commands.Enqueue(match.World.Tick, new Command(CommandType.StartResearch, player, contentId: DesignData.Track(track)));
+
+    /// <summary>
+    /// Runs ticks until the research in the player's own slot has this many ticks left, so that
+    /// a test can give its orders just before a research finishes. With 0 it runs the tick the
+    /// research finishes in.
+    /// </summary>
+    public static void RunUntilResearchHas(this Match match, int player, int ticksLeft)
+    {
+        Assert.True(match.Research.State.Slot(player, 0).IsBusy, "No research is in progress.");
+        while (match.Research.State.Slot(player, 0).IsBusy && match.Research.State.Slot(player, 0).TicksLeft > ticksLeft)
+        {
+            match.Simulation.Tick();
+        }
+
+        Assert.Equal(ticksLeft > 0, match.Research.State.Slot(player, 0).IsBusy);
+    }
+
+    /// <summary>What a chassis is for a player now.</summary>
+    public static ChassisBlueprint BlueprintOf(this Match match, int player, int chassis) => match.Research.Tech(player).Blueprints[chassis];
+
     /// <summary>The tile a unit or a point is on.</summary>
     public static (int X, int Y) Tile(FixedVector2 point) => (point.X.FloorToInt(), point.Y.FloorToInt());
 
@@ -148,13 +175,25 @@ internal static class ProductionMatches
     /// <summary>Brings a structure's hit points to zero, so that the deaths of the next tick take it.</summary>
     public static void Destroy(this Match match, EntityId structure) => match.Health.Get(structure).HitPoints = 0;
 
-    /// <summary>Places units of a chassis on the tiles of the map's last columns, away from what the tests build.</summary>
-    public static void SpawnMany(this Match match, int player, int chassis, int count)
+    /// <summary>Brings units' hit points to zero, so that the deaths of the next tick take them.</summary>
+    public static void Kill(this Match match, IEnumerable<EntityId> units)
     {
+        foreach (var unit in units)
+        {
+            match.Health.Get(unit).HitPoints = 0;
+        }
+    }
+
+    /// <summary>Places units of a chassis on the tiles of the map's last columns, away from what the tests build.</summary>
+    public static EntityId[] SpawnMany(this Match match, int player, int chassis, int count)
+    {
+        var units = new EntityId[count];
         for (var unit = 0; unit < count; unit++)
         {
-            match.SpawnChassis(player, chassis, MapGrid.TileCenter(match.Grid.Width - 1 - (unit / match.Grid.Height), unit % match.Grid.Height));
+            units[unit] = match.SpawnChassis(player, chassis, MapGrid.TileCenter(match.Grid.Width - 1 - (unit / match.Grid.Height), unit % match.Grid.Height));
         }
+
+        return units;
     }
 
     public static EntityId Place(this Match match, int player, string structure, int x, int y) =>
