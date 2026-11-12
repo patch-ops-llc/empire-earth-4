@@ -50,7 +50,7 @@ public readonly record struct StructureLook(
 
 /// <summary>
 /// The one place the view reads the tier a structure shows and the track its banner shows.
-/// The layers that draw them, and the minimap, ask here and nowhere else.
+/// The layers that draw them ask here and nowhere else.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -58,12 +58,13 @@ public readonly record struct StructureLook(
 /// That is right only while structures are not under the fog of war.
 /// </para>
 /// <para>
-/// With fog for structures (17b) the list comes from the local player's view instead:
-/// <c>PlayerView.CollectStructures</c> gives the player's own structures, those of others seen
-/// now and those remembered, and each <c>SeenStructure</c> carries <c>LookTier</c>,
-/// <c>Banner</c> and <c>IsFinished</c> worked out by the same rules as here, as they were when
-/// the player last saw it. <see cref="Collect"/> then copies those fields and nothing else in
-/// this piece changes.
+/// With fog for structures (17b) the list comes from the local player's sight instead, as the
+/// structure layer's does: its <c>CollectStructures</c> gives the player's own structures,
+/// those of others seen now and those remembered, and each <c>SeenStructure</c> carries
+/// <c>LookTier</c>, <c>Banner</c> and <c>IsFinished</c> worked out by the same rules as here,
+/// as they were when the player last saw it. <see cref="Collect"/> then copies those fields
+/// and nothing else in this piece changes. Until it does, the looks of a structure the player
+/// has not seen would be drawn over the dark.
 /// </para>
 /// </remarks>
 public static class StructureLooks
