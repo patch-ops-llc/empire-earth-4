@@ -99,6 +99,7 @@ public sealed class SmokeTest
 
         // Inspection: what the panel shows for a selection.
         new InspectionSmoke(),
+        new StructureInspectionSmoke(),
 
         // Later pieces.
     ];

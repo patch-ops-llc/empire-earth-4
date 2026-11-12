@@ -85,6 +85,7 @@ If joining fails, the menu says why in orange:
 | Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is already in |
 | Clear the selection | Click the ground |
 | See what another player's unit is | Click it. A pale ring marks it and the panel at the bottom describes it. It cannot be given orders |
+| See what another player's structure is | Click it, where you see it or where you remember it. A pale line runs round it and the panel at the bottom describes it. See What a structure is |
 | Send the selected workers to work at a deposit | Right-click the deposit |
 | Send the selected workers to work at a Generator of yours | Right-click the Generator, once it is finished |
 | Open or close the build menu | B, or the Build button in the panel at the bottom, with a worker selected |
@@ -185,6 +186,23 @@ Select units and the panel at the bottom of the window says what they are.
 - Only workers start a match. Fighting units, which have the cards, tiers, accents and badges, come from the development aid for now: see Trying a fight.
 - A unit made before a Protection or Mobility research keeps the hit points and speed it was made with for now, though its card already shows the new tier. Damage, range and accents follow the research at once.
 - An epoch rises when three tracks have reached its tier. The Energy you start with pays for one research, so the rest has to come from a Generator.
+
+## What a structure is
+
+The panel at the bottom also says what a structure is: your own when you select it, and another player's when you click it.
+
+- **One of your own**, selected: under the line with its name and hit points stands a row for each tier that counts for it. Each row begins with the track in its color and your tier in it.
+  - `Protection` is your Protection tier. Beside it are the hit points the structure has at that tier, and what the tier does against attackers: from tier 2 on, an attacker whose Firepower is below your Protection does half damage to your structures. At tier 1 no attacker is below it, and the row says `full damage from every attacker`.
+  - `Firepower` stands only for a structure that attacks, which is the Tower: its damage a second, its range, how often it shoots and which units it cannot hit. A Tower that is still building itself does not shoot yet, and the row says so.
+  - The third row is the track the structure shows by its look, with your tier in it: Logistics for a Capitol, Extraction for a Generator, Manufacturing for a Barracks, Mobility for a Works. Anyone who sees the structure can read that tier. A Tower's look shows Protection, so its Protection row says `shown by its look` and there is no third row. An Outpost and an Academy show no tier.
+  - A structure with a research slot in use has a row with the track in research and no number: that is what its banner shows to anyone who sees it.
+  - With several structures selected there is one Protection row, since the tier is yours and the same for all of them.
+- **Another player's that you see**: click it. A pale line runs round it, and the panel shows its name, whose it is, its hit points as a bar and as numbers, and the same rows, with its owner's tiers. That is all the game lets you know of it: its Protection tier, its Firepower tier if it attacks, the tier of its look and its banner. The last line says that a structure has no Mobility tier and no accents, which a unit would show there. A structure that is building itself has a line with how far it is.
+- **Another player's that you remember**: click it where it stands greyed on your screen. The panel shows it as you last saw it, and its second line, in orange, says so and how long ago that was: `As you last saw it, 15 s ago. It may have changed since, or be gone.` The hit points are those of that moment. There is no Protection row and no Firepower row, because the tiers are shown only while you see the structure, and the last line says that. What is left is what you saw: the tier its look showed then, and the track on its banner then. For a Tower the look is Protection, so you do keep the Protection tier it had when you last saw it.
+- The panel follows what you know. Walk a unit up to a remembered structure and the panel goes over to the structure as it stands, with its tiers. Walk away and it goes back to the memory. If the structure is gone when you see its tiles again, the panel closes.
+- A click on anything else lets the structure go, as it clears a selection. A unit standing in front of a structure is what a click there is on.
+- With the development switch for the fog on (F4), every structure is shown as it stands, with its tiers, also one you have never seen. That is the switch, not the game.
+- Things to try: select your Capitol and read its rows. Finish a Protection research and watch the tier and the hit points in the row change. Alone, press F4, find the other player's Capitol on the small map, press F4 again, point beside the Capitol and press G: your units appear and see it. Click the Capitol and read its tiers. Send the units away and click it again: the panel should say that you remember it.
 
 ## Research
 

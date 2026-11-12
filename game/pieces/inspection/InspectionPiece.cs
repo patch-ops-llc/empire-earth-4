@@ -2,8 +2,9 @@ namespace Game;
 
 /// <summary>
 /// Readability (design 3.2, pulled forward from the plan's M20): the inspection panel that says
-/// what the selected units are, the accent badges over units in the world, and the announcement
-/// of a new epoch. It gives no order.
+/// what the selected units are, the accent badges over units in the world, the announcement of a
+/// new epoch, and what a structure is: another player's on a click, and the player's own when
+/// it is selected. It gives no order.
 /// </summary>
 public sealed class InspectionPiece : ViewPiece
 {
@@ -15,6 +16,9 @@ public sealed class InspectionPiece : ViewPiece
         var mark = new InspectedMark();
         view.World.AddLayer(mark);
         view.Interface.AddPart(new InspectionPart(mark));
+        var structure = new InspectedStructureMark();
+        view.World.AddLayer(structure);
+        view.Interface.AddPart(new StructureInspection(structure));
         view.Interface.AddPart(new EpochAnnouncement());
     }
 }
