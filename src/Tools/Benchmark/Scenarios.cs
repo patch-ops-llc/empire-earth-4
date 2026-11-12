@@ -39,6 +39,9 @@ internal abstract class Run
     protected void OrderMove(int player, EntityId[] units, FixedVector2 target) =>
         Match.Simulation.Commands.Enqueue(Match.World.Tick, new Command(CommandType.Move, player, units, target.X, target.Y));
 
+    protected void OrderAttackMove(int player, EntityId[] units, FixedVector2 target) =>
+        Match.Simulation.Commands.Enqueue(Match.World.Tick, new Command(CommandType.AttackMove, player, units, target.X, target.Y));
+
     protected FixedVector2 PositionOf(EntityId unit) => Match.Bodies.Get(unit).Position;
 
     protected bool AllIdle(EntityId[] units) => units.All(unit => Match.Movers.Get(unit).State == MoveState.Idle);
@@ -155,18 +158,24 @@ internal static class Scenarios
     /// <summary>Line infantry: 3 tiles per second.</summary>
     private static Fixed Speed => Mover.SpeedPerTick(3);
 
-    public static IReadOnlyList<Scenario> All(bool quick) =>
+    /// <summary>The units of a quick run in the scenarios that play the budget's count.</summary>
+    public const int QuickUnits = 60;
+
+    /// <param name="quick">Fewer ticks, and fewer units where the count is the scenario's own.</param>
+    /// <param name="units">The number of units in the scenarios that play the budget's count.</param>
+    public static IReadOnlyList<Scenario> All(bool quick, int units) =>
     [
         new("chokepoint", data => new Chokepoint(Ridge(data), quick ? 48 : 200, held: false, quick ? 1500 : 4000)),
         new("chokepoint-held", data => new Chokepoint(Ridge(data), quick ? 48 : 200, held: true, quick ? 150 : 1200)),
-        new("march", data => new March(Ridge(data), quick ? 60 : 500, quick ? 1500 : 4000)),
-        new("crossing", data => new Crossing(Ridge(data), quick ? 60 : 500, quick ? 150 : 1200)),
-        new("separate-orders", data => new SeparateOrders(Ridge(data), quick ? 60 : 500, quick ? 60 : 400)),
+        new("march", data => new March(Ridge(data), units, quick ? 1500 : 4000)),
+        new("crossing", data => new Crossing(Ridge(data), units, quick ? 150 : 1200)),
+        new("separate-orders", data => new SeparateOrders(Ridge(data), units, quick ? 60 : 400)),
         new("search-ridge", data => new WholeMapSearch(Ridge(data), 3)),
         new("search-256", data => new WholeMapSearch(Serpentine(data, quick ? 64 : 256), 3)),
+        .. ArmyScenarios.All(quick, units),
     ];
 
-    private static Match Ridge(GameData data) =>
+    internal static Match Ridge(GameData data) =>
         MatchSetup.Create(data, data.Maps.Single(map => map.Id == MapId), seed: 1, [PlayerSetup.WithoutStart, PlayerSetup.WithoutStart]);
 
     /// <summary>

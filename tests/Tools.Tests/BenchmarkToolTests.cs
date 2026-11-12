@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
 using Tools.Benchmark;
 
 namespace Tools.Tests;
@@ -18,6 +20,9 @@ public class BenchmarkToolTests
         "separate-orders",
         "search-ridge",
         "search-256",
+        "fight",
+        "siege",
+        "move-everything",
     ];
 
     [Fact]
@@ -42,7 +47,103 @@ public class BenchmarkToolTests
         var first = Rows(Run("--quick").Output);
         var second = Rows(Run("--quick").Output);
 
-        Assert.Equal(first.Select(row => (row.Name, row.Units, row.Ticks, row.Findings)), second.Select(row => (row.Name, row.Units, row.Ticks, row.Findings)));
+        Assert.Equal(
+            first.Select(row => (row.Name, row.Units, row.Ticks, row.EndState, row.Findings)),
+            second.Select(row => (row.Name, row.Units, row.Ticks, row.EndState, row.Findings)));
+        Assert.All(first, row => Assert.Matches("^[0-9a-f]{16}$", row.EndState));
+        Assert.Equal(first.Count, first.Select(row => row.EndState).Distinct().Count());
+    }
+
+    /// <summary>
+    /// The worst cases the budget names, played by units of a chassis: they fight with shots,
+    /// melee and the blast, bring structures down, and take one order for everything a player has.
+    /// </summary>
+    [Fact]
+    public void TheArmyScenariosDoWhatTheyAreThereToShow()
+    {
+        var rows = Rows(Run("--quick").Output).ToDictionary(row => row.Name, StringComparer.Ordinal);
+
+        var fight = Regex.Match(
+            rows["fight"].Findings,
+            @"^30 against 30 of four lines on the open field: (\d+) died, (\d+) melee hits, (\d+) shots with at most (\d+) in flight, (\d+) blasts; (over at tick \d+|not over after \d+ ticks) with \d+ and \d+ left$");
+        Assert.True(fight.Success, rows["fight"].Findings);
+        Assert.All(Enumerable.Range(1, 5), group => Assert.True(Number(fight.Groups[group]) > 0, rows["fight"].Findings));
+
+        var siege = Regex.Match(
+            rows["siege"].Findings,
+            @"^36 sent at a base of 60 structures held by 24: (\d+) units died, (\d+) structures fell, (\d+) shots with at most \d+ in flight, (\d+) blasts, \d+ route searches; after \d+ ticks \d+ attackers and \d+ defenders are left$");
+        Assert.True(siege.Success, rows["siege"].Findings);
+        Assert.All(Enumerable.Range(1, 4), group => Assert.True(Number(siege.Groups[group]) > 0, rows["siege"].Findings));
+
+        var move = Regex.Match(
+            rows["move-everything"].Findings,
+            @"^30 and 30 units from all over the map, each player's sent to a corner by one order: (\d+) route searches, at most (\d+) walking at once, (not at rest after \d+ ticks|at rest at tick \d+); \d+ alive; the players see (\d+) and (\d+) tiles$");
+        Assert.True(move.Success, rows["move-everything"].Findings);
+        Assert.True(Number(move.Groups[1]) > 0, rows["move-everything"].Findings);
+        Assert.True(Number(move.Groups[2]) > 30, rows["move-everything"].Findings);
+        Assert.True(Number(move.Groups[4]) > 0 && Number(move.Groups[5]) > 0, rows["move-everything"].Findings);
+
+        Assert.All(["fight", "siege", "move-everything"], name => Assert.Equal(60, rows[name].Units));
+    }
+
+    /// <summary>The number of units is the budget's 500, and 60 in a quick run, unless it is named.</summary>
+    [Fact]
+    public void TheNumberOfUnitsCanBeNamed()
+    {
+        var rows = Rows(Run("--quick", "--units", "80", "--scenario", "march", "--scenario", "fight", "--scenario", "chokepoint").Output)
+            .ToDictionary(row => row.Name, StringComparer.Ordinal);
+
+        Assert.Equal(80, rows["march"].Units);
+        Assert.Equal(80, rows["fight"].Units);
+        Assert.StartsWith("40 against 40 ", rows["fight"].Findings, StringComparison.Ordinal);
+
+        // The pass is the plan's own case, 200 units through 6 tiles, whatever is asked of the others.
+        Assert.Equal(48, rows["chokepoint"].Units);
+        Assert.Equal(500, BenchmarkTool.BudgetUnits);
+        Assert.Equal(1000, BenchmarkTool.MostUnits);
+    }
+
+    /// <summary>
+    /// With <c>--systems</c> the tool says where the time of a tick goes: the commands, every
+    /// system of the simulation in the order they run, and the rest. The clock that times a
+    /// system reaches the simulation's list of systems by name, so this test is also what says
+    /// so when that list is renamed.
+    /// </summary>
+    [Fact]
+    public void WhereTheTimeGoesIsReportedForEverySystem()
+    {
+        var (exitCode, output, errors) = Run("--quick", "--systems", "--scenario", "fight", "--scenario", "march");
+
+        Assert.Equal("", errors);
+        Assert.Equal(ExitCodes.Ok, exitCode);
+        Assert.Equal(["march", "fight"], Rows(output).Select(row => row.Name));
+
+        var lines = output.ReplaceLineEndings("\n").Split('\n');
+        foreach (var (scenario, units) in new[] { ("march", 60), ("fight", 60) })
+        {
+            var heading = Array.FindIndex(lines, line => line.StartsWith($"{scenario}, {units} units: the worst tick was tick ", StringComparison.Ordinal));
+            Assert.True(heading >= 0, $"No shares for {scenario}.");
+            Assert.Matches(@"^  part +average +share +worst tick$", lines[heading + 1]);
+
+            var parts = new List<(string Name, double Average, double Share, double Worst)>();
+            for (var i = heading + 2; i < lines.Length && lines[i].Length > 0; i++)
+            {
+                var columns = lines[i].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                var numbers = columns[^3..].Select(column => double.Parse(column.TrimEnd('%'), CultureInfo.InvariantCulture)).ToArray();
+                parts.Add((string.Join(' ', columns[..^3]), numbers[0], numbers[1], numbers[2]));
+            }
+
+            // The systems of a match, whatever they are, between the commands and the rest.
+            Assert.Equal("commands", parts[0].Name);
+            Assert.Equal("the rest", parts[^1].Name);
+            Assert.Contains("MovementSystem", parts.Select(part => part.Name));
+            Assert.Contains("AttackSystem", parts.Select(part => part.Name));
+            Assert.All(parts[1..^1], part => Assert.EndsWith("System", part.Name, StringComparison.Ordinal));
+            Assert.All(parts, part => Assert.True(part.Average >= 0 && part.Worst >= 0));
+            Assert.InRange(parts.Sum(part => part.Share), 99, 101);
+            Assert.True(parts.Single(part => part.Name == "MovementSystem").Average > 0);
+            Assert.Equal(scenario == "fight", parts.Single(part => part.Name == "AttackSystem").Average > 0.0005);
+        }
     }
 
     /// <summary>What the plan asks the benchmark to cover, in the words the scenarios report it.</summary>
@@ -75,7 +176,11 @@ public class BenchmarkToolTests
     }
 
     [Theory]
-    [InlineData("benchmark: there is no scenario 'nope'. The scenarios are: chokepoint, chokepoint-held, march, crossing, separate-orders, search-ridge, search-256.", "--scenario", "nope")]
+    [InlineData("benchmark: there is no scenario 'nope'. The scenarios are: chokepoint, chokepoint-held, march, crossing, separate-orders, search-ridge, search-256, fight, siege, move-everything.", "--scenario", "nope")]
+    [InlineData("benchmark: unknown or incomplete argument '--units'.", "--units")]
+    [InlineData("benchmark: unknown or incomplete argument '--units'.", "--units", "19")]
+    [InlineData("benchmark: unknown or incomplete argument '--units'.", "--units", "1001")]
+    [InlineData("benchmark: unknown or incomplete argument '--units'.", "--units", "many")]
     [InlineData("benchmark: unknown or incomplete argument '--fast'.", "--fast")]
     [InlineData("benchmark: unknown or incomplete argument '--scenario'.", "--quick", "--scenario")]
     [InlineData("benchmark: unknown or incomplete argument '--data'.", "--data")]
@@ -132,21 +237,27 @@ public class BenchmarkToolTests
         var rows = new List<Row>();
         for (var i = heading + 1; i < lines.Length && lines[i].Length > 0; i++)
         {
-            // Name, units, ticks, average, worst, bytes, and then what the scenario shows.
-            var parts = lines[i].Split(' ', 7, StringSplitOptions.RemoveEmptyEntries);
-            Assert.Equal(7, parts.Length);
-            Assert.True(double.Parse(parts[3], System.Globalization.CultureInfo.InvariantCulture) >= 0);
-            Assert.True(double.Parse(parts[4], System.Globalization.CultureInfo.InvariantCulture) >= double.Parse(parts[3], System.Globalization.CultureInfo.InvariantCulture));
-            Assert.True(double.Parse(parts[5], System.Globalization.CultureInfo.InvariantCulture) >= 0);
+            // Name, units, ticks, the average, the high and the worst tick, bytes, the state at the end, and then what the scenario shows.
+            var parts = lines[i].Split(' ', 9, StringSplitOptions.RemoveEmptyEntries);
+            Assert.Equal(9, parts.Length);
+            var (average, high, worst) = (Number(parts[3]), Number(parts[4]), Number(parts[5]));
+            Assert.True(average >= 0 && high >= 0);
+            Assert.True(worst >= average && worst >= high);
+            Assert.True(Number(parts[6]) >= 0);
             rows.Add(new Row(
                 parts[0],
-                int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture),
-                int.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture),
-                parts[6]));
+                int.Parse(parts[1], CultureInfo.InvariantCulture),
+                int.Parse(parts[2], CultureInfo.InvariantCulture),
+                parts[7],
+                parts[8]));
         }
 
         return rows;
     }
 
-    private sealed record Row(string Name, int Units, int Ticks, string Findings);
+    private static double Number(string text) => double.Parse(text, CultureInfo.InvariantCulture);
+
+    private static int Number(Group group) => int.Parse(group.Value, CultureInfo.InvariantCulture);
+
+    private sealed record Row(string Name, int Units, int Ticks, string EndState, string Findings);
 }
