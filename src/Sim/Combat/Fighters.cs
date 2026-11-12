@@ -102,7 +102,7 @@ public sealed class Fighters : IGroundHolders
                 || !_combatants.TryGet(other, out var combatant)
                 || !_bodies.TryGet(other, out var otherBody)
                 || otherBody.Owner != body.Owner
-                || !HoldsGround(in combatant, in otherBody)
+                || !InRank(in combatant, in otherBody)
                 || !SpacingRule.TryBetween(_movers, unit, other, out var spacing))
             {
                 continue;
@@ -117,7 +117,13 @@ public sealed class Fighters : IGroundHolders
         return false;
     }
 
+    // EXPERIMENT, variant C, not for merging: a unit that shoots holds its ground too while it
+    // stands where it last fired from and waits for its next shot. Only melee units are in the
+    // rank for HasNoRoom, as before.
     private bool HoldsGround(in Combatant combatant, in Body body) =>
+        InRank(in combatant, in body) || (combatant.Wait > Fraction.Zero && body.Position == combatant.Fought);
+
+    private bool InRank(in Combatant combatant, in Body body) =>
         IsFighting(in combatant, in body) || (combatant.HasPlace && body.Position == combatant.Place);
 
     private bool IsFighting(in Combatant combatant, in Body body) =>
