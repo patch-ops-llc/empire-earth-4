@@ -16,8 +16,8 @@ using static Sim.Tests.Construction.ConstructionMatches;
 namespace Sim.Tests.Construction;
 
 /// <summary>
-/// The worker's arrival and the foundation (design 2.5 and 5.4; design 8.4, rows 22 to 26, 28
-/// and 30): the foundation is laid in the tick of arrival if every rule still holds, blocks its
+/// The worker's arrival and the foundation (design 2.5 and 5.4; design 8.4, rows 22 to 24 and 28
+/// to 30): the foundation is laid in the tick of arrival if every rule still holds, blocks its
 /// tiles at once, and builds itself.
 /// </summary>
 public class FoundationTests
@@ -28,7 +28,7 @@ public class FoundationTests
     public void TheWorkerArrivesThreeQuartersOfATileFromTheNearestEdge() =>
         Assert.Equal(Fixed.One * 3 / 4, ConstructionRules.ArrivalReach);
 
-    /// <summary>Design 8.4, row 22.</summary>
+    /// <summary>Design 8.4, row 28.</summary>
     [Fact]
     public void TheFoundationIsLaidInTheTickTheWorkerComesWithinReachOfTheFootprint()
     {
@@ -93,7 +93,7 @@ public class FoundationTests
         Assert.Equal(within, !match.BuildOrders.Contains(worker));
     }
 
-    /// <summary>Design 8.4, row 28: construction takes the same time whatever the worker does.</summary>
+    /// <summary>Design 8.4, rows 22 and 23: the build time is fixed, and the structure builds itself whatever the worker does.</summary>
     [Fact]
     public void AStructureBuildsItselfInItsBuildTimeAndGivesWhatItGivesFromThen()
     {
@@ -208,7 +208,7 @@ public class FoundationTests
         Assert.Equal(Territory.Around(0, 10, 10, 2, 6), match.Territories.Get(third));
     }
 
-    /// <summary>Design 8.4, row 30.</summary>
+    /// <summary>Design 8.4, row 23.</summary>
     [Fact]
     public void TheWorkerGoesBackToItsWorkWhenTheFoundationIsLaid()
     {
@@ -232,7 +232,7 @@ public class FoundationTests
         Assert.Equal(before + EconomyMatches.MaterialsPayment, match.Stockpiles.Materials(0));
     }
 
-    /// <summary>Design 8.4, row 23: the site is judged again when the worker arrives, with the state as it is then.</summary>
+    /// <summary>Design 8.4, row 29: the site is judged again when the worker arrives, with the state as it is then.</summary>
     [Fact]
     public void ASiteWhoseTerritoryIsLostOnTheWayIsRefusedOnArrivalWithAFullRefund()
     {
@@ -288,7 +288,7 @@ public class FoundationTests
     }
 
     /// <summary>
-    /// Design 5.4 and 8.4, row 24: territories of different players may not overlap, which is
+    /// Design 5.4 and 8.4, row 29: territories of different players may not overlap, which is
     /// judged once, on arrival, and the enemy's unfinished structures count.
     /// </summary>
     [Theory]
@@ -332,7 +332,7 @@ public class FoundationTests
         Assert.True(match.Construction.IsTooCloseToEnemyTerritory(0, match.Def("outpost"), 11, 14));
     }
 
-    /// <summary>Design 8.4, row 25.</summary>
+    /// <summary>Design 8.4, row 30.</summary>
     [Fact]
     public void AnEnemyGroundUnitOnTheSiteStopsTheFoundationWithAFullRefund()
     {
@@ -356,7 +356,7 @@ public class FoundationTests
         Assert.Equal(TestMatches.Point("12.01", "11.5"), match.PositionOf(enemy));
     }
 
-    /// <summary>Design 8.4, row 26.</summary>
+    /// <summary>Design 8.4, row 30.</summary>
     [Fact]
     public void TheOwnersUnitsOnTheSiteAreMovedToTheNearestTileOutsideAndKeepTheirOrders()
     {
@@ -364,18 +364,16 @@ public class FoundationTests
         var worker = match.WorkerAt(0, 10, 9);
         var standing = match.SpawnChassis(0, 0, TestMatches.Point("10.4", "10.6"));
         var walking = match.SpawnUnit(0, MapGrid.TileCenter(11, 11), StructureMatches.QuarterTile);
-        var corner = match.SpawnUnit(0, MapGrid.TileCenter(10, 11), StructureMatches.QuarterTile);
         var destination = MapGrid.TileCenter(11, 15);
 
         match.OrderBuild(0, "generator", 10, 10, worker);
         match.OrderMove(0, destination, walking);
         match.Simulation.Tick();
 
-        // Each went to the tile outside whose center was nearest: to the left, below, and, of two equally near, the one with the lower y.
+        // Each went to the tile outside whose center was nearest: to the left, and below.
         Assert.NotEqual(EntityId.None, match.StructureAt(10, 10));
         Assert.Equal(MapGrid.TileCenter(9, 10), match.PositionOf(standing));
         Assert.Equal(MapGrid.TileCenter(11, 12), match.PositionOf(walking));
-        Assert.Equal(MapGrid.TileCenter(9, 11), match.PositionOf(corner));
 
         // The one that stood has its post where it stands now, and the one on its way goes on.
         Assert.Equal(MapGrid.TileCenter(9, 10), match.Combatants.Get(standing).Anchor);
@@ -383,7 +381,26 @@ public class FoundationTests
         match.RunUntilIdle(walking);
         Assert.Equal(destination, match.PositionOf(walking));
         Assert.Equal(MapGrid.TileCenter(9, 10), match.PositionOf(standing));
-        Assert.Equal(MapGrid.TileCenter(9, 11), match.PositionOf(corner));
+    }
+
+    /// <summary>Of tiles equally near, the one with the lower y takes the unit, and then the one with the lower x.</summary>
+    [Theory]
+    [InlineData(10, 10, 10, 9)]
+    [InlineData(11, 10, 11, 9)]
+    [InlineData(10, 11, 9, 11)]
+    [InlineData(11, 11, 12, 11)]
+    public void AUnitInTheMiddleOfATileOfTheSiteGoesToTheTileWithTheLowerY(int x, int y, int toX, int toY)
+    {
+        var match = WithACapitol();
+        var worker = match.WorkerAt(0, 13, 13);
+        var unit = match.SpawnUnit(0, MapGrid.TileCenter(x, y), StructureMatches.QuarterTile);
+        match.Bodies.Get(worker).Position = TestMatches.Point("12.5", "12.5");
+
+        match.OrderBuild(0, "generator", 10, 10, worker);
+        match.Simulation.Tick();
+
+        Assert.NotEqual(EntityId.None, match.StructureAt(10, 10));
+        Assert.Equal(MapGrid.TileCenter(toX, toY), match.PositionOf(unit));
     }
 
     /// <summary>The worker that builds is one of the owner's units: on the site, it is moved off it too.</summary>
@@ -479,7 +496,7 @@ public class FoundationTests
         Assert.True(match.Grid.IsPassable(match.PositionOf(gatherer)));
     }
 
-    /// <summary>Design 8.4, row 12, and design 2.5: the foundation is a structure like any other to those who shoot at it.</summary>
+    /// <summary>Design 8.4, rows 24 and 25: the foundation is a structure like any other to those who shoot at it, and its price is lost with it.</summary>
     [Fact]
     public void AFoundationThatIsDestroyedGivesNothingBack()
     {
@@ -499,6 +516,25 @@ public class FoundationTests
         Assert.Single(match.EventsOf(SimEventKind.StructureRemoved));
         match.Simulation.Tick();
         Assert.Equal((0, 0, 1), (match.Foundations.Count, match.BuildOrders.Count, match.Structures.Count));
+    }
+
+    /// <summary>Design 8.4, rows 24 and 26: a foundation has all its hit points at once, and nothing gives back the ones it loses.</summary>
+    [Fact]
+    public void ADamagedFoundationIsNotRepairedByBeingBuilt()
+    {
+        var match = WithACapitol();
+        var worker = match.WorkerAt(0, 10, 9);
+        match.OrderBuild(0, "generator", 10, 10, worker);
+        match.Simulation.Tick();
+        var generator = match.StructureAt(10, 10);
+        match.Health.Get(generator).HitPoints = 120_000;
+
+        match.Simulation.Run(500);
+
+        Assert.True(match.Construction.IsFinished(generator));
+        Assert.Equal((120_000, 500_000), (match.Health.Get(generator).HitPoints, match.Health.Get(generator).Maximum));
+        match.Simulation.Run(200);
+        Assert.Equal(120_000, match.Health.Get(generator).HitPoints);
     }
 
     /// <summary>The order ended as the worker arrived: the player is told why and where, and the worker stands without work.</summary>
