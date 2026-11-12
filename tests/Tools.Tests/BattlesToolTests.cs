@@ -167,6 +167,49 @@ public class BattlesToolTests
         }
     }
 
+    /// <summary>
+    /// The width of the test chokepoint can be set, for tuning the test: the corridor and both
+    /// blocks in it are then that wide. Nothing else of the four battles changes.
+    /// </summary>
+    [Theory]
+    [InlineData(4)]
+    [InlineData(8)]
+    public void TheChokepointCanBeAnotherWidth(int width)
+    {
+        var battles = AcceptanceBattles.WithChokepoint(width);
+        var third = battles.Single(battle => battle.Number == 3);
+
+        Assert.Equal([Number(1), Number(2), Number(4)], battles.Where(battle => battle.Number != 3));
+        Assert.Equal(Number(3) with { Name = $"Equal resources, chokepoint {width} tiles wide", BlockWidth = width }, third);
+        Assert.Equal(AcceptanceBattles.All, AcceptanceBattles.WithChokepoint(AcceptanceBattles.ChokepointWidth));
+
+        var fight = Battle.Start(Data, third, massWest: true);
+        var map = fight.Match.Map;
+        Assert.Equal(width + (2 * Arena.CliffRows), map.Height);
+        Assert.Equal((MarkerKind.Chokepoint, width), (Assert.Single(map.Markers).Kind, Assert.Single(map.Markers).Width));
+        foreach (var side in new[] { Side.Mass, Side.Elite })
+        {
+            var rows = fight.Units(side).ToArray().Select(unit => fight.Match.Bodies.Get(unit).Position.Y.FloorToInt()).ToList();
+            Assert.Equal(Enumerable.Range(Arena.CliffRows, width), rows.Take(width));
+            Assert.All(rows, row => Assert.InRange(row, Arena.CliffRows, Arena.CliffRows + width - 1));
+        }
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => AcceptanceBattles.WithChokepoint(AcceptanceBattles.NarrowestChokepoint - 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => AcceptanceBattles.WithChokepoint(AcceptanceBattles.WidestChokepoint + 1));
+    }
+
+    [Fact]
+    public void TheToolFightsTheThirdBattleInAChokepointOfTheWidthAsked()
+    {
+        var (exitCode, output, errors) = Run("--data", Repository.DataFolder, "--battle", "3", "--chokepoint", "8", "--seconds", "1");
+
+        Assert.Equal(("", ExitCodes.Ok), (errors, exitCode));
+        var lines = output.Split(Environment.NewLine);
+        Assert.EndsWith("A missed target is reported and fails nothing. The chokepoint of battle 3 is 8 tiles wide, not the design's 6.", lines[0], StringComparison.Ordinal);
+        Assert.Contains("3. Equal resources, chokepoint 8 tiles wide", lines);
+        Assert.DoesNotContain("not the design's", Run("--data", Repository.DataFolder, "--battle", "3", "--chokepoint", "6", "--seconds", "1").Output, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void TheOpenFieldIsOpenGroundMarkedAsAnOpenField()
     {
@@ -506,6 +549,9 @@ public class BattlesToolTests
     [InlineData("--battle", "5")]
     [InlineData("--battle", "one")]
     [InlineData("--seconds", "0")]
+    [InlineData("--chokepoint", "3")]
+    [InlineData("--chokepoint", "9")]
+    [InlineData("--chokepoint")]
     [InlineData("--data")]
     [InlineData("--fast")]
     public void AnArgumentItDoesNotKnowIsAnErrorOfUsage(params string[] arguments)
