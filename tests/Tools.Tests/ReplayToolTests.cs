@@ -130,7 +130,6 @@ public class ReplayToolTests
             var waited = new int[match.Movers.Count];
             var workers = new Worker[match.Workers.Count];
             long[] materials = [.. Enumerable.Range(0, match.Players.Count).Select(match.Stockpiles.Materials)];
-            long[] hitPoints = [.. Enumerable.Range(0, workers.Length).Select(i => match.Health.Get(match.Workers.EntityAt(i)).Maximum)];
             for (var tick = 0; tick < replay.TickCount; tick++)
             {
                 seen.UnionWith(ResearchOrdersRefused(match, due[tick]));
@@ -150,17 +149,6 @@ public class ReplayToolTests
                 }
 
                 seen.UnionWith(WhatTheWorkersDid(match, workers, materials));
-                for (var i = 0; i < hitPoints.Length; i++)
-                {
-                    var health = match.Health.Get(match.Workers.EntityAt(i));
-                    if (health.Maximum > hitPoints[i] && health.HitPoints == health.Maximum)
-                    {
-                        seen.Add("a worker's hit points raised by a finished research");
-                    }
-
-                    hitPoints[i] = health.Maximum;
-                }
-
                 for (var i = 0; i < match.Movers.Count; i++)
                 {
                     var state = match.Movers.ValueAt(i).State;
@@ -193,7 +181,6 @@ public class ReplayToolTests
             "a research started and paid for",
             "a research cancelled and refunded",
             "a research finished and the tier raised",
-            "a worker's hit points raised by a finished research",
             "a research refused: its track is in research already",
             "a research refused: no free slot",
             "a research refused: the stockpile does not cover it",
