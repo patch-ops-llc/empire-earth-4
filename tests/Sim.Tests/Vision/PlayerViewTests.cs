@@ -572,7 +572,7 @@ public class PlayerViewTests
         SimEventKind[] kinds =
         [
             SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost,
-            SimEventKind.SplashHit, SimEventKind.ChargedAttack, SimEventKind.Regenerated, SimEventKind.UnitTrained,
+            SimEventKind.SplashHit, SimEventKind.ChargedAttack, SimEventKind.Regenerated,
         ];
         foreach (var kind in kinds)
         {
@@ -642,18 +642,18 @@ public class PlayerViewTests
             SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost,
             SimEventKind.StructurePlaced, SimEventKind.StructureFinished, SimEventKind.StructureRemoved,
 
-            // What a seen unit does or shows: a charge is part of an attack that is seen, hit points
-            // that come back are seen on the unit, and a unit that comes out of a structure is seen
-            // from then on.
-            SimEventKind.ChargedAttack, SimEventKind.Regenerated, SimEventKind.UnitTrained,
+            // What a seen unit does or shows: a charge is part of an attack that is seen, and hit
+            // points that come back are seen on the unit.
+            SimEventKind.ChargedAttack, SimEventKind.Regenerated,
         ];
 
-        // A queue, its rally point and a stockpile are their owner's alone, and so is what is paid into one.
+        // A queue, what comes out of it, its rally point and a stockpile are their owner's alone,
+        // and so is what is paid into one.
         SimEventKind[] knownToItsPlayerAlone =
         [
             SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded,
             SimEventKind.RallyPointSet, SimEventKind.TrainOrdered, SimEventKind.TrainCancelled, SimEventKind.TrainRefunded,
-            SimEventKind.TrainRefused, SimEventKind.ReservesRefunded,
+            SimEventKind.TrainRefused, SimEventKind.UnitTrained, SimEventKind.ReservesRefunded,
         ];
 
         foreach (var kind in Enum.GetValues<SimEventKind>())
