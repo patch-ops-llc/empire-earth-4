@@ -102,7 +102,7 @@ The values the design says to tune first. Each block carries a comment naming it
 | `map` | The map rules below. | 5.3, 5.4 |
 | `debug.spawn` | `true` or `false`: whether a match carries out the development spawn, a command that makes units of any chassis from nothing for the player who sends it. It is not in the design. It is on in `game/data/` until units can be trained in a match, and stays on in `tests/golden/data/`, whose replay with a fight needs it. Both players of a match have the same data, so they have the same switch. | |
 
-`map.start_territory` repeats the Capitol's footprint and territory radius, because the map checks still read them from here. They must be the `footprint` and `territory_radius` of `structures/capitol.jsonc` wherever that file exists, and `datacheck` says so when they are not.
+The footprint and the territory radius of a start are not here: they are the `footprint` and `territory_radius` of `structures/capitol.jsonc`, which every data folder must have. The map checks read them from that file, and a match places that structure, finished, at each player's start.
 
 ## research.jsonc
 
@@ -243,7 +243,7 @@ Besides the shape of each file:
 | Check | Rule |
 | --- | --- |
 | References | A line's `id`, `primary`, `secondary`, `built_at`, `counters` and `cannot_hit` must name a track in `tracks.jsonc` or an ID in the roster. So must a structure's `id`, `track`, `trains` and `attack.cannot_hit`. |
-| Structures | `trains` and the lines' `built_at` agree. `map.start_territory` in `rules.jsonc` has the Capitol's footprint and territory radius. A wall has a footprint of 1. An unlock tier, or the tier from which an attack hits every line, is a tier a track can reach above the first. |
+| Structures | `trains` and the lines' `built_at` agree. `structures/capitol.jsonc` exists and has a `territory_radius`: it is what the map checks and the start of a match use. A wall has a footprint of 1. An unlock tier, or the tier from which an attack hits every line, is a tier a track can reach above the first. |
 | Tiers | Counts of tracks and tiers in `rules.jsonc` must fit `tracks.jsonc`; `epoch_cap` is not below `start_epoch`; every track names one tier per epoch. |
 | Tracks | The six tracks the rules name are all defined. |
 | Research | `research.jsonc` has exactly one entry for each tier from 2 to the last, in order. |
