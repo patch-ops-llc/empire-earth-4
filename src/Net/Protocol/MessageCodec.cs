@@ -28,6 +28,8 @@ namespace Net;
 ///   11  SessionEnd      byte reason, int32 final tick, int32 desync tick
 ///   12  MatchNotice     the match, as MatchDescription writes it
 ///   13  LeaveNotice     byte reason
+///   14  PauseNotice     byte 1 when paused, 0 when the match goes on
+///   15  SpeedNotice     int64 tick interval in units of 100 nanoseconds
 /// </code>
 /// <para>
 /// A reason is the number of a <see cref="SessionEndReason"/>. Every message has exactly one
@@ -65,6 +67,8 @@ public static class MessageCodec
         SessionEnd = 11,
         MatchNotice = 12,
         LeaveNotice = 13,
+        PauseNotice = 14,
+        SpeedNotice = 15,
     }
 
     /// <summary>Appends one message to the writer.</summary>
@@ -152,6 +156,16 @@ public static class MessageCodec
             case LeaveNotice leave:
                 writer.WriteByte((byte)Kind.LeaveNotice);
                 writer.WriteByte(ReasonByte(leave.Reason));
+                break;
+
+            case PauseNotice pause:
+                writer.WriteByte((byte)Kind.PauseNotice);
+                writer.WriteBool(pause.Paused);
+                break;
+
+            case SpeedNotice speed:
+                writer.WriteByte((byte)Kind.SpeedNotice);
+                writer.WriteInt64(speed.TickInterval.Ticks);
                 break;
 
             default:
@@ -253,6 +267,14 @@ public static class MessageCodec
 
             case Kind.LeaveNotice:
                 message = new LeaveNotice(ReadReason(reader));
+                break;
+
+            case Kind.PauseNotice:
+                message = new PauseNotice(reader.ReadBool());
+                break;
+
+            case Kind.SpeedNotice:
+                message = new SpeedNotice(TimeSpan.FromTicks(reader.ReadInt64()));
                 break;
 
             default:

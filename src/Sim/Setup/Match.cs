@@ -6,6 +6,7 @@ using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
+using Sim.Outcome;
 using Sim.Production;
 using Sim.Research;
 using Sim.Structures;
@@ -89,6 +90,9 @@ public sealed class Match
 
     /// <summary>Which entities are near a place. Not state: see <see cref="Map.SpatialIndex"/>.</summary>
     public required SpatialIndex SpatialIndex { get; init; }
+
+    /// <summary>Who is still in the match, who is out and why, and who has won.</summary>
+    public required Standings Standings { get; init; }
 
     /// <summary>Every player's Materials and Energy.</summary>
     public required Stockpiles Stockpiles { get; init; }

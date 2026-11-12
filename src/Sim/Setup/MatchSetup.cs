@@ -5,6 +5,7 @@ using Sim.Data;
 using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
+using Sim.Outcome;
 using Sim.Production;
 using Sim.Research;
 using Sim.Structures;
@@ -52,6 +53,7 @@ public static class MatchSetup
         var researchState = world.AddStore(new ResearchState(players.Count, data.Tracks.Count, data.TierCount, data.Rules.Match.StartEpoch));
         var structureMemory = world.AddStore(new StructureMemory(players.Count, map.Width, map.Height));
         var shots = world.AddStore(new ComponentStore<Shot>(Shot.StoreName));
+        var standings = world.AddStore(new Standings(players.Count));
         var stockpiles = world.AddStore(new Stockpiles(players.Count));
         var structures = world.AddStore(new ComponentStore<PlacedStructure>(PlacedStructure.StoreName));
         var territories = world.AddStore(new ComponentStore<Territory>(Territory.StoreName));
@@ -88,6 +90,9 @@ public static class MatchSetup
         var production = new MatchProduction(data, world.Entities, bodies, producers, structures, stockpiles, supply, research, simulation.Events, players.Count);
         supply.AddUser(production);
 
+        // A player who is out of the match gives no more orders, whatever the order.
+        simulation.SetCommandGate(standings);
+
         // Command handlers, in alphabetical order of their types. The order here changes nothing.
         // The four orders of a unit share one handler, which walks a move through the move order's
         // own. A worker walks to its work by the move order, and an order that makes it walk
@@ -117,6 +122,7 @@ public static class MatchSetup
         simulation.SetCommandHandler(CommandType.CancelBuild, new CancelBuildCommandHandler(construction));
         simulation.SetCommandHandler(CommandType.CancelResearch, new CancelResearchHandler(research));
         simulation.SetCommandHandler(CommandType.CancelTrain, new CancelTrainHandler(production, simulation.Events));
+        simulation.SetCommandHandler(CommandType.Concede, new ConcedeCommandHandler(standings));
         simulation.SetCommandHandler(
             CommandType.Gather,
             new OtherOrderHandler(new GatherCommandHandler(bodies, workSites, work, players.Count), construction));
@@ -157,8 +163,11 @@ public static class MatchSetup
         // arrived in this tick; after the deaths, so that a worker killed in this tick earns
         // nothing in it and its place is given out in it; and before research, so that a tier
         // raised in this tick pays from the next. It moves nobody.
-        // Research goes last: after everything that can destroy the holder of a research slot, so
-        // that a research cannot finish in the tick in which its building falls.
+        // Research goes last of the systems that change the map: after everything that can
+        // destroy the holder of a research slot, so that a research cannot finish in the tick in
+        // which its building falls.
+        // Conquest closes the tick: it judges who still has a Capitol or an Outpost on the map as
+        // the tick leaves it, and changes nothing but the standings.
         var producing = new ProductionSystem(production, walkOrders, simulation.Events);
         simulation.AddSystem(producing);
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
@@ -175,6 +184,7 @@ public static class MatchSetup
         simulation.AddSystem(new ProductionRefundSystem(production, bodies));
         simulation.AddSystem(new IncomeSystem(data, grid, bodies, movers, workers, workSites, territories, stockpiles, work, research));
         simulation.AddSystem(new ResearchSystem(research));
+        simulation.AddSystem(new ConquestSystem(data, players, bodies, structures, standings));
 
         var match = new Match
         {
@@ -197,6 +207,7 @@ public static class MatchSetup
             Routes = routes,
             Shots = shots,
             SpatialIndex = spatialIndex,
+            Standings = standings,
             Stockpiles = stockpiles,
             StructureFactory = structureFactory,
             StructureTiles = structureTiles,
