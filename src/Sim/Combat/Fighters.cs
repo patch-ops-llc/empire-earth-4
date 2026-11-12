@@ -7,24 +7,26 @@ using Sim.Numerics;
 namespace Sim.Combat;
 
 /// <summary>
-/// The melee units that are fighting: every one that stands where it last attacked from and still
-/// waits for its next attack. They are what makes a rank a rank (design 2.4, "only the front rank
-/// of a melee block fights"), in two ways.
+/// The melee units that are in the rank: every one that is fighting, which is to say it stands
+/// where it last attacked from and still waits for its next attack, and every one that stands on
+/// its place by its target (<see cref="Combatant.Place"/>) and has yet to make its first attack
+/// from there. They are what makes a rank a rank (design 2.4, "only the front rank of a melee
+/// block fights"), in two ways.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A melee unit that fights holds its ground among its own side (<see cref="IGroundHolders"/>).
+/// A melee unit in the rank holds its ground among its own side (<see cref="IGroundHolders"/>).
 /// A unit attacks only in a tick in which it has not moved, so a unit of its own side that stops
-/// too close to it steps away alone, and the one that fights goes on fighting: the ranks behind
-/// do not push the front rank about.
+/// too close to it steps away alone, and the one in the rank goes on fighting, or makes its
+/// first attack: the ranks behind do not push the front rank about.
 /// </para>
 /// <para>
 /// A melee unit that stands closer than their spacing to one of these has no room in the rank
 /// and does not attack (<see cref="HasNoRoom"/>). Units walk through their own side and enemies
 /// hold them at their spacing, so without this the ranks behind would walk into the front rank,
 /// be held there by the enemy, and fight from inside it. Units are asked in the order of the
-/// store, so of two that come to stand on one place the one asked first attacks, and the other
-/// then has no room.
+/// store, so of two that come to stand on one place the one asked first has it, and the other
+/// then has no room and looks for a place of its own (<see cref="MeleePlaces"/>).
 /// </para>
 /// <para>
 /// Units that shoot are left out of both. A rank of them that has come into range is pushed on
@@ -75,11 +77,21 @@ public sealed class Fighters : IGroundHolders
         && _bodies.TryGet(unit, out var body)
         && IsFighting(in combatant, in body);
 
-    public bool HoldsGround(EntityId unit) => IsFighting(unit);
+    /// <summary>
+    /// True when the unit is in the rank: it is fighting, or it stands on its place by its
+    /// target, where it came with its spacing kept from every unit that holds its ground.
+    /// </summary>
+    public bool HoldsGround(EntityId unit) =>
+        _combatants.TryGet(unit, out var combatant)
+        && _bodies.TryGet(unit, out var body)
+        && HoldsGround(in combatant, in body);
+
+    /// <summary>The largest spacing of any line: no two units keep more between them.</summary>
+    public Fixed WidestSpacing => _widestSpacing;
 
     /// <summary>
     /// True when a unit stands closer than their spacing to a melee unit of its own side that is
-    /// fighting. It reads the spatial index, which must hold where the units stand now.
+    /// in the rank. It reads the spatial index, which must hold where the units stand now.
     /// </summary>
     public bool HasNoRoom(EntityId unit, in Body body)
     {
@@ -90,7 +102,7 @@ public sealed class Fighters : IGroundHolders
                 || !_combatants.TryGet(other, out var combatant)
                 || !_bodies.TryGet(other, out var otherBody)
                 || otherBody.Owner != body.Owner
-                || !IsFighting(in combatant, in otherBody)
+                || !HoldsGround(in combatant, in otherBody)
                 || !SpacingRule.TryBetween(_movers, unit, other, out var spacing))
             {
                 continue;
@@ -104,6 +116,9 @@ public sealed class Fighters : IGroundHolders
 
         return false;
     }
+
+    private bool HoldsGround(in Combatant combatant, in Body body) =>
+        IsFighting(in combatant, in body) || (combatant.HasPlace && body.Position == combatant.Place);
 
     private bool IsFighting(in Combatant combatant, in Body body) =>
         combatant.Wait > Fraction.Zero
