@@ -7,6 +7,7 @@ using Sim.Structures;
 using Sim.Tests.Data;
 using Sim.Tests.Economy;
 using Sim.Tests.Map;
+using Sim.Tests.Vision;
 
 namespace Sim.Tests.Construction;
 
@@ -94,8 +95,11 @@ internal static class ConstructionMatches
     public static GameData DataStartingAtTier(int tier) =>
         DataAssert.Valid(Files().Edit(SampleData.RulesPath, "\"start_epoch\": 1", $"\"start_epoch\": {tier}"));
 
-    /// <summary>A match of two players without starts and with nothing in their stockpiles.</summary>
-    public static Match Create(MapDef map, GameData? data = null) => EconomyMatches.Create(map, data ?? Data);
+    /// <summary>
+    /// A match of two players without starts and with nothing in their stockpiles. Both have
+    /// explored the whole map: what the fog of war does to an order has tests of its own.
+    /// </summary>
+    public static Match Create(MapDef map, GameData? data = null) => EconomyMatches.Create(map, data ?? Data).Explored();
 
     /// <summary>
     /// A match on open ground of 40 by 24 tiles. Player 0 has a finished Capitol on the tiles

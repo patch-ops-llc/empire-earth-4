@@ -56,12 +56,19 @@ public class BuildScriptTests
     }
 
     /// <summary>
-    /// What this recorded match is for (plan 15c): a Generator and an Outpost are built, a build
-    /// is cancelled before its foundation and another after it, and workers earn Energy at a
-    /// Generator that was built. It also has an Outpost refused on arrival for the enemy's
-    /// territory. Throughout it no unit stands on a tile under a structure, no stockpile is below
+    /// What this recorded match is for (plan 15c): a Generator is built, a build is cancelled
+    /// before its foundation and another after it, and workers earn Energy at a Generator that
+    /// was built. Throughout it no unit stands on a tile under a structure, no stockpile is below
     /// nothing, and nobody has more of a structure than its limit.
     /// </summary>
+    /// <remarks>
+    /// The match was recorded before the fog of war had a say in placement (17b). Its orders for
+    /// Outposts are for sites anywhere on the map, which the players have not explored, so they
+    /// are refused now, and with the Materials they no longer spend the players build another
+    /// structure. An Outpost built, the territory it gives, and an Outpost refused on arrival for
+    /// the enemy's territory are in <c>ridge-settlers.replay</c>, which
+    /// <see cref="SettleScriptTests"/> guards.
+    /// </remarks>
     [Fact]
     public void ItsGoldenReplayReachesTheRulesItGuards()
     {
@@ -80,17 +87,16 @@ public class BuildScriptTests
             .. EveryKindOfOrder,
             "a build order refused: CannotAfford",
             "a build order refused: NoStructure",
+            "a build order refused: NotExplored",
             "a build order refused: OutsideTerritory",
             "a build order refused: SiteNotFree",
             "a build order ended: Cancelled",
             "a build order ended: OtherOrder",
-            "a build order ended: TooCloseToEnemyTerritory",
             "a foundation laid",
             "a foundation cancelled with three quarters of its price back",
             "a Generator finished",
-            "an Outpost finished",
             "a structure finished: barracks",
-            "a territory that an Outpost gave",
+            "a structure finished: works",
             "a worker back at its work after it laid a foundation",
             "a worker paid Energy at a Generator that was built",
             "a unit moved off a site",

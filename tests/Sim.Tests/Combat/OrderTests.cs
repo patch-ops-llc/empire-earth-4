@@ -189,8 +189,12 @@ public class OrderTests
         var match = Field();
         var peltast = match.Spawn(0, Peltast, "2.5", "5.5");
         var worker = match.SpawnWorker(1, "20.5", "5.5");
+
+        // A worker of the player's own beside the target: it sees the target, so the order can name it.
+        match.SpawnWorker(0, "20.5", "7.5");
         match.OrderAttack(0, worker, peltast);
         match.Run(10);
+        Assert.Equal(UnitOrder.Attack, match.UnitOf(peltast).Order);
         match.OrderStop(0, peltast);
         match.Run(1);
         var stood = match.PositionOf(peltast);
@@ -209,7 +213,7 @@ public class OrderTests
         var hoplite = match.Spawn(0, Hoplite, "2.5", "5.5");
         var ownWorker = match.SpawnWorker(0, "2.5", "7.5");
         var enemyUnit = match.Spawn(1, Hoplite, "20.5", "1.5");
-        var target = match.SpawnWorker(1, "12.5", "5.5");
+        var target = match.SpawnWorker(1, "9.5", "5.5");
         match.OrderAttack(0, target, ownWorker, enemyUnit, new EntityId(999), hoplite);
         match.Run(1);
 
@@ -234,7 +238,9 @@ public class OrderTests
             var match = Field();
             match.Spawn(0, Hoplite, "2.5", "5.5");
             match.SpawnWorker(0, "2.5", "7.5");
-            match.Spawn(1, Hoplite, "20.5", "5.5");
+
+            // In sight of player 0, so that an attack on it is refused for what the case names and not for the fog.
+            match.Spawn(1, Hoplite, "9.5", "5.5");
             match.Spawn(0, Peltast, "3.5", "5.5");
             return match;
         }

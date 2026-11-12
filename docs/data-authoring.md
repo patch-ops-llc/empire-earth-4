@@ -176,7 +176,11 @@ The values the design says to tune first. Each block carries a comment naming it
 | `match.start_epoch`, `epoch_cap` | The tier all tracks start at and the tier none may pass. | 5.2 |
 | `start.workers`, `materials`, `energy` | What every player starts with, besides a Capitol. | 5.2 |
 | `map` | The map rules below. | 5.3, 5.4 |
-| `debug.spawn` | `true` or `false`: whether a match carries out the development spawn, a command that makes units of any chassis from nothing for the player who sends it. It is not in the design. It is on in `game/data/` until units can be trained in a match, and stays on in `tests/golden/data/`, whose replay with a fight needs it. Both players of a match have the same data, so they have the same switch. | |
+| `combat.look_interval_ticks` | A unit or a Tower without a target looks for one every this many ticks. | 2.4 |
+| `combat.unit_reach_margin`, `structure_reach` | Melee reach in tiles: against a unit, the spacing between the two units plus the margin; against a structure, the reach to the nearest edge of its footprint. | 2.4 |
+| `combat.fortification` | What multiplies the damage a structure takes from an attacker whose effective Firepower is below the Protection tier of the structure's owner. Above 0 and at most 1. | 2.5 |
+| `vision.refresh_ticks` | Every how many ticks the game works out again which tiles each player sees, from 1 to 1,000; there are 20 ticks in a second. In between, a player sees what the last time found. The design says 4. A unit's sight is in its line file, a worker's in `resources.jsonc`, a structure's in its own file. | 5.3, 8.4 |
+| `debug.spawn` | `true` or `false`: whether a match carries out the development spawn, a command that makes units of any chassis from nothing for the player who sends it, and the development placement, which lays a finished structure the same way. Neither is in the design. It is on in `game/data/` until units can be trained and structures built in a match, and stays on in `tests/golden/data/`, whose replays with a fight and with Towers need it. Both players of a match have the same data, so they have the same switch. | |
 
 The footprint and the territory radius of a start are not here: they are the `footprint` and `territory_radius` of `structures/capitol.jsonc`, which every data folder must have. The map checks read them from that file, and a match places that structure, finished, at each player's start.
 
@@ -209,10 +213,10 @@ A kind of perk is a rule in the code with numbers from this file. Which accent g
 | --- | --- | --- | --- |
 | `range_bonus` | `multiplier`, 1 or more | Multiplies attack range. | Ranged attacks |
 | `attack_rate_bonus` | `multiplier`, 1 or more | Multiplies attacks per second. | Melee attacks |
-| `splash` | `share`, `radius` | Each hit also deals `share` of its damage to every other enemy within `radius` tiles of the target. | Attacks without a blast radius |
+| `splash` | `share`, `radius` | Each hit also deals `share` of its damage, taken before anything a target applies, to every other enemy whose center is within `radius` tiles of the target's center when the hit lands. It reaches only what the attacker's line can hit, and a shot that is lost splashes nobody. | Attacks without a blast radius |
 | `blast_radius_bonus` | `multiplier`, 1 or more | Multiplies the blast radius. | Attacks with a blast radius |
-| `area_damage_reduction` | `multiplier`, above 0 to 1 | Multiplies area damage taken. | Every unit |
-| `plating` | `multiplier`, above 0 to 1 | Multiplies damage taken from an attacker whose effective Firepower is below this unit's effective Protection. | Every unit |
+| `area_damage_reduction` | `multiplier`, above 0 to 1 | Multiplies area damage taken: the blast of a shell, for everyone in it, and a splash, for everyone but the target of the hit. | Every unit |
+| `plating` | `multiplier`, above 0 to 1 | Multiplies damage taken from an attacker whose effective Firepower is below this unit's effective Protection. The attacker's is fixed when it attacks and a Tower's is its owner's tier; the unit's is read when the hit lands. | Every unit |
 | `sight_bonus` | `tiles`, whole | Adds to sight. | Every unit |
 | `charge` | `distance`, `multiplier` 1 or more | The first hit after moving at least `distance` tiles deals `multiplier` times the damage. | Units with an attack |
 | `batch` | `time_multiplier` | Each queue slot produces two units in `time_multiplier` times the build time of one. | Every unit |
@@ -277,7 +281,7 @@ Game design 2.5. One file for each structure that is built so far: the eight of 
 | `hp` | Hit points at Protection tier 1. Each Protection tier of the owner multiplies them by `per_tier.hp`. |
 | `cost.materials`, `energy` | The price, in whole resources. For the wall, of one tile. |
 | `build_seconds` | The time the structure builds itself in once its foundation is laid. No track changes it. |
-| `sight` | Sight in tiles when finished, measured from the center. No track changes it. |
+| `sight` | Sight in tiles when finished, measured from the center of the footprint: a tile is seen when its center is within that distance, the distance itself included. No track changes it. While the structure is building itself it sees only the tiles under it. |
 | `territory_radius` | Optional. The radius in tiles of the territory it gives when finished. |
 | `research_slots` | Optional. Research slots it gives when finished. |
 | `max_per_player` | Optional. The most a player may have, counting those under way. |
@@ -324,8 +328,41 @@ Game design 5.5. One file per personality of the computer player. The simulation
 | `economy.expand_at_materials` | It claims another deposit when its stockpile holds more Materials than this. It also does when a deposit it holds has dropped to the lower rate and its other deposits have no free place. |
 | `research.weights` | One whole number from 1 to 1000 for every track of `tracks.jsonc`, by track ID. For every free research slot it starts the research with the highest weight among those it may start and can pay for. A catch-up tier, which is half price, goes before any other. Tracks with the same weight go in the order of `tracks.jsonc`. |
 | `army.lines` | The lines its army is made of: a list of `{ "line", "share" }`, with a line ID from the roster and a whole number from 1 to 1000. Of each line it trains the newest chassis it has unlocked. The shares are parts of the army's units: 3 and 1 make three units of four. It always orders the line that is furthest behind its share, and lines that are level go in the order of the file. |
+| `fight.attack_ratio` | Its army sets out when the value of its fighting units at home is at least this many times its estimate of the enemy's: a number from 1 to 100. A unit's value is the Materials and Energy it costs its owner now. The army also sets out when the supply cap leaves no room for another unit. |
+| `fight.assumed_enemy_value` | The least it takes the enemy's army to be worth, in Materials and Energy together. Its estimate is the value of the enemy fighting units it has seen and not seen die, and never less than this. |
+| `fight.retreat_losses` | It pulls an attack back when this share of the units that set out is lost: above 0 and at most 1. A raiding party goes home by the same share. |
+| `fight.reinforce_units` | While an attack is under way, the units trained since join it in groups of at least this many. |
+| `fight.passage` | The kind of map marker its army goes through: `chokepoint` or `open_field`. Its raiding party goes through the other kind. |
+| `fight.raid.line`, `fight.raid.party` | The line it raids with, and how many units make a party. A party goes for the enemy's workers and then its Generators. With a line that is not among `army.lines` it never raids. |
+| `fight.reaction_seconds` | How long a reason to set out, to join, to raid or to retreat must hold before it acts on it, in seconds. This is the reaction delay of design 5.5: 1 second for Normal. |
+| `scouting` | Optional. Without it the personality sends no scout and responds to nothing. |
+| `scouting.every_seconds` | How often it sends a scout, in seconds: 180 in design 5.5. The first goes when this long has passed, or with the first fighting unit it has after that. The scout is the unit at home that sees furthest, and of those the fastest. It walks to the nearest structure of the enemy's that holds territory, of those it knows; with none, to the nearest other structure of the enemy's; and with none of those, to the nearest other start of the map. It turns for home when the place is inside its sight. |
+| `scouting.responses` | The response table of design 5.5: a list of at most 20 rows of `{ "sees", "does" }`. A row comes into force when what it `sees` has held for `fight.reaction_seconds`, and goes out of force when it has not held for `every_seconds`. Rows in force together are all acted on; where two disagree, the earlier row of the file wins. |
+
+What a row `sees` is a list, and the row holds when any entry of it does. An entry holds when everything it names is true of what the computer player remembers of the enemy: the units it has seen and not seen die, and the structures it has seen.
+
+| Key of `sees` | Meaning |
+| --- | --- |
+| `accents` | A list of `{ "track", "level" }` with level 1 or 2. True when an enemy unit it remembers carries any of them at that level or above. |
+| `on_main_line` | With `true`, the accents count only on units of the enemy's main line: the line it remembers the most units of. It needs `accents`. |
+| `units` | `{ "line", "count" }`: true when it remembers at least so many enemy units of the line. |
+| `army_count_ratio` | A number above 0 and at most 100. True when it remembers more enemy fighting units than this many times its own. |
+| `epochs_ahead` | True when the highest epoch of another player is at least this many above its own. Epochs are announced to every player (design 3.2), so this needs no scout. |
+
+An entry needs at least one of these keys.
+
+| Key of `does` | Meaning |
+| --- | --- |
+| `army_supply` | A list of `{ "line", "share" }` with a share above 0 and at most 1. While the line is below this share of the supply its army takes, it is ordered before the ratio of `army.lines`. The line need not be among `army.lines`, and the computer player builds the structure that trains it. |
+| `research` | `{ "track" }` with exactly one of `"tiers"`, `"until_accent_level"` and `"up_to_enemy"`. The track goes before every other research, and while it cannot be paid for no other is started. With `"tiers": 1` it is researched one tier above the tier it had when the row came into force. With `"until_accent_level": 1` it is researched until the newest chassis of its own main line, the line with the largest share of `army.lines`, carries the track's accent at that level. With `"up_to_enemy": "protection"` it is researched up to the highest tier of that track it has seen on the enemy. |
+| `passage` | `chokepoint` or `open_field`. While the row is in force its army goes through this kind of marker in place of `fight.passage`, and its units at home gather on its own side of the marker instead of at home. |
+| `catch_up_first` | With `true`, a catch-up tier goes before the `research` of every row. |
+
+A row needs at least one of these keys.
 
 The rest of what a computer player does is the same for every personality and is in the code: it divides its workers between Materials and Energy by what its next purchases still lack, builds a Generator when it wants more workers at Generators than they have places, builds the structure that trains each of its lines, and an Academy when every research slot is busy and it could pay for another research.
+
+It knows what a player in its seat could know and no more: every question it asks of the match goes through the `PlayerView` of its seat (design 2.5), and besides that it reads only the map file, which every player has. So it sends a worker to look at ground before it orders an Outpost there, it counts the enemy units it has seen, and it attacks the structures it has seen or remembers. What its scout sees it learns as a player would (design 3.2): a unit's line and accents by inspecting it, a track's tier from the chassis fielded, from the look of a structure and from inspection. The one thing it reads of another player without seeing it is the epoch, which the game announces to everyone. When it knows of none it goes to the other starts of the map, and then to the ground it has not seen for longest.
 
 ## What datacheck checks
 
@@ -344,7 +381,7 @@ Besides the shape of each file:
 | Income | A worker's payment for one second can be computed exactly at every Extraction tier and never rounds to nothing, at the whole rate and at the depleted one. |
 | Formulas | Every stat and price of every chassis can be computed exactly at every tier mix. The game multiplies exact fractions, and a multiplier with many decimal places raised to a high power no longer fits. `1.15` is fine at any tier; `1.123456789` is not. The error names the chassis. The same holds for a structure's hit points at every Protection tier and its damage at every Firepower tier. |
 | Stat bounds | Hit points, damage, speed, sight, supply, spacing, prices, ranges and multipliers must be positive where zero makes no sense and inside wide sanity limits, listed in `src/Sim/Data/DataRules.cs`. The limits catch slips such as a missing decimal point; they are not balance rules. |
-| Personalities | A personality has a weight for every track, names only lines of the roster and names none twice, and its worker counts start at epoch 1 with rising epochs. |
+| Personalities | A personality has a weight for every track, names only lines of the roster and names none twice, and its worker counts start at epoch 1 with rising epochs. Its `fight` block is complete, its passage is a kind of map marker and its reaction delay is a whole number of ticks. A `scouting` block has an interval that is a whole number of ticks and at most 20 rows; every row sees something and does something, names only tracks and lines of the data, names no line twice in `army_supply`, and gives its research exactly one end. |
 | Map symmetry | Terrain, starts, deposits and markers must all mirror under the map's `symmetry`. |
 | Map footprints | Starting Capitols, deposits and markers stand on open ground inside the map. Deposits overlap neither each other nor a Capitol. |
 | Start distance | The Capitols' centers are at least two territory radii apart, so the two starting territories do not overlap. |

@@ -140,6 +140,10 @@ public class SpacingInCombatTests
             .ToArray();
         var worker = match.SpawnWorker(1, "20", "10.6");
         match.SetHitPoints(worker, 100_000_000);
+
+        // A worker of their own side that sees the target, which is further off than they see: an
+        // attack order names only what its player sees.
+        match.SpawnWorker(0, "20", "5.5");
         if (attackOrder)
         {
             match.OrderAttack(0, worker, guards);
@@ -363,7 +367,7 @@ public class SpacingInCombatTests
     {
         var rows = Enumerable.Range(0, 12).Select(_ => new string('.', 10) + "#" + new string('.', 9)).ToArray();
         var match = Create(TestMaps.FromRows(rows));
-        var guard = match.Spawn(0, Hoplite, "4.5", "5.5");
+        var guard = match.Spawn(0, Hoplite, "5.5", "5.5");
         var worker = match.SpawnWorker(1, "13.5", "5.5");
         match.OrderAttack(0, worker, guard);
         match.RunUntilAtRest(300, guard);

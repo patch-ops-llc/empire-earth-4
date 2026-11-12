@@ -32,5 +32,74 @@
       { "line": "line_infantry", "share": 3 },
       { "line": "cavalry_armor", "share": 1 }
     ]
+  },
+
+  // Item 5: it attacks when its army is worth 1.3 times what it takes the enemy's to be worth, or
+  // when it is at its supply cap, and retreats when it has lost 40% of the force it attacked with.
+  // The worth of an army is the price of its units. Until it has seen more, it takes the enemy's
+  // army to be worth "assumed_enemy_value". While a force is attacking, new units follow it
+  // "reinforce_units" at a time. Its many units go through the open field, where they can all fight at once.
+  // "reaction_seconds" is the reaction delay of Normal difficulty.
+  "fight": {
+    "attack_ratio": "1.3",
+    "assumed_enemy_value": 400,
+    "retreat_losses": "0.4",
+    "reinforce_units": 6,
+    "passage": "open_field",
+    "raid": { "line": "cavalry_armor", "party": 4 },
+    "reaction_seconds": 1
+  },
+
+  // Item 4: it sends a scout every three minutes, and these are the rows of the design's table
+  // that the first playable has (no Air, no strategic structures, tiers up to 4). A row is in
+  // force while it remembers seeing what the row says, and for three minutes after.
+  "scouting": {
+    "every_seconds": 180,
+    "responses": [
+      {
+        // Standardized or Supplied badges and an army of more than 1.5 times its own count:
+        // Artillery to 30% of its army's supply, Firepower next, and it fights at chokepoints.
+        "sees": [
+          {
+            "accents": [
+              { "track": "manufacturing", "level": 1 },
+              { "track": "logistics", "level": 1 }
+            ],
+            "army_count_ratio": "1.5"
+          }
+        ],
+        "does": {
+          "army_supply": [{ "line": "artillery", "share": "0.3" }],
+          "research": { "track": "firepower", "tiers": 1 },
+          "passage": "chokepoint"
+        }
+      },
+      {
+        // Overgunned II or three or more Artillery: Protection until its main line is
+        // Hardened I, and its army shifts toward Cavalry/Armor.
+        "sees": [
+          { "accents": [{ "track": "firepower", "level": 2 }] },
+          { "units": { "line": "artillery", "count": 3 } }
+        ],
+        "does": {
+          "research": { "track": "protection", "until_accent_level": 1 },
+          "army_supply": [{ "line": "cavalry_armor", "share": "0.5" }]
+        }
+      },
+      {
+        // Hardened II on the enemy's main line: Firepower up to the enemy's Protection tier.
+        "sees": [
+          { "accents": [{ "track": "protection", "level": 2 }], "on_main_line": true }
+        ],
+        "does": {
+          "research": { "track": "firepower", "up_to_enemy": "protection" }
+        }
+      },
+      {
+        // Enemy epoch two or more above its own: catch-up tiers before anything else.
+        "sees": [{ "epochs_ahead": 2 }],
+        "does": { "catch_up_first": true }
+      }
+    ]
   }
 }

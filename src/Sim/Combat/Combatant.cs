@@ -31,7 +31,9 @@ public struct Combatant : IStateValue
     /// <summary>
     /// The point its order ties it to. While <see cref="UnitOrder.Idle"/>: its post, where it became
     /// idle and where it returns when nothing is left to fight. On <see cref="UnitOrder.AttackMove"/>:
-    /// where the order ends, as the move order placed it. Not used by the other orders.
+    /// where the order ends, as the move order placed it. On <see cref="UnitOrder.Attack"/>: where
+    /// the target stood when the unit's owner last saw it, which is where the unit walks when the
+    /// target is lost from sight (design 5.3). Not used by a move order.
     /// </summary>
     public FixedVector2 Anchor { get; set; }
 
@@ -65,6 +67,25 @@ public struct Combatant : IStateValue
     /// </summary>
     public FixedVector2 Fought { get; set; }
 
+    /// <summary>
+    /// The target that <see cref="Place"/> is a place by, or <see cref="EntityId.None"/>. The unit
+    /// has the place only while this is its <see cref="Target"/> (<see cref="HasPlace"/>), so a
+    /// unit that takes another target or another order has given the place up without anything
+    /// being cleared.
+    /// </summary>
+    public EntityId PlaceFor { get; set; }
+
+    /// <summary>
+    /// The free place by its target that a melee unit found for itself when its own side left it
+    /// no room (<see cref="MeleePlaces"/>): where it is walking to, or where it stands. No other
+    /// unit of its side takes a place closer to this point than their spacing. Meaningful while
+    /// <see cref="HasPlace"/>.
+    /// </summary>
+    public FixedVector2 Place { get; set; }
+
+    /// <summary>True when the unit has a place by the target it has now.</summary>
+    public readonly bool HasPlace => PlaceFor != EntityId.None && PlaceFor == Target;
+
     public void Walk(IStateWalker walker)
     {
         ArgumentNullException.ThrowIfNull(walker);
@@ -77,5 +98,7 @@ public struct Combatant : IStateValue
         Wait = walker.Field(Wait);
         Stood = new FixedVector2(walker.Field(Stood.X), walker.Field(Stood.Y));
         Fought = new FixedVector2(walker.Field(Fought.X), walker.Field(Fought.Y));
+        PlaceFor = walker.Field(PlaceFor);
+        Place = new FixedVector2(walker.Field(Place.X), walker.Field(Place.Y));
     }
 }

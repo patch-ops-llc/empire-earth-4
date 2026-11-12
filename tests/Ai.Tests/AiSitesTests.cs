@@ -237,6 +237,7 @@ public class AiSitesTests
     public void AnOutpostGoesWhereItsTerritoryHoldsTheWholeDeposit(int players)
     {
         var fixture = new AiFixture(players);
+        fixture.ExploreAll();
         var construction = new AiConstruction(fixture.Sight);
         var outpost = AiFixture.Structure("outpost");
         var (homeX, homeY, _) = fixture.Home;
@@ -280,6 +281,7 @@ public class AiSitesTests
     public void AnOutpostIsNeverPutWhereItsTerritoryWouldMissATileOfTheDeposit()
     {
         var fixture = new AiFixture();
+        fixture.ExploreAll();
         var outpost = AiFixture.Structure("outpost");
         var radius = outpost.TerritoryRadius!.Value;
         var (homeX, homeY, _) = fixture.Home;
@@ -318,6 +320,7 @@ public class AiSitesTests
     public void NoOutpostGoesWhereItsTerritoryWouldReachIntoAnotherPlayers()
     {
         var fixture = new AiFixture(players: 2);
+        fixture.ExploreAll();
         var construction = new AiConstruction(fixture.Sight);
         var outpost = AiFixture.Structure("outpost");
         var (homeX, homeY, _) = fixture.Home;
@@ -337,6 +340,7 @@ public class AiSitesTests
     public void AStructureWithoutTerritoryClaimsNothing()
     {
         var fixture = new AiFixture();
+        fixture.ExploreAll();
         var deposit = fixture.Sight.Sites.First(site => site.Kind == WorkSiteKind.Deposit && !site.IsHeld);
 
         Assert.False(new AiConstruction(fixture.Sight).TryFindSiteAt(deposit, AiFixture.Structure("barracks"), 0, 0, out _, out _));

@@ -130,6 +130,7 @@ public class AiPlayerTests
     public void ItClaimsTheNearestDepositItDoesNotHoldWhenItsStockpileIsAboveItsMark()
     {
         var fixture = new AiFixture();
+        fixture.ExploreAll();
         var outpost = AiFixture.Structure("outpost");
         var ai = new AiPlayer(fixture.Match, AiFixture.Player, AiFixture.Personality(expandAt: 600));
         var (homeX, homeY, _) = fixture.Home;
@@ -184,6 +185,85 @@ public class AiPlayerTests
             // It builds an Academy as well, which is not a line's.
             var producers = fixture.Data.Structures.Where(structure => structure.Trains.Count > 0).Select(structure => structure.Index).ToList();
             return [.. built.Where(producers.Contains)];
+        }
+    }
+
+    /// <summary>A row of the response table raises a line its personality does not train: it builds the structure for it.</summary>
+    [Fact]
+    public void ItBuildsTheStructureOfALineARowRaises()
+    {
+        var barracks = AiFixture.Structure("barracks").Index;
+        var works = AiFixture.Structure("works").Index;
+        var infantry = AiFixture.Personality(lines: [("line_infantry", 1)]);
+
+        Assert.Equal([barracks], Built(infantry, enemyAhead: true));
+        Assert.Equal([barracks, works], Built(AiFixture.WithRow(infantry, AiFixture.Raising("artillery", "0.3")), enemyAhead: true));
+
+        // Not while the row is not in force, and not a second structure for a line of the Barracks.
+        Assert.Equal([barracks], Built(AiFixture.WithRow(infantry, AiFixture.Raising("artillery", "0.3")), enemyAhead: false));
+        Assert.Equal([barracks], Built(AiFixture.WithRow(infantry, AiFixture.Raising("guard", "0.3")), enemyAhead: true));
+
+        static List<int> Built(AiPersonalityDef personality, bool enemyAhead)
+        {
+            var fixture = new AiFixture(players: 2);
+            if (enemyAhead)
+            {
+                fixture.Match.Research.SetTiers(1, [2, 2, 2, 1, 1, 1]);
+            }
+
+            var ai = new AiPlayer(fixture.Match, AiFixture.Player, personality);
+            var built = new List<int>();
+            for (var round = 0; round < 4; round++)
+            {
+                fixture.SetStock(1000, 1000);
+                built.AddRange(Of(Round(fixture, ai), CommandType.Build).Select(command => command.ContentId));
+            }
+
+            Assert.Equal(enemyAhead && personality.Scouting.Responses.Count > 0, personality.Scouting.Responses.Count > 0 && ai.Responses.IsInForce(0));
+            var producers = fixture.Data.Structures.Where(structure => structure.Trains.Count > 0).Select(structure => structure.Index).ToList();
+            return [.. built.Where(producers.Contains)];
+        }
+    }
+
+    /// <summary>
+    /// "Fights at chokepoints" (design 5.5, item 4; 5.3: markers say where to hold): while a row
+    /// names a passage its units at home gather on its own side of it, and at home again when
+    /// the row is out of force.
+    /// </summary>
+    [Fact]
+    public void WhileARowNamesAPassageItsArmyGathersOnItsOwnSideOfIt()
+    {
+        var chokepoint = new AiDoesDef([], Research: null, MarkerKind.Chokepoint, CatchUpFirst: false);
+        var (plain, atHome) = MusterOf(AiFixture.Personality(), enemyAhead: true);
+        var (_, unmoved) = MusterOf(AiFixture.WithRow(AiFixture.Personality(), chokepoint), enemyAhead: false);
+        var (fixture, held) = MusterOf(AiFixture.WithRow(AiFixture.Personality(), chokepoint), enemyAhead: true);
+
+        var (homeX, homeY, radius) = plain.Home;
+        Assert.True(Math.Max(Math.Abs(atHome.X - homeX), Math.Abs(atHome.Y - homeY)) <= radius);
+        Assert.Equal(atHome, unmoved);
+
+        // The chokepoint of Ridge is four tiles deep, and the army stands two tiles before it.
+        var marker = fixture.Match.Map.Markers.Single(candidate => candidate.Kind == MarkerKind.Chokepoint);
+        Assert.Equal(MapAxis.Y, marker.Across);
+        Assert.Equal((marker.Area.X - AiPlayer.HoldBehind, marker.Area.Y + (marker.Area.SizeY / 2)), held);
+        Assert.True(held.X > homeX + radius);
+        Assert.True(fixture.Match.Grid.IsPassable(held.X, held.Y));
+
+        static (AiFixture Fixture, (int X, int Y) Muster) MusterOf(AiPersonalityDef personality, bool enemyAhead)
+        {
+            var fixture = new AiFixture(players: 2);
+            if (enemyAhead)
+            {
+                fixture.Match.Research.SetTiers(1, [2, 2, 2, 1, 1, 1]);
+            }
+
+            var (homeX, homeY, _) = fixture.Home;
+            var units = fixture.SpawnRow(AiFixture.Player, "peltast", 2, homeX - 1, homeY + 6);
+            var ai = new AiPlayer(fixture.Match, AiFixture.Player, personality);
+
+            var order = Assert.Single(Of(Round(fixture, ai), CommandType.Move));
+            Assert.Equal(units, order.Entities.ToArray());
+            return (fixture, (order.TargetX.FloorToInt(), order.TargetY.FloorToInt()));
         }
     }
 
@@ -270,6 +350,34 @@ public class AiPlayerTests
     /// Runs the match up to the computer player's next round, has the match carry out the orders
     /// of that round, and returns them.
     /// </summary>
+    /// <summary>
+    /// A research can lower its supply cap below what its units take (design 2.3 allows a player
+    /// to stand above the cap). It then orders no unit, keeps no money back for one, and goes on
+    /// researching: the research is chosen by the weights of its file alone.
+    /// </summary>
+    [Fact]
+    public void AboveItsSupplyCapItOrdersNoUnitAndStillResearches()
+    {
+        var fixture = new AiFixture();
+        fixture.Place("barracks");
+        var ai = new AiPlayer(fixture.Match, AiFixture.Player, AiFixture.Personality(workers: 30, FirepowerFirst, lines: [("line_infantry", 1)]));
+        var peltast = fixture.Sight.Tech.Blueprints[AiFixture.Chassis("peltast")];
+        fixture.Spawn("peltast", fixture.Sight.SupplyCap / peltast.Supply);
+        Assert.True(fixture.Sight.SupplyUsed > fixture.Sight.SupplyCap);
+
+        // Exactly the price of its first research, and nothing for a unit besides.
+        var first = fixture.Sight.Tech.Research[0].Price!.Value;
+        fixture.SetStock(first.Materials, first.Energy);
+        ai.Think(fixture.Commands);
+        var given = fixture.Commands.ToList();
+        fixture.Carry();
+
+        Assert.Empty(Of(given, CommandType.Train));
+        Assert.Equal(0, Assert.Single(Of(given, CommandType.StartResearch)).ContentId);
+        Assert.True(fixture.Sight.IsResearching(0));
+        Assert.Equal(0, fixture.Match.Simulation.DroppedCommandCount);
+    }
+
     private static List<Command> Round(AiFixture fixture, AiPlayer ai)
     {
         fixture.Run(AiPlayer.ThinkInterval);

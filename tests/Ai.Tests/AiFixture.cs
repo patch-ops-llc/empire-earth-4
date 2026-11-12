@@ -39,6 +39,9 @@ internal sealed class AiFixture
 
     public AiBudget Budget { get; } = new();
 
+    /// <summary>The tile the army gathers on, for the tests of how it fights.</summary>
+    public (int X, int Y) Muster { get; init; }
+
     public List<Command> Commands { get; } = [];
 
     /// <summary>The middle tile of the player's Capitol and the radius of its territory.</summary>
@@ -65,7 +68,66 @@ internal sealed class AiFixture
             [new AiWorkerTarget(1, workers)],
             expandAt,
             weights ?? [.. Enumerable.Repeat(1, data.Tracks.Count)],
-            [.. lines.Select(line => new AiLineShare(Line(line.Line), line.Share))]);
+            [.. lines.Select(line => new AiLineShare(Line(line.Line), line.Share))],
+            Fight());
+    }
+
+    /// <summary>
+    /// How a personality made for a test fights: the numbers of design 5.5, and what the test
+    /// changes of them. Without a reaction delay it acts in the round it finds a reason.
+    /// </summary>
+    public static AiFightDef Fight(
+        string attackRatio = "1.3",
+        int assumedEnemyValue = 400,
+        string retreatLosses = "0.4",
+        int reinforceUnits = 6,
+        MarkerKind passage = MarkerKind.OpenField,
+        string raidLine = "cavalry_armor",
+        int raidParty = 4,
+        int reactionTicks = 0)
+    {
+        Assert.True(DataNumber.TryParse(attackRatio, out var ratio));
+        Assert.True(DataNumber.TryParse(retreatLosses, out var losses));
+        return new AiFightDef(ratio, assumedEnemyValue, losses, reinforceUnits, passage, Line(raidLine), raidParty, reactionTicks);
+    }
+
+    /// <summary>
+    /// A response table of one row, in force: the row is of an enemy one epoch ahead, and the
+    /// other seat is given the tiers for it, so nothing has to stand on the map. The fixture
+    /// needs two players.
+    /// </summary>
+    public AiTable Responding(AiPersonalityDef personality, AiDoesDef does)
+    {
+        ArgumentNullException.ThrowIfNull(personality);
+        var table = WithRow(personality, does);
+        var ahead = Sight.Tech.Epoch + 1;
+        Match.Research.SetTiers(1, [ahead, ahead, ahead, 1, 1, 1]);
+        Sight.Refresh();
+        var intel = new AiIntel(Sight);
+        var responses = new AiResponses(Sight, intel, table);
+        var made = new AiTable(table, intel, responses);
+        made.Judge();
+        Assert.True(responses.IsInForce(0));
+        return made;
+    }
+
+    /// <summary>A personality with a response table of one row, which is of an enemy one epoch ahead.</summary>
+    public static AiPersonalityDef WithRow(AiPersonalityDef personality, AiDoesDef does)
+    {
+        ArgumentNullException.ThrowIfNull(personality);
+        var sees = new AiSeesDef([], OnMainLine: false, Line: 0, Units: 0, ArmyCountRatio: null, EpochsAhead: 1);
+        return personality with { Scouting = new AiScoutingDef(180 * Sim.SimInfo.TicksPerSecond, [new AiResponseDef([sees], does)]) };
+    }
+
+    /// <summary>What a row does that only has it research a track first.</summary>
+    public static AiDoesDef Researching(string track, AiResearchUntil until = AiResearchUntil.Tiers, int amount = 1, bool catchUpFirst = false) =>
+        new([], new AiResearchResponse(Track(track), until, amount), Passage: null, catchUpFirst);
+
+    /// <summary>What a row does that only raises a line to a share of its army's supply.</summary>
+    public static AiDoesDef Raising(string line, string share)
+    {
+        Assert.True(DataNumber.TryParse(share, out var number));
+        return new([new AiSupplyShare(Line(line), number)], Research: null, Passage: null, CatchUpFirst: false);
     }
 
     public static int Line(string id) => GameFiles.Data.Lines.Single(line => line.Id == id).Index;
@@ -92,6 +154,21 @@ internal sealed class AiFixture
         var stock = Match.Stockpiles;
         Assert.True(stock.TryPay(Player, (int)(stock.Materials(Player) / Stockpiles.PerResource), (int)(stock.Energy(Player) / Stockpiles.PerResource)));
         stock.Add(Player, materials, energy);
+        Sight.Refresh();
+    }
+
+    /// <summary>
+    /// Shows the player the whole map once, as if it had walked all of it: every tile is
+    /// explored, and what stands on it now is remembered. Sight is worked out anew after it, so
+    /// the player then sees what its units and structures see.
+    /// </summary>
+    public void ExploreAll()
+    {
+        var grid = Match.Vision.Grid;
+        grid.BeginRefresh();
+        grid.Reveal(Player, MapGrid.TileCenter(grid.Width / 2, grid.Height / 2), Sim.Numerics.Fixed.FromInt(grid.Width + grid.Height));
+        grid.EndRefresh();
+        Match.Vision.Refresh();
         Sight.Refresh();
     }
 
@@ -170,6 +247,67 @@ internal sealed class AiFixture
         }
     }
 
+    /// <summary>Places one unit of a chassis for a player on a tile, has sight worked out anew and reads the match again.</summary>
+    public EntityId SpawnAt(int player, string chassis, int x, int y)
+    {
+        var entity = Match.SpawnChassis(player, Chassis(chassis), MapGrid.TileCenter(x, y));
+        Match.Vision.Refresh();
+        Sight.Refresh();
+        return entity;
+    }
+
+    /// <summary>Places units of a chassis for a player on a row of tiles that starts at a tile.</summary>
+    public List<EntityId> SpawnRow(int player, string chassis, int count, int x, int y)
+    {
+        var units = new List<EntityId>();
+        for (var i = 0; i < count; i++)
+        {
+            units.Add(Match.SpawnChassis(player, Chassis(chassis), MapGrid.TileCenter(x + i, y)));
+        }
+
+        Match.Vision.Refresh();
+        Sight.Refresh();
+        return units;
+    }
+
+    /// <summary>Places a worker for a player on a tile.</summary>
+    public EntityId SpawnWorkerAt(int player, int x, int y)
+    {
+        var entity = Match.SpawnWorker(player, MapGrid.TileCenter(x, y));
+        Match.Vision.Refresh();
+        Sight.Refresh();
+        return entity;
+    }
+
+    /// <summary>Places a finished structure for a player with its lowest tile on a tile.</summary>
+    public EntityId PlaceAt(int player, string structure, int x, int y)
+    {
+        var entity = Match.PlaceStructure(player, Structure(structure), x, y);
+        Match.Vision.Refresh();
+        Sight.Refresh();
+        return entity;
+    }
+
+    /// <summary>Takes hit points from something, to none at most. What has none left dies in the next tick.</summary>
+    public void Damage(EntityId entity, long hitPoints)
+    {
+        ref var health = ref Match.Health.ValueAt(Match.Health.IndexOf(entity));
+        health.HitPoints = Math.Max(0, health.HitPoints - hitPoints);
+        Sight.Refresh();
+    }
+
+    /// <summary>Kills units: they die in a tick that runs here, and whoever sees them die is told.</summary>
+    public void Kill(params EntityId[] entities)
+    {
+        foreach (var entity in entities)
+        {
+            ref var health = ref Match.Health.ValueAt(Match.Health.IndexOf(entity));
+            health.HitPoints = 0;
+        }
+
+        Run(1);
+    }
+
     /// <summary>
     /// Has the match carry out the orders in <see cref="Commands"/> in one tick, as with a command
     /// delay of 1, then empties the list and reads the match again.
@@ -201,4 +339,16 @@ internal sealed class AiFixture
     public List<Command> Orders(CommandType type) => [.. Commands.Where(command => command.Type == type)];
 
     public KnownSite SiteOf(EntityId entity) => Sight.Sites.Single(site => site.Entity == entity);
+}
+
+/// <summary>A personality with a response table, what it remembers of the enemy, and the table as it is judged.</summary>
+internal sealed record AiTable(AiPersonalityDef Personality, AiIntel Intel, AiResponses Responses)
+{
+    /// <summary>One round: the memory is brought up to date and the table is judged.</summary>
+    public void Judge()
+    {
+        Intel.Watch();
+        Intel.Update();
+        Responses.Update();
+    }
 }

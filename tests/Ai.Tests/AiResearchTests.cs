@@ -163,6 +163,111 @@ public class AiResearchTests
         Assert.Equal(2 * price.Energy, budget.MissingEnergy);
     }
 
+    /// <summary>A row of the response table has it research a track next (design 5.5, item 4): its weights wait.</summary>
+    [Fact]
+    public void TheTrackOfAResponseGoesBeforeTheWeights()
+    {
+        var fixture = new AiFixture(players: 2);
+        var table = fixture.Responding(AiFixture.Personality(weights: Rising), AiFixture.Researching("protection"));
+        Assert.Equal([AiFixture.Track("protection")], table.Responses.ResearchFirst);
+
+        Assert.Equal([1], Started(fixture, table));
+
+        // With a second slot the best of its weights is started beside it.
+        fixture.Place("academy");
+        Assert.Equal([1, 5], Started(fixture, table));
+    }
+
+    [Fact]
+    public void TheTrackOfAResponseGoesBeforeACatchUpTier()
+    {
+        var fixture = new AiFixture(players: 2);
+        fixture.Match.Research.SetTiers(AiFixture.Player, [2, 2, 2, 1, 1, 1]);
+        fixture.Sight.Refresh();
+        Assert.Equal([3], Started(fixture, Falling));
+
+        var table = fixture.Responding(AiFixture.Personality(weights: Falling), AiFixture.Researching("protection"));
+
+        Assert.Equal([1], Started(fixture, table));
+    }
+
+    /// <summary>"Buys catch-up tiers before anything else": before the track of another row too.</summary>
+    [Fact]
+    public void WithCatchUpFirstACatchUpTierGoesBeforeTheTrackOfAResponse()
+    {
+        var fixture = new AiFixture(players: 2);
+        fixture.Place("academy");
+        fixture.Match.Research.SetTiers(AiFixture.Player, [2, 2, 2, 2, 2, 1]);
+        fixture.Sight.Refresh();
+        Assert.Equal(ResearchBand.CatchUp, fixture.Sight.Tech.Research[5].Price!.Value.Band);
+
+        // The track of the row, then the catch-up tier.
+        var table = fixture.Responding(AiFixture.Personality(weights: Falling), AiFixture.Researching("protection"));
+        Assert.False(table.Responses.CatchUpFirst);
+        Assert.Equal([1, 5], Started(fixture, table));
+
+        // The catch-up tier, then the track of the row.
+        table = fixture.Responding(AiFixture.Personality(weights: Falling), AiFixture.Researching("protection", catchUpFirst: true));
+        Assert.True(table.Responses.CatchUpFirst);
+        Assert.Equal([5, 1], Started(fixture, table));
+    }
+
+    /// <summary>
+    /// With two tracks at tier 2 its next Firepower tier is ahead of its epoch and costs more
+    /// than the tiers it can pay for. A row asks for Firepower, so it starts none of those and
+    /// keeps the price out of the hands of everything else.
+    /// </summary>
+    [Fact]
+    public void WhenItCannotPayForTheTrackOfAResponseItStartsNothingInItsPlace()
+    {
+        var fixture = new AiFixture(players: 2);
+        fixture.Match.Research.SetTiers(AiFixture.Player, [2, 2, 1, 1, 1, 1]);
+        fixture.Sight.Refresh();
+        var ahead = fixture.Sight.Tech.Research[0].Price!.Value;
+        var frontier = fixture.Sight.Tech.Research[2].Price!.Value;
+        Assert.True(ahead.Materials > frontier.Materials + 50 && ahead.Energy > frontier.Energy);
+        Assert.Equal([2], Started(fixture, Falling, frontier.Materials, frontier.Energy));
+
+        var table = fixture.Responding(AiFixture.Personality(weights: Falling), AiFixture.Researching("firepower"));
+        var research = new AiResearch(fixture.Sight, table.Personality, table.Responses);
+        fixture.Commands.Clear();
+        var budget = fixture.With(frontier.Materials + 50, frontier.Energy);
+        research.Think(budget, fixture.Commands);
+
+        Assert.Empty(fixture.Commands);
+        Assert.False(budget.Covers(1, 0));
+        Assert.False(budget.Covers(0, 1));
+
+        // When it can pay, it starts it.
+        Assert.Equal([0], Started(fixture, table, ahead.Materials, ahead.Energy));
+    }
+
+    [Fact]
+    public void WhenTheResponseHasWhatItAskedForTheWeightsDecideAgain()
+    {
+        var fixture = new AiFixture(players: 2);
+        var table = fixture.Responding(AiFixture.Personality(weights: Rising), AiFixture.Researching("protection"));
+        Assert.Equal([1], Started(fixture, table));
+
+        fixture.Match.Research.SetTiers(AiFixture.Player, [1, 2, 1, 1, 1, 1]);
+        fixture.Sight.Refresh();
+        table.Judge();
+
+        Assert.True(table.Responses.IsInForce(0));
+        Assert.Empty(table.Responses.ResearchFirst);
+        Assert.Equal([5], Started(fixture, table));
+    }
+
+    /// <summary>The tracks of the researches one round starts with a response table, in the order of its orders.</summary>
+    private static int[] Started(AiFixture fixture, AiTable table, int materials = AiFixture.Plenty, int energy = AiFixture.Plenty)
+    {
+        var research = new AiResearch(fixture.Sight, table.Personality, table.Responses);
+        fixture.Commands.Clear();
+        research.Think(fixture.With(materials, energy), fixture.Commands);
+        Assert.All(fixture.Commands, command => Assert.Equal(CommandType.StartResearch, command.Type));
+        return [.. fixture.Commands.Select(command => command.ContentId)];
+    }
+
     /// <summary>The tracks of the researches one round starts, in the order of its orders.</summary>
     private static int[] Started(AiFixture fixture, int[] weights, int materials = AiFixture.Plenty, int energy = AiFixture.Plenty)
     {

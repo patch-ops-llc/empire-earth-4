@@ -39,6 +39,9 @@ public class SchemaTests
     [InlineData("rules.jsonc", "\"damage\": \"1.25\"", "\"damage\": 1.25", "$.per_tier.damage: matches none of the allowed forms")]
     [InlineData("rules.jsonc", "\"manufacturing_cost\": \"0.90\"", "\"manufacturing_cost\": \"90%\"", "$.per_step.manufacturing_cost: matches none of the allowed forms")]
     [InlineData("rules.jsonc", "\"capitol\",", "\"capitol\", \"capitol\",", "$.roster.structures: has the same item twice")]
+    [InlineData("rules.jsonc", "\"look_interval_ticks\": 4", "\"look_interval_ticks\": 0", "$.combat.look_interval_ticks: is below 1")]
+    [InlineData("rules.jsonc", "\"fortification\": \"0.5\"", "\"fortification\": 0.5", "$.combat.fortification: matches none of the allowed forms")]
+    [InlineData("rules.jsonc", "\"structure_reach\": \"0.75\"", "\"structure_reach\": \"0.75\", \"reach\": 1", "$.combat: has an unknown key reach")]
     [InlineData("research.jsonc", "\"seconds\": 45", "\"seconds\": 45.5", "$.tiers[0].seconds: matches none of the allowed forms")]
     [InlineData("research.jsonc", "\"tier\": 2", "\"tier\": 1", "$.tiers[0].tier: is below 2")]
     [InlineData("research.jsonc", "\"materials\": 100,", "\"material\": 100,", "$.tiers[0].cost: has an unknown key material")]
@@ -89,6 +92,14 @@ public class SchemaTests
     [InlineData("ai/elite.jsonc", "\"firepower\": 6", "\"Firepower\": 6", "$.research.weights.Firepower (key): does not match")]
     [InlineData("ai/elite.jsonc", "{ \"line\": \"artillery\", \"share\": 1 }", "{ \"line\": \"artillery\", \"share\": 0 }", "$.army.lines[1].share: is below 1")]
     [InlineData("ai/elite.jsonc", "\"name\": \"Elite\",", "", "$: has no name")]
+    [InlineData("ai/swarm.jsonc", "\"every_seconds\": 180", "\"every_seconds\": 180.5", "$.scouting.every_seconds: matches none of the allowed forms")]
+    [InlineData("ai/swarm.jsonc", "\"army_count_ratio\": \"1.5\"", "\"army_count_ratio\": 1.5", "$.scouting.responses[0].sees[0].army_count_ratio: matches none of the allowed forms")]
+    [InlineData("ai/swarm.jsonc", "{ \"track\": \"firepower\", \"tiers\": 1 }", "{ \"track\": \"firepower\" }", "$.scouting.responses[0].does.research: has fewer than 2 keys")]
+    [InlineData("ai/swarm.jsonc", "{ \"track\": \"firepower\", \"tiers\": 1 }", "{ \"track\": \"firepower\", \"tiers\": 1, \"until_accent_level\": 1 }", "$.scouting.responses[0].does.research: has more than 2 keys")]
+    [InlineData("ai/swarm.jsonc", "\"passage\": \"chokepoint\"", "\"passage\": \"ford\"", "$.scouting.responses[0].does.passage: is not one of the allowed values")]
+    [InlineData("ai/elite.jsonc", "{ \"epochs_ahead\": 2 }", "{ }", "$.scouting.responses[3].sees[0]: has fewer than 1 keys")]
+    [InlineData("ai/elite.jsonc", "{ \"catch_up_first\": true }", "{ \"catch_up\": true }", "$.scouting.responses[3].does: has an unknown key catch_up")]
+    [InlineData("ai/elite.jsonc", "{ \"line\": \"artillery\", \"count\": 3 }", "{ \"line\": \"artillery\" }", "$.scouting.responses[1].sees[1].units: has no count")]
     public void ASchemaRejectsTheMistakesAnEditorShouldUnderline(string file, string oldText, string newText, string expectedError)
     {
         var text = File.ReadAllText(Path.Combine(Repository.DataFolder, file));

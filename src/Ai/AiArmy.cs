@@ -10,6 +10,12 @@ namespace Ai;
 /// it has unlocked, and it keeps the lines in the personality's ratio by always ordering the
 /// line that is furthest behind its share.
 /// </summary>
+/// <remarks>
+/// "Then adjust for what it has scouted": a row of the response table that is in force can raise
+/// a line to a share of the army's supply, whether the personality trains the line or not. While
+/// the line is below that share it is ordered before the ratio is asked, and the ratio shares
+/// out the rest.
+/// </remarks>
 internal sealed class AiArmy
 {
     /// <summary>The most orders it places in one round of thinking.</summary>
@@ -21,15 +27,34 @@ internal sealed class AiArmy
     private readonly int[] _unitsByLine;
     private readonly List<(EntityId Structure, int Type, int Orders)> _producers = [];
     private readonly EntityId[] _one = new EntityId[1];
+    private readonly AiResponses? _responses;
+    private readonly int[] _supplyOfLine;
+    private long _armySupply;
+    private int _supplyRoom;
+    private int _supplyFree;
 
-    public AiArmy(AiSight sight, AiPersonalityDef personality)
+    public AiArmy(AiSight sight, AiPersonalityDef personality, AiResponses? responses = null)
     {
         ArgumentNullException.ThrowIfNull(sight);
         ArgumentNullException.ThrowIfNull(personality);
         _sight = sight;
         _personality = personality;
+        _responses = responses;
         _blueprints = new ChassisBlueprint?[personality.Lines.Count];
         _unitsByLine = new int[sight.Data.Rules.Lines.Count];
+        _supplyOfLine = new int[_unitsByLine.Length];
+    }
+
+    /// <summary>What came of trying to order a unit.</summary>
+    private enum Placement
+    {
+        /// <summary>Nothing was ordered, and a unit of another line may be.</summary>
+        Passed,
+
+        /// <summary>Nothing was ordered, and nothing else is: the stockpile does not cover the unit yet.</summary>
+        Waits,
+
+        Ordered,
     }
 
     /// <summary>
@@ -37,6 +62,13 @@ internal sealed class AiArmy
     /// has unlocked none. Set by <see cref="Think"/>.
     /// </summary>
     public int SmallestUnitSupply { get; private set; }
+
+    /// <summary>
+    /// True when its army is as large as its supply lets it be, as the last round of thinking
+    /// found it: it can train a unit, and the supply its army may take has room for none. Supply
+    /// used above the cap, as after a displaced Light footprint (design 2.3), is at the cap too.
+    /// </summary>
+    public bool IsAtSupplyCap { get; private set; }
 
     /// <summary>
     /// The newest chassis of a line that the player has unlocked, or null: the one of the highest
@@ -110,8 +142,36 @@ internal sealed class AiArmy
             }
         }
 
+        // And one unit of each line a row of the response table raises.
+        var raised = _responses?.ArmySupply ?? [];
+        foreach (var share in raised)
+        {
+            if (NewestUnlocked(tech, share.Line) is { } blueprint)
+            {
+                budget.Want(blueprint.Materials, blueprint.Energy);
+                SmallestUnitSupply = SmallestUnitSupply == 0 ? blueprint.Supply : Math.Min(SmallestUnitSupply, blueprint.Supply);
+            }
+        }
+
+        IsAtSupplyCap = SmallestUnitSupply > 0 && supplyRoom < SmallestUnitSupply;
+
+        // A research that ends before these orders are carried out may raise a price, and the
+        // order would be refused. It orders in the next round, at the price that then holds.
+        if (_sight.ResearchEndsWithin(AiPlayer.ThinkInterval))
+        {
+            return;
+        }
+
         Array.Clear(_unitsByLine);
         _sight.CountUnitsByLine(_unitsByLine);
+
+        // The supply of its army by line, each unit at what the newest chassis of its line takes.
+        _armySupply = 0;
+        for (var line = 0; line < _unitsByLine.Length; line++)
+        {
+            _supplyOfLine[line] = NewestUnlocked(tech, line)?.Supply ?? 1;
+            _armySupply += (long)_unitsByLine[line] * _supplyOfLine[line];
+        }
 
         _producers.Clear();
         foreach (var structure in _sight.Structures)
@@ -123,59 +183,78 @@ internal sealed class AiArmy
             }
         }
 
-        var supplyFree = _sight.SupplyFree;
+        _supplyRoom = supplyRoom;
+        _supplyFree = _sight.SupplyFree;
         Span<bool> skip = stackalloc bool[lines.Count];
         for (var placed = 0; placed < OrdersPerRound; placed++)
         {
-            skip.Clear();
-            var ordered = false;
-            while (!ordered && FurthestBehind(lines, _unitsByLine, skip) is var index && index >= 0)
+            var result = Placement.Passed;
+
+            // A line that is below the share a row raises it to goes before the ratio.
+            foreach (var share in raised)
             {
-                skip[index] = true;
-                if (_blueprints[index] is not { } blueprint)
+                if (result == Placement.Passed
+                    && share.IsBelow((long)_unitsByLine[share.Line] * _supplyOfLine[share.Line], _armySupply)
+                    && NewestUnlocked(tech, share.Line) is { } blueprint)
                 {
-                    continue;
+                    result = TryOrder(blueprint, budget, commands);
                 }
-
-                var producer = FindProducer(blueprint.Line.BuiltAt);
-                if (producer < 0)
-                {
-                    continue;
-                }
-
-                // The simulation makes the order a pair when the stockpile and the free supply cover two.
-                var count = blueprint.BatchSize >= TrainOrder.MaxCount
-                    && budget.StockCovers(TrainOrder.MaxCount * blueprint.Materials, TrainOrder.MaxCount * blueprint.Energy)
-                    && supplyFree >= TrainOrder.MaxCount * blueprint.Supply
-                        ? TrainOrder.MaxCount
-                        : 1;
-                if (count * blueprint.Supply > supplyRoom)
-                {
-                    // A unit of another line may still fit.
-                    continue;
-                }
-
-                if (!budget.Covers(count * blueprint.Materials, count * blueprint.Energy))
-                {
-                    // The line that is behind is waited for: buying another in its place would leave it behind for good.
-                    return;
-                }
-
-                budget.Pay(count * blueprint.Materials, count * blueprint.Energy);
-                _one[0] = _producers[producer].Structure;
-                commands.Add(new Command(CommandType.Train, _sight.Player, _one, contentId: blueprint.Chassis.Index));
-                _producers[producer] = _producers[producer] with { Orders = _producers[producer].Orders + 1 };
-                _unitsByLine[lines[index].Line] += count;
-                supplyRoom -= count * blueprint.Supply;
-                supplyFree -= count * blueprint.Supply;
-                ordered = true;
             }
 
-            if (!ordered)
+            skip.Clear();
+            while (result == Placement.Passed && FurthestBehind(lines, _unitsByLine, skip) is var index && index >= 0)
+            {
+                skip[index] = true;
+                if (_blueprints[index] is { } blueprint)
+                {
+                    result = TryOrder(blueprint, budget, commands);
+                }
+            }
+
+            if (result != Placement.Ordered)
             {
                 return;
             }
         }
+    }
+
+    /// <summary>Orders one unit of a chassis, or a pair, at the structure of its line with the shortest queue.</summary>
+    private Placement TryOrder(ChassisBlueprint blueprint, AiBudget budget, List<Command> commands)
+    {
+        var producer = FindProducer(blueprint.Line.BuiltAt);
+        if (producer < 0)
+        {
+            return Placement.Passed;
+        }
+
+        // The simulation makes the order a pair when the stockpile and the free supply cover two.
+        var count = blueprint.BatchSize >= TrainOrder.MaxCount
+            && budget.StockCovers(TrainOrder.MaxCount * blueprint.Materials, TrainOrder.MaxCount * blueprint.Energy)
+            && _supplyFree >= TrainOrder.MaxCount * blueprint.Supply
+                ? TrainOrder.MaxCount
+                : 1;
+        if (count * blueprint.Supply > _supplyRoom)
+        {
+            // A unit of another line may still fit.
+            return Placement.Passed;
+        }
+
+        if (!budget.Covers(count * blueprint.Materials, count * blueprint.Energy))
+        {
+            // The line that is behind is waited for: buying another in its place would leave it behind for good.
+            return Placement.Waits;
+        }
+
+        budget.Pay(count * blueprint.Materials, count * blueprint.Energy);
+        _one[0] = _producers[producer].Structure;
+        commands.Add(new Command(CommandType.Train, _sight.Player, _one, contentId: blueprint.Chassis.Index));
+        _producers[producer] = _producers[producer] with { Orders = _producers[producer].Orders + 1 };
+        var line = blueprint.Line.Index;
+        _unitsByLine[line] += count;
+        _armySupply += (long)count * _supplyOfLine[line];
+        _supplyRoom -= count * blueprint.Supply;
+        _supplyFree -= count * blueprint.Supply;
+        return Placement.Ordered;
     }
 
     /// <summary>

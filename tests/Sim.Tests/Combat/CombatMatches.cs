@@ -14,7 +14,9 @@ namespace Sim.Tests.Combat;
 /// Matches for combat tests: built by the real match setup from the design's own numbers
 /// (<see cref="DesignData"/>), on a map made in code, with players who start with nothing. Each
 /// test places its armies itself with <see cref="Spawn"/>, which is
-/// <see cref="CombatSpawn.SpawnChassis"/>, before the first tick.
+/// <see cref="CombatSpawn.SpawnChassis"/>, before the first tick. What the players see is worked
+/// out again after each unit placed, as the match setup does for what a match starts with, so
+/// that an order given for the first tick finds the armies in sight of each other.
 /// </summary>
 /// <remarks>
 /// Every player has every track at tier 1, so the chassis of epoch 1 fight with the values of the
@@ -37,12 +39,20 @@ internal static class CombatMatches
 
     public static int Line(string id) => Data.Lines.Single(line => line.Id == id).Index;
 
-    public static EntityId Spawn(this Match match, int player, string chassis, string x, string y) =>
-        match.SpawnChassis(player, Chassis(chassis), TestMatches.Point(x, y));
+    public static EntityId Spawn(this Match match, int player, string chassis, string x, string y)
+    {
+        var unit = match.SpawnChassis(player, Chassis(chassis), TestMatches.Point(x, y));
+        match.Vision.Refresh();
+        return unit;
+    }
 
     /// <summary>A worker: it can be hit, belongs to no line, and never acts on its own.</summary>
-    public static EntityId SpawnWorker(this Match match, int player, string x, string y) =>
-        match.SpawnWorker(player, TestMatches.Point(x, y));
+    public static EntityId SpawnWorker(this Match match, int player, string x, string y)
+    {
+        var worker = match.SpawnWorker(player, TestMatches.Point(x, y));
+        match.Vision.Refresh();
+        return worker;
+    }
 
     /// <summary>Gives a player other tiers than the starting ones. Call it before placing that player's units.</summary>
     public static void SetTiers(this Match match, int player, params int[] tiers) =>
@@ -96,7 +106,7 @@ internal static class CombatMatches
     public static Combatant UnitOf(this Match match, EntityId entity) => match.Combatants.Get(entity);
 
     public static Targeting Targeting(this Match match) =>
-        new(match.Grid, match.Bodies, match.Combatants, match.Health, match.SpatialIndex, match.Combat);
+        new(match.Grid, match.Bodies, match.Combatants, match.Health, match.SpatialIndex, match.Combat, match.Vision) { Structures = match.Structures };
 
     /// <summary>The exact distance between two entities, squared, in the unit of <see cref="FixedVector2.DistanceSquaredRaw"/>.</summary>
     public static long DistanceSquared(this Match match, EntityId a, EntityId b) =>
