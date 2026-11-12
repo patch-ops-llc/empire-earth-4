@@ -78,6 +78,7 @@ If joining fails, the menu says why in orange:
 | Move the camera | W, A, S, D or the arrow keys, or push the pointer against an edge of the window |
 | Zoom | Mouse wheel, the = and - keys, or a pinch or two-finger scroll on a trackpad |
 | Select one of your units | Click it |
+| Select one of your structures | Click it |
 | Select several | Hold the left button and drag a box round them |
 | Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is already in |
 | Clear the selection | Click the ground |
@@ -95,7 +96,10 @@ If joining fails, the menu says why in orange:
 - When you play alone, the other player's workers never move. Nothing controls them.
 - In a shared match, both players see the same workers in the same places. An order takes a moment longer to start than it does alone, because it travels to the host first.
 - If the other player leaves or closes the game, the bar at the top says so and your match goes on without them. If the host leaves, the match ends for both.
-- There is no Capitol and nothing to build.
+- Each player has a Capitol where they start, on the square their workers stand around: a stone hall with a keep and a pointed roof in the player's color. Nobody can stand on it, and units walk round it. Nothing can be built yet.
+- The ground a player holds is tinted in the player's color, with a line along its edge. It reaches 16 tiles from the middle of the Capitol. The line follows the sides of the tiles, so it has steps: a tile is either held or it is not. A deposit pays only when all of it is inside, and structures will have to stand inside.
+- Click your Capitol to select it. A green line runs round it, and the panel at the bottom of the window names it and its hit points. Nothing can damage a structure yet, so they stay full.
+- Structures and units are not selected together. A box takes units only, and a structure leaves the selection as soon as a unit joins it. A selected structure takes no orders yet, so a right-click does nothing while one is selected.
 
 ## What to know about multiplayer
 
@@ -104,6 +108,8 @@ Every player's machine runs the whole game and they exchange only commands. That
 - A modified copy of the game can show what should be hidden: the fog of war and an opponent's tracks.
 - A player who drops out cannot rejoin the match.
 - A slow machine or connection on the host's side slows the match for everyone.
+
+This build also has a development switch on. No match can train a fighting unit yet, so the game accepts an order that makes units from nothing, for either player, to try out fights. Nothing in the game sends that order yet. It is switched off again once units can be trained.
 
 The two games check each other all the time. If they ever disagree about the state of the match, both stop and say so. That is a fault in the game, and its files are what finds it: see the next section.
 

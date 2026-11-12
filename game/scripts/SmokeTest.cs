@@ -82,6 +82,7 @@ public sealed class SmokeTest
         // 14v. Research: one research.
 
         // 15v. Construction and production.
+        new StructuresSmoke(),
 
         // 17v. Fog of war.
 
