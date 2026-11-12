@@ -239,7 +239,10 @@ public partial class UnitControl : Node
         // itself runs a tick or more later, and each unit may end up somewhere else: beside
         // blocked ground it is moved off it, and a place that cannot be reached becomes the
         // nearest that can.
-        _marker.ShowAt(WorldView.ToWorld(target.Point), row.Mark);
+        if (row.Mark is { } mark)
+        {
+            _marker.ShowAt(WorldView.ToWorld(target.Point), mark);
+        }
 
         if (OS.IsStdOutVerbose())
         {

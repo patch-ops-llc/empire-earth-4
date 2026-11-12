@@ -12,10 +12,17 @@ public partial class MatchPanel : InterfacePart
 {
     private readonly List<string> _left = [];
     private Label _text = null!;
+    private float _textWidth;
 
     protected override void Attach()
     {
-        _text = new Label { Name = "MatchText" };
+        // The sentence is cut short with an ellipsis when it is given less than its width.
+        _text = new Label
+        {
+            Name = "MatchText",
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            HorizontalAlignment = HorizontalAlignment.Right,
+        };
         Frame.TopRight.AddChild(_text);
 
         if (View.Leave is { } leave)
@@ -36,6 +43,18 @@ public partial class MatchPanel : InterfacePart
         Refresh();
     }
 
+    // The sentence gives way to everything else in the top bar: it has its whole width while
+    // the bar has the room, and what is left when the other parts need it, so that the button
+    // beside it never leaves the window.
+    public override void EveryFrame(double delta)
+    {
+        var width = Mathf.Min(_textWidth, Mathf.Floor(Frame.TopBarRoomFor(_text)));
+        if (!Mathf.IsEqualApprox(width, _text.CustomMinimumSize.X))
+        {
+            _text.CustomMinimumSize = new Vector2(width, 0f);
+        }
+    }
+
     /// <summary>A player as a sentence names it: seats count from 1.</summary>
     public static string PlayerName(int seat) => string.Create(CultureInfo.InvariantCulture, $"Player {seat + 1}");
 
@@ -51,6 +70,7 @@ public partial class MatchPanel : InterfacePart
         };
 
         _text.Text = string.Join(' ', [who, how, .. _left]);
+        _textWidth = Mathf.Ceil(_text.GetThemeFont("font").GetStringSize(_text.Text, fontSize: _text.GetThemeFontSize("font_size")).X);
     }
 
     private static string HowLeft(SessionEndReason reason) => reason switch

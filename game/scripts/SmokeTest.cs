@@ -78,6 +78,7 @@ public sealed class SmokeTest
         // 11v. Combat: a short fight.
 
         // 13v. Economy: a work order.
+        new GatherOrdersSmoke(),
 
         // 14v. Research: one research.
 
