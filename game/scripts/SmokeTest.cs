@@ -87,6 +87,7 @@ public sealed class SmokeTest
 
         // 15v. Construction and production.
         new StructuresSmoke(),
+        new BuildSmoke(),
 
         // 17v. Fog of war.
 

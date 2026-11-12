@@ -31,6 +31,7 @@ public static class ViewPieces
 
         // 15v. Construction and production: structures, the build menu, the production panel.
         new StructuresPiece(),
+        new BuildPiece(),
 
         // 17v. Fog of war.
 

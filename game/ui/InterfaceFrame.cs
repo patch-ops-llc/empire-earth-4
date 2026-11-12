@@ -187,6 +187,13 @@ public partial class InterfaceFrame : CanvasLayer
     /// </summary>
     public float MessagesEnd => _messageLines.GetGlobalRect().End.Y;
 
+    /// <summary>
+    /// Where the bottom panel begins now, in the interface's units: the lower edge of the window
+    /// while the panel is not shown. Something a part shows over the world above the bottom panel
+    /// ends here, so that neither covers the other.
+    /// </summary>
+    public float BottomPanelStart => _bottom.Visible ? _bottom.GetGlobalRect().Position.Y : _bottom.GetViewportRect().Size.Y;
+
     /// <summary>Shows a sentence to the player in the message line. It goes away by itself.</summary>
     /// <param name="message">The sentence.</param>
     /// <param name="seconds">How long it stays.</param>
@@ -369,8 +376,8 @@ public partial class InterfaceFrame : CanvasLayer
     // of one message, so that the first message to come does not move the panel.
     private void KeepMessageRoom() => _messageRoom.Visible = IsPanelOpen && _messages.Count == 0;
 
-    // The key an action is given with, as the player knows it, or null when it has none.
-    private static string? KeyOf(StringName action)
+    /// <summary>The key an action is given with, as the player knows it, or null when it has none.</summary>
+    public static string? KeyOf(StringName action)
     {
         if (!InputMap.HasAction(action))
         {

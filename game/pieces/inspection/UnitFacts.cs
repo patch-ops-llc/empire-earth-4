@@ -35,6 +35,9 @@ public readonly record struct UnitFacts
     /// <summary>What a worker is doing. Meaningful while <see cref="IsWorker"/>.</summary>
     public WorkerState Work { get; init; }
 
+    /// <summary>The roster index of the structure the unit is on its way to build, or null when it has no build order.</summary>
+    public int? Builds { get; init; }
+
     /// <summary>Hit points now, in thousandths. Zero with <see cref="Maximum"/> zero for a unit that cannot be damaged.</summary>
     public long HitPoints { get; init; }
 
@@ -81,6 +84,7 @@ public readonly record struct UnitFacts
             Blueprint = blueprint,
             IsWorker = isWorker,
             Work = worker.State,
+            Builds = match.BuildOrders.TryGet(entity, out var order) ? order.Type : null,
             HitPoints = health.HitPoints,
             Maximum = health.Maximum,
             SpeedPerTick = mover.Speed,

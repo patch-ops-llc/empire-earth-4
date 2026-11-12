@@ -18,8 +18,9 @@ namespace Game;
 /// the smoke test: an event that was missed must not leave a structure that is not there.
 /// </para>
 /// <para>
-/// A structure is drawn the same from the moment it is laid. Construction (15c) brings
-/// structures that are not finished yet, and their look is decided here, in
+/// A structure that is still building itself (15c) is drawn unfinished, as
+/// <see cref="FoundationLook"/> has it, from the moment it is laid until the match no longer
+/// has it among its foundations. Which of the two looks a structure gets is decided here, in
 /// <see cref="Create"/>.
 /// </para>
 /// </remarks>
@@ -38,12 +39,20 @@ public partial class StructureLayer : WorldLayer
     private readonly Dictionary<int, ArrayMesh> _meshes = [];
     private readonly Dictionary<int, ArrayMesh> _outlines = [];
     private readonly Dictionary<int, (Material Walls, Material Roof)> _materials = [];
+    private readonly Dictionary<EntityId, FoundationLook> _unfinished = [];
+    private readonly List<EntityId> _finished = [];
 
     /// <summary>The number of structures drawn.</summary>
     public int Count => _structures.Count;
 
     /// <summary>True when this structure is drawn.</summary>
     public bool Draws(EntityId entity) => _structures.ContainsKey(entity);
+
+    /// <summary>
+    /// How much of a structure that is building itself is drawn as built, from 0 to 1, or null
+    /// for one that is drawn finished or not drawn.
+    /// </summary>
+    public float? DrawnBuilt(EntityId entity) => _unfinished.TryGetValue(entity, out var look) ? look.Shown : null;
 
     protected override void Attach()
     {
@@ -65,6 +74,7 @@ public partial class StructureLayer : WorldLayer
             }
         }
 
+        ShowProgress();
         var standing = View.Match.Structures.Count;
         if (_structures.Count != standing)
         {
@@ -110,11 +120,58 @@ public partial class StructureLayer : WorldLayer
 
     private void Remove(EntityId entity)
     {
+        _unfinished.Remove(entity);
         if (_structures.Remove(entity, out var node))
         {
             node.Body.QueueFree();
         }
     }
+
+    // Fills every unfinished structure as far as it is built, and gives one the match no longer
+    // has among its foundations the look of a finished one.
+    private void ShowProgress()
+    {
+        var foundations = View.Match.Foundations;
+        foreach (var (entity, look) in _unfinished)
+        {
+            if (foundations.TryGet(entity, out var foundation))
+            {
+                look.Show(foundation.Built);
+            }
+            else
+            {
+                _finished.Add(entity);
+            }
+        }
+
+        foreach (var entity in _finished)
+        {
+            _unfinished.Remove(entity);
+            if (_structures.TryGetValue(entity, out var node) && View.Match.Bodies.TryGet(entity, out var body))
+            {
+                var (walls, roof) = MaterialsOf(body.Owner);
+                node.Body.SetSurfaceOverrideMaterial(StructureShapes.WallsSurface, walls);
+                node.Body.SetSurfaceOverrideMaterial(StructureShapes.RoofSurface, roof);
+                node.Body.CastShadow = GeometryInstance3D.ShadowCastingSetting.On;
+            }
+        }
+
+        _finished.Clear();
+    }
+
+    private (Material Walls, Material Roof) MaterialsOf(int owner)
+    {
+        if (!_materials.TryGetValue(owner, out var materials))
+        {
+            var color = PlayerColors.Of(owner);
+            materials = (PlaceholderMeshes.Flat(WallColorOf(color)), PlaceholderMeshes.Flat(color));
+            _materials.Add(owner, materials);
+        }
+
+        return materials;
+    }
+
+    private static Color WallColorOf(Color owner) => Stone.Lerp(owner, WallTint);
 
     private void ShowSelection()
     {
@@ -138,13 +195,6 @@ public partial class StructureLayer : WorldLayer
             _outlines.Add(placed.Size, outline);
         }
 
-        if (!_materials.TryGetValue(owner, out var materials))
-        {
-            var color = PlayerColors.Of(owner);
-            materials = (PlaceholderMeshes.Flat(Stone.Lerp(color, WallTint)), PlaceholderMeshes.Flat(color));
-            _materials.Add(owner, materials);
-        }
-
         // The middle of the footprint, from the tiles themselves: a whole or a half number of tiles.
         var body = new MeshInstance3D
         {
@@ -152,8 +202,20 @@ public partial class StructureLayer : WorldLayer
             Mesh = mesh,
             Position = new Vector3(placed.X + (placed.Size / 2f), 0f, placed.Y + (placed.Size / 2f)),
         };
-        body.SetSurfaceOverrideMaterial(StructureShapes.WallsSurface, materials.Walls);
-        body.SetSurfaceOverrideMaterial(StructureShapes.RoofSurface, materials.Roof);
+        if (View.Match.Foundations.TryGet(entity, out var foundation))
+        {
+            var color = PlayerColors.Of(owner);
+            var look = FoundationLook.On(body, structure, WallColorOf(color), color);
+            look.Show(foundation.Built);
+            _unfinished[entity] = look;
+        }
+        else
+        {
+            var (walls, roof) = MaterialsOf(owner);
+            body.SetSurfaceOverrideMaterial(StructureShapes.WallsSurface, walls);
+            body.SetSurfaceOverrideMaterial(StructureShapes.RoofSurface, roof);
+        }
+
 
         var line = new MeshInstance3D
         {
