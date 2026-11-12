@@ -3,6 +3,7 @@ using Sim.Core;
 using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
+using Sim.Numerics;
 using Sim.Setup;
 using Sim.Structures;
 using Sim.Tests.Economy;
@@ -15,8 +16,8 @@ namespace Sim.Tests.Construction;
 
 /// <summary>
 /// How a build order ends before its foundation, and how a foundation is cancelled (design 2.5;
-/// design 8.4, row 12): the whole price back before the foundation, 75% of it after, each
-/// resource rounded half up.
+/// design 8.4, rows 12, 25 and 26): the whole price back before the foundation, 75% of it after,
+/// each resource rounded half up, and no way to remove a finished structure.
 /// </summary>
 public class CancelBuildTests
 {
@@ -83,7 +84,7 @@ public class CancelBuildTests
     public void ThreeQuartersOfAPriceRoundHalfUp(int paid, int back) =>
         Assert.Equal(back, ConstructionRules.RefundOf(paid));
 
-    /// <summary>Design 8.4, row 12: 75% of 205 Materials is 153.75 and of 51 Energy is 38.25.</summary>
+    /// <summary>Design 8.4, row 25: 75% of 205 Materials is 153.75 and of 51 Energy is 38.25.</summary>
     [Fact]
     public void ACancelledFoundationGivesThreeQuartersOfEachResourceBackRoundedHalfUp()
     {
@@ -117,7 +118,7 @@ public class CancelBuildTests
         Assert.Empty(match.EventsOf(SimEventKind.StructureFinished));
     }
 
-    /// <summary>Design 2.5: there is no demolition, so a finished structure cannot be cancelled.</summary>
+    /// <summary>Design 8.4, row 26: there is no demolition, so a finished structure cannot be cancelled.</summary>
     [Fact]
     public void AFinishedStructureCannotBeCancelled()
     {
@@ -225,7 +226,9 @@ public class CancelBuildTests
         Assert.Equal(EntityId.None, match.StructureAt(10, 10));
         if (type is CommandType.Move or CommandType.AttackMove)
         {
-            Assert.Equal(point, match.PositionOf(worker));
+            // The two walk as a group, so each stands beside the point and not on it.
+            Assert.Equal(MoveState.Idle, match.MoveStateOf(worker));
+            Assert.InRange(FixedVector2.DistanceSquaredRaw(point, match.PositionOf(worker)), 0, FixedVector2.SquareRaw(Fixed.FromInt(4)));
         }
     }
 
