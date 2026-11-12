@@ -102,6 +102,31 @@ public enum SimEventKind
     ShotLost,
 
     /// <summary>
+    /// A hit landed that splashes (design 2.3, Overgunned II): besides its target, it damages
+    /// every other enemy within a distance of the target's center. Reported right after the
+    /// <see cref="ShotHit"/> or <see cref="MeleeHit"/> of the hit itself, whether or not it
+    /// reached anyone else. <see cref="SimEvent.Player"/> is the attacker's owner,
+    /// <see cref="SimEvent.Entity"/> the shot, which is gone after this tick, or the attacker
+    /// for a melee hit, <see cref="SimEvent.Other"/> the target that was hit,
+    /// <see cref="SimEvent.Position"/> the target's center, from which the distance is measured,
+    /// and <see cref="SimEvent.Amount"/> that distance in units of 1/65,536 of a tile, the raw
+    /// value of a <see cref="Numerics.Fixed"/>. A <see cref="SplashHit"/> follows for each
+    /// other enemy it reached.
+    /// </summary>
+    Splash,
+
+    /// <summary>
+    /// The splash of a hit reached an enemy other than its target: one event for each, after
+    /// their <see cref="Splash"/>, in the order of their IDs. <see cref="SimEvent.Player"/> is
+    /// the attacker's owner, <see cref="SimEvent.Entity"/> what was hit,
+    /// <see cref="SimEvent.Other"/> the shot or, for a melee hit, the attacker, as in the
+    /// <see cref="Splash"/>, <see cref="SimEvent.Position"/> where what was hit stood, and
+    /// <see cref="SimEvent.Amount"/> the damage in thousandths of a hit point, which may be more
+    /// than it had left.
+    /// </summary>
+    SplashHit,
+
+    /// <summary>
     /// A structure has built itself and gives what its file says from now on.
     /// <see cref="SimEvent.Player"/> is its owner, <see cref="SimEvent.Entity"/> the structure,
     /// <see cref="SimEvent.Position"/> the center of its footprint, and

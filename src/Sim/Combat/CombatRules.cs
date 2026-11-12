@@ -47,6 +47,7 @@ public sealed class CombatRules
     private readonly Func<int, PlayerTech> _techOf;
     private readonly PlayerTech?[] _profiled;
     private readonly AttackProfile[][] _profiles;
+    private readonly ArmorProfile[][] _armor;
     private readonly TurretProfile?[][] _turrets;
 
     /// <summary>Works out the rules for a match.</summary>
@@ -127,6 +128,7 @@ public sealed class CombatRules
 
         _profiled = new PlayerTech?[playerCount];
         _profiles = new AttackProfile[playerCount][];
+        _armor = new ArmorProfile[playerCount][];
         _turrets = new TurretProfile?[playerCount][];
     }
 
@@ -169,6 +171,13 @@ public sealed class CombatRules
     {
         Refresh(player);
         return _profiles[player][chassis];
+    }
+
+    /// <summary>What a player's units of a chassis take a hit with, under the player's tech as it is now.</summary>
+    public ArmorProfile ArmorOf(int player, int chassis)
+    {
+        Refresh(player);
+        return _armor[player][chassis];
     }
 
     /// <summary>
@@ -226,6 +235,41 @@ public sealed class CombatRules
         (attackerSide * Multiplier(attackerLine, targetLine)).RoundHalfUp(1000);
 
     /// <summary>
+    /// The damage a hit does to a unit of a chassis, in thousandths of a hit point: the attacker's
+    /// side, times the counter multiplier of the two lines, times what the target's accents take
+    /// off (design 2.3). Exact fractions, rounded once.
+    /// </summary>
+    /// <remarks>
+    /// Hardened I takes its share off area damage: the blast of a shell, for everyone in it, and
+    /// the splash of a hit, for everyone but the target of that hit. Hardened II, plating, takes
+    /// its share off any hit whose attacker's effective Firepower is below the target's effective
+    /// Protection. The two multiply. The target's side is read when the hit lands: its owner's
+    /// tech as it is now.
+    /// </remarks>
+    /// <param name="attackerSide">The attacker's damage of one hit, fixed when it attacked.</param>
+    /// <param name="attackerLine">The attacker's line, or <see cref="NoLine"/> for a Tower.</param>
+    /// <param name="attackerFirepower">The attacker's effective Firepower, fixed when it attacked. A Tower's is its owner's tier.</param>
+    /// <param name="owner">The player the target belongs to.</param>
+    /// <param name="chassis">The target's chassis.</param>
+    /// <param name="area">True for area damage: a blast or a splash.</param>
+    public long DamageToUnit(Fraction attackerSide, int attackerLine, int attackerFirepower, int owner, int chassis, bool area)
+    {
+        var armor = ArmorOf(owner, chassis);
+        var damage = attackerSide * Multiplier(attackerLine, LineOf(chassis));
+        if (area)
+        {
+            damage *= armor.AreaDamage;
+        }
+
+        if (attackerFirepower < armor.Protection)
+        {
+            damage *= armor.Plating;
+        }
+
+        return damage.RoundHalfUp(1000);
+    }
+
+    /// <summary>
     /// The damage a hit does to a structure, in thousandths of a hit point: the attacker's side,
     /// times its line's multiplier against structures, times <see cref="Fortification"/> when the
     /// attacker's effective Firepower is below the Protection tier the structure's owner has now
@@ -271,9 +315,11 @@ public sealed class CombatRules
         }
 
         var profiles = new AttackProfile[tech.Blueprints.Count];
+        var armor = new ArmorProfile[tech.Blueprints.Count];
         for (var i = 0; i < profiles.Length; i++)
         {
             profiles[i] = ProfileFor(tech.Blueprints[i]);
+            armor[i] = ArmorFor(tech.Blueprints[i]);
         }
 
         var turrets = new TurretProfile?[_structurePicks.Length];
@@ -286,6 +332,7 @@ public sealed class CombatRules
         }
 
         _profiles[player] = profiles;
+        _armor[player] = armor;
         _turrets[player] = turrets;
         _profiled[player] = tech;
     }
@@ -310,6 +357,13 @@ public sealed class CombatRules
             ShotSpeed = Mover.SpeedPerTick(speed.ToFraction()),
         };
     }
+
+    private ArmorProfile ArmorFor(ChassisBlueprint blueprint) => new()
+    {
+        Protection = blueprint.EffectiveTiers[_data.TrackRoles.Protection],
+        AreaDamage = blueprint.Perks.AreaDamageReduction is { } hardened ? hardened.Multiplier.ToFraction() : Fraction.One,
+        Plating = blueprint.Perks.Plating is { } plating ? plating.Multiplier.ToFraction() : Fraction.One,
+    };
 
     private AttackProfile ProfileFor(ChassisBlueprint blueprint)
     {
@@ -347,6 +401,8 @@ public sealed class CombatRules
             MinRangeSquared = !melee && blueprint.MinRange is { } minRange ? FixedVector2.SquareRaw(minRange) : 0,
             ShotSpeed = shotSpeed,
             Blast = !melee && blueprint.BlastRadius is { } blast ? blast : Fixed.Zero,
+            SplashShare = blueprint.Perks.Splash is { } splash ? splash.Share.ToFraction() : Fraction.Zero,
+            SplashRadius = blueprint.Perks.Splash is { } reach ? reach.Radius.ToFraction().ToFixed() : Fixed.Zero,
             Acquisition = acquisition,
             AcquisitionSquared = FixedVector2.SquareRaw(acquisition),
         };
@@ -400,12 +456,46 @@ public sealed class AttackProfile
     public required Fixed Blast { get; init; }
 
     /// <summary>
+    /// The splash of the attack (design 2.3, Overgunned II): the share of <see cref="Damage"/>
+    /// that every other enemy within <see cref="SplashRadius"/> of the target takes with each
+    /// hit. Zero for an attack without splash, and for one with a <see cref="Blast"/>, which
+    /// gets a larger blast instead.
+    /// </summary>
+    public required Fraction SplashShare { get; init; }
+
+    /// <summary>How far the splash reaches from the target's center, in tiles. Zero for an attack without splash.</summary>
+    public required Fixed SplashRadius { get; init; }
+
+    /// <summary>
     /// How far the unit looks for targets: its sight or its weapon range, whichever is larger, with
     /// accents included (design 2.4).
     /// </summary>
     public required Fixed Acquisition { get; init; }
 
     public required long AcquisitionSquared { get; init; }
+}
+
+/// <summary>
+/// What one player's units of one chassis take a hit with, taken from the player's blueprint of
+/// it (design 2.3): the target's side of the two Protection accents.
+/// </summary>
+public sealed class ArmorProfile
+{
+    internal ArmorProfile()
+    {
+    }
+
+    /// <summary>The chassis's effective Protection tier, which plating compares with the attacker's effective Firepower.</summary>
+    public required int Protection { get; init; }
+
+    /// <summary>What multiplies area damage, the blast of a shell and the splash of a hit: less than 1 with Hardened I, else 1.</summary>
+    public required Fraction AreaDamage { get; init; }
+
+    /// <summary>
+    /// What multiplies the damage of a hit whose attacker's effective Firepower is below
+    /// <see cref="Protection"/>: less than 1 with Hardened II, else 1.
+    /// </summary>
+    public required Fraction Plating { get; init; }
 }
 
 /// <summary>How units and Towers pick a structure by themselves (design 2.4, "What may be picked").</summary>

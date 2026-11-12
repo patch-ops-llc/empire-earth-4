@@ -569,7 +569,7 @@ public class PlayerViewTests
         match.SpawnWorker(2, "6.5", "5.5");
         var seen = TestMatches.Point("8.5", "5.5");
         var unseen = TestMatches.Point("30.5", "5.5");
-        foreach (var kind in new[] { SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost })
+        foreach (var kind in new[] { SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost, SimEventKind.SplashHit })
         {
             Assert.True(view.Knows(new SimEvent(kind, 5, 0, new EntityId(1), new EntityId(2), seen, 7)));
             Assert.False(view.Knows(new SimEvent(kind, 5, 0, new EntityId(1), new EntityId(2), unseen, 7)));
@@ -583,10 +583,13 @@ public class PlayerViewTests
     /// <summary>
     /// A blast is seen by whoever sees a tile of it: the tile under its center, or a tile whose
     /// center is within its radius, as sight itself is measured (design 5.3). Its radius is the
-    /// event's amount, the raw value of a <see cref="Fixed"/>.
+    /// event's amount, the raw value of a <see cref="Fixed"/>. The splash of a hit is such a
+    /// circle too, round the target that was hit.
     /// </summary>
-    [Fact]
-    public void ABlastIsSeenByAnyTileOfIt()
+    [Theory]
+    [InlineData(SimEventKind.Blast)]
+    [InlineData(SimEventKind.Splash)]
+    public void ABlastAndASplashAreSeenByAnyTileOfThem(SimEventKind kind)
     {
         var match = Create(TestMaps.Open(40, 12), players: 3);
         var view = new PlayerView(match, 2);
@@ -597,7 +600,7 @@ public class PlayerViewTests
         Assert.False(match.Vision.Grid.IsVisible(2, 13, 5));
 
         SimEvent Blast(string x, string y, string radius, int player = 0) =>
-            new(SimEventKind.Blast, 5, player, new EntityId(1), new EntityId(2), TestMatches.Point(x, y), Fraction.Parse(radius).ToFixed().Raw);
+            new(kind, 5, player, new EntityId(1), new EntityId(2), TestMatches.Point(x, y), Fraction.Parse(radius).ToFixed().Raw);
 
         // Centered on a tile the player sees, whatever its radius.
         Assert.True(view.Knows(Blast("12.5", "5.5", "1.5")));
@@ -630,7 +633,7 @@ public class PlayerViewTests
     {
         SimEventKind[] seenWhereItHappens =
         [
-            SimEventKind.Blast,
+            SimEventKind.Blast, SimEventKind.Splash, SimEventKind.SplashHit,
             SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost,
             SimEventKind.StructurePlaced, SimEventKind.StructureFinished, SimEventKind.StructureRemoved,
         ];

@@ -487,25 +487,39 @@ public sealed class Targeting
     }
 
     /// <summary>
+    /// Lists what the splash of a hit reaches (design 2.3): what a blast of that radius round the
+    /// target's center would, as <see cref="ReachedByBlast"/> says, without the target itself.
+    /// </summary>
+    public void ReachedBySplash(
+        World world, int owner, int attackerLine, EntityId target, FixedVector2 center, Fixed radius, List<EntityId> reached)
+    {
+        ReachedByBlast(world, owner, attackerLine, center, radius, reached);
+        reached.Remove(target);
+    }
+
+    /// <summary>
     /// Lands a hit: takes the damage off the target's hit points, with the target's side multiplied
     /// in and the result rounded once. Hit points stop at zero, and the target stays until the end
     /// of the tick even there.
     /// </summary>
     /// <remarks>
-    /// The target's side of a unit is the counter multiplier of the two lines. That of a structure
-    /// is the attacking line's multiplier against structures and the fortification rule, under
-    /// the Protection tier its owner has at this moment (design 2.5). A foundation is a structure
-    /// like any other here.
+    /// The target's side of a unit is the counter multiplier of the two lines and what its
+    /// accents take off: Hardened I off area damage, plating off a hit from below its Protection
+    /// (design 2.3). A worker has no line and no accents. That of a structure is the attacking
+    /// line's multiplier against structures and the fortification rule, under the Protection
+    /// tier its owner has at this moment (design 2.5). A foundation is a structure like any
+    /// other here.
     /// </remarks>
     /// <param name="target">What is hit.</param>
     /// <param name="attackerSide">The attacker's damage of one hit, fixed when it attacked.</param>
     /// <param name="attackerLine">The attacker's line, or <see cref="CombatRules.NoLine"/> for a Tower.</param>
     /// <param name="attackerFirepower">The attacker's effective Firepower, fixed when it attacked.</param>
+    /// <param name="area">True for area damage: the blast of a shell, and the splash of a hit on what stands round its target.</param>
     /// <returns>
     /// The damage of the hit in thousandths of a hit point, which may be more than the target had
     /// left. Zero for a target that cannot be damaged.
     /// </returns>
-    public long Hit(EntityId target, Fraction attackerSide, int attackerLine, int attackerFirepower)
+    public long Hit(EntityId target, Fraction attackerSide, int attackerLine, int attackerFirepower, bool area = false)
     {
         var index = _health.IndexOf(target);
         if (index < 0)
@@ -514,9 +528,24 @@ public sealed class Targeting
         }
 
         ref var health = ref _health.ValueAt(index);
-        var damage = Structures is { } structures && structures.Contains(target) && _bodies.TryGet(target, out var body)
-            ? _rules.DamageToStructure(attackerSide, attackerLine, attackerFirepower, body.Owner)
-            : _rules.DamageOf(attackerSide, attackerLine, LineOf(target));
+        long damage;
+        if (!_bodies.TryGet(target, out var body))
+        {
+            damage = _rules.DamageOf(attackerSide, attackerLine, CombatRules.NoLine);
+        }
+        else if (IsStructure(target))
+        {
+            damage = _rules.DamageToStructure(attackerSide, attackerLine, attackerFirepower, body.Owner);
+        }
+        else if (_combatants.TryGet(target, out var unit))
+        {
+            damage = _rules.DamageToUnit(attackerSide, attackerLine, attackerFirepower, body.Owner, unit.Chassis, area);
+        }
+        else
+        {
+            damage = _rules.DamageOf(attackerSide, attackerLine, CombatRules.NoLine);
+        }
+
         health.HitPoints = Math.Max(0, checked(health.HitPoints - damage));
         return damage;
     }

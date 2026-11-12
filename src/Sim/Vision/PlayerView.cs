@@ -501,6 +501,7 @@ public sealed class PlayerView
     /// </summary>
     public static bool IsSeenWhereItHappens(SimEventKind kind) =>
         kind is SimEventKind.Death or SimEventKind.MeleeHit or SimEventKind.ShotFired or SimEventKind.ShotHit or SimEventKind.ShotLost
+            or SimEventKind.SplashHit
         || IsOfAStructure(kind)
         || IsOfAnArea(kind);
 
@@ -512,7 +513,7 @@ public sealed class PlayerView
     /// The kinds of event that happen in a circle, whose radius is the event's amount as the raw
     /// value of a <see cref="Fixed"/>. One is seen by any tile of the circle.
     /// </summary>
-    private static bool IsOfAnArea(SimEventKind kind) => kind is SimEventKind.Blast;
+    private static bool IsOfAnArea(SimEventKind kind) => kind is SimEventKind.Blast or SimEventKind.Splash;
 
     private bool SeesWhereItHappened(in SimEvent happened)
     {
