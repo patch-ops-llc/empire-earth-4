@@ -6,6 +6,7 @@ using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Outcome;
+using Sim.Perks;
 using Sim.Production;
 using Sim.Research;
 using Sim.Structures;
@@ -49,6 +50,7 @@ public static class MatchSetup
         var foundations = world.AddStore(new ComponentStore<Foundation>(Foundation.StoreName));
         var health = world.AddStore(new ComponentStore<Health>(Health.StoreName));
         var movers = world.AddStore(new ComponentStore<Mover>(Mover.StoreName));
+        var perkCounts = world.AddStore(new ComponentStore<PerkCounts>(PerkCounts.StoreName));
         var producers = world.AddStore(new ComponentStore<Producer>(Producer.StoreName));
         var researchState = world.AddStore(new ResearchState(players.Count, data.Tracks.Count, data.TierCount, data.Rules.Match.StartEpoch));
         var structureMemory = world.AddStore(new StructureMemory(players.Count, map.Width, map.Height));
@@ -80,7 +82,12 @@ public static class MatchSetup
 
         // The combat numbers are worked out from the data and from each player's tech as research has it.
         var combat = new CombatRules(data, players.Count, research.Tech);
-        var targeting = new Targeting(grid, bodies, combatants, health, spatialIndex, combat, vision) { Structures = structures };
+        var perkCounters = new PerkCounters(world, perkCounts);
+        var targeting = new Targeting(grid, bodies, combatants, health, spatialIndex, combat, vision)
+        {
+            Structures = structures,
+            Counters = perkCounters,
+        };
         var approach = new Approach(grid);
         var fighters = new Fighters(data, combat, combatants, bodies, movers, spatialIndex);
         var placeHolders = new PlaceHolders(workers);
@@ -154,7 +161,11 @@ public static class MatchSetup
         // attack right after the units: theirs are attacks of the tick like any other. Deaths
         // come after all three: every attack due in a tick is made before any death of that tick
         // takes effect.
-        // Structures leave the map right after the deaths: a structure destroyed in this tick
+        // Upkeep comes right after the deaths: a unit's ticks without damage count the damage of
+        // this tick, a unit that died in this tick regenerates nothing, and the refund for one
+        // that died with Reserves is in the stockpile when the tick ends. It comes before
+        // research, so a perk a research gives or takes counts from the next tick.
+        // Structures leave the map right after the deaths and the upkeep: a structure destroyed in this tick
         // frees its tiles in this tick, so income, research and the orders of the next tick see
         // the tiles, the territory and the research slots as they are without it.
         // Construction comes after movement, the deaths and the structures that leave: a worker
@@ -175,14 +186,15 @@ public static class MatchSetup
         var producing = new ProductionSystem(production, walkOrders, simulation.Events);
         simulation.AddSystem(producing);
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
-        simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
+        simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes) { WalkCounter = perkCounters });
         simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, placeHolders, fighters));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
         simulation.AddSystem(new VisionSystem(vision));
         simulation.AddSystem(new ShotSystem(bodies, shots, targeting, simulation.Events));
-        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, places, simulation.Events));
+        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, places, perkCounters, simulation.Events));
         simulation.AddSystem(new TurretSystem(bodies, structures, turrets, shots, targeting, simulation.Events));
         simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
+        simulation.AddSystem(new UpkeepSystem(research, bodies, combatants, health, perkCounts, stockpiles, simulation.Events));
         simulation.AddSystem(new StructureSystem(data, bodies, structures, foundations, structureTiles, research, simulation.Events));
         simulation.AddSystem(new ConstructionSystem(construction, data));
         simulation.AddSystem(new ProductionRefundSystem(production, bodies));
@@ -206,6 +218,7 @@ public static class MatchSetup
             Foundations = foundations,
             Health = health,
             Movers = movers,
+            PerkCounts = perkCounts,
             Production = production,
             Research = research,
             Routes = routes,
