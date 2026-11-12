@@ -99,7 +99,6 @@ If joining fails, the menu says why in orange:
 - The host's workers are blue and the other player's are red. Alone, yours are blue. Which side of the map each player starts on is chosen at random each time.
 - Selected units have a green ring under them. A right-click leaves a yellow ring that closes on the place you clicked.
 - The small map in the bottom right corner shows the whole map: forest in dark green, cliffs in grey, deposits as orange squares, and every unit as a dot in its player's color. The white outline is the part of the map on your screen. Your selected units have a white rim.
-- The small map also shows the ground each player holds, tinted in the player's color with a brighter line along its edge.
 - Click the small map and the view jumps there; hold the button and drag, and the view follows. A right-click on it sends the selected units to that place, and a yellow ring closes on the place for a moment. The mouse wheel still zooms while the pointer is on it.
 - The small map shows everything, the other player's units too. Nothing is hidden yet.
 - Units find their own way round the cliffs and the forest. A unit that needs a way round stands still for a moment while it works one out.
@@ -110,7 +109,6 @@ If joining fails, the menu says why in orange:
 - If the other player leaves or closes the game, the bar at the top says so and your match goes on without them. If the host leaves, the match ends for both.
 - Each player has a Capitol where they start, on the square their workers stand around: a stone hall with a keep and a pointed roof in the player's color. Nobody can stand on it, and units walk round it. Nothing can be built yet.
 - The ground a player holds is tinted in the player's color, with a line along its edge. It reaches 16 tiles from the middle of the Capitol. The line follows the sides of the tiles, so it has steps: a tile is either held or it is not. A deposit pays only when all of it is inside, and structures will have to stand inside.
-- A structure shows how far its owner's research has come in one track. A block in that track's color stands on it, one storey for each tier, and the dots on top of the block count the tier as on a die. The colors are those of the rows in the research panel. The Capitol shows Logistics, in purple, so when your Logistics research finishes, your Capitol's block gains a storey and a dot. The other player's Capitol shows theirs.
 - Click your Capitol to select it. A green line runs round it, and the panel at the bottom of the window names it and its hit points. Nothing can damage a structure yet, so they stay full.
 - Structures and units are not selected together. A box takes units only, and a structure leaves the selection as soon as a unit joins it. A right-click with a structure selected sets its rally point: see the next lines.
 - With your Capitol selected, the panel at the bottom offers a worker. The button says the price, 50 Materials, shown as "50 M", and the supply it takes. Click it or press Q, and the worker joins the queue under the buttons. You pay when you order. The match starts with 400 Materials and room for 49 more supply.
@@ -130,9 +128,14 @@ Press R, or click Research in the bar at the top. The panel shows your six track
 - While a research runs, its cell fills up, and the top of the panel shows a progress bar with the time left and a Cancel button. Cancelling gives the whole price back. The bar at the top of the window shows the same progress when the panel is closed.
 - When a research finishes, a line under the top bar says so and the track's row has one more filled cell.
 - You have one research slot, so one research runs at a time.
-- An Academy gives a second slot, and flies a banner in the color of the track being researched in it. Academies cannot be built yet, so you will not see one.
 - You start with 400 Materials and 100 Energy and nothing earns more yet, so a match has room for one research: a tier 2 costs 100 of each. After it, every next tier shows as too expensive.
 - Tiers 5 to 9 are closed. A match stops at epoch 4 for now.
+
+## What structures tell you
+
+- A structure shows how far its owner's research has come in one track. A block in that track's color stands on it, one storey for each tier, and the dots on top of the block count the tier as on a die. The colors are those of the rows in the research panel. The Capitol shows Logistics, in purple, so when your Logistics research finishes, your Capitol's block gains a storey and a dot. The other player's Capitol shows theirs.
+- An Academy gives a second research slot, and flies a banner in the color of the track being researched in it. Academies cannot be built yet, so you will not see one.
+- The small map shows the ground each player holds, tinted in the player's color with a brighter line along its edge.
 
 ## What to know about multiplayer
 
