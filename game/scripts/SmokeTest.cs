@@ -30,7 +30,10 @@ namespace Game;
 /// </para>
 /// <para>
 /// The match is shown as any match is, through the main scene: every layer of the world and every
-/// part of the interface reads it after each tick, so a view that fails on the match fails the test.
+/// part of the interface reads it after each tick. A view that fails on the match fails the test:
+/// while it runs, <see cref="SmokeLog"/> counts the errors the engine logs, an exception thrown by
+/// a piece of the view among them, and <see cref="Main"/> ends the test without the line on the
+/// first of them.
 /// </para>
 /// </remarks>
 public sealed class SmokeTest

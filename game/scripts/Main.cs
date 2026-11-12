@@ -44,6 +44,7 @@ public partial class Main : Node3D
 
     private LocalRun? _smokeRun;
     private SmokeTest? _smokeTest;
+    private SmokeLog? _smokeLog;
     private MatchMenu? _menu;
     private NetTest? _netTest;
     private MatchView? _view;
@@ -95,9 +96,9 @@ public partial class Main : Node3D
             return;
         }
 
-        if (_smokeTest is not null)
+        if (_smokeLog is not null)
         {
-            RunSmokeTest(_smokeTest);
+            RunSmokeTest(_smokeLog);
             return;
         }
 
@@ -187,6 +188,11 @@ public partial class Main : Node3D
 
     private void StartSmokeTest(GameData data)
     {
+        // From here on an error the engine logs fails the smoke test: among them every exception
+        // that Godot catches and logs, after which the game would go on without what threw it.
+        _smokeLog = new SmokeLog();
+        OS.AddLogger(_smokeLog);
+
         var map = data.Maps.First(candidate => candidate.Id == MapId);
 
         // The smoke test fixes the seed and the starts so that every machine builds the same match.
@@ -211,8 +217,22 @@ public partial class Main : Node3D
         _smokeTest = new SmokeTest(_smokeRun.Match, _smokeRun.Session);
     }
 
-    private void RunSmokeTest(SmokeTest smokeTest)
+    private void RunSmokeTest(SmokeLog log)
     {
+        if (log.Errors > 0)
+        {
+            GD.PrintErr($"Smoke test: the engine logged an error while the match was shown, {log.Errors} so far. The first: {log.First}");
+            Quit(1);
+            return;
+        }
+
+        if (_smokeTest is not { } smokeTest)
+        {
+            GD.PrintErr("Smoke test: the match could not be shown.");
+            Quit(1);
+            return;
+        }
+
         _world.TickFraction = 1f;
         if (!smokeTest.Run(SmokeTestTicksPerFrame))
         {
@@ -227,6 +247,11 @@ public partial class Main : Node3D
     private void Quit(int exitCode)
     {
         _quitting = true;
+        if (_smokeLog is not null)
+        {
+            OS.RemoveLogger(_smokeLog);
+        }
+
         _menu?.CloseRun();
         GetTree().Quit(exitCode);
     }
