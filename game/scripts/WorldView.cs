@@ -7,32 +7,29 @@ using Sim.Setup;
 namespace Game;
 
 /// <summary>
-/// Draws a match: the map's forest and cliff tiles, and one node for every entity that stands on
-/// the map. It only reads the match. Nodes are created, moved and removed here and nowhere else,
-/// so no entity has a script of its own.
+/// Draws a match: the map's forest and cliff tiles, and one node for every unit, which is an
+/// entity that stands on the map and can move. It only reads the match. The nodes of units are
+/// created, moved and removed here and nowhere else, so no entity has a script of its own.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The simulation moves in ticks and the screen in frames. After each tick <see cref="AfterTick"/>
-/// records where everything stands now, and every frame an entity is drawn between where it stood
+/// records where everything stands now, and every frame a unit is drawn between where it stood
 /// one tick ago and where it stands now, <see cref="TickFraction"/> of the way along.
+/// </para>
+/// <para>
+/// Every other kind of thing in the world is a <see cref="WorldLayer"/>, a class of its own that
+/// is called from here after every tick and in every frame. A piece that draws something new
+/// adds a layer and leaves this file alone. An entity that stands on the map and cannot move, as
+/// a structure or a deposit will be, is not drawn here: the layer of its kind draws it.
+/// </para>
 /// </remarks>
 public partial class WorldView : Node3D
 {
-    // One color per seat. A match has at most eight players.
-    private static readonly Color[] PlayerColors =
-    [
-        new(0.20f, 0.45f, 0.95f),
-        new(0.90f, 0.22f, 0.20f),
-        new(0.95f, 0.80f, 0.20f),
-        new(0.25f, 0.75f, 0.70f),
-        new(0.65f, 0.35f, 0.85f),
-        new(0.95f, 0.55f, 0.15f),
-        new(0.90f, 0.90f, 0.90f),
-        new(0.95f, 0.50f, 0.70f),
-    ];
-
     private readonly Dictionary<EntityId, UnitView> _units = [];
     private readonly List<EntityId> _gone = [];
+    private readonly List<WorldLayer> _layers = [];
+    private MatchView? _view;
     private Material[] _playerMaterials = [];
     private Mesh? _unitMesh;
     private Match? _match;
@@ -44,28 +41,54 @@ public partial class WorldView : Node3D
     /// </summary>
     public float TickFraction { get; set; } = 1f;
 
-    /// <summary>The number of entities drawn.</summary>
+    /// <summary>The number of units drawn.</summary>
     public int UnitCount => _units.Count;
 
+    /// <summary>The units drawn, in no order.</summary>
+    public IReadOnlyCollection<EntityId> Units => _units.Keys;
+
     /// <summary>Starts drawing a match. Call it once, before the match's first tick.</summary>
-    public void Attach(Match match)
+    public void Attach(MatchView view)
     {
         if (_match is not null)
         {
             throw new InvalidOperationException("The world view already draws a match.");
         }
 
-        _match = match;
+        _view = view;
+        _match = view.Match;
         _unitMesh = PlaceholderMeshes.Unit();
-        _playerMaterials = [.. PlayerColors.Select(color => (Material)PlaceholderMeshes.Flat(color))];
+        _playerMaterials = [.. Enumerable.Range(0, PlayerColors.Count).Select(player => (Material)PlaceholderMeshes.Flat(PlayerColors.Of(player)))];
 
-        BuildTerrain(match.Map);
+        BuildTerrain(_match.Map);
         AfterTick();
     }
 
     /// <summary>
-    /// Reads the match again. Call it after every tick: entities that are new get a node, entities
-    /// that are gone lose theirs, and the rest start gliding to where they stand now.
+    /// Adds a layer: a kind of thing drawn in the world beside the units. From now on it is called
+    /// after every tick and in every frame, after the layers added before it.
+    /// </summary>
+    public void AddLayer(WorldLayer layer)
+    {
+        if (_view is null)
+        {
+            throw new InvalidOperationException("A layer is added once the world view draws a match.");
+        }
+
+        if (string.IsNullOrEmpty(layer.Name))
+        {
+            layer.Name = layer.GetType().Name;
+        }
+
+        AddChild(layer);
+        _layers.Add(layer);
+        layer.Begin(_view);
+    }
+
+    /// <summary>
+    /// Reads the match again. Call it after every tick: units that are new get a node, units that
+    /// are gone lose theirs, and the rest start gliding to where they stand now. Then every layer
+    /// reads the match in its turn.
     /// </summary>
     public void AfterTick()
     {
@@ -79,9 +102,14 @@ public partial class WorldView : Node3D
         for (var i = 0; i < bodies.Count; i++)
         {
             var entity = bodies.EntityAt(i);
+            if (!_match.Movers.TryGet(entity, out var mover))
+            {
+                continue;
+            }
+
             var body = bodies.ValueAt(i);
             var position = ToWorld(body.Position);
-            var heading = _match.Movers.TryGet(entity, out var mover) ? ToHeading(mover.Facing) : 0f;
+            var heading = ToHeading(mover.Facing);
 
             if (_units.TryGetValue(entity, out var unit))
             {
@@ -115,11 +143,16 @@ public partial class WorldView : Node3D
         }
 
         _gone.Clear();
+
+        foreach (var layer in _layers)
+        {
+            layer.AfterTick();
+        }
     }
 
     /// <summary>
-    /// Where an entity is drawn in this frame, which is where the player sees it. False for an
-    /// entity that is not drawn.
+    /// Where a unit is drawn in this frame, which is where the player sees it. False for an
+    /// entity that is not drawn as a unit.
     /// </summary>
     public bool TryGetDrawnPosition(EntityId entity, out Vector3 position)
     {
@@ -140,6 +173,12 @@ public partial class WorldView : Node3D
         {
             unit.Node.Position = unit.PreviousPosition.Lerp(unit.Position, fraction);
             unit.Node.Rotation = new Vector3(0f, Mathf.LerpAngle(unit.PreviousHeading, unit.Heading, fraction), 0f);
+        }
+
+        // The layers come after the units, so that what follows a unit is exactly on it.
+        foreach (var layer in _layers)
+        {
+            layer.EveryFrame(delta);
         }
     }
 

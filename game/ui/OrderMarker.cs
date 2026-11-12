@@ -3,37 +3,40 @@ using Godot;
 namespace Game;
 
 /// <summary>
-/// The mark on the ground that answers a move order: a ring that closes on the place the units
-/// were sent to and then goes away.
+/// The mark on the ground that answers an order: a ring that closes on the point the player
+/// ordered and then goes away. It stays at that point. Where each unit ends up can differ from
+/// it, since each unit of a group has a destination of its own.
 /// </summary>
-public partial class OrderMarker : Node3D
+public partial class OrderMarker : WorldLayer
 {
     private const double Seconds = 1.2;
     private const float Lift = 0.05f;
 
+    private MeshInstance3D _ring = null!;
+    private StandardMaterial3D _material = null!;
     private double _left;
 
-    public override void _Ready()
+    protected override void Attach()
     {
-        AddChild(new MeshInstance3D { Mesh = PlaceholderMeshes.Ring(0.5f, new Color(1f, 0.95f, 0.4f)) });
-        Visible = false;
+        var mesh = PlaceholderMeshes.Ring(0.5f, Colors.White);
+        _material = (StandardMaterial3D)mesh.Material;
+        _ring = new MeshInstance3D { Name = "Ring", Mesh = mesh, Visible = false };
+        AddChild(_ring);
     }
 
-    /// <summary>Shows the mark at a point on the ground, from its beginning.</summary>
-    public void ShowAt(Vector3 point)
+    /// <summary>Shows the mark at a point on the ground, from its beginning, in the color of the order.</summary>
+    public void ShowAt(Vector3 point, Color color)
     {
-        MoveTo(point);
+        _material.AlbedoColor = color;
+        _ring.Position = point + (Vector3.Up * Lift);
         _left = Seconds;
-        Visible = true;
+        _ring.Visible = true;
         Shrink();
     }
 
-    /// <summary>Moves the mark, as far as it has got, to another point.</summary>
-    public void MoveTo(Vector3 point) => Position = point + (Vector3.Up * Lift);
-
-    public override void _Process(double delta)
+    public override void EveryFrame(double delta)
     {
-        if (!Visible)
+        if (!_ring.Visible)
         {
             return;
         }
@@ -41,7 +44,7 @@ public partial class OrderMarker : Node3D
         _left -= delta;
         if (_left <= 0.0)
         {
-            Visible = false;
+            _ring.Visible = false;
             return;
         }
 
@@ -52,6 +55,6 @@ public partial class OrderMarker : Node3D
     private void Shrink()
     {
         var size = Mathf.Lerp(0.5f, 2f, (float)(_left / Seconds));
-        Scale = new Vector3(size, 0.25f, size);
+        _ring.Scale = new Vector3(size, 0.25f, size);
     }
 }
