@@ -78,35 +78,49 @@ internal static class AiOrders
     }
 
     /// <summary>
+    /// The middle of the marker of a kind that lies best on the way from one tile to another:
+    /// see <see cref="TryFindMarker"/>.
+    /// </summary>
+    public static bool TryFindPassage(AiSight sight, MarkerKind kind, int fromX, int fromY, int toX, int toY, out int x, out int y)
+    {
+        var found = TryFindMarker(sight, kind, fromX, fromY, toX, toY, out var marker);
+        x = marker is null ? 0 : MiddleX(marker);
+        y = marker is null ? 0 : MiddleY(marker);
+        return found;
+    }
+
+    /// <summary>
     /// The marker of a kind that lies best on the way from one tile to another: the one for
     /// which the way through its middle is shortest. False when the map has none of the kind,
     /// and when the way through the best is more than twice the straight way.
     /// </summary>
-    public static bool TryFindPassage(AiSight sight, MarkerKind kind, int fromX, int fromY, int toX, int toY, out int x, out int y)
+    public static bool TryFindMarker(AiSight sight, MarkerKind kind, int fromX, int fromY, int toX, int toY, out MapMarker? marker)
     {
-        x = 0;
-        y = 0;
+        marker = null;
         var best = long.MaxValue;
-        foreach (var marker in sight.Markers)
+        foreach (var candidate in sight.Markers)
         {
-            if (marker.Kind != kind)
+            if (candidate.Kind != kind)
             {
                 continue;
             }
 
-            var middleX = marker.Area.X + (marker.Area.SizeX / 2);
-            var middleY = marker.Area.Y + (marker.Area.SizeY / 2);
+            var middleX = MiddleX(candidate);
+            var middleY = MiddleY(candidate);
             var way = Length(fromX, fromY, middleX, middleY) + Length(middleX, middleY, toX, toY);
             if (way < best)
             {
                 best = way;
-                x = middleX;
-                y = middleY;
+                marker = candidate;
             }
         }
 
         return best <= 2 * Math.Max(1, Length(fromX, fromY, toX, toY));
     }
+
+    public static int MiddleX(MapMarker marker) => marker.Area.X + (marker.Area.SizeX / 2);
+
+    public static int MiddleY(MapMarker marker) => marker.Area.Y + (marker.Area.SizeY / 2);
 
     /// <summary>Sends units to a tile with a move or an attack-move. Nothing is added for an empty list.</summary>
     public static void Send(CommandType type, int player, List<EntityId> units, int x, int y, List<Command> commands)

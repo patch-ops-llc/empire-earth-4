@@ -91,7 +91,105 @@
             "party": { "description": "The units of that line it sends on one raid.", "type": "integer", "minimum": 1, "maximum": 200 }
           }
         },
-        "reaction_seconds": { "description": "The seconds a reason to attack, retreat, defend or raid must hold before it acts on it. Above 0, at most 3600 and a whole number of ticks.", "$ref": "#/definitions/number" }
+        "reaction_seconds": { "description": "The seconds a reason to attack, retreat, defend or raid must hold before it acts on it, and what a row of the response table sees before the row comes into force. Above 0, at most 3600 and a whole number of ticks.", "$ref": "#/definitions/number" }
+      }
+    },
+    "scouting": {
+      "description": "Item 4 of game design 5.5. A personality without this block sends no scout and has no response table.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["every_seconds", "responses"],
+      "properties": {
+        "every_seconds": { "description": "The seconds from one scout to the next, and from the start of the match to the first. A row of the table also stays in force this long after it last saw what it says. Above 0, at most 3600 and a whole number of ticks.", "$ref": "#/definitions/number" },
+        "responses": {
+          "description": "The rows of the response table. Every row in force is acted on; where two say something about the same thing, the earlier row goes first.",
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sees", "does"],
+            "properties": {
+              "sees": {
+                "description": "The row holds when any one of these does. Within one, every part that is given must hold. The enemy's units are the fighting units of other players it has seen and has not seen die.",
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "minProperties": 1,
+                  "properties": {
+                    "accents": {
+                      "description": "One of the enemy's units carries one of these accents, at the level given or above it.",
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["track", "level"],
+                        "properties": {
+                          "track": { "description": "The track the accent belongs to: a track ID from tracks.jsonc.", "$ref": "#/definitions/id" },
+                          "level": { "description": "1 for level I, 2 for level II.", "type": "integer", "minimum": 1, "maximum": 2 }
+                        }
+                      }
+                    },
+                    "on_main_line": { "description": "With accents: only units of the enemy's main line count, the line it has seen most units of.", "type": "boolean" },
+                    "units": {
+                      "description": "The enemy has at least so many units of a line.",
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["line", "count"],
+                      "properties": {
+                        "line": { "description": "A line ID from the roster in rules.jsonc.", "$ref": "#/definitions/id" },
+                        "count": { "type": "integer", "minimum": 1, "maximum": 200 }
+                      }
+                    },
+                    "army_count_ratio": { "description": "The enemy's units are more than this many times its own fighting units. Above 0 and at most 100.", "$ref": "#/definitions/number" },
+                    "epochs_ahead": { "description": "The enemy's epoch, which is announced to everyone, is at least this far above its own.", "type": "integer", "minimum": 1, "maximum": 20 }
+                  }
+                }
+              },
+              "does": {
+                "description": "What it does while the row is in force.",
+                "type": "object",
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "army_supply": {
+                    "description": "Lines it raises to a share of its army's supply, whether army.lines has them or not. A line below its share is ordered before the ratio of army.lines is asked.",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["line", "share"],
+                      "properties": {
+                        "line": { "description": "A line ID from the roster in rules.jsonc.", "$ref": "#/definitions/id" },
+                        "share": { "description": "Above 0 and at most 1, such as \"0.3\".", "$ref": "#/definitions/number" }
+                      }
+                    }
+                  },
+                  "research": {
+                    "description": "A track it researches before any its weights would choose, and until when: exactly one of tiers, until_accent_level and up_to_enemy. While it cannot pay for it, it starts no other research.",
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["track"],
+                    "minProperties": 2,
+                    "maxProperties": 2,
+                    "properties": {
+                      "track": { "description": "A track ID from tracks.jsonc.", "$ref": "#/definitions/id" },
+                      "tiers": { "description": "Until the track is this many tiers above where it was when the row came into force.", "type": "integer", "minimum": 1, "maximum": 20 },
+                      "until_accent_level": { "description": "Until the newest chassis of its main line, the first line of army.lines with the largest share, carries the track's accent at this level.", "type": "integer", "minimum": 1, "maximum": 2 },
+                      "up_to_enemy": { "description": "Until the track is at the highest tier it has seen the enemy to have in this track: a track ID from tracks.jsonc.", "$ref": "#/definitions/id" }
+                    }
+                  },
+                  "passage": { "description": "The kind of map marker its army holds at and goes through, in place of fight.passage.", "enum": ["chokepoint", "open_field"] },
+                  "catch_up_first": { "description": "True: a catch-up tier goes before every other research, and while it cannot pay for one it is offered it starts no other.", "type": "boolean" }
+                }
+              }
+            }
+          }
+        }
       }
     }
   },

@@ -9,26 +9,34 @@ namespace Ai;
 /// the highest weight among those it may start and can pay for. A half-price catch-up tier goes
 /// before any other. Tracks with the same weight go in the order of the data.
 /// </summary>
+/// <remarks>
+/// The response table (item 4) can put a track before all of that: what a row in force
+/// researches goes first, rows in the order of the file, and it starts nothing else while it
+/// cannot pay for it, because the table says it researches that track next. A row that has it
+/// buy catch-up tiers before anything else puts those before even that, and holds every other
+/// research back in the same way.
+/// </remarks>
 internal sealed class AiResearch
 {
     private readonly AiSight _sight;
     private readonly AiPersonalityDef _personality;
+    private readonly AiResponses? _responses;
     private readonly List<ResearchOffer> _offers = [];
     private readonly Comparison<ResearchOffer> _byPreference;
 
-    public AiResearch(AiSight sight, AiPersonalityDef personality)
+    public AiResearch(AiSight sight, AiPersonalityDef personality, AiResponses? responses = null)
     {
         ArgumentNullException.ThrowIfNull(sight);
         ArgumentNullException.ThrowIfNull(personality);
         _sight = sight;
         _personality = personality;
+        _responses = responses;
         _byPreference = (left, right) =>
         {
-            var leftCatchUp = left.Price!.Value.Band == ResearchBand.CatchUp;
-            var rightCatchUp = right.Price!.Value.Band == ResearchBand.CatchUp;
-            if (leftCatchUp != rightCatchUp)
+            var byRank = Rank(left).CompareTo(Rank(right));
+            if (byRank != 0)
             {
-                return leftCatchUp ? -1 : 1;
+                return byRank;
             }
 
             var byWeight = _personality.TrackWeights[right.Track].CompareTo(_personality.TrackWeights[left.Track]);
@@ -47,6 +55,9 @@ internal sealed class AiResearch
     /// researched and is not in research already.
     /// </summary>
     public IReadOnlyList<ResearchOffer> Offers => _offers;
+
+    /// <summary>The ranks from this one on are those of its personality alone: a catch-up tier, then the weights.</summary>
+    private const int FirstOrdinaryRank = 1_000;
 
     public void Think(AiBudget budget, List<Command> commands)
     {
@@ -94,6 +105,12 @@ internal sealed class AiResearch
                 commands.Add(new Command(CommandType.StartResearch, _sight.Player, contentId: offer.Track));
                 free--;
             }
+            else if (Rank(offer) < FirstOrdinaryRank)
+            {
+                // The response table has it research this next: nothing else is started in its place.
+                budget.Hold(price.Materials, price.Energy);
+                return;
+            }
             else
             {
                 cheapestMaterials = Math.Min(cheapestMaterials, price.Materials);
@@ -107,5 +124,28 @@ internal sealed class AiResearch
         {
             budget.Hold(cheapestMaterials, cheapestEnergy);
         }
+    }
+
+    /// <summary>The place of an offer before its weight is asked: lower goes first.</summary>
+    private int Rank(ResearchOffer offer)
+    {
+        var isCatchUp = offer.Price!.Value.Band == ResearchBand.CatchUp;
+        if (_responses is not null)
+        {
+            if (isCatchUp && _responses.CatchUpFirst)
+            {
+                return 0;
+            }
+
+            for (var i = 0; i < _responses.ResearchFirst.Count; i++)
+            {
+                if (_responses.ResearchFirst[i] == offer.Track)
+                {
+                    return 1 + i;
+                }
+            }
+        }
+
+        return isCatchUp ? FirstOrdinaryRank : FirstOrdinaryRank + 1;
     }
 }

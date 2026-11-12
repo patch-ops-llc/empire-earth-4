@@ -306,7 +306,6 @@ Game design 5.5. One file per personality of the computer player. The simulation
 | `economy.expand_at_materials` | It claims another deposit when its stockpile holds more Materials than this. It also does when a deposit it holds has dropped to the lower rate and its other deposits have no free place. |
 | `research.weights` | One whole number from 1 to 1000 for every track of `tracks.jsonc`, by track ID. For every free research slot it starts the research with the highest weight among those it may start and can pay for. A catch-up tier, which is half price, goes before any other. Tracks with the same weight go in the order of `tracks.jsonc`. |
 | `army.lines` | The lines its army is made of: a list of `{ "line", "share" }`, with a line ID from the roster and a whole number from 1 to 1000. Of each line it trains the newest chassis it has unlocked. The shares are parts of the army's units: 3 and 1 make three units of four. It always orders the line that is furthest behind its share, and lines that are level go in the order of the file. |
-
 | `fight.attack_ratio` | Its army sets out when the value of its fighting units at home is at least this many times its estimate of the enemy's: a number from 1 to 100. A unit's value is the Materials and Energy it costs its owner now. The army also sets out when the supply cap leaves no room for another unit. |
 | `fight.assumed_enemy_value` | The least it takes the enemy's army to be worth, in Materials and Energy together. Its estimate is the value of the enemy fighting units it has seen and not seen die, and never less than this. |
 | `fight.retreat_losses` | It pulls an attack back when this share of the units that set out is lost: above 0 and at most 1. A raiding party goes home by the same share. |
@@ -314,10 +313,34 @@ Game design 5.5. One file per personality of the computer player. The simulation
 | `fight.passage` | The kind of map marker its army goes through: `chokepoint` or `open_field`. Its raiding party goes through the other kind. |
 | `fight.raid.line`, `fight.raid.party` | The line it raids with, and how many units make a party. A party goes for the enemy's workers and then its Generators. With a line that is not among `army.lines` it never raids. |
 | `fight.reaction_seconds` | How long a reason to set out, to join, to raid or to retreat must hold before it acts on it, in seconds. This is the reaction delay of design 5.5: 1 second for Normal. |
+| `scouting` | Optional. Without it the personality sends no scout and responds to nothing. |
+| `scouting.every_seconds` | How often it sends a scout, in seconds: 180 in design 5.5. The first goes when this long has passed, or with the first fighting unit it has after that. The scout is the unit at home that sees furthest, and of those the fastest. It walks to the nearest structure of the enemy's that holds territory, of those it knows; with none, to the nearest other structure of the enemy's; and with none of those, to the nearest other start of the map. It turns for home when the place is inside its sight. |
+| `scouting.responses` | The response table of design 5.5: a list of at most 20 rows of `{ "sees", "does" }`. A row comes into force when what it `sees` has held for `fight.reaction_seconds`, and goes out of force when it has not held for `every_seconds`. Rows in force together are all acted on; where two disagree, the earlier row of the file wins. |
+
+What a row `sees` is a list, and the row holds when any entry of it does. An entry holds when everything it names is true of what the computer player remembers of the enemy: the units it has seen and not seen die, and the structures it has seen.
+
+| Key of `sees` | Meaning |
+| --- | --- |
+| `accents` | A list of `{ "track", "level" }` with level 1 or 2. True when an enemy unit it remembers carries any of them at that level or above. |
+| `on_main_line` | With `true`, the accents count only on units of the enemy's main line: the line it remembers the most units of. It needs `accents`. |
+| `units` | `{ "line", "count" }`: true when it remembers at least so many enemy units of the line. |
+| `army_count_ratio` | A number above 0 and at most 100. True when it remembers more enemy fighting units than this many times its own. |
+| `epochs_ahead` | True when the highest epoch of another player is at least this many above its own. Epochs are announced to every player (design 3.2), so this needs no scout. |
+
+An entry needs at least one of these keys.
+
+| Key of `does` | Meaning |
+| --- | --- |
+| `army_supply` | A list of `{ "line", "share" }` with a share above 0 and at most 1. While the line is below this share of the supply its army takes, it is ordered before the ratio of `army.lines`. The line need not be among `army.lines`, and the computer player builds the structure that trains it. |
+| `research` | `{ "track" }` with exactly one of `"tiers"`, `"until_accent_level"` and `"up_to_enemy"`. The track goes before every other research, and while it cannot be paid for no other is started. With `"tiers": 1` it is researched one tier above the tier it had when the row came into force. With `"until_accent_level": 1` it is researched until the newest chassis of its own main line, the line with the largest share of `army.lines`, carries the track's accent at that level. With `"up_to_enemy": "protection"` it is researched up to the highest tier of that track it has seen on the enemy. |
+| `passage` | `chokepoint` or `open_field`. While the row is in force its army goes through this kind of marker in place of `fight.passage`, and its units at home gather on its own side of the marker instead of at home. |
+| `catch_up_first` | With `true`, a catch-up tier goes before the `research` of every row. |
+
+A row needs at least one of these keys.
 
 The rest of what a computer player does is the same for every personality and is in the code: it divides its workers between Materials and Energy by what its next purchases still lack, builds a Generator when it wants more workers at Generators than they have places, builds the structure that trains each of its lines, and an Academy when every research slot is busy and it could pay for another research.
 
-It knows what a player in its seat could know and no more: every question it asks of the match goes through the `PlayerView` of its seat (design 2.5), and besides that it reads only the map file, which every player has. So it sends a worker to look at ground before it orders an Outpost there, it counts the enemy units it has seen, and it attacks the structures it has seen or remembers. When it knows of none it goes to the other starts of the map, and then to the ground it has not seen for longest.
+It knows what a player in its seat could know and no more: every question it asks of the match goes through the `PlayerView` of its seat (design 2.5), and besides that it reads only the map file, which every player has. So it sends a worker to look at ground before it orders an Outpost there, it counts the enemy units it has seen, and it attacks the structures it has seen or remembers. What its scout sees it learns as a player would (design 3.2): a unit's line and accents by inspecting it, a track's tier from the chassis fielded, from the look of a structure and from inspection. The one thing it reads of another player without seeing it is the epoch, which the game announces to everyone. When it knows of none it goes to the other starts of the map, and then to the ground it has not seen for longest.
 
 ## What datacheck checks
 
@@ -337,7 +360,7 @@ Besides the shape of each file:
 | Income | A worker's payment for one second can be computed exactly at every Extraction tier and never rounds to nothing, at the whole rate and at the depleted one. |
 | Formulas | Every stat and price of every chassis can be computed exactly at every tier mix. The game multiplies exact fractions, and a multiplier with many decimal places raised to a high power no longer fits. `1.15` is fine at any tier; `1.123456789` is not. The error names the chassis. The same holds for a structure's hit points at every Protection tier and its damage at every Firepower tier. |
 | Stat bounds | Hit points, damage, speed, sight, supply, spacing, prices, ranges and multipliers must be positive where zero makes no sense and inside wide sanity limits, listed in `src/Sim/Data/DataRules.cs`. The limits catch slips such as a missing decimal point; they are not balance rules. |
-| Personalities | A personality has a weight for every track, names only lines of the roster and names none twice, and its worker counts start at epoch 1 with rising epochs. Its `fight` block is complete, its passage is a kind of map marker and its reaction delay is a whole number of ticks. |
+| Personalities | A personality has a weight for every track, names only lines of the roster and names none twice, and its worker counts start at epoch 1 with rising epochs. Its `fight` block is complete, its passage is a kind of map marker and its reaction delay is a whole number of ticks. A `scouting` block has an interval that is a whole number of ticks and at most 20 rows; every row sees something and does something, names only tracks and lines of the data, names no line twice in `army_supply`, and gives its research exactly one end. |
 | Map symmetry | Terrain, starts, deposits and markers must all mirror under the map's `symmetry`. |
 | Map footprints | Starting Capitols, deposits and markers stand on open ground inside the map. Deposits overlap neither each other nor a Capitol. |
 | Start distance | The Capitols' centers are at least two territory radii apart, so the two starting territories do not overlap. |

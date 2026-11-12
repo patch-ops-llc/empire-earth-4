@@ -72,6 +72,10 @@ internal readonly record struct KnownSite(
 /// pays the lower rate, which the player sees in what its workers there earn.
 /// </para>
 /// <para>
+/// One thing it reads of the other players without seeing them: their epochs, which the game
+/// announces to everyone when they change (design 3.2).
+/// </para>
+/// <para>
 /// Of the map file it reads what every player is told before the match begins: the size of the
 /// map, where each seat starts, and the markers of design 5.3, which the design gives the
 /// computer player in place of an analysis of the terrain. The ground and the deposits it learns
@@ -158,6 +162,12 @@ internal sealed class AiSight
     /// sent to work while it is, and it still takes an order to build.
     /// </summary>
     public EntityId Explorer { get; set; }
+
+    /// <summary>
+    /// The fighting unit that is away as a scout, or none. It is not counted among the units at
+    /// home and takes no order of the army while it is.
+    /// </summary>
+    public EntityId Scout { get; set; }
 
     /// <summary>The player's fighting units on the map, in the order of their IDs.</summary>
     public List<OwnFighter> Fighters { get; } = [];
@@ -281,6 +291,33 @@ internal sealed class AiSight
 
     /// <summary>The events of the last tick that the player may know of, in their order. The list is emptied first.</summary>
     public void CollectEvents(List<SimEvent> events) => _view.CollectEvents(events);
+
+    /// <summary>
+    /// What inspecting a unit or a structure the player sees shows (design 3.2): its effective
+    /// Firepower, Protection and Mobility tiers and its accents. False for one it does not see.
+    /// </summary>
+    public bool Inspect(EntityId entity, out Inspection inspection) => _view.Inspect(entity, out inspection);
+
+    /// <summary>
+    /// The highest epoch among the other players. An epoch is announced to every player when it
+    /// changes (design 3.2), so each knows every other's without seeing anything of them.
+    /// </summary>
+    public int HighestOtherEpoch
+    {
+        get
+        {
+            var highest = 0;
+            for (var other = 0; other < _match.Players.Count; other++)
+            {
+                if (other != Player)
+                {
+                    highest = Math.Max(highest, _match.Research.Tech(other).Epoch);
+                }
+            }
+
+            return highest;
+        }
+    }
 
     /// <summary>True when the player has a research slot with nothing in it.</summary>
     public int FreeResearchSlots => CountSlots(free: true);

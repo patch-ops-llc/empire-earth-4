@@ -30,6 +30,9 @@ public sealed record AiPersonalityDef(
     IReadOnlyList<AiLineShare> Lines,
     AiFightDef Fight)
 {
+    /// <summary>How it scouts and what it does about what it has seen. A file without the block gives <see cref="AiScoutingDef.None"/>.</summary>
+    public AiScoutingDef Scouting { get; init; } = AiScoutingDef.None;
+
     /// <summary>The workers it keeps in an epoch: the count of the last entry at or below it.</summary>
     public int WorkersAt(int epoch)
     {
@@ -98,19 +101,8 @@ public sealed record AiFightDef(
     int ReactionTicks)
 {
     /// <summary>True when an army worth <paramref name="own"/> is enough to attack one worth <paramref name="enemy"/>.</summary>
-    public bool IsEnoughToAttack(long own, long enemy) => own * Pow10(AttackRatio.Scale) >= AttackRatio.Unscaled * enemy;
+    public bool IsEnoughToAttack(long own, long enemy) => own * AiNumbers.Pow10(AttackRatio.Scale) >= AttackRatio.Unscaled * enemy;
 
     /// <summary>True when losing <paramref name="lost"/> of a force worth <paramref name="whole"/> is reason to retreat.</summary>
-    public bool IsTooMuchLost(long lost, long whole) => whole > 0 && lost * Pow10(RetreatLosses.Scale) >= RetreatLosses.Unscaled * whole;
-
-    private static long Pow10(int scale)
-    {
-        var value = 1L;
-        for (var i = 0; i < scale; i++)
-        {
-            value *= 10;
-        }
-
-        return value;
-    }
+    public bool IsTooMuchLost(long lost, long whole) => whole > 0 && lost * AiNumbers.Pow10(RetreatLosses.Scale) >= RetreatLosses.Unscaled * whole;
 }
