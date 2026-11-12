@@ -11,9 +11,17 @@ namespace Game;
 /// row of the <see cref="OrderTable"/> is handed this, and nothing else.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Code under <c>game/</c> reads the match and never changes it. Only commands change the
 /// simulation: they leave through <see cref="Client"/>, alone and over the network alike, and
 /// the session runs them a tick or more later on every machine.
+/// </para>
+/// <para>
+/// The machine holds the whole match, and the player may be shown only their own picture of it
+/// (design 5.3). So what is read of another player's units, shots and events is first asked of
+/// <see cref="Sight"/>. The simplest way is to draw what follows a unit only for the units the
+/// <see cref="World"/> draws, which are those the player sees.
+/// </para>
 /// </remarks>
 public sealed class MatchView
 {
@@ -26,6 +34,7 @@ public sealed class MatchView
         Units = units;
         Interface = frame;
         Leave = leave;
+        Sight = new PlayerSight(match, run.Client.Player);
         Selection = new Selection();
         UnderPointer = new UnderPointer(this);
         Orders = new OrderTable();
@@ -43,7 +52,13 @@ public sealed class MatchView
     /// <summary>The local player's number.</summary>
     public int Player => Client.Player;
 
-    /// <summary>Draws the units, and calls every <see cref="WorldLayer"/>.</summary>
+    /// <summary>
+    /// What of the match the local player may be shown: the fog of war. Whatever draws a unit, a
+    /// shot or an effect, or turns a click into a target, asks here.
+    /// </summary>
+    public PlayerSight Sight { get; }
+
+    /// <summary>Draws the units the player sees and the fog, and calls every <see cref="WorldLayer"/>.</summary>
     public WorldView World { get; }
 
     public RtsCamera Camera { get; }

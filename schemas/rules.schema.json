@@ -16,7 +16,9 @@
     "wall_crossing_cost",
     "match",
     "start",
-    "map"
+    "map",
+    "vision",
+    "debug"
   ],
   "properties": {
     "$schema": { "type": "string" },
@@ -127,18 +129,8 @@
       "description": "Design 5.3 and 5.4. What every map must satisfy; datacheck enforces it on maps/*.jsonc.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["start_territory", "deposit_size", "deposits", "chokepoint_width", "open_field_min_width"],
+      "required": ["deposit_size", "deposits", "chokepoint_width", "open_field_min_width"],
       "properties": {
-        "start_territory": {
-          "description": "The starting Capitol: the side of its square footprint and its territory radius, in tiles.",
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["footprint", "radius"],
-          "properties": {
-            "footprint": { "type": "integer", "minimum": 1, "maximum": 16 },
-            "radius": { "type": "integer", "minimum": 1, "maximum": 256 }
-          }
-        },
         "deposit_size": {
           "description": "The side of a deposit's square footprint, in tiles.",
           "type": "integer",
@@ -171,6 +163,32 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 256
+        }
+      }
+    },
+    "vision": {
+      "description": "The fog of war (design 5.3).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["refresh_ticks"],
+      "properties": {
+        "refresh_ticks": {
+          "description": "What each player sees is worked out again in every tick whose number is a multiple of this.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
+      }
+    },
+    "debug": {
+      "description": "Switches for development. They are not in the design. Both players of a match have the same data, so they have the same switches.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spawn"],
+      "properties": {
+        "spawn": {
+          "description": "Whether a match carries out the development spawn, a command that makes units from nothing.",
+          "type": "boolean"
         }
       }
     }
