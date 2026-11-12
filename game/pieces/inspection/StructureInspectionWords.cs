@@ -1,12 +1,30 @@
 using System.Globalization;
+using System.Text;
 using Sim.Data;
 using Sim.Numerics;
 
 namespace Game;
 
 /// <summary>
-/// The wording of the inspection panel for a structure (design 3.2 with 2.5): what a tier of its
-/// owner's means for it, and what the player is told of one they only remember.
+/// One row of the inspection panel for a structure: a track, the tier in it when there is one
+/// to name, and what that means for the structure.
+/// </summary>
+/// <param name="Name">What the row is about, in a word: "Protection", "Firepower", "Look" or "Banner".</param>
+/// <param name="Track">The track, as its index in the data.</param>
+/// <param name="Tier">The tier, or null for a row that names the track alone, as the banner's.</param>
+/// <param name="Text">What stands beside the track.</param>
+public readonly record struct StructureTierRow(string Name, int Track, int? Tier, string Text)
+{
+    /// <summary>The track with its tier, as the row shows it in the track's color: "Protection 2", or "Firepower" alone.</summary>
+    public string Label(GameData data) =>
+        Tier is { } tier ? StructureInspectionWords.Tier(data, Track, tier) : data.Tracks[Track].Name;
+}
+
+/// <summary>
+/// What the inspection panel says of a structure (design 3.2 with 2.5): its rows, what a tier of
+/// its owner's means for it, and what the player is told of one they only remember. The panel
+/// makes its controls from what is worded here and adds no word of its own, so a test can ask
+/// here what the panel shows for a structure that no match has.
 /// </summary>
 public static class StructureInspectionWords
 {
@@ -120,4 +138,127 @@ public static class StructureInspectionWords
     public static string TiersWhileSeen(in StructureFacts structure) => structure.Structure.Attack is null
         ? "Its Protection tier is shown while you see it."
         : "Its Protection and Firepower tiers are shown while you see it.";
+
+    /// <summary>The last line of the panel for another player's structure.</summary>
+    public static string Note(in StructureFacts structure) =>
+        structure.IsRemembered ? TiersWhileSeen(in structure) : NoMobilityNoAccents;
+
+    /// <summary>
+    /// The rows for one structure: its owner's Protection tier and, for one that attacks, the
+    /// Firepower tier, while the player may know them; the tier its look shows, unless the
+    /// Protection row has said it; and the track on its banner.
+    /// </summary>
+    /// <param name="data">The game data.</param>
+    /// <param name="structure">The structure.</param>
+    /// <param name="own">True for a structure of the local player's.</param>
+    public static List<StructureTierRow> Rows(GameData data, in StructureFacts structure, bool own)
+    {
+        var roles = data.TrackRoles;
+        var rows = new List<StructureTierRow>();
+        if (structure.HasTiers)
+        {
+            rows.Add(new StructureTierRow("Protection", roles.Protection, structure.Protection, Protection(data, in structure)));
+            if (structure.Attack is not null)
+            {
+                rows.Add(new StructureTierRow("Firepower", roles.Firepower, structure.Firepower, Attack(data, in structure)));
+            }
+        }
+
+        // The look of a Tower shows its owner's Protection, which the row above has said.
+        if (structure.Structure.Track is { } track && structure.LookTier > 0 && !(structure.HasTiers && track == roles.Protection))
+        {
+            rows.Add(new StructureTierRow("Look", track, structure.LookTier, Look(in structure, own)));
+        }
+
+        if (structure.Banner >= 0 && structure.Banner < data.Tracks.Count)
+        {
+            rows.Add(new StructureTierRow("Banner", structure.Banner, null, Banner(in structure, own)));
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// The rows for several structures of one player: the Protection tier, which is their
+    /// owner's and so the same for all, and the Firepower tier of the first that attacks.
+    /// </summary>
+    public static List<StructureTierRow> SharedRows(GameData data, IReadOnlyList<StructureFacts> structures)
+    {
+        var roles = data.TrackRoles;
+        var rows = new List<StructureTierRow>();
+        if (structures.Count == 0 || !structures[0].HasTiers)
+        {
+            return rows;
+        }
+
+        var first = structures[0];
+        rows.Add(new StructureTierRow(
+            "Protection",
+            roles.Protection,
+            first.Protection,
+            $"{Fortified(first.Fortification, first.Protection)}, for every structure of yours"));
+        foreach (var structure in structures)
+        {
+            if (structure.Attack is not null)
+            {
+                rows.Add(new StructureTierRow(
+                    "Firepower",
+                    roles.Firepower,
+                    structure.Firepower,
+                    $"{StructureWords.NameOf(structure.Structure)}: {Attack(data, in structure)}"));
+                break;
+            }
+        }
+
+        return rows;
+    }
+
+    /// <summary>
+    /// Every line of text the panel shows for one structure, in reading order, each on a line of
+    /// its own. For another player's: its name, its owner, its hit points, the line that says
+    /// how far it is built or that it is a memory, its rows and the last line. For the player's
+    /// own, whose name and hit points the selection's own line gives: its rows.
+    /// </summary>
+    /// <param name="data">The game data.</param>
+    /// <param name="structure">The structure.</param>
+    /// <param name="own">True for a structure of the local player's.</param>
+    public static string Lines(GameData data, in StructureFacts structure, bool own)
+    {
+        var text = new StringBuilder();
+        if (!own)
+        {
+            text.AppendLine(StructureWords.NameOf(structure.Structure));
+            text.AppendLine(InspectionWords.Owner(structure.Owner));
+            text.AppendLine(InspectionWords.Health(structure.HitPoints, structure.Maximum));
+            if (State(in structure) is { Length: > 0 } state)
+            {
+                text.AppendLine(state);
+            }
+        }
+
+        AppendRows(text, data, Rows(data, in structure, own));
+        if (!own)
+        {
+            text.AppendLine(Note(in structure));
+        }
+
+        return text.ToString();
+    }
+
+    /// <summary>The lines of text of rows, as <see cref="Lines"/> has them: the track of each, and then what stands beside it.</summary>
+    public static string Lines(GameData data, IReadOnlyList<StructureTierRow> rows)
+    {
+        var text = new StringBuilder();
+        AppendRows(text, data, rows);
+        return text.ToString();
+    }
+
+    private static void AppendRows(StringBuilder text, GameData data, IReadOnlyList<StructureTierRow> rows)
+    {
+        foreach (var row in rows)
+        {
+            text.AppendLine(row.Label(data));
+            text.AppendLine(row.Text);
+        }
+    }
 }

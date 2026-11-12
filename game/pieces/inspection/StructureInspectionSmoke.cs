@@ -19,10 +19,12 @@ namespace Game;
 /// The steps:
 /// </para>
 /// <list type="bullet">
-/// <item>Before the first tick the part asks the panel what it would show for every structure
-/// of the roster under a range of tiers: as another player's that is seen, as one that is
-/// remembered, and as the player's own. A match of the smoke test reaches one tier above the
-/// start, and has no Tower.</item>
+/// <item>Before the first tick the part asks what the panel says of every structure of the
+/// roster under a range of tiers: as another player's that is seen, as one that is remembered,
+/// and as the player's own. A match of the smoke test reaches one tier above the start, and has
+/// no Tower. It asks <see cref="StructureInspectionWords"/>, which words every line of the
+/// panel, and whenever the panel shows a structure of the match the part holds what is on the
+/// panel against those words.</item>
 /// <item>It selects one structure of the local player's, and then two when there are two: the
 /// panel must show their tiers. It asks for a structure of the other seat's that the player has
 /// never seen, when there is one: the panel must show nothing.</item>
@@ -36,8 +38,8 @@ namespace Game;
 /// memory by itself: the hit points and the look as last seen, no tiers, and the sentence that
 /// says so. The development switch must then show it as it stands, with its tiers, and laying
 /// the fog back must make it a memory again.</item>
-/// <item>A selection of the player's own must take the panel from it, and a click on open
-/// ground must let it go.</item>
+/// <item>A selection of the player's own must take the panel from it, and a click that is not
+/// on a structure of another player's must let it go.</item>
 /// </list>
 /// <para>
 /// The part gives two move orders and no other, and leaves nothing selected. It holds whatever
@@ -116,7 +118,7 @@ public sealed class StructureInspectionSmoke : SmokePart
             return;
         }
 
-        WordEveryStructure(orders, _panel);
+        WordEveryStructure(orders);
         if (orders.Failed)
         {
             return;
@@ -324,6 +326,10 @@ public sealed class StructureInspectionSmoke : SmokePart
         {
             orders.Fail($"the panel calls a structure the player sees a memory, {when}: {said}");
         }
+        else if (shown != StructureInspectionWords.Lines(data, in facts, own: false))
+        {
+            orders.Fail($"the panel does not show the other seat's structure as it is worded, {when}: {said}");
+        }
         else
         {
             MarkMustLieRound(orders, when);
@@ -371,6 +377,10 @@ public sealed class StructureInspectionSmoke : SmokePart
         {
             orders.Fail($"the panel does not show the tier the structure's look showed when the player last saw it, {when}: {said}");
         }
+        else if (shown != StructureInspectionWords.Lines(data, in facts, own: false))
+        {
+            orders.Fail($"the panel does not show the memory of the other seat's structure as it is worded, {when}: {said}");
+        }
         else
         {
             MarkMustLieRound(orders, when);
@@ -405,6 +415,7 @@ public sealed class StructureInspectionSmoke : SmokePart
         var shown = panel.ShownText();
         var structure = data.StructureOf(own[0].Type);
         if (panel.Mode != StructureInspectionMode.Own
+            || shown != StructureInspectionWords.Lines(data, panel.Structures[0], own: true)
             || !shown.Contains(protection, StringComparison.Ordinal)
             || !shown.Contains($"{InspectionWords.Whole(own[0].MaxHitPoints)} hit points", StringComparison.Ordinal))
         {
@@ -420,7 +431,9 @@ public sealed class StructureInspectionSmoke : SmokePart
         {
             view.Selection.Set([own[0].Entity, own[1].Entity]);
             shown = panel.ShownText();
-            if (panel.Mode != StructureInspectionMode.Several || !shown.Contains(protection, StringComparison.Ordinal))
+            if (panel.Mode != StructureInspectionMode.Several
+                || shown != StructureInspectionWords.Lines(data, StructureInspectionWords.SharedRows(data, panel.Structures))
+                || !shown.Contains(protection, StringComparison.Ordinal))
             {
                 orders.Fail($"the panel is in mode {panel.Mode} for two selected structures of the player's own and does not show their Protection tier: {shown.ReplaceLineEndings(" / ")}");
             }
@@ -434,7 +447,7 @@ public sealed class StructureInspectionSmoke : SmokePart
 
     // Every structure of the roster under each mix of tiers, as the panel words it for another
     // player's that is seen, for one that is remembered, and for the player's own.
-    private void WordEveryStructure(SmokeOrders orders, StructureInspection panel)
+    private void WordEveryStructure(SmokeOrders orders)
     {
         var match = orders.Match;
         var data = match.Data;
@@ -472,11 +485,13 @@ public sealed class StructureInspectionSmoke : SmokePart
                     SeenStructure.NoTrack,
                     IsRemembered: false,
                     SeenTick: 0);
-                var seen = panel.ShownFor(StructureFacts.Of(structure, in standing, built, fortification, WordedAgo), own: false);
-                var remembered = panel.ShownFor(
+                var seen = StructureInspectionWords.Lines(data, StructureFacts.Of(structure, in standing, built, fortification, WordedAgo), own: false);
+                var remembered = StructureInspectionWords.Lines(
+                    data,
                     StructureFacts.Of(structure, standing with { IsRemembered = true }, null, fortification, WordedAgo),
                     own: false);
-                var own = panel.ShownFor(
+                var own = StructureInspectionWords.Lines(
+                    data,
                     StructureFacts.Of(structure, standing with { Owner = orders.Player }, built, fortification, WordedAgo),
                     own: true);
                 _worded += 3;
@@ -570,11 +585,11 @@ public sealed class StructureInspectionSmoke : SmokePart
     {
         var name = orders.Match.Data.StructureOf(_target.Type)?.Id;
         GD.Print(
-            $"Smoke test, inspection of structures: the panel worded {_worded} structures under {TierMixes.Length} mixes of tiers" +
-            $"{(_ownShown ? ", showed the tiers of the local player's own" : string.Empty)}" +
-            $"{(_unknownAsked ? ", showed nothing of one never seen" : string.Empty)}" +
-            $"{(_rememberedBefore ? ", showed the memory of the other seat's " + name + " before the walk" : string.Empty)}, " +
-            $"showed the other seat's {name} with its tiers from tick {_seenAt} of the part and as a memory from tick {_rememberedAt}, after {_clicks} clicks.");
+            $"Smoke test, inspection of structures: {_worded} structures worded under {TierMixes.Length} mixes of tiers. The panel" +
+            $"{(_ownShown ? " showed the tiers of the local player's own," : string.Empty)}" +
+            $"{(_unknownAsked ? " showed nothing of one never seen," : string.Empty)}" +
+            $"{(_rememberedBefore ? " showed the memory of the other seat's " + name + " before the walk," : string.Empty)}" +
+            $" showed the other seat's {name} with its tiers from tick {_seenAt} of the part and as a memory from tick {_rememberedAt}, after {_clicks} clicks.");
 
         if (_panel is null)
         {

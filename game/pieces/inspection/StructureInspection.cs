@@ -3,7 +3,6 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using Godot;
 using Sim.Core;
-using Sim.Data;
 
 namespace Game;
 
@@ -48,7 +47,8 @@ public enum StructureInspectionMode
 /// </para>
 /// <para>
 /// A tile of wall of another player's is left to the panel that describes walls. This panel
-/// reads the match after every tick and gives no command.
+/// reads the match after every tick and gives no command. Every word it shows is made in
+/// <see cref="StructureInspectionWords"/>.
 /// </para>
 /// </remarks>
 public partial class StructureInspection : InterfacePart
@@ -98,31 +98,6 @@ public partial class StructureInspection : InterfacePart
             Collect(root, text);
         }
 
-        return text.ToString();
-    }
-
-    /// <summary>
-    /// Every line of text the panel would show for a structure, whether it is in the match or
-    /// not. The smoke test asks it what a structure shows under tiers that no match of the test
-    /// reaches. The panel then shows again what it was showing.
-    /// </summary>
-    /// <param name="structure">The structure.</param>
-    /// <param name="own">True to show it as one of the local player's, and false as another player's.</param>
-    public string ShownFor(StructureFacts structure, bool own)
-    {
-        _structures.Clear();
-        _structures.Add(structure);
-        Mode = own ? StructureInspectionMode.Own
-            : structure.IsRemembered ? StructureInspectionMode.Remembered
-            : StructureInspectionMode.Seen;
-        Build();
-        Present();
-        var text = new StringBuilder();
-        Collect(own ? _rows : _detail, text);
-
-        // What is built now is not what the signature stands for, so the panel builds again.
-        _signature = string.Empty;
-        Refresh();
         return text.ToString();
     }
 
@@ -294,10 +269,10 @@ public partial class StructureInspection : InterfacePart
         switch (Mode)
         {
             case StructureInspectionMode.Own:
-                AddRows(_rows, _structures[0], own: true);
+                AddRows(_rows, StructureInspectionWords.Rows(View.Match.Data, _structures[0], own: true));
                 break;
             case StructureInspectionMode.Several:
-                AddSharedRows();
+                AddRows(_rows, StructureInspectionWords.SharedRows(View.Match.Data, _structures));
                 break;
             case StructureInspectionMode.Seen:
             case StructureInspectionMode.Remembered:
@@ -332,94 +307,33 @@ public partial class StructureInspection : InterfacePart
         _state.Name = "State";
         _detail.AddChild(_state);
 
-        AddRows(_detail, structure, own: false);
+        AddRows(_detail, StructureInspectionWords.Rows(View.Match.Data, in structure, own: false));
 
-        var last = InspectionUi.Text(
-            structure.IsRemembered ? StructureInspectionWords.TiersWhileSeen(in structure) : StructureInspectionWords.NoMobilityNoAccents,
-            ResearchColors.Faint,
-            13);
+        var last = InspectionUi.Text(StructureInspectionWords.Note(in structure), ResearchColors.Faint, 13);
         last.Name = "Note";
         _detail.AddChild(last);
     }
 
-    // A row for each tier the player may know of a structure, and one for its banner.
-    private void AddRows(Container into, StructureFacts structure, bool own)
-    {
-        var data = View.Match.Data;
-        var roles = data.TrackRoles;
-        if (structure.HasTiers)
-        {
-            into.AddChild(Row(data, "Protection", roles.Protection, structure.Protection, StructureInspectionWords.Protection(data, in structure)));
-            if (structure.Attack is not null)
-            {
-                into.AddChild(Row(data, "Firepower", roles.Firepower, structure.Firepower, StructureInspectionWords.Attack(data, in structure)));
-            }
-        }
-
-        // The look of a Tower shows its owner's Protection, which the row above has said.
-        if (structure.Structure.Track is { } track && structure.LookTier > 0 && !(structure.HasTiers && track == roles.Protection))
-        {
-            into.AddChild(Row(data, "Look", track, structure.LookTier, StructureInspectionWords.Look(in structure, own)));
-        }
-
-        if (structure.Banner >= 0 && structure.Banner < data.Tracks.Count)
-        {
-            into.AddChild(Row(data, "Banner", structure.Banner, null, StructureInspectionWords.Banner(in structure, own)));
-        }
-    }
-
-    // What several structures of the player's own share: the Protection tier, which is their
-    // owner's, and the Firepower tier of those that attack.
-    private void AddSharedRows()
-    {
-        var data = View.Match.Data;
-        var roles = data.TrackRoles;
-        var first = _structures[0];
-        if (!first.HasTiers)
-        {
-            return;
-        }
-
-        _rows.AddChild(Row(
-            data,
-            "Protection",
-            roles.Protection,
-            first.Protection,
-            $"{StructureInspectionWords.Fortified(first.Fortification, first.Protection)}, for every structure of yours"));
-        foreach (var structure in _structures)
-        {
-            if (structure.Attack is not null)
-            {
-                _rows.AddChild(Row(
-                    data,
-                    "Firepower",
-                    roles.Firepower,
-                    structure.Firepower,
-                    $"{StructureWords.NameOf(structure.Structure)}: {StructureInspectionWords.Attack(data, in structure)}"));
-                break;
-            }
-        }
-    }
-
     // A track in its color, with a tier when there is one to name, and what that means for the structure.
-    private static HBoxContainer Row(GameData data, string name, int track, int? tier, string text)
+    private void AddRows(Container into, List<StructureTierRow> rows)
     {
-        var color = TrackColors.Of(data, track);
-        var style = ResearchColors.Boxed(ResearchColors.Box, 8f, 8f, 1f);
-        style.BorderColor = color;
-        style.BorderWidthLeft = 3;
+        var data = View.Match.Data;
+        foreach (var row in rows)
+        {
+            var color = TrackColors.Of(data, row.Track);
+            var style = ResearchColors.Boxed(ResearchColors.Box, 8f, 8f, 1f);
+            style.BorderColor = color;
+            style.BorderWidthLeft = 3;
 
-        var row = UiStyle.Row(8);
-        row.Name = name;
-        var chip = new PanelContainer { Name = "Tier", CustomMinimumSize = new Vector2(ChipWidth, 0f) };
-        chip.AddThemeStyleboxOverride("panel", style);
-        chip.AddChild(InspectionUi.Text(
-            tier is { } has ? StructureInspectionWords.Tier(data, track, has) : data.Tracks[track].Name,
-            color,
-            13));
-        row.AddChild(chip);
-        row.AddChild(InspectionUi.Text(text, ResearchColors.Ink, 13));
-        return row;
+            var line = UiStyle.Row(8);
+            line.Name = row.Name;
+            var chip = new PanelContainer { Name = "Tier", CustomMinimumSize = new Vector2(ChipWidth, 0f) };
+            chip.AddThemeStyleboxOverride("panel", style);
+            chip.AddChild(InspectionUi.Text(row.Label(data), color, 13));
+            line.AddChild(chip);
+            line.AddChild(InspectionUi.Text(row.Text, ResearchColors.Ink, 13));
+            into.AddChild(line);
+        }
     }
 
     private static void Empty(Node root)
