@@ -88,6 +88,9 @@ If joining fails, the menu says why in orange:
 | Train a unit | Click your Capitol, then click a button in the panel at the bottom, or press the key the button names. The first button is Q |
 | Cancel an order in the queue | Click it. Backspace cancels the last one |
 | Set where new units go | Right-click while the structure that trains them is selected |
+| Open or close the research panel | R, or the Research button in the bar at the top. Escape closes it too |
+| Start a research | In the research panel, click a bright cell |
+| Cancel a research | In the research panel, click Cancel beside its progress bar |
 | Show or hide the readout in the corner | F3 |
 | Quit | Close the window |
 
@@ -114,6 +117,19 @@ If joining fails, the menu says why in orange:
 - Click an order in the queue to cancel it, or press Backspace for the last one. You get the whole price back, also for the one being made.
 - Right-click the ground while the Capitol is selected to set its rally point. A flag stands there, with a line to it from the Capitol, while the Capitol is selected. New workers walk to the flag. If the flag stands on a deposit, they go to work there instead.
 - If there is nowhere for a new unit to stand, its order says "no room" and waits until there is.
+
+## Research
+
+Press R, or click Research in the bar at the top. The panel shows your six tracks as rows and their nine tiers as columns. The match goes on behind it.
+
+- A filled cell is a tier you have. The bright cell after it is the next tier, with its price: M is Materials and E is Energy. Click it to start the research.
+- Point at a row and the right side says what its next tier costs, how long it takes, which units it unlocks and which accents it gives or takes from the units you can build.
+- A cell that cannot be started says why: too expensive, with what you lack in orange; slot busy; or out of reach, because no track may be more than two tiers above your epoch.
+- While a research runs, its cell fills up, and the top of the panel shows a progress bar with the time left and a Cancel button. Cancelling gives the whole price back. The bar at the top of the window shows the same progress when the panel is closed.
+- When a research finishes, a line under the top bar says so and the track's row has one more filled cell.
+- You have one research slot, so one research runs at a time.
+- You start with 400 Materials and 100 Energy and nothing earns more yet, so a match has room for one research: a tier 2 costs 100 of each. After it, every next tier shows as too expensive.
+- Tiers 5 to 9 are closed. A match stops at epoch 4 for now.
 
 ## What to know about multiplayer
 

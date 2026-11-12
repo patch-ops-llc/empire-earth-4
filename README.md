@@ -109,6 +109,9 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | Train a unit | Select one finished structure of your own that trains. The bottom panel offers its units: click one, or press its key, which the button names: Q, E, F, T, Y, Z, C, V in the order of the buttons |
 | Cancel an order | Click it in the queue. Backspace cancels the last one |
 | Set the rally point | Right click with structures that train selected |
+| Open or close the research panel | R, or the Research button in the top bar. Escape closes it too |
+| Start a research | In the research panel, left click on a bright cell |
+| Cancel a research | In the research panel, the Cancel button beside its progress bar |
 | Show or hide the overlay | F3 |
 
 ## Test builds
