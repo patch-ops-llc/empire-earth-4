@@ -119,6 +119,13 @@ internal sealed class AiArmy
 
         IsAtSupplyCap = SmallestUnitSupply > 0 && supplyRoom < SmallestUnitSupply;
 
+        // A research that ends before these orders are carried out may raise a price, and the
+        // order would be refused. It orders in the next round, at the price that then holds.
+        if (_sight.ResearchEndsWithin(AiPlayer.ThinkInterval))
+        {
+            return;
+        }
+
         Array.Clear(_unitsByLine);
         _sight.CountUnitsByLine(_unitsByLine);
 

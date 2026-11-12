@@ -254,7 +254,17 @@ Game design 5.5. One file per personality of the computer player. The simulation
 | `research.weights` | One whole number from 1 to 1000 for every track of `tracks.jsonc`, by track ID. For every free research slot it starts the research with the highest weight among those it may start and can pay for. A catch-up tier, which is half price, goes before any other. Tracks with the same weight go in the order of `tracks.jsonc`. |
 | `army.lines` | The lines its army is made of: a list of `{ "line", "share" }`, with a line ID from the roster and a whole number from 1 to 1000. Of each line it trains the newest chassis it has unlocked. The shares are parts of the army's units: 3 and 1 make three units of four. It always orders the line that is furthest behind its share, and lines that are level go in the order of the file. |
 
+| `fight.attack_ratio` | Its army sets out when the value of its fighting units at home is at least this many times its estimate of the enemy's: a number from 1 to 100. A unit's value is the Materials and Energy it costs its owner now. The army also sets out when the supply cap leaves no room for another unit. |
+| `fight.assumed_enemy_value` | The least it takes the enemy's army to be worth, in Materials and Energy together. Its estimate is the value of the enemy fighting units it has seen and not seen die, and never less than this. |
+| `fight.retreat_losses` | It pulls an attack back when this share of the units that set out is lost: above 0 and at most 1. A raiding party goes home by the same share. |
+| `fight.reinforce_units` | While an attack is under way, the units trained since join it in groups of at least this many. |
+| `fight.passage` | The kind of map marker its army goes through: `chokepoint` or `open_field`. Its raiding party goes through the other kind. |
+| `fight.raid.line`, `fight.raid.party` | The line it raids with, and how many units make a party. A party goes for the enemy's workers and then its Generators. With a line that is not among `army.lines` it never raids. |
+| `fight.reaction_seconds` | How long a reason to set out, to join, to raid or to retreat must hold before it acts on it, in seconds. This is the reaction delay of design 5.5: 1 second for Normal. |
+
 The rest of what a computer player does is the same for every personality and is in the code: it divides its workers between Materials and Energy by what its next purchases still lack, builds a Generator when it wants more workers at Generators than they have places, builds the structure that trains each of its lines, and an Academy when every research slot is busy and it could pay for another research.
+
+It knows what a player in its seat could know and no more: every question it asks of the match goes through the `PlayerView` of its seat (design 2.5), and besides that it reads only the map file, which every player has. So it sends a worker to look at ground before it orders an Outpost there, it counts the enemy units it has seen, and it attacks the structures it has seen or remembers. When it knows of none it goes to the other starts of the map, and then to the ground it has not seen for longest.
 
 ## What datacheck checks
 
@@ -273,7 +283,7 @@ Besides the shape of each file:
 | Income | A worker's payment for one second can be computed exactly at every Extraction tier and never rounds to nothing, at the whole rate and at the depleted one. |
 | Formulas | Every stat and price of every chassis can be computed exactly at every tier mix. The game multiplies exact fractions, and a multiplier with many decimal places raised to a high power no longer fits. `1.15` is fine at any tier; `1.123456789` is not. The error names the chassis. The same holds for a structure's hit points at every Protection tier and its damage at every Firepower tier. |
 | Stat bounds | Hit points, damage, speed, sight, supply, spacing, prices, ranges and multipliers must be positive where zero makes no sense and inside wide sanity limits, listed in `src/Sim/Data/DataRules.cs`. The limits catch slips such as a missing decimal point; they are not balance rules. |
-| Personalities | A personality has a weight for every track, names only lines of the roster and names none twice, and its worker counts start at epoch 1 with rising epochs. |
+| Personalities | A personality has a weight for every track, names only lines of the roster and names none twice, and its worker counts start at epoch 1 with rising epochs. Its `fight` block is complete, its passage is a kind of map marker and its reaction delay is a whole number of ticks. |
 | Map symmetry | Terrain, starts, deposits and markers must all mirror under the map's `symmetry`. |
 | Map footprints | Starting Capitols, deposits and markers stand on open ground inside the map. Deposits overlap neither each other nor a Capitol. |
 | Start distance | The Capitols' centers are at least two territory radii apart, so the two starting territories do not overlap. |

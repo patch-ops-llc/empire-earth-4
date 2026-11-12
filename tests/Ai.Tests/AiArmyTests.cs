@@ -124,6 +124,43 @@ public class AiArmyTests
         Assert.Empty(fixture.Commands);
     }
 
+    /// <summary>
+    /// Protection makes a unit cost more. An order priced before a research ends and carried out
+    /// after it would be refused, so it gives none in the round before one ends.
+    /// </summary>
+    [Fact]
+    public void ItOrdersNoUnitWhileAResearchIsAboutToEnd()
+    {
+        var fixture = new AiFixture();
+        fixture.Place("barracks");
+        var army = new AiArmy(fixture.Sight, AiFixture.Personality(lines: [("line_infantry", 1)]));
+        fixture.SetStock(AiFixture.Plenty, AiFixture.Plenty);
+        fixture.Commands.Add(new Command(CommandType.StartResearch, AiFixture.Player, contentId: AiFixture.Track("protection")));
+        fixture.Carry();
+        Assert.True(fixture.Sight.IsResearching(AiFixture.Track("protection")));
+
+        while (!fixture.Sight.ResearchEndsWithin(AiPlayer.ThinkInterval))
+        {
+            army.Think(AiFixture.Plenty, fixture.Rich(), fixture.Commands);
+            Assert.NotEmpty(fixture.Commands);
+            fixture.Commands.Clear();
+            fixture.Run(1);
+        }
+
+        var before = fixture.Sight.Tech.Blueprints[AiFixture.Chassis("peltast")].Materials;
+        for (var tick = 0; tick < AiPlayer.ThinkInterval; tick++)
+        {
+            army.Think(AiFixture.Plenty, fixture.Rich(), fixture.Commands);
+            Assert.Empty(fixture.Commands);
+            fixture.Run(1);
+        }
+
+        Assert.False(fixture.Sight.IsResearching(AiFixture.Track("protection")));
+        Assert.True(fixture.Sight.Tech.Blueprints[AiFixture.Chassis("peltast")].Materials > before);
+        army.Think(AiFixture.Plenty, fixture.Rich(), fixture.Commands);
+        Assert.NotEmpty(fixture.Commands);
+    }
+
     [Fact]
     public void UnitsOnTheMapAndInTheQueuesCountForTheRatio()
     {

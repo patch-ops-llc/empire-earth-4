@@ -303,6 +303,24 @@ internal sealed class AiSight
         return false;
     }
 
+    /// <summary>
+    /// True when a research of the player's ends within so many ticks. The prices of its units
+    /// change when one does, so an order priced now could be refused when it is carried out.
+    /// </summary>
+    public bool ResearchEndsWithin(int ticks)
+    {
+        for (var slot = 0; slot < Sim.Research.ResearchState.SlotsPerPlayer; slot++)
+        {
+            var candidate = _view.ResearchSlot(slot);
+            if (candidate.IsBusy && candidate.TicksLeft <= ticks)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Whether the player may order the structure at all, wherever it goes.</summary>
     public BuildProblem CheckStructure(int structure) => _view.CheckStructure(structure);
 
