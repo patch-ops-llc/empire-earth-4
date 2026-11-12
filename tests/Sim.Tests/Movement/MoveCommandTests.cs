@@ -41,20 +41,23 @@ public class MoveCommandTests
     }
 
     [Fact]
-    public void EveryListedUnitGoesToTheSamePoint()
+    public void EveryListedUnitGoesToItsPlaceAroundThePoint()
     {
         var match = NewMatch();
         EntityId[] units =
         [
             match.SpawnUnit(0, TestMatches.Point("1.5", "1.5"), Speed),
-            match.SpawnUnit(0, TestMatches.Point("2.5", "6.5"), Speed),
-            match.SpawnUnit(0, TestMatches.Point("10.5", "3.5"), Speed),
+            match.SpawnUnit(0, TestMatches.Point("2.5", "4.5"), Speed),
+            match.SpawnUnit(0, TestMatches.Point("5.5", "3.5"), Speed),
         ];
 
+        // The box that holds the three has its center at (3.5, 3).
         match.OrderMove(0, Target, units);
         match.Simulation.Run(60);
 
-        Assert.All(units, unit => Assert.Equal(Target, match.PositionOf(unit)));
+        Assert.Equal(
+            [TestMatches.Point("6.5", "4"), TestMatches.Point("7.5", "7"), TestMatches.Point("10.5", "6")],
+            units.Select(match.PositionOf));
         Assert.All(units, unit => Assert.Equal(MoveState.Idle, match.Movers.Get(unit).State));
     }
 
