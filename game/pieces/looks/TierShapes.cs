@@ -73,9 +73,9 @@ public static class TierShapes
     /// <summary>
     /// The turret of a structure at a tier, in one color for the storeys and the top, standing on the ground
     /// with the middle of the footprint at the origin. It has no material: its colors are those
-    /// of its corners.
+    /// of its corners, each as the shade of the structure under it shows it.
     /// </summary>
-    public static ArrayMesh Turret(StructureDef structure, int tier, Color track)
+    public static ArrayMesh Turret(StructureDef structure, int tier, Color track, StructureShade shade)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(tier, 1);
         var half = WidthOf(structure) / 2f;
@@ -83,27 +83,27 @@ public static class TierShapes
 
         var tool = new SurfaceTool();
         tool.Begin(Mesh.PrimitiveType.Triangles);
-        AddBox(tool, half - 0.02f, 0f, from, Shaft);
-        AddBox(tool, half + CollarOverhang, from, from + CollarHeight, Collar);
+        AddBox(tool, half - 0.02f, 0f, from, shade.Of(Shaft));
+        AddBox(tool, half + CollarOverhang, from, from + CollarHeight, shade.Of(Collar));
 
         var height = from + CollarHeight;
         for (var storey = 1; storey <= tier; storey++)
         {
             // The top of the last storey is what is seen from above, so it is always the track's own color.
-            AddBox(tool, half, height, height + StoreyHeight, storey % 2 == 1 ? track : track.Darkened(EvenStoreyShade), track);
+            AddBox(tool, half, height, height + StoreyHeight, shade.Of(storey % 2 == 1 ? track : track.Darkened(EvenStoreyShade)), shade.Of(track));
             height += StoreyHeight;
         }
 
-        AddDots(tool, half, height + DotLift, Dots[Math.Min(tier, MostDots)]);
+        AddDots(tool, half, height + DotLift, Dots[Math.Min(tier, MostDots)], shade.Of(Dot));
         return tool.Commit();
     }
 
     // The dots of a tier, lying on a square top.
-    private static void AddDots(SurfaceTool tool, float half, float height, int cells)
+    private static void AddDots(SurfaceTool tool, float half, float height, int cells, Color color)
     {
         var cell = 2f * half / DotsInARow;
         var dot = cell * DotShare / 2f;
-        tool.SetColor(Dot);
+        tool.SetColor(color);
         tool.SetNormal(Vector3.Up);
         for (var row = 0; row < DotsInARow; row++)
         {

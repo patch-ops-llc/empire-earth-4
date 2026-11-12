@@ -11,7 +11,9 @@ public sealed class LooksPiece : ViewPiece
 
     public override void AddTo(MatchView view)
     {
-        view.World.AddLayer(new TierMarkLayer());
-        view.World.AddLayer(new BannerLayer());
+        var structures = view.World.GetChildren().OfType<StructureLayer>().FirstOrDefault()
+            ?? throw new InvalidOperationException("The structure looks are added after the piece that draws structures.");
+        view.World.AddLayer(new TierMarkLayer(structures));
+        view.World.AddLayer(new BannerLayer(structures));
     }
 }

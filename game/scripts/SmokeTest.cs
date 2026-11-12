@@ -100,6 +100,10 @@ public sealed class SmokeTest
         new FogSmoke(),
         new StructuresInFogSmoke(),
 
+        // Structure looks under the fog: the tier and the banner of a structure remembered. It
+        // follows the part above, which leaves an Academy of the other seat's remembered.
+        new LooksInFogSmoke(),
+
         // 24v. Minimap: an order given on it.
         new MinimapSmoke(),
 

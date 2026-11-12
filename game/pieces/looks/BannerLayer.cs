@@ -9,9 +9,17 @@ namespace Game;
 /// research runs in its slot a banner hangs from the pole in that track's color.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Like the tier's look it is read from <see cref="StructureLooks"/> after every tick. The pole
 /// stands also while the slot is idle, so that an Academy with nothing in research can be told
 /// from one whose banner is hidden behind something.
+/// </para>
+/// <para>
+/// So an Academy of another player that the player remembers flies the banner it flew when
+/// last seen, or none if it flew none then, whatever is in research there now. Pole and cloth
+/// are shaded as the structure under them is, by <see cref="StructureLayer.ShadeOf"/>, so
+/// those of a memory are as dim as the memory.
+/// </para>
 /// </remarks>
 public partial class BannerLayer : WorldLayer
 {
@@ -30,16 +38,20 @@ public partial class BannerLayer : WorldLayer
     private const float Sway = 0.07f;
     private const float SwaySpeed = 1.6f;
 
-    private static readonly Color PoleColor = new(0.93f, 0.92f, 0.88f);
+    /// <summary>The color of a pole on a structure in sight.</summary>
+    public static readonly Color PoleColor = new(0.93f, 0.92f, 0.88f);
 
+    private readonly StructureLayer _structures;
     private readonly List<StructureLook> _looks = [];
     private readonly Dictionary<EntityId, Banner> _banners = [];
-    private readonly Dictionary<int, Material> _paints = [];
     private readonly List<EntityId> _gone = [];
     private readonly Dictionary<int, ArrayMesh> _poles = [];
     private ArrayMesh _cloth = null!;
     private double _time;
     private int _pass;
+
+    /// <param name="structures">The layer that draws the structures the poles stand on.</param>
+    public BannerLayer(StructureLayer structures) => _structures = structures;
 
     /// <summary>The number of structures that carry a pole.</summary>
     public int Count => _banners.Count;
@@ -50,6 +62,17 @@ public partial class BannerLayer : WorldLayer
     /// <summary>The track whose banner hangs on a structure, or <see cref="StructureLook.NoTrack"/>.</summary>
     public int TrackShown(EntityId structure) =>
         _banners.TryGetValue(structure, out var banner) ? banner.Track : StructureLook.NoTrack;
+
+    /// <summary>True when a structure carries a pole, with a banner or without.</summary>
+    public bool HasPole(EntityId structure) => _banners.ContainsKey(structure);
+
+    /// <summary>The color the cloth of a structure's banner is drawn in, or null when none hangs there.</summary>
+    public Color? ClothShown(EntityId structure) =>
+        _banners.TryGetValue(structure, out var banner) && banner.Cloth.Visible ? banner.ClothPaint.AlbedoColor : null;
+
+    /// <summary>The color the pole on a structure is drawn in, or null when it carries none.</summary>
+    public Color? PoleShown(EntityId structure) =>
+        _banners.TryGetValue(structure, out var banner) ? banner.PolePaint.AlbedoColor : null;
 
     protected override void Attach() => _cloth = ClothMesh();
 
@@ -75,12 +98,10 @@ public partial class BannerLayer : WorldLayer
             {
                 banner.Track = look.Banner;
                 banner.Cloth.Visible = look.Banner != StructureLook.NoTrack;
-                if (banner.Cloth.Visible)
-                {
-                    banner.Cloth.MaterialOverride = PaintOf(look.Banner);
-                }
+                banner.Shade = null;
             }
 
+            Paint(look.Entity, banner);
             banner.Pole.Position = look.Middle;
             banner.Pass = _pass;
             Flown += banner.Cloth.Visible ? 1 : 0;
@@ -108,6 +129,8 @@ public partial class BannerLayer : WorldLayer
         _time += delta;
         foreach (var (entity, banner) in _banners)
         {
+            // A structure dims between ticks, and what stands on it with it.
+            Paint(entity, banner);
             if (banner.Cloth.Visible)
             {
                 // Each a little out of step with the others, by its own number.
@@ -126,16 +149,21 @@ public partial class BannerLayer : WorldLayer
             _poles.Add(look.Def.Index, mesh);
         }
 
+        // Each banner has materials of its own, because each dims with its structure.
+        var polePaint = Paint();
+        var clothPaint = Paint();
         var pole = new MeshInstance3D
         {
             Name = $"Banner{look.Entity.Value}",
             Mesh = mesh,
+            MaterialOverride = polePaint,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
         };
         var cloth = new MeshInstance3D
         {
             Name = "Cloth",
             Mesh = _cloth,
+            MaterialOverride = clothPaint,
             Position = new Vector3(0f, top, PoleWidth),
             Rotation = new Vector3(Hang, 0f, 0f),
             Visible = false,
@@ -143,34 +171,43 @@ public partial class BannerLayer : WorldLayer
         };
         pole.AddChild(cloth);
         AddChild(pole);
-        return new Banner(pole, cloth);
+        return new Banner(pole, cloth, polePaint, clothPaint);
     }
 
-    private Material PaintOf(int track)
+    // Takes no light and is seen from both sides. Its color is the pole's or the track's, and
+    // the corners of the mesh darken it where the cloth has its band.
+    private static StandardMaterial3D Paint() => new()
     {
-        if (!_paints.TryGetValue(track, out var paint))
+        VertexColorUseAsAlbedo = true,
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+        CullMode = BaseMaterial3D.CullModeEnum.Disabled,
+    };
+
+    // Gives pole and cloth the shade of the structure under them, when it is not the one they have.
+    private void Paint(EntityId structure, Banner banner)
+    {
+        var shade = _structures.ShadeOf(structure) ?? new StructureShade(0f);
+        if (banner.Shade == shade)
         {
-            paint = new StandardMaterial3D
-            {
-                AlbedoColor = TrackColors.Of(View.Match.Data, track),
-                VertexColorUseAsAlbedo = true,
-                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-                CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-            };
-            _paints.Add(track, paint);
+            return;
         }
 
-        return paint;
+        banner.Shade = shade;
+        banner.PolePaint.AlbedoColor = shade.Of(PoleColor);
+        if (banner.Track != StructureLook.NoTrack)
+        {
+            banner.ClothPaint.AlbedoColor = shade.Of(TrackColors.Of(View.Match.Data, banner.Track));
+        }
     }
 
-    // A pole on the origin, as two upright rectangles that cross, with a bar across its top. It
-    // takes no light and is seen from every side.
+    // A pole on the origin, as two upright rectangles that cross, with a bar across its top.
+    // White, so that the material's color is the pole's.
     private static ArrayMesh PoleMesh(float top)
     {
         var tool = new SurfaceTool();
         tool.Begin(Mesh.PrimitiveType.Triangles);
         tool.SetNormal(Vector3.Up);
-        tool.SetColor(PoleColor);
+        tool.SetColor(Colors.White);
 
         var half = PoleWidth / 2f;
         AddQuad(tool, new(-half, 0f, 0f), new(half, 0f, 0f), new(half, top, 0f), new(-half, top, 0f));
@@ -181,14 +218,7 @@ public partial class BannerLayer : WorldLayer
         AddQuad(tool, new(-bar, top - PoleWidth, 0f), new(bar, top - PoleWidth, 0f), new(bar, top, 0f), new(-bar, top, 0f));
         AddQuad(tool, new(-bar, top, -half), new(bar, top, -half), new(bar, top, half), new(-bar, top, half));
 
-        var mesh = tool.Commit();
-        mesh.SurfaceSetMaterial(0, new StandardMaterial3D
-        {
-            VertexColorUseAsAlbedo = true,
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-        });
-        return mesh;
+        return tool.Commit();
     }
 
     // The cloth, hanging down from the origin: a rectangle that ends in a point, with a darker
@@ -226,13 +256,20 @@ public partial class BannerLayer : WorldLayer
         tool.AddVertex(d);
     }
 
-    private sealed class Banner(MeshInstance3D pole, MeshInstance3D cloth)
+    private sealed class Banner(MeshInstance3D pole, MeshInstance3D cloth, StandardMaterial3D polePaint, StandardMaterial3D clothPaint)
     {
         public MeshInstance3D Pole { get; } = pole;
 
         public MeshInstance3D Cloth { get; } = cloth;
 
+        public StandardMaterial3D PolePaint { get; } = polePaint;
+
+        public StandardMaterial3D ClothPaint { get; } = clothPaint;
+
         public int Track { get; set; } = StructureLook.NoTrack;
+
+        /// <summary>The shade pole and cloth are painted in, or null when they are to be painted anew.</summary>
+        public StructureShade? Shade { get; set; }
 
         public int Pass { get; set; }
     }

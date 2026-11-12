@@ -1,5 +1,6 @@
 using Godot;
 using Sim.Core;
+using Sim.Data;
 
 namespace Game;
 
@@ -10,24 +11,38 @@ namespace Game;
 /// storey in the same tick.
 /// </summary>
 /// <remarks>
+/// <para>
 /// What is drawn is read from <see cref="StructureLooks"/> after every tick, not from events, so
-/// the layer shows whatever that seam lists: today every structure as it is, and under the fog
-/// of war what the player sees or remembers.
+/// the layer shows whatever that seam lists, which is what the local player sees or remembers:
+/// a structure of another player that the player has never seen carries no turret, and one the
+/// player remembers carries the turret of the tier it had when last seen, until it is seen again.
+/// </para>
+/// <para>
+/// A turret is shaded as the structure under it is, by <see cref="StructureLayer.ShadeOf"/>, so
+/// the turret of a memory is as dim as the memory and dims at the same pace.
+/// </para>
 /// </remarks>
 public partial class TierMarkLayer : WorldLayer
 {
+    private readonly StructureLayer _structures;
     private readonly List<StructureLook> _looks = [];
     private readonly Dictionary<EntityId, Mark> _marks = [];
-    private readonly Dictionary<(int Structure, int Tier), ArrayMesh> _meshes = [];
+    private readonly Dictionary<(int Structure, int Tier, StructureShade Shade), ArrayMesh> _meshes = [];
     private readonly List<EntityId> _gone = [];
     private Material _paint = null!;
     private int _pass;
+
+    /// <param name="structures">The layer that draws the structures the turrets stand on.</param>
+    public TierMarkLayer(StructureLayer structures) => _structures = structures;
 
     /// <summary>The number of structures whose tier is drawn.</summary>
     public int Count => _marks.Count;
 
     /// <summary>The tier drawn on a structure, or zero when none is.</summary>
     public int TierShown(EntityId structure) => _marks.TryGetValue(structure, out var mark) ? mark.Tier : 0;
+
+    /// <summary>The shade the turret of a structure is drawn in, or null when it has none.</summary>
+    public StructureShade? ShadeShown(EntityId structure) => _marks.TryGetValue(structure, out var mark) ? mark.Shade : null;
 
     protected override void Attach() =>
         _paint = new StandardMaterial3D { VertexColorUseAsAlbedo = true, VertexColorIsSrgb = true, Roughness = 1f };
@@ -50,12 +65,16 @@ public partial class TierMarkLayer : WorldLayer
                 _marks.Add(look.Entity, mark);
             }
 
-            if (mark.Tier != look.LookTier)
+            var shade = ShadeOf(look.Entity);
+            if (mark.Tier != look.LookTier || mark.Shade != shade)
             {
                 mark.Tier = look.LookTier;
-                mark.Node.Mesh = MeshOf(look, track);
+                mark.Shade = shade;
+                mark.Node.Mesh = MeshOf(look.Def, track, look.LookTier, shade);
             }
 
+            mark.Def = look.Def;
+            mark.Track = track;
             mark.Node.Position = look.Middle;
             mark.Pass = _pass;
         }
@@ -77,12 +96,29 @@ public partial class TierMarkLayer : WorldLayer
         _gone.Clear();
     }
 
-    private ArrayMesh MeshOf(in StructureLook look, int track)
+    // A structure dims between ticks, and its turret with it.
+    public override void EveryFrame(double delta)
     {
-        var key = (look.Def.Index, look.LookTier);
+        foreach (var (entity, mark) in _marks)
+        {
+            var shade = ShadeOf(entity);
+            if (mark.Shade != shade && mark.Def is { } def)
+            {
+                mark.Shade = shade;
+                mark.Node.Mesh = MeshOf(def, mark.Track, mark.Tier, shade);
+            }
+        }
+    }
+
+    // The shade of the structure under a turret, in the few steps a mesh is kept for.
+    private StructureShade ShadeOf(EntityId structure) => (_structures.ShadeOf(structure) ?? new StructureShade(0f)).Stepped();
+
+    private ArrayMesh MeshOf(StructureDef def, int track, int tier, StructureShade shade)
+    {
+        var key = (def.Index, tier, shade);
         if (!_meshes.TryGetValue(key, out var mesh))
         {
-            mesh = TierShapes.Turret(look.Def, look.LookTier, TrackColors.Of(View.Match.Data, track));
+            mesh = TierShapes.Turret(def, tier, TrackColors.Of(View.Match.Data, track), shade);
             _meshes.Add(key, mesh);
         }
 
@@ -93,7 +129,13 @@ public partial class TierMarkLayer : WorldLayer
     {
         public MeshInstance3D Node { get; } = node;
 
+        public StructureDef? Def { get; set; }
+
+        public int Track { get; set; }
+
         public int Tier { get; set; }
+
+        public StructureShade Shade { get; set; }
 
         public int Pass { get; set; }
     }

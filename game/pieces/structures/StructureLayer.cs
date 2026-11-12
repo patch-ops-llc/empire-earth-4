@@ -67,6 +67,13 @@ public partial class StructureLayer : WorldLayer
     public float? DrawnBuilt(EntityId entity) => _structures.TryGetValue(entity, out var node) ? node.Unfinished?.Shown : null;
 
     /// <summary>
+    /// How a structure that is drawn is shaded now, for what is drawn on it, as the look of its
+    /// tier: that then dims with the structure, at the same pace. Null for one that is not drawn.
+    /// </summary>
+    public StructureShade? ShadeOf(EntityId entity) =>
+        _structures.TryGetValue(entity, out var node) ? new StructureShade(node.Dimmed) : null;
+
+    /// <summary>
     /// Adds every structure that is drawn unfinished to a list, for what is drawn over one, as
     /// the bar of its progress: nothing then shows a foundation this layer does not.
     /// </summary>
@@ -304,6 +311,24 @@ public partial class StructureLayer : WorldLayer
 
         public int Pass { get; set; }
     }
+}
+
+/// <summary>
+/// What the condition of a structure, as the player knows it, does to the colors it is drawn in.
+/// Whatever is drawn on a structure puts its colors through <see cref="Of"/>, and so changes
+/// with the structure under it.
+/// </summary>
+/// <param name="Dimmed">How far the structure is drawn as a memory, from 0 for one seen now to 1 for one remembered.</param>
+public readonly record struct StructureShade(float Dimmed)
+{
+    // A shade that is kept in a mesh is made for this many steps and no more.
+    private const float Steps = 8f;
+
+    /// <summary>A color as this shade shows it.</summary>
+    public Color Of(Color color) => StructureLayer.Dim(color, Dimmed);
+
+    /// <summary>The nearest of the few shades a mesh is kept for, so that a structure that dims does not make a mesh in every frame.</summary>
+    public StructureShade Stepped() => new(Mathf.Round(Dimmed * Steps) / Steps);
 }
 
 /// <summary>A structure the <see cref="StructureLayer"/> draws unfinished.</summary>

@@ -210,7 +210,8 @@ Press R, or click Research in the bar at the top. The panel shows your six track
 ## What structures tell you
 
 - A structure shows how far its owner's research has come in one track. A block in that track's color stands on it, one storey for each tier, and the dots on top of the block count the tier as on a die. The colors are those of the rows in the research panel. The Capitol shows Logistics, in purple, so when your Logistics research finishes, your Capitol's block gains a storey and a dot. The other player's Capitol shows theirs.
-- An Academy gives a second research slot, and flies a banner in the color of the track being researched in it. Academies cannot be built yet, so you will not see one.
+- An Academy gives a second research slot, and flies a banner in the color of the track being researched in it. Its pole stands also while nothing is being researched there.
+- Another player's structure shows the block and the banner it had when you last saw it. While it is out of your sight they are greyed and dimmed with the structure, and they do not change: that player may have reached a higher tier since, or started or ended a research in the Academy, and you learn that when you see the structure again. A structure you have never seen shows nothing.
 - The small map shows the ground each player holds, tinted in the player's color with a brighter line along its edge.
 
 ## What to know about multiplayer
