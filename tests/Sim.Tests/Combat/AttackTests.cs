@@ -50,7 +50,7 @@ public class AttackTests
     }
 
     [Fact]
-    public void AUnitDoesNotAttackInATickInWhichItMovesAndMayMoveInTheTickAfterAnAttack()
+    public void AUnitDoesNotAttackInATickInWhichItWalksAndMayWalkInTheTickAfterAnAttack()
     {
         var match = Field();
         var hoplite = match.Spawn(0, Hoplite, "2.5", "5.5");

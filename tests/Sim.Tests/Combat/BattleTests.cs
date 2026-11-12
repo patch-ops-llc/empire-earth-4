@@ -101,7 +101,7 @@ public class BattleTests
         Assert.Contains(Enumerable.Range(0, early.Combatants.Count), i => early.Combatants.ValueAt(i).Order == UnitOrder.Attack);
         Assert.Contains(Enumerable.Range(0, early.Movers.Count), i => early.Movers.ValueAt(i).State == MoveState.Following);
 
-        var middle = Run(140);
+        var middle = Run(131);
         Assert.NotEqual(0, middle.Shots.Count);
         Assert.Contains(Enumerable.Range(0, middle.Combatants.Count), i => middle.Combatants.ValueAt(i).Wait > Fraction.Zero);
         Assert.Contains(Enumerable.Range(0, middle.Combatants.Count), i => middle.Combatants.ValueAt(i).Engaged);
@@ -118,24 +118,33 @@ public class BattleTests
     [InlineData(2)]
     [InlineData(30)]
     [InlineData(91)]
-    [InlineData(140)]
+    [InlineData(131)]
     [InlineData(263)]
     [InlineData(420)]
     [InlineData(700)]
     public void ASnapshotTakenInTheMiddleOfTheBattleRestoresAndContinues(int snapshotTick) =>
         SnapshotAssert.RestoresAndContinues(Build, Script(), snapshotTick, LastTick);
 
+    /// <summary>
+    /// A unit attacks only in a tick in which it does not walk (design 2.4). From outside a tick,
+    /// a unit that attacked has not walked when it stands where it stood, or when it stood still
+    /// before the tick and was given no order in it: then only its own side can have stepped it
+    /// aside, which is no walk. The battle has attacks of both kinds.
+    /// </summary>
     [Fact]
     public void InEveryTickOfTheBattleTheRulesOfAnAttackHold()
     {
         var match = Build();
-        foreach (var (tick, command) in Script())
+        var script = Script();
+        foreach (var (tick, command) in script)
         {
             match.Simulation.Commands.Enqueue(tick, command);
         }
 
         var attacks = 0;
-        var before = new Dictionary<EntityId, (FixedVector2 Position, Fraction Wait)>();
+        var attacksWhileStepped = 0;
+        var before = new Dictionary<EntityId, (FixedVector2 Position, Fraction Wait, bool Stood)>();
+        var ordered = new HashSet<EntityId>();
         for (var tick = 0; tick < LastTick; tick++)
         {
             before.Clear();
@@ -143,7 +152,16 @@ public class BattleTests
             {
                 var entity = match.Combatants.EntityAt(i);
                 var unit = match.Combatants.ValueAt(i);
-                before[entity] = (match.PositionOf(entity), unit.Wait);
+                before[entity] = (match.PositionOf(entity), unit.Wait, match.Movers.Get(entity).State == MoveState.Idle);
+            }
+
+            ordered.Clear();
+            foreach (var (commandTick, command) in script)
+            {
+                if (commandTick == tick)
+                {
+                    ordered.UnionWith(command.Entities.ToArray());
+                }
             }
 
             match.Run(1);
@@ -151,15 +169,20 @@ public class BattleTests
             {
                 var entity = match.Combatants.EntityAt(i);
                 var unit = match.Combatants.ValueAt(i);
-                var (position, wait) = before[entity];
+                var (position, wait, stood) = before[entity];
 
                 // The wait only goes up when the unit attacks.
                 if (unit.Wait > wait)
                 {
                     attacks++;
 
-                    // A unit attacks only in a tick in which it does not move, and never on a move order.
-                    Assert.Equal(position, match.PositionOf(entity));
+                    // A unit attacks only in a tick in which it does not walk, and never on a move order.
+                    var stepped = match.PositionOf(entity) != position;
+                    attacksWhileStepped += stepped ? 1 : 0;
+                    Assert.True(
+                        !stepped || (stood && !ordered.Contains(entity)),
+                        $"{entity} attacked in tick {tick}, in which it walked from {position} to {match.PositionOf(entity)}.");
+                    Assert.Equal(MoveState.Idle, match.Movers.Get(entity).State);
                     Assert.NotEqual(UnitOrder.Move, unit.Order);
                     Assert.True(wait <= 1, $"{entity} attacked in tick {tick} with {wait} ticks still to wait.");
                 }
@@ -173,9 +196,9 @@ public class BattleTests
                 Assert.True(match.HitPointsOf(entity) > 0, $"{entity} is still there with no hit points after tick {tick}.");
                 Assert.InRange(match.HitPointsOf(entity), 1, match.Health.Get(entity).Maximum);
             }
-
         }
 
         Assert.InRange(attacks, 50, 5_000);
+        Assert.InRange(attacksWhileStepped, 1, attacks - 1);
     }
 }

@@ -14,9 +14,9 @@ namespace Sim.Combat;
 /// <remarks>
 /// <para>
 /// A melee unit that fights holds its ground among its own side (<see cref="IGroundHolders"/>).
-/// A unit attacks only in a tick in which it has not moved, so a unit of its own side that stops
-/// too close to it steps away alone, and the one that fights goes on fighting: the ranks behind
-/// do not push the front rank about.
+/// It is fighting only where it last attacked from, so a unit of its own side that stops too
+/// close to it steps away alone, and the one that fights stays in its rank: the ranks behind do
+/// not push the front rank about.
 /// </para>
 /// <para>
 /// A melee unit that stands closer than their spacing to one of these has no room in the rank
@@ -29,7 +29,8 @@ namespace Sim.Combat;
 /// <para>
 /// Units that shoot are left out of both. A rank of them that has come into range is pushed on
 /// by the ranks behind like any standing unit, and the block closes up until every rank that can
-/// be in range is: at one tile a rank, a range of 5 fires five ranks deep (design 3.1).
+/// be in range is: at one tile a rank, a range of 5 fires five ranks deep (design 3.1). A unit
+/// that is stepped along like this has not walked, and shoots all the while.
 /// </para>
 /// </remarks>
 public sealed class Fighters : IGroundHolders

@@ -12,7 +12,9 @@ namespace Sim.Combat;
 /// <remarks>
 /// <para>
 /// <b>Attacks.</b> A unit attacks when its wait is over, its target is in reach from where it
-/// stands, and it has not moved in this tick. Then it waits its attack interval. A melee hit lands
+/// stands, and it has not walked in this tick (<see cref="WalkMarks"/>): a step under an order
+/// or toward a target is a walk, and a step that its own side gives it to keep their spacing is
+/// not. Then it waits its attack interval. A melee hit lands
 /// in the tick it is made; a ranged attack fires a <see cref="Shot"/>. A unit that comes into reach
 /// while walking is stopped, and so attacks in the next tick at the earliest. Turning takes no
 /// time, and a unit may walk again in the tick after an attack. A melee hit is reported as a
@@ -56,6 +58,7 @@ public sealed class AttackSystem : ISystem
     private readonly Targeting _targeting;
     private readonly Approach _approach;
     private readonly Fighters _fighters;
+    private readonly WalkMarks _walks;
     private readonly SimEventList _events;
 
     public AttackSystem(
@@ -66,6 +69,7 @@ public sealed class AttackSystem : ISystem
         Targeting targeting,
         Approach approach,
         Fighters fighters,
+        WalkMarks walks,
         SimEventList events)
     {
         ArgumentNullException.ThrowIfNull(bodies);
@@ -75,6 +79,7 @@ public sealed class AttackSystem : ISystem
         ArgumentNullException.ThrowIfNull(targeting);
         ArgumentNullException.ThrowIfNull(approach);
         ArgumentNullException.ThrowIfNull(fighters);
+        ArgumentNullException.ThrowIfNull(walks);
         ArgumentNullException.ThrowIfNull(events);
         _bodies = bodies;
         _movers = movers;
@@ -83,6 +88,7 @@ public sealed class AttackSystem : ISystem
         _targeting = targeting;
         _approach = approach;
         _fighters = fighters;
+        _walks = walks;
         _events = events;
     }
 
@@ -106,7 +112,7 @@ public sealed class AttackSystem : ISystem
                 body,
                 profile,
                 _movers.IndexOf(entity),
-                Moved: body.Position != unit.Stood,
+                Walked: _walks.Walked(entity),
                 TurnToLook: (world.Tick + entity.Value) % CombatRules.LookInterval == 0);
 
             unit.Stood = body.Position;
@@ -278,7 +284,7 @@ public sealed class AttackSystem : ISystem
                 _movers.ValueAt(turn.Mover).Stop();
             }
 
-            if (!reaches || turn.Moved || unit.Wait > Fraction.Zero)
+            if (!reaches || turn.Walked || unit.Wait > Fraction.Zero)
             {
                 return false;
             }
@@ -374,5 +380,5 @@ public sealed class AttackSystem : ISystem
 
     /// <summary>What one unit's turn reads and does not change.</summary>
     private readonly record struct Turn(
-        World World, EntityId Entity, Body Body, AttackProfile Profile, int Mover, bool Moved, bool TurnToLook);
+        World World, EntityId Entity, Body Body, AttackProfile Profile, int Mover, bool Walked, bool TurnToLook);
 }

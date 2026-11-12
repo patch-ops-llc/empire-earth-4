@@ -89,8 +89,9 @@ public static class MatchSetup
         // walk left them, except a worker that holds a place and a unit that is fighting, which
         // stay where they are. The spatial index is rebuilt after both, so that every system after it
         // sees where things stand now. A system that moves bodies goes before it.
-        // Combat comes after movement, so that it sees where everything stands in this tick and
-        // which units have moved in it: a unit attacks only in a tick in which it does not move.
+        // Combat comes after movement, so that it sees where everything stands in this tick. A
+        // unit attacks only in a tick in which it does not walk, and which units have walked is
+        // noted between the walk and the stepping apart: a step away from its own side is no walk.
         // Shots land before the attacks, so a shot fired in one tick flies from the next. Deaths
         // come after both: every attack due in a tick is made before any death of that tick takes
         // effect.
@@ -102,10 +103,12 @@ public static class MatchSetup
         // that a research cannot finish in the tick in which its building falls.
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
+        var walks = new WalkMarks(bodies, combatants);
+        simulation.AddSystem(walks);
         simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, new PlaceHolders(workers), fighters));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
         simulation.AddSystem(new ShotSystem(bodies, shots, targeting, simulation.Events));
-        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, simulation.Events));
+        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, walks, simulation.Events));
         simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
         simulation.AddSystem(new IncomeSystem(data, grid, bodies, movers, workers, workSites, territories, stockpiles, work, research));
         simulation.AddSystem(new ResearchSystem(research));

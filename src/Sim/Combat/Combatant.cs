@@ -54,8 +54,9 @@ public struct Combatant : IStateValue
     public Fraction Wait { get; set; }
 
     /// <summary>
-    /// Where it stood when the attack system last ran. A unit that stands somewhere else now has
-    /// moved in this tick, and a unit attacks only in a tick in which it does not move (design 2.4).
+    /// Where it stood when the attack system last ran. A unit that stands somewhere else after
+    /// the movement of a tick has walked in it (<see cref="WalkMarks"/>), and a unit attacks only
+    /// in a tick in which it does not walk (design 2.4).
     /// </summary>
     public FixedVector2 Stood { get; set; }
 
