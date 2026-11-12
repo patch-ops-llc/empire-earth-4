@@ -42,7 +42,7 @@
   // "reaction_seconds" is the reaction delay of Normal difficulty.
   "fight": {
     "attack_ratio": "1.3",
-    "assumed_enemy_value": 400,
+    "assumed_enemy_value": 3600,
     "retreat_losses": "0.4",
     "reinforce_units": 6,
     "passage": "chokepoint",
