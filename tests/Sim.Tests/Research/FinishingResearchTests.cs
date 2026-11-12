@@ -1,9 +1,8 @@
 using Sim.Core;
-using Sim.Map;
-using Sim.Numerics;
 using Sim.Research;
 using Sim.Setup;
 using Sim.Tech;
+using Sim.Tests.Map;
 using Sim.Tests.Tech;
 using static Sim.Tests.Research.ResearchMatches;
 
@@ -30,7 +29,7 @@ public class FinishingResearchTests
         Assert.Equal([2, 1, 1, 1, 1, 1], match.Research.State.Tiers(0).ToArray());
         Assert.Equal([1, 1, 1, 1, 1, 1], match.Research.State.Tiers(1).ToArray());
         Assert.True(match.Slot(0).IsFree);
-        Assert.Equal(new ResearchEvent(ResearchEventKind.Finished, 7 + TicksToTier2 - 1, 0, Firepower, 2, 1), events[^1]);
+        Assert.Equal(new ResearchEvent(SimEventKind.ResearchFinished, 7 + TicksToTier2 - 1, 0, Firepower, 2, 1), events[^1]);
         Assert.Equal(2, events.Count);
 
         // Tiers are permanent and the price is spent.
@@ -93,8 +92,9 @@ public class FinishingResearchTests
     public void TheEpochRisesWithTheThirdTrackAndIsReportedOnce()
     {
         var match = Create();
-        match.Research.OpenSlot(0, match.PlaceHolder(0, 3, 3));
-        match.Research.OpenSlot(0, match.PlaceHolder(0, 5, 3));
+        var (first, second) = (match.PlaceHolder(0, 3, 3), match.PlaceHolder(0, 5, 3));
+        match.Research.OpenSlot(0, first);
+        match.Research.OpenSlot(0, second);
         var events = match.Events();
 
         match.OrderResearch(0, Mobility);
@@ -105,13 +105,13 @@ public class FinishingResearchTests
         var last = TicksToTier2 - 1;
         Assert.Equal(
             [
-                new ResearchEvent(ResearchEventKind.Started, 0, 0, Mobility, 2, 1),
-                new ResearchEvent(ResearchEventKind.Started, 0, 0, Extraction, 2, 1),
-                new ResearchEvent(ResearchEventKind.Started, 0, 0, Firepower, 2, 1),
-                new ResearchEvent(ResearchEventKind.Finished, last, 0, Mobility, 2, 1),
-                new ResearchEvent(ResearchEventKind.Finished, last, 0, Extraction, 2, 1),
-                new ResearchEvent(ResearchEventKind.Finished, last, 0, Firepower, 2, 2),
-                new ResearchEvent(ResearchEventKind.EpochChanged, last, 0, Firepower, 2, 2),
+                new ResearchEvent(SimEventKind.ResearchStarted, 0, 0, Mobility, 2, 1),
+                new ResearchEvent(SimEventKind.ResearchStarted, 0, 0, Extraction, 2, 1, first),
+                new ResearchEvent(SimEventKind.ResearchStarted, 0, 0, Firepower, 2, 1, second),
+                new ResearchEvent(SimEventKind.ResearchFinished, last, 0, Mobility, 2, 1),
+                new ResearchEvent(SimEventKind.ResearchFinished, last, 0, Extraction, 2, 1, first),
+                new ResearchEvent(SimEventKind.ResearchFinished, last, 0, Firepower, 2, 2, second),
+                new ResearchEvent(SimEventKind.EpochChanged, last, 0, Firepower, 2, 2),
             ],
             events);
         Assert.Equal((2, 1), (match.Research.Tech(0).Epoch, match.Research.Tech(1).Epoch));
@@ -119,7 +119,7 @@ public class FinishingResearchTests
         // A fourth track at the same tier is breadth, not a new epoch.
         match.OrderResearch(0, Protection);
         match.Simulation.Run(TicksToTier2 / 2);
-        Assert.Equal(new ResearchEvent(ResearchEventKind.Finished, last + (TicksToTier2 / 2), 0, Protection, 2, 2), events[^1]);
+        Assert.Equal(new ResearchEvent(SimEventKind.ResearchFinished, last + (TicksToTier2 / 2), 0, Protection, 2, 2), events[^1]);
         Assert.Equal(9, events.Count);
     }
 
@@ -138,13 +138,88 @@ public class FinishingResearchTests
         Assert.Equal(ResearchStatus.Available, match.Research.Tech(0).Research[Firepower].Status);
     }
 
+    /// <summary>
+    /// Research reports on the event list of the simulation, which holds the events of one tick
+    /// in the order they happened. Each says whose research it is, the track, the tier, the
+    /// player's epoch after it, and the holder of the slot.
+    /// </summary>
     [Fact]
-    public void WhoListensChangesNothing()
+    public void WhatHappensToAResearchIsOnTheEventListOfItsTick()
     {
-        var quiet = Create();
-        var heard = Create();
-        heard.Events();
-        foreach (var match in new[] { quiet, heard })
+        var match = Create();
+        var academy = match.PlaceHolder(1);
+        match.Research.OpenSlot(1, academy);
+        match.Research.SetTiers(0, DesignData.Mix(2, 2, 1, 1, 1, 1));
+        Assert.Empty(match.Simulation.Events);
+
+        match.OrderResearch(0, Mobility);
+        match.OrderResearch(1, Firepower);
+        match.OrderResearch(1, Protection);
+        match.OrderResearch(1, Protection);
+        match.Simulation.Tick();
+
+        Assert.Equal(
+            [
+                new ResearchEvent(SimEventKind.ResearchStarted, 0, 0, Mobility, 2, 1),
+                new ResearchEvent(SimEventKind.ResearchStarted, 0, 1, Firepower, 2, 1),
+                new ResearchEvent(SimEventKind.ResearchStarted, 0, 1, Protection, 2, 1, academy),
+            ],
+            match.EventsOnTheList());
+        Assert.All(match.Simulation.Events, listed => Assert.Equal((EntityId.None, default), (listed.Other, listed.Position)));
+
+        match.OrderCancel(1, Protection);
+        match.Simulation.Tick();
+        Assert.Equal([new ResearchEvent(SimEventKind.ResearchCancelled, 1, 1, Protection, 2, 1, academy)], match.EventsOnTheList());
+
+        match.Simulation.Tick();
+        Assert.Empty(match.Simulation.Events);
+
+        match.Simulation.Run(TicksToTier2 - 3);
+        Assert.Equal(
+            [
+                new ResearchEvent(SimEventKind.ResearchFinished, TicksToTier2 - 1, 0, Mobility, 2, 2),
+                new ResearchEvent(SimEventKind.EpochChanged, TicksToTier2 - 1, 0, Mobility, 2, 2),
+                new ResearchEvent(SimEventKind.ResearchFinished, TicksToTier2 - 1, 1, Firepower, 2, 1),
+            ],
+            match.EventsOnTheList());
+    }
+
+    /// <summary>Every kind of event of research is read back as it was added, and no other kind is taken for one.</summary>
+    [Fact]
+    public void AnEventOfResearchIsReadBackWhole()
+    {
+        var match = Create();
+        match.Research.SetTiers(0, DesignData.Mix(9, 9, 3, 3, 3, 7));
+        match.OrderResearch(0, Extraction);
+        match.Simulation.Tick();
+
+        var listed = Assert.Single(match.Simulation.Events);
+        Assert.Equal((SimEventKind.ResearchStarted, 0, 0, EntityId.None), (listed.Kind, listed.Tick, listed.Player, listed.Entity));
+        Assert.True(ResearchEvent.TryRead(listed, out var research));
+        Assert.Equal(new ResearchEvent(SimEventKind.ResearchStarted, 0, 0, Extraction, 8, 7), research);
+
+        Assert.False(ResearchEvent.TryRead(listed with { Kind = (SimEventKind)1000 }, out var other));
+        Assert.Equal(default, other);
+        Assert.False(ResearchEvent.IsResearch(SimEventKind.None));
+    }
+
+    /// <summary>
+    /// The event list is output. A match in which something reads it after every tick runs to the
+    /// same state as one in which nothing does.
+    /// </summary>
+    [Fact]
+    public void WhoReadsTheEventsChangesNothing()
+    {
+        var unread = MatchSetup.Create(DesignData.Data, TestMaps.Open(24, 24), 1, [PlayerSetup.WithoutStart, PlayerSetup.WithoutStart]);
+        for (var player = 0; player < 2; player++)
+        {
+            unread.Research.OpenPlayerSlot(player);
+            unread.Stockpiles.Add(player, Plenty, Plenty);
+        }
+
+        var read = Create();
+        var events = read.Events();
+        foreach (var match in new[] { unread, read })
         {
             match.OrderResearch(0, Firepower);
             match.OrderResearch(1, Protection);
@@ -153,39 +228,8 @@ public class FinishingResearchTests
             match.Simulation.Run(500);
         }
 
-        Assert.Equal(quiet.World.ComputeHash(), heard.World.ComputeHash());
-    }
-
-    /// <summary>
-    /// Design 2.3: "when a research finishes, every existing unit updates", and a unit whose
-    /// maximum hit points change keeps the same fraction of them. The store of hit points is not
-    /// built yet, so this test brings one of its own, and brings it up to date through the
-    /// handler the real one will use.
-    /// </summary>
-    [Fact]
-    public void UnitsOnTheMapKeepTheirFractionOfHitPointsWhenProtectionIsResearched()
-    {
-        var match = Create();
-        var health = match.World.AddStore(new ComponentStore<TestHealth>("test-health"));
-        match.Research.AddTechChangeHandler(new HealthRefresh(match.Bodies, health));
-        var hoplite = DesignData.Chassis("hoplite").Index;
-        var whole = Place(match, health, 0, 3, hoplite, 130_000);
-        var hurt = Place(match, health, 0, 5, hoplite, 52_000);
-        var nearlyDead = Place(match, health, 0, 7, hoplite, 1);
-        var theirs = Place(match, health, 1, 9, hoplite, 52_000);
-
-        match.OrderResearch(0, Firepower);
-        match.Simulation.Run(TicksToTier2);
-        Assert.Equal((130_000, 52_000), (health.Get(whole).HitPoints, health.Get(hurt).HitPoints));
-
-        match.OrderResearch(0, Protection);
-        match.Simulation.Run(TicksToTier2);
-
-        Assert.Equal(162_500, match.Research.Tech(0).Blueprints[hoplite].HitPoints);
-        Assert.Equal((162_500, 162_500), (health.Get(whole).HitPoints, health.Get(whole).Maximum));
-        Assert.Equal((65_000, 162_500), (health.Get(hurt).HitPoints, health.Get(hurt).Maximum));
-        Assert.Equal((1, 162_500), (health.Get(nearlyDead).HitPoints, health.Get(nearlyDead).Maximum));
-        Assert.Equal((52_000, 130_000), (health.Get(theirs).HitPoints, health.Get(theirs).Maximum));
+        Assert.Equal(4, events.Count);
+        Assert.Equal(unread.World.ComputeHash(), read.World.ComputeHash());
     }
 
     [Fact]
@@ -196,26 +240,21 @@ public class FinishingResearchTests
         var calls = new List<string>();
         match.Research.AddTechChangeHandler(new Recorder("first", calls, match));
         match.Research.AddTechChangeHandler(new Recorder("second", calls, match));
-        match.Events().Clear();
-        match.Research.Reported += reported => calls.Add($"reported {reported.Kind}");
 
         match.OrderResearch(0, Firepower);
         match.OrderResearch(0, Protection);
         match.OrderResearch(1, Mobility);
         match.Simulation.Tick();
-        calls.Clear();
         match.OrderCancel(1, Mobility);
         match.Simulation.Run(TicksToTier2 - 1);
 
+        // A cancelled research changes no tech, so nothing is told of it.
         Assert.Equal(
             [
-                "reported Cancelled",
                 "first: player 0, 1/1/1/1/1/1 -> 2/1/1/1/1/1 in tick 899",
                 "second: player 0, 1/1/1/1/1/1 -> 2/1/1/1/1/1 in tick 899",
-                "reported Finished",
                 "first: player 0, 2/1/1/1/1/1 -> 2/2/1/1/1/1 in tick 899",
                 "second: player 0, 2/1/1/1/1/1 -> 2/2/1/1/1/1 in tick 899",
-                "reported Finished",
             ],
             calls);
     }
@@ -228,47 +267,6 @@ public class FinishingResearchTests
 
         Assert.Throws<InvalidOperationException>(() => match.Research.AddTechChangeHandler(new Recorder("late", [], match)));
         Assert.Throws<ArgumentNullException>(() => Create().Research.AddTechChangeHandler(null!));
-    }
-
-    private static EntityId Place(Match match, ComponentStore<TestHealth> health, int player, int tileX, int chassis, long hitPoints)
-    {
-        var unit = match.SpawnUnit(player, MapGrid.TileCenter(tileX, 10), Fixed.Zero);
-        health.Add(unit, new TestHealth { Chassis = chassis, HitPoints = hitPoints, Maximum = match.Research.Tech(player).Blueprints[chassis].HitPoints });
-        return unit;
-    }
-
-    private struct TestHealth : IStateValue
-    {
-        public int Chassis;
-        public long HitPoints;
-        public long Maximum;
-
-        public void Walk(IStateWalker walker)
-        {
-            Chassis = walker.Field(Chassis);
-            HitPoints = walker.Field(HitPoints);
-            Maximum = walker.Field(Maximum);
-        }
-    }
-
-    /// <summary>What the store of hit points will do when a research finishes.</summary>
-    private sealed class HealthRefresh(ComponentStore<Body> bodies, ComponentStore<TestHealth> health) : ITechChangeHandler
-    {
-        public void TechChanged(World world, int player, PlayerTech before, PlayerTech after)
-        {
-            for (var i = 0; i < health.Count; i++)
-            {
-                if (bodies.Get(health.EntityAt(i)).Owner != player)
-                {
-                    continue;
-                }
-
-                ref var unit = ref health.ValueAt(i);
-                var maximum = after.Blueprints[unit.Chassis].HitPoints;
-                unit.HitPoints = HitPointRules.KeepFraction(unit.HitPoints, unit.Maximum, maximum);
-                unit.Maximum = maximum;
-            }
-        }
     }
 
     private sealed class Recorder(string name, List<string> calls, Match match) : ITechChangeHandler

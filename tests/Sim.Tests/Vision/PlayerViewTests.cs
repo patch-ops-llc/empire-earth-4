@@ -654,6 +654,8 @@ public class PlayerViewTests
             SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded,
             SimEventKind.RallyPointSet, SimEventKind.TrainOrdered, SimEventKind.TrainCancelled, SimEventKind.TrainRefunded,
             SimEventKind.TrainRefused, SimEventKind.UnitTrained, SimEventKind.ReservesRefunded,
+            SimEventKind.EpochChanged, SimEventKind.ResearchCancelled, SimEventKind.ResearchFinished, SimEventKind.ResearchLost,
+            SimEventKind.ResearchStarted,
         ];
 
         foreach (var kind in Enum.GetValues<SimEventKind>())

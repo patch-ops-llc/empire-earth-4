@@ -62,8 +62,10 @@ public static class MatchSetup
         var workers = world.AddStore(new ComponentStore<Worker>(Worker.StoreName));
         var workSites = world.AddStore(new ComponentStore<WorkSite>(WorkSite.StoreName));
 
+        var simulation = new Simulation(world);
+
         // Worked out from the state and not state itself. Match.RefreshDerivedState renews it.
-        var research = new MatchResearch(data, world, researchState, stockpiles, data.Rules.Match.EpochCap);
+        var research = new MatchResearch(data, world, researchState, stockpiles, data.Rules.Match.EpochCap, simulation.Events);
         var routes = new RouteCache(grid);
         var spatialIndex = new SpatialIndex(grid, world.Entities, bodies);
 
@@ -89,7 +91,17 @@ public static class MatchSetup
         var placeHolders = new PlaceHolders(workers);
         var places = new MeleePlaces(grid, bodies, movers, combatants, spatialIndex, targeting, fighters, placeHolders);
 
-        var simulation = new Simulation(world);
+        // What a research that finishes brings up to date in the state of what stands on the map,
+        // in this order: the hit points and the speed of the player's units and workers.
+        research.AddTechChangeHandler(new UnitRefresh(combat, bodies, combatants, health, movers, workers));
+
+        // The development tier raises a track the way a research that finishes does, so it is
+        // research's to carry out. Only while the rules switch it on, like the development spawn
+        // further down: otherwise the command has no handler and is dropped.
+        if (data.Rules.Debug.Spawn)
+        {
+            simulation.SetCommandHandler(CommandType.DebugSetTier, new DebugSetTierHandler(research, simulation.Events));
+        }
 
         // The orders in the queues hold supply from the moment they are placed.
         var production = new MatchProduction(data, world.Entities, bodies, producers, structures, stockpiles, supply, research, simulation.Events, players.Count);

@@ -33,11 +33,10 @@ public class PerkScriptTests
         "a unit nobody paid for that died",
     ];
 
-    /// <summary>What the first recorded match no longer reaches under the rules of today: see the second.</summary>
-    private static readonly string[] NeedsTheJoinedRules =
+    /// <summary>What the second recorded match no longer reaches under the rules of today: the first has it.</summary>
+    private static readonly string[] OnlyTheFirstReaches =
     [
-        "a regeneration that stops at the maximum",
-        "a regeneration of a unit that carries Charge",
+        "a charged melee attack",
     ];
 
     private static readonly string[] ItsCommands =
@@ -81,25 +80,26 @@ public class PerkScriptTests
     /// <summary>
     /// What this recorded match is for: it must reach each of the three perks in a match that
     /// was played to them, by researches that were paid for and with units that were trained,
-    /// and the cases beside the plain one that a change could break. Two of them it reached
-    /// when it was recorded and does not now: the second recorded match has them.
+    /// and the cases beside the plain one that a change could break. It reaches every rule of
+    /// the list now that a finished research brings the units on the map up to date (live
+    /// refresh); before that, played by the rules of the fog, it did not reach two of them.
     /// </summary>
     [Fact]
-    public void ItsGoldenReplayReachesTheRulesItGuards()
+    public void ItsGoldenReplayReachesEveryRuleItGuards()
     {
-        AssertReached(EveryRule.Except(NeedsTheJoinedRules), WhatItReaches(ReplayRuns.ReadGolden(GoldenReplay)));
+        AssertReached(EveryRule, WhatItReaches(ReplayRuns.ReadGolden(GoldenReplay)));
     }
 
     /// <summary>
-    /// The second recorded match reaches every rule of the list. It was recorded when units pick
-    /// only what their owner sees and attack the structures of an enemy, which the first was
-    /// not: played by those rules, the orders of the first leave no raider hurt and alive, so
-    /// none of them regenerates.
+    /// The second recorded match was recorded when units pick only what their owner sees and
+    /// attack the structures of an enemy, and before a finished research brought the units on
+    /// the map up to date. Played with that, it reaches every rule of the list but one, which
+    /// the first has.
     /// </summary>
     [Fact]
-    public void ItsSecondGoldenReplayReachesEveryRuleItGuards()
+    public void ItsSecondGoldenReplayReachesTheRulesItGuards()
     {
-        AssertReached(EveryRule, WhatItReaches(ReplayRuns.ReadGolden(SecondGoldenReplay)));
+        AssertReached(EveryRule.Except(OnlyTheFirstReaches), WhatItReaches(ReplayRuns.ReadGolden(SecondGoldenReplay)));
     }
 
     private static void AssertReached(IEnumerable<string> expected, HashSet<string> reached) =>
