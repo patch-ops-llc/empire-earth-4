@@ -77,6 +77,9 @@ public class WallSnapshotTests
         EntityId[] shooters = [match.Spawn(0, SiegeMatches.Peltast, "18.5", "2.5"), match.Spawn(0, SiegeMatches.Peltast, "19.5", "2.5")];
         var lone = match.Spawn(0, SiegeMatches.Hoplite, "29.5", "12.5");
         var inside = match.SpawnWorker(1, "18.5", "12.5");
+
+        // Outside the camp to the south, 5 tiles from the unit inside and out of everybody's way.
+        match.Spotter(0, "18.5", "17.5");
         match.RefreshDerivedState();
         return (match, group, shooters, lone, inside);
     }

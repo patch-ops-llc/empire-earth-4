@@ -195,6 +195,9 @@ public class WallRuleTests
         var target = match.SpawnWorker(1, "18.5", "12.5");
         var inWay = match.WallOn(14, 12);
         var walls = match.WallHitPoints();
+
+        // Outside the camp to the north, 5 tiles from the target.
+        match.Spotter(0, "18.5", "7.5");
         match.OrderAttack(0, target, unit);
 
         match.Run(1);
@@ -222,6 +225,9 @@ public class WallRuleTests
         var unit = match.Spawn(0, Peltast, "5.5", "12.5");
         var target = match.SpawnWorker(1, "16.5", "12.5");
         var walls = match.WallHitPoints();
+
+        // Outside the camp to the north, 5 tiles from the target.
+        match.Spotter(0, "16.5", "7.5");
         match.OrderAttack(0, target, unit);
 
         for (var tick = 0; tick < 400 && match.IsAlive(target); tick++)
@@ -247,6 +253,9 @@ public class WallRuleTests
         var target = match.SpawnWorker(1, "18.5", "12.5");
         var inWay = match.WallOn(10, 12);
         var walls = match.WallHitPoints();
+
+        // Nobody outside sees the middle of a camp this wide: the spotter stands inside it.
+        match.Spotter(0, "18.5", "8.5");
         match.OrderAttack(0, target, unit);
 
         match.Run(1);
@@ -363,6 +372,8 @@ public class WallRuleTests
             }
         }
 
+        // Outside the camp to the north, 5 tiles from the unit inside.
+        match.Spotter(0, "18.5", "7.5");
         match.RefreshDerivedState();
         var walls = match.WallHitPoints();
         if (attackOrder)

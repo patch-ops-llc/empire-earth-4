@@ -94,6 +94,14 @@ internal static class WalledMatches
         return tiles;
     }
 
+    /// <summary>
+    /// A worker of a player that stands where it sees a unit behind walls: an attack order may
+    /// name only what its player sees (design 5.3), and the order ends when the target is lost
+    /// from sight. Make it after the units of a test, so that each of them has the ID it would
+    /// have without it. Where there is no fog it changes nothing.
+    /// </summary>
+    public static EntityId Spotter(this Match match, int player, string x, string y) => match.SpawnWorker(player, x, y);
+
     /// <summary>Queues a move order for the next tick to run.</summary>
     public static void OrderMove(this Match match, int player, FixedVector2 target, params EntityId[] entities) =>
         match.Simulation.Commands.Enqueue(match.World.Tick, CombatMatches.MoveCommand(player, target, entities));
