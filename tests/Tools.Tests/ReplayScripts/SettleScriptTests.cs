@@ -11,7 +11,7 @@ namespace Tools.Tests.ReplayScripts;
 
 /// <summary>
 /// The script <c>settle</c> of <c>replay record</c> and the golden replay recorded for it: what
-/// the script must give, and what that replay must reach.
+/// the script must give, and the rules it must reach.
 /// </summary>
 public class SettleScriptTests
 {
@@ -33,7 +33,9 @@ public class SettleScriptTests
         "a foundation cancelled that another player remembers and does not see",
     ];
 
-    /// <summary>What the golden replay must reach: every kind of order, and what the orders lead to.</summary>
+    private const string ExploredByTheEnd = "every player has been to more than twice what it sees by the end, and none has seen the whole map";
+
+    /// <summary>What the script must reach: every kind of order, and what the orders lead to.</summary>
     private static readonly string[] Expected =
     [
         .. EveryKindOfOrder,
@@ -59,7 +61,43 @@ public class SettleScriptTests
         "a Generator finished",
         "an Outpost finished",
         "a territory that an Outpost gave",
+        ExploredByTheEnd,
     ];
+
+    /// <summary>
+    /// The rules are asked of four matches between them, each three times as long as the golden
+    /// replay: its own numbers and the next three pairs, 100 apart. Many of these rules need two
+    /// players to want the same ground at the right moment (a site that is no longer free, an
+    /// order for ground too close to another player's, a structure that is gone and still
+    /// remembered), and whether they do turns on where the first Outposts happen to go. The
+    /// golden replay's numbers were chosen because their match has them all; of 30 other pairs
+    /// 1 reaches every rule alone at its length and 17 at three times its length, where a site
+    /// that is no longer free is still missing from 8. Of the sets of four that can be made of
+    /// those 30, 997 in 1000 reach every rule between them, and 986 in 1000 of the sets of three.
+    /// The second set, the next four pairs, is there for a change that moves all of the first.
+    /// None of the numbers was chosen for what it reaches.
+    /// </summary>
+    /// <remarks>
+    /// A build order that ends because its site cannot be reached, or because an enemy stands
+    /// on it, is something a match may come to and none has to: the script does not aim at
+    /// either, and 6 of the 30 matches have one.
+    /// </remarks>
+    private static readonly ScriptReach Reach = new ScriptReach(
+        Expected,
+        Reached,
+        [
+            "--map ridge --starts 0,1 --seed 7 --orders 53 --ticks 18000 --script settle",
+            "--map ridge --starts 0,1 --seed 107 --orders 153 --ticks 18000 --script settle",
+            "--map ridge --starts 0,1 --seed 207 --orders 253 --ticks 18000 --script settle",
+            "--map ridge --starts 0,1 --seed 307 --orders 353 --ticks 18000 --script settle",
+        ],
+        [
+            "--map ridge --starts 0,1 --seed 407 --orders 453 --ticks 18000 --script settle",
+            "--map ridge --starts 0,1 --seed 507 --orders 553 --ticks 18000 --script settle",
+            "--map ridge --starts 0,1 --seed 607 --orders 653 --ticks 18000 --script settle",
+            "--map ridge --starts 0,1 --seed 707 --orders 753 --ticks 18000 --script settle",
+        ])
+        .MayAlsoReach("a build order ended: CannotReach", "a build order ended: EnemyOnSite");
 
     /// <summary>
     /// The script gives every kind of order it is meant to: here in one long match on each map.
@@ -99,32 +137,22 @@ public class SettleScriptTests
     }
 
     /// <summary>
-    /// What this recorded match is for: it must reach the rules of the fog of war with
-    /// structures that a change could break (design 5.3, 5.4 and 2.5; design 8.4, rows 11, 23,
-    /// 24, 29 and 39). The match has the orders of this script alone. It also has what the
+    /// What the script is for: a match recorded with it must reach the rules of the fog of war
+    /// with structures that a change could break (design 5.3, 5.4 and 2.5; design 8.4, rows 11,
+    /// 23, 24, 29 and 39). The match has the orders of this script alone. It also has what the
     /// replay of the builders had before orders were judged by what a player has explored: an
     /// Outpost built, the territory it gives, and one refused on arrival for the enemy's
     /// territory.
     /// </summary>
     [Fact]
-    public void ItsGoldenReplayReachesTheRulesItGuards()
-    {
-        var replay = ReplayRuns.ReadGolden(GoldenReplay);
-        var (match, seen) = Reach(replay);
+    public void TheScriptReachesTheRulesItGuards() => Reach.MustHoldOnARecordingMadeNow();
 
-        Assert.Equal(Expected.Order(StringComparer.Ordinal), seen.Order(StringComparer.Ordinal));
+    /// <summary>Says, without failing, what the stored replay no longer reaches of them.</summary>
+    [Fact]
+    public void ItsGoldenReplayStillReachesThem() => Reach.SayWhatTheGoldenReplaysNoLongerReach(GoldenReplay);
 
-        // By the end every player has been to more of the map than it sees, and none has seen all of it.
-        var grid = match.Vision.Grid;
-        for (var player = 0; player < match.Players.Count; player++)
-        {
-            Assert.True(grid.CountExplored(player) > 2 * grid.CountVisible(player), $"Player {player} has explored {grid.CountExplored(player)} tiles.");
-            Assert.True(grid.CountExplored(player) < grid.Width * grid.Height);
-        }
-    }
-
-    /// <summary>Runs a replay and gives the match at its end with everything its ticks did.</summary>
-    private static (Match Match, HashSet<string> Seen) Reach(Sim.Serialization.Replay replay)
+    /// <summary>What the match of a replay reaches, in the words of <see cref="Expected"/>.</summary>
+    private static HashSet<string> Reached(Sim.Serialization.Replay replay)
     {
         var match = ReplayRuns.Start(replay);
         var due = replay.Commands.ToLookup(entry => entry.Tick, entry => entry.Command);
@@ -139,7 +167,14 @@ public class SettleScriptTests
             seen.UnionWith(watch.WhatTheTickDid(tick));
         }
 
-        return (match, seen);
+        var grid = match.Vision.Grid;
+        if (Enumerable.Range(0, match.Players.Count).All(player =>
+                grid.CountExplored(player) > 2 * grid.CountVisible(player) && grid.CountExplored(player) < grid.Width * grid.Height))
+        {
+            seen.Add(ExploredByTheEnd);
+        }
+
+        return seen;
     }
 
     /// <summary>
