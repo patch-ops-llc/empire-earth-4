@@ -1,0 +1,113 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ai/<id>.jsonc",
+  "description": "One personality of the computer player (game design 5.5): the workers it keeps, when it expands, which tracks it researches first, which lines its army is made of and when that army attacks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "economy", "research", "army", "fight"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": { "description": "The personality's ID. It must equal the file name.", "$ref": "#/definitions/id" },
+    "name": { "description": "The personality's display name, such as Swarm. Not empty, and no space at either end.", "type": "string", "pattern": "^\\S(.*\\S)?$" },
+    "economy": {
+      "description": "Item 1 of game design 5.5.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workers", "expand_at_materials"],
+      "properties": {
+        "workers": {
+          "description": "How many workers it keeps, by epoch. The first entry is for epoch 1, and epochs rise from one entry to the next. An entry holds until the epoch of the next.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["epoch", "workers"],
+            "properties": {
+              "epoch": { "description": "The epoch from which this count holds.", "type": "integer", "minimum": 1, "maximum": 20 },
+              "workers": { "description": "The workers it keeps, counting those in training.", "type": "integer", "minimum": 1, "maximum": 200 }
+            }
+          }
+        },
+        "expand_at_materials": { "description": "It expands to another deposit when its stockpile holds more Materials than this.", "type": "integer", "minimum": 0, "maximum": 1000000 }
+      }
+    },
+    "research": {
+      "description": "Item 2 of game design 5.5.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["weights"],
+      "properties": {
+        "weights": {
+          "description": "One weight for every track of tracks.jsonc, by track ID. Of the researches it may start and can pay for, it starts the one with the highest weight. Tracks with the same weight go in the order of tracks.jsonc.",
+          "type": "object",
+          "propertyNames": { "$ref": "#/definitions/id" },
+          "additionalProperties": { "$ref": "#/definitions/weight" }
+        }
+      }
+    },
+    "army": {
+      "description": "Item 3 of game design 5.5.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lines"],
+      "properties": {
+        "lines": {
+          "description": "The lines its army is made of. Of each it trains the newest chassis it has unlocked.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["line", "share"],
+            "properties": {
+              "line": { "description": "A line ID from the roster in rules.jsonc.", "$ref": "#/definitions/id" },
+              "share": { "description": "The line's part of the army's units, against the shares of the other lines: 3 and 1 make three units of four.", "$ref": "#/definitions/weight" }
+            }
+          }
+        }
+      }
+    },
+    "fight": {
+      "description": "Item 5 of game design 5.5. The value of an army is the price of its units, Materials and Energy added.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attack_ratio", "assumed_enemy_value", "retreat_losses", "reinforce_units", "passage", "raid", "reaction_seconds"],
+      "properties": {
+        "attack_ratio": { "description": "It attacks when its army's value is this many times its estimate of the enemy's, or when it is at its supply cap. From 1 to 100.", "$ref": "#/definitions/number" },
+        "assumed_enemy_value": { "description": "The least it takes the enemy's army to be worth. Its estimate is the value of the enemy units it has seen and has not seen die, and never less than this.", "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "retreat_losses": { "description": "It retreats when it has lost this share of the value of the force it attacked with. Above 0 and at most 1, such as \"0.4\".", "$ref": "#/definitions/number" },
+        "reinforce_units": { "description": "The fewest units it sends after a force that is already attacking.", "type": "integer", "minimum": 1, "maximum": 200 },
+        "passage": { "description": "The kind of map marker its army goes through on the way to the enemy. A raid goes through the other kind.", "enum": ["chokepoint", "open_field"] },
+        "raid": {
+          "description": "The raids on the enemy's workers and Generators.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["line", "party"],
+          "properties": {
+            "line": { "description": "The line it raids with: a line ID from the roster in rules.jsonc. It raids only when its army has units of this line.", "$ref": "#/definitions/id" },
+            "party": { "description": "The units of that line it sends on one raid.", "type": "integer", "minimum": 1, "maximum": 200 }
+          }
+        },
+        "reaction_seconds": { "description": "The seconds a reason to attack, retreat, defend or raid must hold before it acts on it. Above 0, at most 3600 and a whole number of ticks.", "$ref": "#/definitions/number" }
+      }
+    }
+  },
+  "definitions": {
+    "id": {
+      "description": "Lowercase letters, digits and underscores, starting with a letter.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$"
+    },
+    "weight": { "type": "integer", "minimum": 1, "maximum": 1000 },
+    "number": {
+      "description": "A whole number, or text in plain decimal notation such as \"2.6\". A bare number with a fraction is not accepted, so that every value is read exactly.",
+      "anyOf": [
+        { "type": "integer" },
+        { "type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$" }
+      ]
+    }
+  }
+}

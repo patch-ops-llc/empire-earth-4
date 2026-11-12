@@ -33,6 +33,7 @@ public sealed class SpatialIndex
     // The entries of square c are those from _firstOfCell[c] up to _firstOfCell[c + 1], in ID order.
     private readonly int[] _firstOfCell;
     private Entry[] _entries = new Entry[64];
+    private int _filed;
 
     public SpatialIndex(MapGrid grid, EntityRegistry entities, ComponentStore<Body> bodies)
     {
@@ -46,8 +47,27 @@ public sealed class SpatialIndex
         _firstOfCell = new int[(_columns * _rows) + 1];
     }
 
-    /// <summary>The number of entities in the index.</summary>
-    public int Count { get; private set; }
+    /// <summary>
+    /// The number of living entities in the index. Like the queries, it leaves out an entity that
+    /// was destroyed after it was filed, so that it is the same in a match that has run on and in
+    /// one restored from a snapshot of it.
+    /// </summary>
+    public int Count
+    {
+        get
+        {
+            var living = 0;
+            for (var i = 0; i < _filed; i++)
+            {
+                if (_entities.IsAlive(_entries[i].Entity))
+                {
+                    living++;
+                }
+            }
+
+            return living;
+        }
+    }
 
     /// <summary>Files every living body again, from its position now.</summary>
     public void Rebuild()
@@ -60,13 +80,13 @@ public sealed class SpatialIndex
 
         // Count the bodies of each square, turn the counts into where each square begins, then
         // file the bodies in store order, which is ID order.
-        Count = 0;
+        _filed = 0;
         for (var i = 0; i < _bodies.Count; i++)
         {
             if (_entities.IsAlive(_bodies.EntityAt(i)))
             {
                 _firstOfCell[CellOf(_bodies.ValueAt(i).Position) + 1]++;
-                Count++;
+                _filed++;
             }
         }
 

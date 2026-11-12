@@ -16,6 +16,8 @@ public class DataCheckToolTests
         Assert.Contains("is valid.", output, StringComparison.Ordinal);
         Assert.Contains("  research:     8 tiers, from 2 to 9\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         Assert.Contains("  accents:      5\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("  structures:   8 of the 11 in the roster\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("  ai:           2\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         Assert.Matches("content hash: sha256:[0-9a-f]{64}", output);
     }
 
@@ -36,6 +38,18 @@ public class DataCheckToolTests
     [InlineData("lines/line_infantry.jsonc", "\"id\": \"peltast\"", "\"id\": \"hoplite\"", "lines/line_infantry.jsonc: $.chassis[0].id: chassis 'hoplite' is already defined in lines/guard.jsonc")]
     [InlineData("lines/line_infantry.jsonc", "\"primary\": \"manufacturing\"", "\"primary\": \"industry\"", "lines/line_infantry.jsonc: $.primary: unknown track 'industry'")]
     [InlineData("rules.jsonc", "\"hp\": \"1.25\"", "\"hp\": \"1.123456789\"", "lines/artillery.jsonc: $.chassis[2]: a stat or price of chassis 'trebuchet' is too large to compute exactly at some tier mix")]
+    [InlineData("rules.jsonc", "\"hp\": \"1.25\"", "\"hp\": \"1.123456789\"", "structures/capitol.jsonc: $.hp: the hit points are too large to compute exactly at some Protection tier")]
+    [InlineData("structures/capitol.jsonc", "\"footprint\": 4", "\"footprint\": 5", "maps/ridge.jsonc: $.starts[1]: must mirror start 0 under mirror_x")]
+    [InlineData("structures/capitol.jsonc", "\"territory_radius\": 16", "\"territory_radius\": 40", "maps/ridge.jsonc: $.starts: the starting Capitols are too close: their centers must be at least 80 tiles apart")]
+    [InlineData("structures/barracks.jsonc", "[\"line_infantry\", \"guard\"]", "[\"line_infantry\"]", "structures/barracks.jsonc: $.trains: line 'guard' names this structure in \"built_at\", so \"trains\" must list it")]
+    [InlineData("structures/works.jsonc", "\"cavalry_armor\", ", "\"cavalry_armor\", \"guard\", ", "structures/works.jsonc: $.trains: line 'guard' is built at 'barracks' by its \"built_at\", so it cannot be trained here")]
+    [InlineData("structures/works.jsonc", "\"track\": \"mobility\"", "\"track\": \"speed\"", "structures/works.jsonc: $.track: unknown track 'speed'")]
+    [InlineData("structures/generator.jsonc", "\"work_site\": \"energy\"", "\"work_site\": \"materials\"", "structures/generator.jsonc: $.work_site: unknown resource 'materials'; use energy")]
+    [InlineData("structures/academy.jsonc", "\"id\": \"academy\"", "\"id\": \"school\"", "structures/academy.jsonc: $.id: must be 'academy' to match the file name, found 'school'")]
+    [InlineData("structures/wall.jsonc", "\"footprint\": 1", "\"footprint\": 2", "structures/wall.jsonc: $.wall: a wall is laid tile by tile, so its \"footprint\" must be 1, found 2")]
+    [InlineData("structures/tower.jsonc", "\"interval_seconds\": 1", "\"interval_seconds\": \"0.33\"", "structures/tower.jsonc: $.attack.interval_seconds: 0.33 s is not a whole number of ticks")]
+    [InlineData("structures/tower.jsonc", "\"can_hit_all_from_protection\": 5", "\"can_hit_all_from_protection\": 10", "structures/tower.jsonc: $.attack.can_hit_all_from_protection: tier 10 changes nothing: tracks have tiers 1 to 9")]
+    [InlineData("structures/tower.jsonc", "\"cannot_hit\": [\"air\"]", "\"cannot_hit\": [\"planes\"]", "structures/tower.jsonc: $.attack.cannot_hit[0]: unknown line 'planes'")]
     [InlineData("rules.jsonc", "\"epoch_cap\": 4", "\"epoch_cap\": 10", "rules.jsonc: $.match.epoch_cap: must be between 1 and 9, found 10")]
     [InlineData("rules.jsonc", "\"tracks_needed\": 3", "\"tracks_needed\": 7", "rules.jsonc: $.epoch.tracks_needed: must be between 1 and 6, found 7")]
     [InlineData("tracks.jsonc", "\"Antimatter\"", "\"Antimatter\", \"Beyond\"", "tracks.jsonc: $.tracks[5].tiers: must name 9 tiers, one per epoch, found 10")]
@@ -94,12 +108,12 @@ public class DataCheckToolTests
     public void AStrayFileFails()
     {
         using var data = Repository.CopyOfData();
-        data.Write("structures/capitol.jsonc", "{}");
+        data.Write("weapons/v_rocket.jsonc", "{}");
 
         var (exitCode, _, errors) = Run("datacheck", data.Path);
 
         Assert.Equal(ExitCodes.Failed, exitCode);
-        Assert.Contains("structures/capitol.jsonc: unexpected file", errors, StringComparison.Ordinal);
+        Assert.Contains("weapons/v_rocket.jsonc: unexpected file", errors, StringComparison.Ordinal);
     }
 
     [Fact]
