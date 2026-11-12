@@ -60,6 +60,16 @@ public class FogScriptTests
     /// fights: those order every unit about so often that a unit sent to where its target was
     /// last seen seldom gets there.
     /// </summary>
+    /// <remarks>
+    /// The match was recorded before a shell had a blast and before Towers (16a, 16b). Under those
+    /// rules its fights go another way, and the one unit its owner sent away from a shot is no
+    /// longer under fire in the tick it is sent. What that order was for is still reached: a shot
+    /// that lands on a target its owner no longer sees. Nor does a target of an attack order die
+    /// in it any more while the order stands, so "a unit whose attack order ends where it stands
+    /// because its target died" is not reached here: the replay of the script <c>combat-perks</c>
+    /// reaches it, and <see cref="CombatPerkScriptTests"/> has it on its list. An existing replay
+    /// is never recorded again, so this one keeps the orders it has.
+    /// </remarks>
     [Fact]
     public void ItsGoldenReplayReachesTheRulesItGuards()
     {
@@ -79,7 +89,7 @@ public class FogScriptTests
 
         string[] expected =
         [
-            .. EveryKindOfOrder,
+            .. EveryKindOfOrder.Where(kind => kind != "a unit sent away from a shot that has far to go"),
             "sight worked out with another result",
             "a tick in which sight is not worked out",
             "a unit that sees further than a worker",
@@ -92,7 +102,6 @@ public class FogScriptTests
             "an attack order refused for a unit the player does not see",
             "a unit sent to where its target was last seen",
             "a unit idle after it walked to where its target was last seen",
-            "a unit whose attack order ends where it stands because its target died",
             "a unit fighting a target that only another unit of its owner sees",
             "a shot that lands on a target its owner no longer sees",
         ];
