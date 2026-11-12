@@ -80,6 +80,7 @@ If joining fails, the menu says why in orange:
 | Look somewhere else on the map | Click the minimap in the bottom right corner, or hold the left button on it and drag |
 | Send the selected units somewhere on the minimap | Right-click the minimap |
 | Select one of your units | Click it |
+| Select one of your structures | Click it |
 | Select several | Hold the left button and drag a box round them |
 | Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is already in |
 | Clear the selection | Click the ground |
@@ -105,7 +106,10 @@ If joining fails, the menu says why in orange:
 - When you play alone, the other player's workers never move. Nothing controls them.
 - In a shared match, both players see the same workers in the same places. An order takes a moment longer to start than it does alone, because it travels to the host first.
 - If the other player leaves or closes the game, the bar at the top says so and your match goes on without them. If the host leaves, the match ends for both.
-- Each player has a Capitol where they start, on the empty square that their workers stand around. It is not drawn yet, but it is there: nobody can stand on it, and units walk round it. Nothing can be built yet.
+- Each player has a Capitol where they start, on the square their workers stand around: a stone hall with a keep and a pointed roof in the player's color. Nobody can stand on it, and units walk round it. Nothing can be built yet.
+- The ground a player holds is tinted in the player's color, with a line along its edge. It reaches 16 tiles from the middle of the Capitol. The line follows the sides of the tiles, so it has steps: a tile is either held or it is not. A deposit pays only when all of it is inside, and structures will have to stand inside.
+- Click your Capitol to select it. A green line runs round it, and the panel at the bottom of the window names it and its hit points. Nothing can damage a structure yet, so they stay full.
+- Structures and units are not selected together. A box takes units only, and a structure leaves the selection as soon as a unit joins it. A selected structure takes no orders yet, so a right-click does nothing while one is selected.
 
 ## The fog of war
 

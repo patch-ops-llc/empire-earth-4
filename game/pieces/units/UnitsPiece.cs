@@ -25,10 +25,14 @@ public sealed class UnitsPiece : ViewPiece
         });
     }
 
+    // The simulation drops a move order that moves nobody, so a selection without a unit in it,
+    // as a structure, is given none.
     private static bool Move(OrderRequest request)
     {
         var client = request.View.Client;
         var target = request.Target.Point;
-        return client.Submit(new Command(CommandType.Move, client.Player, request.Selected, target.X, target.Y));
+        var movers = request.View.Match.Movers;
+        return Array.Exists(request.Selected, movers.Contains)
+            && client.Submit(new Command(CommandType.Move, client.Player, request.Selected, target.X, target.Y));
     }
 }

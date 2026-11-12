@@ -28,6 +28,7 @@ public static class ViewPieces
         // 14v. Research: the grid.
 
         // 15v. Construction and production: structures, the build menu, the production panel.
+        new StructuresPiece(),
 
         // 17v. Fog of war.
         new FogPiece(),

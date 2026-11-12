@@ -81,7 +81,7 @@ godot --headless --path game -- --host --net-test 300
 godot --headless --path game -- --join 127.0.0.1 --net-test 300
 ```
 
-Selection works without physics. A click or a box is turned into an area of the ground, the simulation's spatial index names the units there, and each is tested again where it appears on screen. Started with Godot's `--verbose`, the game prints every selection, every order and every message to the player.
+Selection works without physics. A click or a box is turned into an area of the ground, the simulation's spatial index names the units there, and each is tested again where it appears on screen. A structure is found by the line from the camera through the pointer, tested against the box that stands on its tiles. Started with Godot's `--verbose`, the game prints every selection, every order and every message to the player.
 
 What the player sees and does in a match is put together from pieces, each in a folder of its own under `game/pieces/` and named in `game/pieces/ViewPieces.cs`. A piece adds what it has to four things the game gives it:
 
@@ -103,6 +103,7 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | Look somewhere else on the map | Left click on the minimap, or hold the button on it and drag |
 | Send the selected units somewhere on the minimap | Right click on the minimap |
 | Select a unit of your own | Left click on it |
+| Select a structure of your own | Left click on it. Structures and units are not selected together |
 | Select several | Drag a box round them with the left button |
 | Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is in |
 | Clear the selection | Left click on the ground |
