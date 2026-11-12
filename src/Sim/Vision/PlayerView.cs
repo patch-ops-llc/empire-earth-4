@@ -493,23 +493,73 @@ public sealed class PlayerView
 
     /// <summary>True when the player may know of an event: see <see cref="CollectEvents"/>.</summary>
     public bool Knows(in SimEvent happened) =>
-        happened.Player == Player
-        || (IsSeenWhereItHappens(happened.Kind)
-            && (IsOfAStructure(happened.Kind) && _match.Data.StructureOf((int)happened.Amount) is { } structure
-                ? _vision.Grid.IsAnyVisible(Player, TilesAround(happened.Position, structure.Footprint))
-                : _vision.Grid.IsVisible(Player, happened.Position)));
+        happened.Player == Player || (IsSeenWhereItHappens(happened.Kind) && SeesWhereItHappened(in happened));
 
     /// <summary>
     /// True for the kinds of event that anyone sees who sees the tile they happen on. Every other
     /// kind is known only to the player it names.
     /// </summary>
     public static bool IsSeenWhereItHappens(SimEventKind kind) =>
-        kind is SimEventKind.Blast or SimEventKind.Death or SimEventKind.MeleeHit or SimEventKind.ShotFired or SimEventKind.ShotHit or SimEventKind.ShotLost
-        || IsOfAStructure(kind);
+        kind is SimEventKind.Death or SimEventKind.MeleeHit or SimEventKind.ShotFired or SimEventKind.ShotHit or SimEventKind.ShotLost
+            or SimEventKind.SplashHit
+        || IsOfAStructure(kind)
+        || IsOfAnArea(kind);
 
     /// <summary>The kinds of event that happen to a structure, which is seen by any tile of its footprint.</summary>
     private static bool IsOfAStructure(SimEventKind kind) =>
         kind is SimEventKind.StructurePlaced or SimEventKind.StructureFinished or SimEventKind.StructureRemoved;
+
+    /// <summary>
+    /// The kinds of event that happen in a circle, whose radius is the event's amount as the raw
+    /// value of a <see cref="Fixed"/>. One is seen by any tile of the circle.
+    /// </summary>
+    private static bool IsOfAnArea(SimEventKind kind) => kind is SimEventKind.Blast or SimEventKind.Splash;
+
+    private bool SeesWhereItHappened(in SimEvent happened)
+    {
+        if (IsOfAStructure(happened.Kind) && _match.Data.StructureOf((int)happened.Amount) is { } structure)
+        {
+            return _vision.Grid.IsAnyVisible(Player, TilesAround(happened.Position, structure.Footprint));
+        }
+
+        return _vision.Grid.IsVisible(Player, happened.Position)
+            || (IsOfAnArea(happened.Kind) && SeesTileWithin(happened.Position, happened.Amount));
+    }
+
+    /// <summary>
+    /// True when the player sees a tile whose center is within a distance of a point, the
+    /// distance itself included: the measure by which a tile is in sight (design 5.3).
+    /// </summary>
+    private bool SeesTileWithin(FixedVector2 center, long radiusRaw)
+    {
+        var grid = _vision.Grid;
+        if (radiusRaw <= 0)
+        {
+            return false;
+        }
+
+        var radius = Math.Min(radiusRaw, (long)Math.Max(grid.Width, grid.Height) * Fixed.RawOne);
+        const long Half = Fixed.RawOne / 2;
+        // Shifting right rounds down, also below zero.
+        var firstRow = (int)Math.Max(0, (center.Y.Raw - radius) >> Fixed.FractionalBits);
+        var lastRow = (int)Math.Min(grid.Height - 1, (center.Y.Raw + radius) >> Fixed.FractionalBits);
+        var firstTile = (int)Math.Max(0, (center.X.Raw - radius) >> Fixed.FractionalBits);
+        var lastTile = (int)Math.Min(grid.Width - 1, (center.X.Raw + radius) >> Fixed.FractionalBits);
+        for (var y = firstRow; y <= lastRow; y++)
+        {
+            var dy = (y * (long)Fixed.RawOne) + Half - center.Y.Raw;
+            for (var x = firstTile; x <= lastTile; x++)
+            {
+                var dx = (x * (long)Fixed.RawOne) + Half - center.X.Raw;
+                if ((dx * dx) + (dy * dy) <= radius * radius && grid.IsVisible(Player, x, y))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>The square of tiles with this middle.</summary>
     private static TileSquare TilesAround(FixedVector2 center, int size)

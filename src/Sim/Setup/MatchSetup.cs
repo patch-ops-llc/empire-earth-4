@@ -112,10 +112,8 @@ public static class MatchSetup
         // order it is given ends the build order: the handlers of those orders are wrapped once
         // more. An attack order is not, because a worker never takes one.
         var structureFactory = new StructureFactory(
-            data, world, bodies, health, structures, territories, workSites, structureTiles, research, production, simulation.Events, players.Count)
-        {
-            Turrets = turrets,
-        };
+            data, world, bodies, health, structures, territories, turrets, workSites, structureTiles, research, production,
+            simulation.Events, players.Count);
         var construction = new ConstructionRules(
             data, world, grid, bodies, buildOrders, combatants, foundations, movers, structures, territories, workers,
             stockpiles, research, work, structureFactory, spatialIndex, move, simulation.Events, players.Count)
@@ -220,8 +218,8 @@ public static class MatchSetup
             Structures = structures,
             Supply = supply,
             Territories = territories,
-            Vision = vision,
             Turrets = turrets,
+            Vision = vision,
             Work = work,
             Workers = workers,
             WorkSites = workSites,

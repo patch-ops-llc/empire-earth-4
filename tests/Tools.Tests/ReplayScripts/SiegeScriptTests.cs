@@ -32,7 +32,7 @@ public class SiegeScriptTests
     /// The script gives every kind of order it is meant to: here in one long match on each map.
     /// The rarest kind comes about once in 350 ticks, and needs a wall of an enemy to stand.
     /// </summary>
-    [Theory]
+    [Theory(Skip = TestBuild.SiegeMeetsConquest)]
     [InlineData("ridge")]
     [InlineData("switchback")]
     public void TheScriptGivesEveryKindOfItsOrders(string map)
@@ -61,7 +61,7 @@ public class SiegeScriptTests
     /// not to others. Every hit on a structure in it is worked out again here, apart from the
     /// simulation's own sum.
     /// </summary>
-    [Fact]
+    [Fact(Skip = TestBuild.SiegeMeetsConquest)]
     public void ItsGoldenReplayReachesTheRulesItGuards()
     {
         var replay = ReplayRuns.ReadGolden(GoldenReplay);

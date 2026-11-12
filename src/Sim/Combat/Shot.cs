@@ -18,6 +18,10 @@ namespace Sim.Combat;
 /// A shot with a <see cref="Blast"/> is a shell. Where it lands, every enemy within that distance
 /// takes its damage, and it lands even when its target is gone: at <see cref="Aim"/>.
 /// </para>
+/// <para>
+/// A shot with a <see cref="SplashShare"/> hits its target like any other and deals that share
+/// of its damage to the other enemies round it. It has no blast: an attack has one or the other.
+/// </para>
 /// </remarks>
 public struct Shot : IStateValue
 {
@@ -59,6 +63,17 @@ public struct Shot : IStateValue
     /// </summary>
     public Fixed Blast { get; set; }
 
+    /// <summary>
+    /// The splash the attacker had when it fired (design 2.3, Overgunned II): the share of
+    /// <see cref="Damage"/> that every other enemy within <see cref="SplashRadius"/> of the
+    /// target takes when the shot lands. Zero for a shot without splash. A shot that is lost
+    /// splashes nobody.
+    /// </summary>
+    public Fraction SplashShare { get; set; }
+
+    /// <summary>How far the splash reaches from the target's center, in tiles. Zero for a shot without splash.</summary>
+    public Fixed SplashRadius { get; set; }
+
     public void Walk(IStateWalker walker)
     {
         ArgumentNullException.ThrowIfNull(walker);
@@ -71,5 +86,7 @@ public struct Shot : IStateValue
         Firepower = walker.Field(Firepower);
         Aim = new FixedVector2(walker.Field(Aim.X), walker.Field(Aim.Y));
         Blast = walker.Field(Blast);
+        SplashShare = walker.Field(SplashShare);
+        SplashRadius = walker.Field(SplashRadius);
     }
 }

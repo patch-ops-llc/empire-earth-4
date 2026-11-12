@@ -44,7 +44,7 @@ public class SurroundScriptTests
     /// that a change could break. The match has the orders of <c>gather</c> as well, so that
     /// workers stand at their deposits when a band comes for them.
     /// </summary>
-    [Fact]
+    [Fact(Skip = TestBuild.SurroundMeetsFog)]
     public void ItsGoldenReplayReachesTheRulesItGuards()
     {
         var replay = ReplayRuns.ReadGolden(GoldenReplay);

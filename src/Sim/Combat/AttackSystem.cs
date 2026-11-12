@@ -75,7 +75,17 @@ namespace Sim.Combat;
 /// <b>Fog.</b> A unit fights only what its owner sees (design 5.3). A target that an idle unit or a
 /// unit on an attack-move picked is given up in the tick its owner stops seeing it, like one out
 /// of range. A unit on an attack order then walks to where the target was last seen and is idle
-/// there. A shot already in the air still lands.
+/// there. A shot already in the air still lands. A structure is seen by any tile of its
+/// footprint, and an attack order on one holds while it is out of sight, since it stands where
+/// it was seen. One that is destroyed out of its attackers' owner's sight is still remembered by
+/// that player, so the units go on to where it stood, and are idle there.
+/// </para>
+/// <para>
+/// <b>Accents</b> (design 2.3). The rate bonus of a melee unit makes each tick of waiting count as
+/// more than one (<see cref="AttackProfile.Rate"/>). A unit with splash also deals a share of
+/// each hit to the other enemies round its target: a melee hit at once, a shot when it lands
+/// (<see cref="SplashDamage"/>). What a target's accents take off a hit is the target's side,
+/// read when the hit lands (<see cref="CombatRules.DamageToUnit"/>).
 /// </para>
 /// </remarks>
 public sealed class AttackSystem : ISystem
@@ -89,6 +99,9 @@ public sealed class AttackSystem : ISystem
     private readonly Fighters _fighters;
     private readonly MeleePlaces _places;
     private readonly SimEventList _events;
+
+    // Scratch for one splash, emptied at its start. Not state.
+    private readonly List<EntityId> _splashed = [];
 
     public AttackSystem(
         ComponentStore<Body> bodies,
@@ -182,6 +195,14 @@ public sealed class AttackSystem : ISystem
             case UnitOrder.Attack:
                 if (!_targeting.IsEnemyThere(turn.World, owner, unit.Target, out var named))
                 {
+                    // A structure its owner remembers and has not seen gone: the owner cannot
+                    // know, so the unit goes on to where the structure stood (design 5.3).
+                    if (_targeting.IsRememberedGone(turn.World, owner, unit.Target, out _))
+                    {
+                        GoWhereLastSeen(ref unit, in turn);
+                        return false;
+                    }
+
                     if (turn.Mover >= 0)
                     {
                         _movers.ValueAt(turn.Mover).Stop();
@@ -191,7 +212,9 @@ public sealed class AttackSystem : ISystem
                     return false;
                 }
 
-                if (!_targeting.KnowsForAnOrder(owner, unit.Target, in named))
+                // Losing sight ends the order for a unit, which may have walked on. A structure
+                // stands where it was seen, so the order on one holds while it is out of sight.
+                if (!_targeting.IsStructure(unit.Target) && !_targeting.Sees(owner, unit.Target, in named))
                 {
                     GoWhereLastSeen(ref unit, in turn);
                     return false;
@@ -333,7 +356,8 @@ public sealed class AttackSystem : ISystem
 
     /// <summary>
     /// Ends an attack order whose target its owner no longer sees (design 5.3): the unit walks to
-    /// where the target was last seen and is idle there.
+    /// where the target was last seen and is idle there. The same for a remembered structure that
+    /// is gone without its owner's enemy having seen it go.
     /// </summary>
     /// <remarks>
     /// The walk is a move order, so the unit does not fight on the way, and does not take the
@@ -447,10 +471,20 @@ public sealed class AttackSystem : ISystem
                 _movers.ValueAt(turn.Mover).Facing = (target.Position - position).ToAngle();
             }
 
+            // The attacker's side is settled now, also for a shot that lands later, and the splash of
+            // the hit is a share of the same side.
+            var side = profile.Damage;
             if (profile.Melee)
             {
-                var damage = _targeting.Hit(unit.Target, profile.Damage, profile.Line, profile.Firepower);
+                var damage = _targeting.Hit(unit.Target, side, profile.Line, profile.Firepower);
                 _events.Add(SimEventKind.MeleeHit, turn.Body.Owner, unit.Target, turn.Entity, nearest, damage);
+                if (profile.SplashRadius > Fixed.Zero)
+                {
+                    var hit = new SplashingHit(
+                        turn.Body.Owner, turn.Entity, unit.Target, target.Position, profile.SplashRadius, side, profile.SplashShare,
+                        profile.Line, profile.Firepower);
+                    SplashDamage.Land(turn.World, _targeting, _bodies, _events, _splashed, in hit);
+                }
             }
             else
             {
@@ -461,11 +495,13 @@ public sealed class AttackSystem : ISystem
                     Target = unit.Target,
                     Aim = target.Position,
                     Speed = profile.ShotSpeed,
-                    Damage = profile.Damage,
+                    Damage = side,
                     Owner = turn.Body.Owner,
                     Line = profile.Line,
                     Firepower = profile.Firepower,
                     Blast = profile.Blast,
+                    SplashShare = profile.SplashShare,
+                    SplashRadius = profile.SplashRadius,
                 });
                 _events.Add(SimEventKind.ShotFired, turn.Body.Owner, shot, turn.Entity, position);
             }

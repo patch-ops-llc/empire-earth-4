@@ -115,14 +115,14 @@ public sealed class Match
     /// <summary>The ground each Capitol and Outpost holds for its owner.</summary>
     public required ComponentStore<Territory> Territories { get; init; }
 
+    /// <summary>The attack of each finished structure that has one: the Towers.</summary>
+    public required ComponentStore<Turret> Turrets { get; init; }
+
     /// <summary>
     /// What each player sees: the fog of war, which is state, and the questions asked of it. What
     /// draws a match for a player reads it through a <see cref="PlayerView"/>.
     /// </summary>
     public required MatchVision Vision { get; init; }
-
-    /// <summary>The attack of each finished structure that has one: the Towers.</summary>
-    public required ComponentStore<Turret> Turrets { get; init; }
 
     /// <summary>Assigns workers to work sites. Not state: see <see cref="WorkAssignments"/>.</summary>
     public required WorkAssignments Work { get; init; }

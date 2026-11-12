@@ -11,7 +11,8 @@ namespace Sim.Structures;
 /// <summary>
 /// Puts structures on the map. A structure comes in two steps (design 2.5): it is laid, from
 /// which moment it blocks its tiles and has its full hit points, and it is finished, from which
-/// moment it gives what its file says: a territory, a research slot, a Generator's places.
+/// moment it gives what its file says: a territory, a research slot, a Generator's places, a
+/// Tower's attack.
 /// Construction lays a structure when its worker arrives and finishes it when it has built
 /// itself; the match setup and fixtures do both at once, through <see cref="StructureSetup"/>.
 /// </summary>
@@ -27,15 +28,13 @@ public sealed class StructureFactory
     private readonly ComponentStore<Health> _health;
     private readonly ComponentStore<PlacedStructure> _structures;
     private readonly ComponentStore<Territory> _territories;
+    private readonly ComponentStore<Turret> _turrets;
     private readonly ComponentStore<WorkSite> _workSites;
     private readonly StructureTiles _tiles;
     private readonly MatchResearch _research;
     private readonly MatchProduction _production;
     private readonly SimEventList _events;
     private readonly int _playerCount;
-
-    /// <summary>The attacks of finished structures that have one: the Towers. A match sets it.</summary>
-    public ComponentStore<Turret>? Turrets { get; init; }
 
     public StructureFactory(
         GameData data,
@@ -44,6 +43,7 @@ public sealed class StructureFactory
         ComponentStore<Health> health,
         ComponentStore<PlacedStructure> structures,
         ComponentStore<Territory> territories,
+        ComponentStore<Turret> turrets,
         ComponentStore<WorkSite> workSites,
         StructureTiles tiles,
         MatchResearch research,
@@ -57,6 +57,7 @@ public sealed class StructureFactory
         ArgumentNullException.ThrowIfNull(health);
         ArgumentNullException.ThrowIfNull(structures);
         ArgumentNullException.ThrowIfNull(territories);
+        ArgumentNullException.ThrowIfNull(turrets);
         ArgumentNullException.ThrowIfNull(workSites);
         ArgumentNullException.ThrowIfNull(tiles);
         ArgumentNullException.ThrowIfNull(research);
@@ -68,6 +69,7 @@ public sealed class StructureFactory
         _health = health;
         _structures = structures;
         _territories = territories;
+        _turrets = turrets;
         _workSites = workSites;
         _tiles = tiles;
         _research = research;
@@ -130,8 +132,8 @@ public sealed class StructureFactory
 
     /// <summary>
     /// Gives a laid structure what comes with completion (design 2.5): the territory of a Capitol
-    /// or an Outpost, a research slot, the work site of a Generator, the queue of a structure that
-    /// trains. Call it once for a structure.
+    /// or an Outpost, a research slot, the work site of a Generator, the attack of a Tower, the
+    /// queue of a structure that trains. Call it once for a structure.
     /// </summary>
     /// <exception cref="ArgumentException">The entity is no living structure.</exception>
     /// <exception cref="InvalidOperationException">
@@ -163,7 +165,7 @@ public sealed class StructureFactory
         if (def.Attack is not null)
         {
             // A Tower's attack comes with completion (design 2.5): ready, and with no target yet.
-            Turrets?.Add(entity, default);
+            _turrets.Add(entity, default);
         }
 
         _production.Open(entity);

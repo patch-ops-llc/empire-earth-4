@@ -151,13 +151,13 @@ internal static class SiegeMatches
     /// <summary>An open field of 32 by 24 tiles.</summary>
     public static Match Field(GameData? data = null) => Create(TestMaps.Open(32, 24), data);
 
-    /// <summary>A unit of a chassis of the match's own data.</summary>
+    /// <summary>
+    /// A unit of a chassis of the match's own data. What the players see is worked out again, as
+    /// <see cref="CombatMatches.Spawn"/> does, so that an order for the first tick may name what the unit sees.
+    /// </summary>
     public static EntityId Unit(this Match match, int player, string chassis, string x, string y)
     {
         var unit = match.SpawnChassis(player, match.Data.Chassis.Single(candidate => candidate.Id == chassis).Index, TestMatches.Point(x, y));
-
-        // What the players see is worked out again, as CombatMatches.Spawn does, so that an
-        // order given for the first tick finds what the unit sees.
         match.Vision.Refresh();
         return unit;
     }

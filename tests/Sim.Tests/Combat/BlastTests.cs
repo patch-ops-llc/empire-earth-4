@@ -212,6 +212,9 @@ public class BlastTests
         // a worker of the Ballista's owner sees it for the order, and all the way it walks.
         match.SpawnWorker(0, "15.5", "5.5");
         var start = match.PositionOf(target);
+
+        // The Ballista reaches further than it sees: a worker of its side keeps the target in sight.
+        match.SpawnWorker(0, "8.5", "5.5");
         match.OrderAttack(0, target, ballista);
         match.Run(1);
         Assert.Equal(1, match.Shots.Count);

@@ -138,10 +138,10 @@ A kind of perk is a rule in the code with numbers from this file. Which accent g
 | --- | --- | --- | --- |
 | `range_bonus` | `multiplier`, 1 or more | Multiplies attack range. | Ranged attacks |
 | `attack_rate_bonus` | `multiplier`, 1 or more | Multiplies attacks per second. | Melee attacks |
-| `splash` | `share`, `radius` | Each hit also deals `share` of its damage to every other enemy within `radius` tiles of the target. | Attacks without a blast radius |
+| `splash` | `share`, `radius` | Each hit also deals `share` of its damage, taken before anything a target applies, to every other enemy whose center is within `radius` tiles of the target's center when the hit lands. It reaches only what the attacker's line can hit, and a shot that is lost splashes nobody. | Attacks without a blast radius |
 | `blast_radius_bonus` | `multiplier`, 1 or more | Multiplies the blast radius. | Attacks with a blast radius |
-| `area_damage_reduction` | `multiplier`, above 0 to 1 | Multiplies area damage taken. | Every unit |
-| `plating` | `multiplier`, above 0 to 1 | Multiplies damage taken from an attacker whose effective Firepower is below this unit's effective Protection. | Every unit |
+| `area_damage_reduction` | `multiplier`, above 0 to 1 | Multiplies area damage taken: the blast of a shell, for everyone in it, and a splash, for everyone but the target of the hit. | Every unit |
+| `plating` | `multiplier`, above 0 to 1 | Multiplies damage taken from an attacker whose effective Firepower is below this unit's effective Protection. The attacker's is fixed when it attacks and a Tower's is its owner's tier; the unit's is read when the hit lands. | Every unit |
 | `sight_bonus` | `tiles`, whole | Adds to sight. | Every unit |
 | `charge` | `distance`, `multiplier` 1 or more | The first hit after moving at least `distance` tiles deals `multiplier` times the damage. | Units with an attack |
 | `batch` | `time_multiplier` | Each queue slot produces two units in `time_multiplier` times the build time of one. | Every unit |
