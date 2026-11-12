@@ -203,6 +203,9 @@ public sealed class CombatRules
             Firepower = blueprint.EffectiveTiers[_data.TrackRoles.Firepower],
             IntervalTicks = attack.IntervalTicks,
             Rate = melee && blueprint.Perks.AttackRateBonus is { } bonus ? bonus.Multiplier.ToFraction() : Fraction.One,
+            Charge = blueprint.Perks.Charge is { } charge
+                ? new ChargeProfile(charge.Distance.ToFraction().ToFixed(), charge.Multiplier.ToFraction())
+                : null,
             Range = melee ? Fixed.Zero : range,
             RangeSquared = melee ? 0 : FixedVector2.SquareRaw(range),
             MinRangeSquared = !melee && blueprint.MinRange is { } minRange ? FixedVector2.SquareRaw(minRange) : 0,
@@ -235,6 +238,9 @@ public sealed class AttackProfile
     /// <summary>The chassis's effective Firepower tier.</summary>
     public required int Firepower { get; init; }
 
+    /// <summary>Charge (design 2.3), when the chassis carries it.</summary>
+    public required ChargeProfile? Charge { get; init; }
+
     /// <summary>The wait between two attacks, in ticks.</summary>
     public required int IntervalTicks { get; init; }
 
@@ -261,3 +267,10 @@ public sealed class AttackProfile
 
     public required long AcquisitionSquared { get; init; }
 }
+
+/// <summary>
+/// Charge (design 2.3): "the first attack after moving 4 or more tiles deals +50% damage".
+/// </summary>
+/// <param name="Distance">The distance a unit must have walked since its last attack, in tiles.</param>
+/// <param name="Multiplier">What the attacker's side of all damage of that one attack is multiplied by.</param>
+public sealed record ChargeProfile(Fixed Distance, Fraction Multiplier);

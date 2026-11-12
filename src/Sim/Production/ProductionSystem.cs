@@ -23,7 +23,8 @@ namespace Sim.Production;
 /// placed by <see cref="EconomySetup.SpawnWorker"/> and a unit of a chassis by
 /// <see cref="CombatSpawn.SpawnChassis"/>, so each has its full hit points and the stats of its
 /// owner's tech in this tick. The units of a pair are created one after the other, the first on
-/// the better tile.
+/// the better tile. A unit of a chassis keeps the Materials paid for it in its
+/// <see cref="Perks.PerkCounts"/>: the order's price divided by the units it made.
 /// </para>
 /// <para>
 /// <b>Rally point.</b> While none is set, the units stay where they appear. Once one is set, a
@@ -133,6 +134,12 @@ public sealed class ProductionSystem : ISystem
         {
             var position = MapGrid.TileCenter(tiles[i].X, tiles[i].Y);
             units[i] = order.IsWorker ? match.SpawnWorker(body.Owner, position) : match.SpawnChassis(body.Owner, order.Unit, position);
+            if (!order.IsWorker)
+            {
+                // What Reserves refunds a share of (design 2.3): each unit of a pair has half the pair's price.
+                match.PerkCounts.Get(units[i]).Paid = new Fraction(order.Materials, order.Count);
+            }
+
             _events.Add(SimEventKind.UnitTrained, body.Owner, units[i], structure, position, TrainEvent.Amount(order.Unit, 1));
         }
 

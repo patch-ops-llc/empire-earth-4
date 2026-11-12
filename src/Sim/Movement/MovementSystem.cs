@@ -72,6 +72,12 @@ public sealed class MovementSystem : ISystem
     private readonly RouteCache _routes;
     private readonly EnemyBlocking _blocking;
 
+    /// <summary>
+    /// Who is told of every step a mover walks here, when the match keeps count of the distance a
+    /// unit has walked (Charge, design 2.3).
+    /// </summary>
+    public IWalkCounter? WalkCounter { get; init; }
+
     public MovementSystem(MapGrid grid, ComponentStore<Body> bodies, ComponentStore<Mover> movers, RouteCache routes)
     {
         ArgumentNullException.ThrowIfNull(grid);
@@ -127,7 +133,12 @@ public sealed class MovementSystem : ISystem
 
             ref var body = ref _bodies.Get(entity);
             var turnToLook = (world.Tick + entity.Value) % LookInterval == 0;
-            body.Position = Walk(ref mover, i, body.Position, turnToLook);
+            var from = body.Position;
+            body.Position = Walk(ref mover, i, from, turnToLook);
+            if (WalkCounter is not null && body.Position != from)
+            {
+                WalkCounter.Walked(entity, from, body.Position);
+            }
         }
     }
 
