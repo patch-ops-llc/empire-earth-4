@@ -95,7 +95,7 @@ public class SiegeScriptTests
     /// </summary>
     /// <remarks>
     /// It was recorded before a match could be lost. Now its first player loses its only Capitol
-    /// in tick 850 and is out (design 5.1), and what it ordered after that is dropped, so the
+    /// early on and is out (design 5.1), and what it ordered after that is dropped, so the
     /// match no longer reaches the four rules of <see cref="NeedsBothSidesForLong"/>. The second
     /// recorded match reaches them. What this one reaches of conquest is in
     /// <see cref="ConquestByAttackReplayTests"/>.
