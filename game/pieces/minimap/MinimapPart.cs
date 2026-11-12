@@ -31,6 +31,9 @@ public partial class MinimapPart : InterfacePart
     private MinimapPicture _picture = null!;
     private PanelContainer _box = null!;
 
+    /// <summary>What the minimap shows of structures and territory.</summary>
+    public MinimapStructures Structures => _picture.Structures;
+
     protected override void Attach()
     {
         var map = View.Match.Map;

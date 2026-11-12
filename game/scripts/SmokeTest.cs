@@ -89,6 +89,9 @@ public sealed class SmokeTest
         // 15v, second half. Production: a worker trained to a rally point.
         new ProductionSmoke(),
 
+        // Structure looks, of M20: tier looks and banners against the match.
+        new LooksSmoke(),
+
         // 17v. Fog of war.
 
         // 24v. Minimap: an order given on it.

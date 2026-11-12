@@ -5,14 +5,15 @@ using Sim.Economy;
 namespace Game;
 
 /// <summary>
-/// The picture of the minimap: the terrain, the deposits, every unit as a dot in its owner's
-/// color, and the outline of the ground the camera shows. It takes the presses on it and says
+/// The picture of the minimap: the terrain, the territories, the deposits, the structures, every
+/// unit as a dot in its owner's color, and the outline of the ground the camera shows. It takes the presses on it and says
 /// what they ask for, and it changes nothing itself.
 /// </summary>
 /// <remarks>
-/// It is drawn in this order, each over those before it: terrain, deposits, the shade of the fog
-/// when there is one, other players' units, the local player's units, the outline of the view,
-/// the mark of an order. What the player may not know is left out by <see cref="MinimapSight"/>.
+/// It is drawn in this order, each over those before it: terrain, territory, deposits,
+/// structures, the shade of the fog when there is one, other players' units, the local player's
+/// units, the outline of the view, the mark of an order. What the player may not know is left
+/// out by <see cref="MinimapSight"/>, and of structures by the list <see cref="MinimapStructures"/> reads.
 /// </remarks>
 public partial class MinimapPicture : Control
 {
@@ -37,6 +38,7 @@ public partial class MinimapPicture : Control
     private static readonly Color EdgeColor = new(0.35f, 0.39f, 0.47f);
 
     private readonly Vector2[] _viewOutline = new Vector2[5];
+    private readonly MinimapStructures _structures = new();
 
     private MatchView? _view;
     private MinimapGeometry _geometry;
@@ -45,6 +47,9 @@ public partial class MinimapPicture : Control
     private bool _looking;
     private Vector2 _markAt;
     private double _markLeft;
+
+    /// <summary>What the picture shows of structures and territory.</summary>
+    public MinimapStructures Structures => _structures;
 
     /// <summary>The view is asked to look at a point of the ground, as map x and y in tiles.</summary>
     public event Action<Vector2>? Looked;
@@ -134,7 +139,9 @@ public partial class MinimapPicture : Control
 
         var whole = new Rect2(Vector2.Zero, _geometry.Size);
         DrawTextureRect(_terrain, whole, tile: false);
+        _structures.DrawTerritory(this, view, _geometry);
         DrawDeposits(view);
+        _structures.DrawStructures(this, view, _geometry);
         if (_sight.Shade is { } shade)
         {
             DrawTextureRect(shade, whole, tile: false);
