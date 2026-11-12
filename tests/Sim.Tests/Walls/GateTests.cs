@@ -283,6 +283,49 @@ public class GateTests
     }
 
     [Fact]
+    public void PlayersWithoutAGateShareARouteAndTheOwnerOfOneHasItsOwn()
+    {
+        // The wall of player 1 runs down the column x = 14 to y = 18 with a gate at (14, 4).
+        // One worker of each of three players stands on the tile (5, 2), and all are sent to
+        // the tile (20, 2).
+        var match = Create(Tests.Map.TestMaps.Open(32, 24), players: 3);
+        for (var y = 0; y <= 18; y++)
+        {
+            match.PlaceStructure(1, y == 4 ? Gate : Wall, 14, y);
+        }
+
+        EntityId[] workers = [match.SpawnWorker(0, "5.25", "2.5"), match.SpawnWorker(1, "5.5", "2.5"), match.SpawnWorker(2, "5.75", "2.5")];
+        match.RefreshDerivedState();
+        foreach (var player in new[] { 0, 1, 2 })
+        {
+            match.OrderMove(player, Center(20, 2), workers[player]);
+        }
+
+        match.Run(1);
+
+        // Two searches for three movers with the same two ends: one on the grid everyone
+        // shares, and one on the grid of player 1.
+        const int Start = (2 * 32) + 5;
+        const int Goal = (2 * 32) + 20;
+        Assert.All(workers, worker => Assert.Equal(
+            (MoveState.Following, Start, Goal),
+            (match.Movers.Get(worker).State, match.Movers.Get(worker).RouteStart, match.Movers.Get(worker).RouteGoal)));
+        Assert.Equal(2, match.Routes.SearchCount);
+        Assert.Same(match.Routes.Get(0, Start, Goal), match.Routes.Get(2, Start, Goal));
+        Assert.Same(match.Routes.Get(Start, Goal), match.Routes.Get(0, Start, Goal));
+        Assert.Contains((4 * 32) + 14, match.Routes.Get(1, Start, Goal).Tiles);
+        Assert.Contains((19 * 32) + 14, match.Routes.Get(0, Start, Goal).Tiles);
+        Assert.True(match.Routes.Get(1, Start, Goal).Tiles.Count < match.Routes.Get(0, Start, Goal).Tiles.Count);
+        Assert.Equal(2, match.Routes.SearchCount);
+
+        // And each walks the route of its own grid to the end, where the three are enemies of
+        // each other and stand beside one another.
+        match.Run(700);
+        Assert.Equal((20, 2), match.TileOf(workers[1]));
+        Assert.All(workers, worker => Assert.InRange(match.DistanceSquared(worker, workers[1]), 0, Squared("2")));
+    }
+
+    [Fact]
     public void AUnitInItsOwnGateIsHitFromTheTileBesideItAndNotPickedByAMeleeUnit()
     {
         var match = WithCamp();
