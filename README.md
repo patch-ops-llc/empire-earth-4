@@ -54,10 +54,11 @@ The game starts in `scenes/main.tscn`. It loads `game/data/` through the simulat
 
 The match runs through the lockstep session of `src/Net/`: every frame the game takes in what the network brought, hands the session the time that passed, and the session runs the ticks, 20 a second. Alone, the host and the player are in one process with no network. Hosting, the game listens on UDP port 24642 unless told otherwise, and its own player joins over the loopback. The game only reads the match and never changes it. A move order leaves as a command through the session and runs a few ticks later. A player who leaves, or closes the window, tells the host so; the others play on. When the host leaves, the match ends for everyone.
 
-Every match writes its replay, with the state hash of every tick, to the folder `matches` in the game's user data folder. A match that stops on a desync also writes a snapshot of its state beside the replay, and `desync-diff` compares the files of two players:
+Every match writes its replay, with the state hash of every tick, to the folder `matches` in the game's user data folder. A network match that stops on a desync also writes one desync bundle beside the replay: the replay, the last state the games agreed on, the state of every tick the fault may be in, the hash of every store for each of those ticks, and the build and the system. The page that ends the match names it, and [docs/desync.md](docs/desync.md) tells a tester what to send. `desync-diff` compares the bundles of two players, or one bundle with a run on this machine, and names the first tick and the first store that differ, and the fields:
 
 ```sh
-dotnet run --project src/Tools -- desync-diff host_p0.replay guest_p1.replay
+dotnet run --project src/Tools -- desync-diff host_p0.desync.zip guest_p1.desync.zip
+dotnet run --project src/Tools -- desync-diff guest_p1.desync.zip
 ```
 
 The game version is the text that two players must share. `Directory.Build.props` takes it from the environment variable `GAME_VERSION`, which the export workflow sets to the tag or to `dev-` and the commit; any other build is `dev`.
@@ -69,8 +70,8 @@ Arguments after `--` on the command line start a match without the menu:
 | `--alone` | Starts a match alone at once, with no network. |
 | `--host [port]` | Hosts a match at once. |
 | `--join <address>[:port]` | Joins a match at once. |
-| `--match-files <folder>` | Writes replays and snapshots to this folder. |
-| `--net-test <ticks>` | With `--host` or `--join`: plays a match with nobody at the keyboard, on the local address only. The host starts when the other game is ready, each game orders its units to move, the host ends the match after this many ticks, and each game prints a line that starts with `NET_TEST_OK` with the last tick and the state hash. The two lines must agree. |
+| `--match-files <folder>` | Writes replays and desync bundles to this folder. |
+| `--net-test <ticks>` | With `--host` or `--join`: plays two matches with nobody at the keyboard, on the local address only. In the first, the host starts when the other game is ready, each game orders its units to move, and the host ends the match after this many ticks. The second is a desync made on purpose: both games go back to the first page and host or join again, the joining game moves one of its units by the smallest step on its own machine only, both must stop because they no longer agree, and each must have written a desync bundle that says of its own game what is true of it. Its files go to a folder beside the one for match files, with `-desync` added to the name. Each game then prints what the end screen says, a line that starts with `NET_TEST_DESYNC` and names its bundle, and last a line that starts with `NET_TEST_OK` with the last tick and the state hash of the first match. The two `NET_TEST_OK` lines must agree. |
 
 Two games on one machine, the second in another terminal once the first has printed that it is hosting. CI runs the same pair:
 
@@ -136,7 +137,7 @@ Godot builds every project as `ExportRelease` for an export. `Directory.Build.pr
 | `game/ui/` | What the player does to the match, as scripts: the menu and lobby where a match is started alone, hosted or joined; the frame of the interface round a match; the selection, the box and the rings that show it; the one answer to what is under the pointer; and the table that turns a click into an order, with the mark it leaves on the ground. Orders leave through the session of `Net`. |
 | `game/pieces/` | The pieces of the view, a folder each: what a piece draws in the world, shows in the interface, lets the pointer find and adds to the order table and to the smoke test. `ViewPieces.cs` lists them. |
 | `schemas/` | JSON Schemas for the files in `game/data/`. |
-| `docs/` | [determinism.md](docs/determinism.md): the rules that keep the simulation deterministic, the kernel, the byte format, snapshots, replays and the golden replays. [data-authoring.md](docs/data-authoring.md): how the data files are written and checked. [testers.md](docs/testers.md): how a tester gets a build and starts it. |
+| `docs/` | [determinism.md](docs/determinism.md): the rules that keep the simulation deterministic, the kernel, the byte format, snapshots, replays and the golden replays. [data-authoring.md](docs/data-authoring.md): how the data files are written and checked. [testers.md](docs/testers.md): how a tester gets a build and starts it. [desync.md](docs/desync.md): what a tester sends when a match stops because the games disagree. |
 | `.github/workflows/` | `ci.yml`, `determinism.yml` and `export.yml`, described above. |
 | `global.json` | Pins the .NET SDK and the Godot version, and selects the test runner. |
 | `Directory.Build.props` | C# settings shared by every project: target framework, nullable, warnings as errors, analyzers, overflow checking, and optimization for exports. |

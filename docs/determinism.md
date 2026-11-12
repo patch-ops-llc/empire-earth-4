@@ -283,6 +283,63 @@ dotnet run --project src/Tools -- replay record <file> --map <id> [--data <folde
 
 `verify` prints one line for each replay (`ok`, `PARTIAL` for a file that is cut short or has no end record, or `FAILED` with the tick and both hashes) and exits with 1 unless every replay is whole and reproduced. A folder is searched for files that end in `.replay`. The lines name no folder and are the same on every system. `update` and `record` are for golden replays, below. Replays are tooling for developers: the game has no screen for them.
 
+## Finding a desync
+
+In a network match every peer reports its state hash once a second (`HostOptions.HashInterval`), and the host compares the reports. When two differ, the host stops every peer at one last tick with the reason `Desync` and the tick of the comparison that failed. That tick is not the tick of the fault: the fault is somewhere in the second before it, and by the time the slowest report is in, the peers have run a few ticks further. Three things turn "the hashes differ" into a store, an entity and a field.
+
+**`StoreHasher`** (`src/Sim/Core/`) takes the state hash apart: one hash for what the world itself holds (the tick, the random generator, the list of entities) and one for each store. It asks the world for its stores, so a store added by any system is a part with no change here. The parts are hashed apart and are not the state hash cut up: they only ever say which part differs. It changes nothing in the world.
+
+**`DesyncWatch`** (`src/Net/Files/`) follows a match that a `ClientSession` runs. After every tick it keeps the hash of every part and the whole state, the first for the last 512 ticks and the second for the last 64 ticks or 32 megabytes; once a second it keeps the whole state for longer, 24 seconds; and it keeps the commands since the oldest of those states. That costs a tick about one more hash of the state and one snapshot, which is less than the tick itself in the golden replays. When the session stops on a desync it makes the bundle:
+
+- The **agreed state** is the newest state it kept from no later than the comparison before the one that failed, which every peer passed.
+- It then runs the match **a second time** from the agreed state, in a match built afresh from the description, with the same commands, and compares every tick with the hashes of the first run. A machine that gets the same states "repeats itself". One that does not has changed its state in a way its commands do not account for: state the walk misses, or something outside the simulation that wrote to it.
+- The **states** of the ticks the fault may be in, those after the last comparison passed up to the one that failed, are the states the match had, as kept after each tick. For a machine that was too far behind to still have them, they are the second run's, as long as that run gave the hashes of the first.
+
+**`DesyncBundle`** is the one file a peer leaves, beside its replay and with the ending `.desync.zip`. It is a zip archive:
+
+```text
+about.txt               what the file is, in words, then one "key: value" line for each fact:
+                        the player, the match, the tick of the failed comparison, the final
+                        tick, the tick of the agreed state, the names of the parts, what the
+                        second run found, and what the game says of its build and its system
+match.replay            the replay, with a state hash for every tick
+agreed.snapshot         the agreed state. Missing when the peers differed at their first
+                        comparison, or when the state was no longer kept
+final.snapshot          the state the match stopped in
+hashes.txt              a line of part names, then for each tick from the agreed state to the
+                        last its number and the hash of each part, as the match ran. Without
+                        an agreed state, every tick the watch still had
+states/tick-N.snapshot  the state after N ticks, for each tick the fault may be in
+```
+
+`Net` may not ask what machine it runs on, so the game hands the watch those facts: the game version, a debug or a release build, the operating system, the architecture, the .NET runtime, the Godot version, the processor, the culture and the time. Nothing names the player, the machine or a folder. `DesyncBundle.Read` takes nothing on trust: a file that is not such an archive, lacks a part or unpacks to more than a bundle can is refused with `InvalidDataException`.
+
+The game does this in `MatchFiles`, for a hosted and for a joined match, and the page that ends the match names the file and has a button that shows it. A match alone has no other machine and keeps nothing. [desync.md](desync.md) tells a tester what to send.
+
+The `desync-diff` tool reads bundles, with no Godot:
+
+```sh
+dotnet run --project src/Tools -- desync-diff <bundle> <bundle> [--data <folder>] [--limit <n>] [--from-start]
+dotnet run --project src/Tools -- desync-diff <bundle> [--data <folder>] [--limit <n>] [--from-start]
+```
+
+Given the bundles of two players of one match, it reports, in this order:
+
+1. Each bundle's match and ticks, and the two machines side by side, with every fact that differs marked.
+2. `First tick that differs`: the first tick for which the two have different hashes. `First store that differs`: the first store, in the order of the walk, whose hash differs in that tick, and then every part that does. The order is that of the names and says nothing of cause; when more than one store differs, the fields below say more.
+3. Whether each machine repeated itself, and what this machine gets when it runs each side's commands from the agreed state: a third opinion on which of the two went wrong. `--from-start` runs the whole match here instead.
+4. `Reading:` one sentence on what that means. Two machines that both repeat themselves compute differently: look at what differs between them. One that does not repeat itself is the one to look at.
+5. The fields that differ in the first tick that differs, by store, entity and field name, as `desync-diff` lists them. A store that keeps its values by entity gets the entity beside each field; any other store is compared field by field in the order of its walk. When a bundle lacks the state of that tick and this machine's run cannot stand in for it, the states the match stopped in are compared instead, the stores that differed first in front, and the report says how many ticks later they are.
+
+Given one bundle, it runs the match here and reports the same against this machine's run. That finds a fault when this machine computes as the other player's did; when it repeats the bundle exactly, the report says that the other bundle is needed.
+
+It exits with 0 when it found no difference, 1 when it found one or could not read a file, and 2 when its arguments make no sense. It still reads the files of a build from before the bundle, a `.replay` and a `.snapshot` from each of two peers.
+
+- **A new store needs nothing.** The watch, the bundle and the tool name the parts by what the world has registered. A store shows in a report as soon as it is in the world, under the name it gave itself.
+- **The second run trusts `Snapshot.Restore`.** A system whose derived data is not brought in line after a restore (see "Derived data") makes every machine fail to repeat itself, in the same tick and the same store. That is a fault worth finding, and it is not the desync.
+- **What is kept is bounded.** The peers run on until the host has every report and its order to stop has arrived, a few ticks as a rule. When that takes more than two seconds, a bundle has the states of the ticks in question only from its second run, and when it takes more than about twenty, it has no agreed state and no second run, and says so. It still has the hashes of every part for its last 512 ticks, so two such bundles still name the tick and the store.
+- **CI forces one.** The network match that `ci.yml` plays between two copies of the game is followed by a second, in which the joining game moves one unit by the smallest step on its own machine. Both games must stop and each must write its bundle and say so in words. Each then reads its own bundle back and fails the step unless it says what that game knows: the host's that it repeated itself, the other's that it did not, from the tick after the fault and in `bodies`. The step does not run `desync-diff`; with `--match-files <folder>` the two bundles are left in `<folder>-desync` for it.
+
 ## Golden replays
 
 `tests/golden/replays/` holds recorded matches that every build must reproduce, and `tests/golden/data/` holds the data they were recorded with. `ci.yml` verifies them for every pull request:

@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../Sim/Sim.csproj" />
+    <ProjectReference Include="../Net/Net.csproj" />
   </ItemGroup>
 
 </Project>

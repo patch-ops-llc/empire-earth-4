@@ -114,7 +114,9 @@ Every match writes a replay, a small file with the orders both players gave. The
 - Windows: `%APPDATA%\Godot\app_userdata\empire-earth-4\matches`
 - macOS: `~/Library/Application Support/Godot/app_userdata/empire-earth-4/matches`
 
-A file is named after the time the match started, the map and the player: `2026-11-11_19-30-05_ridge_p0.replay` is the host's and `..._p1.replay` the other player's. When a match stops because the two games disagree, a second file with the same name and the ending `.snapshot` appears beside each.
+A file is named after the time the match started, the map and the player: `2026-11-11_19-30-05_ridge_p0.replay` is the host's and `..._p1.replay` the other player's.
+
+When a match stops because the two games disagree, each game saves one more file with the same name and the ending `.desync.zip`. The page that ends the match names it, and its button **Show the file in its folder** opens the folder. That file is what to send, from both players. It holds the replay, the state of the match in its last seconds, and the version of the game and of your system; it holds nothing else from your machine. `docs/desync.md` in the repository says the same at more length.
 
 ## Reporting a problem
 
@@ -123,7 +125,7 @@ Send this to whoever gave you the build:
 - The name of the zip file. It carries the version.
 - Your operating system and its version, and the model of your machine or graphics card.
 - What you did, what you expected and what happened. A screenshot helps.
-- For a problem in a match, its replay from the `matches` folder. If the match stopped because the two games disagreed, the `.replay` and the `.snapshot` file from both players: four files.
+- For a problem in a match, its replay from the `matches` folder. If the match stopped because the two games disagreed, the `.desync.zip` file from both players instead: two files, one from each, and nothing else is needed from the match.
 - The log file `godot.log`. It is in a folder named after the game:
   - Windows: `%APPDATA%\Godot\app_userdata\`
   - macOS: `~/Library/Application Support/Godot/app_userdata/`

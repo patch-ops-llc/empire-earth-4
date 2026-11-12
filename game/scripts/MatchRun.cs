@@ -77,7 +77,7 @@ public sealed class LocalRun : MatchRun
         Session = new LocalSession(_match.Simulation, description.Players.Count, localPlayer);
         if (keepFiles)
         {
-            Files = new MatchFiles(Session.Client, description, _match, localPlayer);
+            Files = new MatchFiles(Session.Client, description, _match, localPlayer, watchForDesync: false);
         }
     }
 

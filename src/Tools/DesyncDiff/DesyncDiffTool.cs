@@ -1,15 +1,26 @@
 using System.Globalization;
+using Net;
 using Sim.Data;
 using Sim.Serialization;
 
 namespace Tools.DesyncDiff;
 
 /// <summary>
-/// Compares what two peers left on disk when their match stopped on a desync, and says when the
-/// two parted and which fields of the state differ. Each peer has a pair of files with the same
-/// name: the replay of the match, which the game records with a state hash for every tick, and a
-/// snapshot of the state the match stopped in. A tester sends both pairs.
+/// Compares what the peers of a match left on disk when it stopped on a desync, and says when
+/// they parted, in which part of the state, and which fields differ.
 /// </summary>
+/// <remarks>
+/// <para>
+/// What a peer leaves is one file, a desync bundle (<see cref="DesyncBundle"/>): the replay, the
+/// last state the peers agreed on, the state the match stopped in, and the hash of every part of
+/// the state for each tick in between. Given two, the tool compares them. Given one, it runs the
+/// match again on this machine and compares that with the bundle. See <see cref="BundleDiff"/>.
+/// </para>
+/// <para>
+/// It also still reads what builds before the bundle left: for each peer a replay with a state
+/// hash for every tick and, beside it under the same name, a snapshot of the final state.
+/// </para>
+/// </remarks>
 public sealed class DesyncDiffTool : ITool
 {
     public const string DefaultFolder = "game/data";
@@ -25,22 +36,34 @@ public sealed class DesyncDiffTool : ITool
     private const string Usage =
         """
         Usage:
+          desync-diff <bundle> <bundle> [--data <folder>] [--limit <number>] [--from-start]
+          desync-diff <bundle> [--data <folder>] [--limit <number>] [--from-start]
           desync-diff <file> <file> [--data <folder>] [--limit <number>]
 
-        Each file is one peer's replay (.replay) or snapshot (.snapshot) of the same match; the
-        other file of the pair is read from beside it. Reports the tick at which the recorded
-        state hashes of the two peers part, whether this machine's own run of each replay gives
-        the hashes that peer recorded, and the fields of the two final states that differ, by
-        store, entity and field name.
-        --data   The data folder the match was played with, default game/data.
-        --limit  The most differences to list, default 40. 0 lists all.
+        A bundle is the .desync.zip file the game writes when a match stops because the players'
+        games no longer agree. With two, from two players of the same match: reports what differs
+        between the machines, the first tick whose state differs, the parts of the state (stores)
+        that differ in it, whether each machine repeats its own run and whether this one does,
+        and the fields that differ, by store, entity and field name. With one: runs the match
+        again here and reports the same against this machine's run.
+
+        Each <file> is one peer's replay (.replay) or snapshot (.snapshot) of the same match, from
+        a build that wrote no bundle; the other file of the pair is read from beside it. Reports
+        the tick at which the recorded state hashes of the two peers part, whether this machine's
+        own run of each replay gives the hashes that peer recorded, and the fields of the two
+        final states that differ.
+        --data        The data folder the match was played with, default game/data.
+        --limit       The most differences to list, default 40. 0 lists all.
+        --from-start  With bundles: run the whole match again here, not only from the last state
+                      the players agreed on.
         """;
 
     public string Name => "desync-diff";
 
     public string Summary =>
-        "Compare the replays and snapshots two peers wrote when their match stopped on a desync: when they parted, and which fields differ. "
-        + $"Arguments: <file> <file> [--data <folder>, default {DefaultFolder}] [--limit <n>, default {DefaultLimit}].";
+        "Compare the desync bundles two players' games wrote when their match stopped on a desync, or one bundle with a run on this machine: "
+        + "the first tick and the first store that differ, and the fields. "
+        + $"Arguments: <bundle> [<bundle>] [--data <folder>, default {DefaultFolder}] [--limit <n>, default {DefaultLimit}] [--from-start].";
 
     public int Run(IReadOnlyList<string> arguments, TextWriter output, TextWriter errors)
     {
@@ -48,9 +71,25 @@ public sealed class DesyncDiffTool : ITool
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(errors);
 
-        if (!TryParse(arguments, out var paths, out var dataFolder, out var limit, out var problem))
+        if (!TryParse(arguments, out var paths, out var dataFolder, out var limit, out var fromStart, out var problem))
         {
             errors.WriteLine($"desync-diff: {problem}");
+            errors.WriteLine(Usage);
+            return ExitCodes.Usage;
+        }
+
+        var bundles = paths.Count(IsBundle);
+        if (bundles != 0 && bundles != paths.Count)
+        {
+            errors.WriteLine("desync-diff: one file is a desync bundle and the other is not. Give two bundles, or one, or the replays or snapshots of two peers.");
+            return ExitCodes.Usage;
+        }
+
+        if (bundles == 0 && (paths.Count != 2 || fromStart))
+        {
+            errors.WriteLine(fromStart
+                ? "desync-diff: --from-start goes with desync bundles."
+                : $"desync-diff: '{paths[0]}' is not a desync bundle, and without one it compares the files of two peers.");
             errors.WriteLine(Usage);
             return ExitCodes.Usage;
         }
@@ -66,6 +105,11 @@ public sealed class DesyncDiffTool : ITool
         {
             errors.WriteLine($"desync-diff: the data in {dataFolder} is not valid. Run datacheck on it.");
             return ExitCodes.Failed;
+        }
+
+        if (bundles > 0)
+        {
+            return BundleDiff.Run(paths, loaded.Data, limit, fromStart, output, errors);
         }
 
         var sides = new Side[2];
@@ -108,18 +152,28 @@ public sealed class DesyncDiffTool : ITool
             return parted ? ExitCodes.Failed : ExitCodes.Ok;
         }
 
+        WriteDifferences(differences, limit, "between the snapshots", "A | B", output);
+        return ExitCodes.Failed;
+    }
+
+    /// <summary>Writes the heading with the number of differences, then one line for each, up to the limit.</summary>
+    /// <param name="differences">What differs. Not empty.</param>
+    /// <param name="limit">The most to list, or 0 for all.</param>
+    /// <param name="between">Between what, such as <c>between the snapshots</c>.</param>
+    /// <param name="sides">What the two values of a line are, such as <c>A | B</c>.</param>
+    /// <param name="output">Where to write.</param>
+    internal static void WriteDifferences(List<Difference> differences, int limit, string between, string sides, TextWriter output)
+    {
         var shown = limit == 0 ? differences.Count : Math.Min(limit, differences.Count);
         output.WriteLine(shown == differences.Count
-            ? Invariant($"{differences.Count} {(differences.Count == 1 ? "difference" : "differences")} between the snapshots, A | B:")
-            : Invariant($"{differences.Count} differences between the snapshots. The first {shown}, A | B:"));
+            ? Invariant($"{differences.Count} {(differences.Count == 1 ? "difference" : "differences")} {between}, {sides}:")
+            : Invariant($"{differences.Count} differences {between}. The first {shown}, {sides}:"));
 
         var width = differences.Take(shown).Max(difference => difference.Where.Length);
         foreach (var difference in differences.Take(shown))
         {
             output.WriteLine($"  {difference.Where.PadRight(width)}  {difference.Text}");
         }
-
-        return ExitCodes.Failed;
     }
 
     private static string Describe(string label, Side side)
@@ -170,7 +224,11 @@ public sealed class DesyncDiffTool : ITool
     /// then what only the second state has. Fields are matched by store and entity, so one entity
     /// more on one side is one line and does not put every field after it out of step.
     /// </summary>
-    private static List<Difference> Differences(List<StateField> first, List<StateField> second)
+    /// <param name="first">The fields of the first state.</param>
+    /// <param name="second">The fields of the second.</param>
+    /// <param name="firstName">What the first is called in "only in" lines.</param>
+    /// <param name="secondName">What the second is called.</param>
+    internal static List<Difference> Differences(List<StateField> first, List<StateField> second, string firstName = "A", string secondName = "B")
     {
         var differences = new List<Difference>();
         var others = Group(second);
@@ -181,7 +239,7 @@ public sealed class DesyncDiffTool : ITool
             seen.Add(key);
             if (!others.TryGetValue(key, out var otherFields))
             {
-                differences.Add(new Difference(key.Section, key.Item, "only in A"));
+                differences.Add(new Difference(key.Section, key.Item, $"only in {firstName}"));
                 continue;
             }
 
@@ -209,7 +267,7 @@ public sealed class DesyncDiffTool : ITool
         {
             if (!seen.Contains(key))
             {
-                differences.Add(new Difference(key.Section, key.Item, "only in B"));
+                differences.Add(new Difference(key.Section, key.Item, $"only in {secondName}"));
             }
         }
 
@@ -294,11 +352,27 @@ public sealed class DesyncDiffTool : ITool
         }
     }
 
-    private static bool TryParse(IReadOnlyList<string> arguments, out List<string> paths, out string dataFolder, out int limit, out string problem)
+    /// <summary>True when the file begins as a desync bundle does. A file that cannot be read is not one, and is reported when it is loaded.</summary>
+    private static bool IsBundle(string path)
+    {
+        try
+        {
+            using var file = File.OpenRead(path);
+            Span<byte> start = stackalloc byte[4];
+            return DesyncBundle.LooksLikeOne(start[..file.ReadAtLeast(start, start.Length, throwOnEndOfStream: false)]);
+        }
+        catch (Exception refused) when (refused is IOException or UnauthorizedAccessException)
+        {
+            return path.EndsWith(DesyncBundle.FileEnding, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private static bool TryParse(IReadOnlyList<string> arguments, out List<string> paths, out string dataFolder, out int limit, out bool fromStart, out string problem)
     {
         paths = [];
         dataFolder = DefaultFolder;
         limit = DefaultLimit;
+        fromStart = false;
         problem = "";
 
         for (var i = 0; i < arguments.Count; i++)
@@ -323,6 +397,10 @@ public sealed class DesyncDiffTool : ITool
                     return false;
                 }
             }
+            else if (argument == "--from-start")
+            {
+                fromStart = true;
+            }
             else if (argument.StartsWith("--", StringComparison.Ordinal))
             {
                 problem = $"unknown option '{argument}'.";
@@ -334,18 +412,18 @@ public sealed class DesyncDiffTool : ITool
             }
         }
 
-        if (paths.Count != 2)
+        if (paths.Count is not (1 or 2))
         {
-            problem = Invariant($"it compares two peers, and {paths.Count} files were given.");
+            problem = Invariant($"it compares two peers, or one desync bundle with a run here, and {paths.Count} files were given.");
             return false;
         }
 
         return true;
     }
 
-    private static string Invariant(FormattableString text) => text.ToString(CultureInfo.InvariantCulture);
+    internal static string Invariant(FormattableString text) => text.ToString(CultureInfo.InvariantCulture);
 
-    private readonly record struct Difference(string Section, string Item, string Text)
+    internal readonly record struct Difference(string Section, string Item, string Text)
     {
         /// <summary>The store, and the entity when the field belongs to one.</summary>
         public string Where => Item.Length == 0 ? Section : $"{Section} {Item}";
