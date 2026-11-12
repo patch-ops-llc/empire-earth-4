@@ -70,7 +70,6 @@ public partial class MatchPanel : InterfacePart
         };
 
         _text.Text = string.Join(' ', [who, how, .. _left]);
-        _text.TooltipText = _text.Text;
         _textWidth = Mathf.Ceil(_text.GetThemeFont("font").GetStringSize(_text.Text, fontSize: _text.GetThemeFontSize("font_size")).X);
     }
 
