@@ -17,7 +17,7 @@ public class AiFightMatchTests
     /// <summary>The longest the match may take: long enough that the numbers can be tuned a good way before this fails.</summary>
     private const int MostTicks = 40 * 60 * SimInfo.TicksPerSecond;
 
-    /// <summary>Each personality sends its army out, and it does so after it has built one, not with its first unit.</summary>
+    /// <summary>Each personality sends its army out, and it does so after it has built one, not with its first unit. Before that it has sent a scout.</summary>
     [Theory]
     [InlineData("swarm", "elite")]
     [InlineData("elite", "swarm")]
@@ -34,6 +34,10 @@ public class AiFightMatchTests
         {
             Assert.InRange(player.Fight.FirstAttackTick, 2 * 60 * SimInfo.TicksPerSecond, 10 * 60 * SimInfo.TicksPerSecond);
             Assert.True(player.Fight.ArmyValue > 0);
+
+            // Its first scout went at three minutes, or with the first unit it had after that (design 5.5, item 4).
+            Assert.InRange(player.Scout.FirstSentTick, 3 * 60 * SimInfo.TicksPerSecond, 4 * 60 * SimInfo.TicksPerSecond);
+            Assert.InRange(player.Scout.Sent, 1, 3);
         });
 
         // What they ordered of their units, they ordered of their own, and with the three orders of design 2.4.

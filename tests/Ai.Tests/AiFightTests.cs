@@ -187,6 +187,25 @@ public class AiFightTests
         Assert.Equal(MiddleOf(fixture, passage), TargetOf(attack));
     }
 
+    /// <summary>"Fights at chokepoints" (design 5.5, item 4): a row of the response table that names a passage overrides the personality's.</summary>
+    [Fact]
+    public void WhileARowNamesAPassageItsArmyGoesThroughThatOne()
+    {
+        var fixture = new AiFixture(players: 2) { Muster = (HomeX, HomeY) };
+        var personality = AiFixture.Personality(lines: [("line_infantry", 1)]);
+        Assert.Equal(MarkerKind.OpenField, personality.Fight.Passage);
+        var table = fixture.Responding(personality, new AiDoesDef([], Research: null, MarkerKind.Chokepoint, CatchUpFirst: false));
+        var fight = new AiFight(fixture.Sight, new AiSearch(fixture.Sight), personality.Fight, table.Intel, table.Responses);
+        Assert.Equal(MarkerKind.Chokepoint, fight.Passage);
+        var army = fixture.SpawnRow(AiFixture.Player, "peltast", 6, HomeX - 3, HomeY + 2);
+
+        Round(fixture, fight, atSupplyCap: true);
+
+        var attack = Assert.Single(fixture.Orders(CommandType.AttackMove));
+        Assert.Equal(army, attack.Entities.ToArray());
+        Assert.Equal(MiddleOf(fixture, MarkerKind.Chokepoint), TargetOf(attack));
+    }
+
     [Fact]
     public void AtThePassageTheForceGoesOnToTheStartOfTheOtherSeatWhileItKnowsNoStructureOfIts()
     {

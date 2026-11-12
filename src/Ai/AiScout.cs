@@ -38,7 +38,6 @@ internal enum ScoutPhase
 /// </remarks>
 internal sealed class AiScout
 {
-
     private readonly AiSight _sight;
     private readonly AiScoutingDef _scouting;
     private readonly List<EntityId> _one = [];
