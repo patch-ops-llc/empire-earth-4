@@ -240,7 +240,7 @@ The hash is the SHA-256, written as 64 lowercase hex digits, of a canonical text
 1. The line `content-hash-v1`, ended by a line feed.
 2. For each file, in ordinal order of its path: the path with `/` separators, a line feed, the file's canonical JSON and a line feed.
 
-Canonical JSON has no spaces or line breaks. Object keys are in ordinal order (by UTF-16 code unit) and the top-level `$schema` key is left out. Strings escape only `"` and `\` with a backslash and characters below U+0020 as `\u00xx` in lowercase hex; everything else is written as it is. Whole numbers are written in decimal without a sign unless negative.
+Canonical JSON has no spaces or line breaks. Object keys are in ordinal order (by UTF-16 code unit) and the top-level `$schema` key is left out. Strings escape only `"` and `\` with a backslash and characters below U+0020 as `\u00xx` in lowercase hex; everything else is written as it is. Whole numbers are written in decimal without a sign unless negative, and `true` and `false` as they are.
 
 A change to this form changes every hash, so it needs a new version line.
 

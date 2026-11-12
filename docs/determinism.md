@@ -92,6 +92,7 @@ A `Command` is the only way anything outside the simulation changes it. It is im
 - Whoever orders commands (the host, the local session, a replay) schedules each for a tick with `Simulation.Commands.Enqueue(tick, command)`. Commands for one tick run in the order they were queued, so that order must be the same on every machine. Scheduling a command for a tick that has already run throws.
 - Each command type has one `ICommandHandler`. It checks the command against the world as it is when the command runs (ownership, affordability, placement) and returns `false`, having changed nothing, if the command is not valid. The command is then dropped, on every machine alike. A type with no handler is dropped too.
 - The queue is input, not state. It is not in the state hash, because peers may hold different amounts of the future when they compare hashes.
+- One command is not an order of the game: `DebugSpawn`, the development spawn, makes one unit of a chassis from nothing for the player who sends it, at the command's point. The match setup gives it a handler only while the rules have `debug.spawn` on; otherwise it is dropped like any type without a handler. The switch is data, so every machine of a match has the same one, and it is part of the content hash. It is on in `tests/golden/data/` for good, because the golden replay with a fight gets its forces through it.
 
 ## Events
 
@@ -102,6 +103,7 @@ Commands go in; events come out. `Simulation.Events` is the list of what happene
 - The tick empties the list before it runs its commands. So after `Tick()` the list holds that tick's events, and a reader that skips a tick has missed them. A handler that refuses its command changes no state, but it may add an event that says why.
 - **The list is output, not state.** It is not walked, so it is in neither the state hash nor a snapshot, and restoring a snapshot empties it. A match runs to the same state whether or not anything is reported: `SimEventTests` runs the toy match with and without a system that reports, and compares every hash and the snapshots.
 - **Nothing in the simulation reads the list.** What a rule needs to know goes in a store. Adding an event draws nothing from the random generator and changes nothing in the world. Enforced by review.
+- Combat reports `MeleeHit`, `ShotFired`, `ShotHit`, `ShotLost` and `Death`, and `OrderRefused` for a move, attack-move, attack or stop order or a development spawn that was not carried out. In a tick they stand as the systems run: the refusals of the commands, then the shots that land or are lost, then the attacks, then the deaths.
 - A piece that reports something adds its kinds to `SimEventKind`, in alphabetical order and without numbers. The number of a kind is recorded nowhere, unlike that of a command type, so it may change from one build to the next and nothing may store one.
 
 ## The state hash
