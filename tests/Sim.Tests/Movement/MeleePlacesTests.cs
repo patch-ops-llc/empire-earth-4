@@ -153,6 +153,7 @@ public class MeleePlacesTests
         var unit = match.Spawn(0, chassis, "8", "6");
         var worker = match.SpawnWorker(1, "20", "10.6");
         match.SetHitPoints(worker, 100_000_000);
+        Spotter(match, "23.5", "13.5");
         var start = match.PositionOf(unit);
         var at = match.PositionOf(worker);
         if (attackOrder)
@@ -740,6 +741,7 @@ public class MeleePlacesTests
         }
 
         match.SetHitPoints(target, 2_000_000_000);
+        Spotter(match, "28.5", "19.5");
         match.RefreshDerivedState();
         if (attackOrder == true)
         {
@@ -752,6 +754,14 @@ public class MeleePlacesTests
 
         return (match, units, target);
     }
+
+    /// <summary>
+    /// A worker of the attackers' side that stands in sight of the target, out of everybody's
+    /// way: an attack order may name only what its player sees (design 5.3), and the attackers
+    /// start further off than they see. It is made last, so that every other entity has the ID
+    /// it would have without it. Where there is no fog it changes nothing.
+    /// </summary>
+    private static void Spotter(Match match, string x, string y) => match.SpawnWorker(0, x, y);
 
     /// <summary>A unit has a place only by where its target stands now, never by where it stood.</summary>
     private static void AssertEveryPlaceIsByWhereTheTargetStands(Match match, EntityId[] units, EntityId target)
