@@ -408,6 +408,62 @@ public class StructurePlacesTests
     }
 
     /// <summary>
+    /// A side of the line ends where the quarter circle round the corner begins. Beside a unit
+    /// that stands less than their spacing from the end of a side, the place is on the quarter
+    /// circle, at the same distance from the footprint as every other place, and not on the
+    /// side drawn on past its end, which is further from the corner.
+    /// </summary>
+    [Theory]
+    [InlineData("15.2578125", "10.95", "12", "9.9", 16, 10)]
+    [InlineData("15.2578125", "13.05", "12", "14.1", 16, 14)]
+    [InlineData("16.95", "9.2578125", "15.9", "6", 16, 10)]
+    [InlineData("19.05", "9.2578125", "20.1", "6", 20, 10)]
+    public void BesideAUnitNearTheEndOfASideThePlaceIsRoundTheCorner(string holderX, string holderY, string x, string y, int cornerX, int cornerY)
+    {
+        var match = Field();
+        var capitol = Place(match, Capitol);
+        var holder = match.Unit(0, Hoplite, holderX, holderY);
+        var seeker = match.Unit(0, Hoplite, x, y);
+        match.RefreshDerivedState();
+        ref var unit = ref match.Combatants.Get(holder);
+        unit.Target = capitol;
+        unit.PlaceFor = capitol;
+        unit.Place = match.PositionOf(holder);
+        var keep = (Fixed.One + MeleePlaces.Gap).Raw;
+
+        Assert.True(Find(match, seeker, capitol, out var place, out _));
+        Assert.Equal(new FixedVector2(Fixed.FromInt(cornerX), Fixed.FromInt(cornerY)), match.Structures.Get(capitol).Tiles.NearestPointTo(place));
+        Assert.InRange(Gap(match, capitol, place), Line(match).Raw - 2, Line(match).Raw + 2);
+        Assert.InRange(Distance(place, unit.Place), keep - 2, keep + 2);
+    }
+
+    /// <summary>
+    /// A unit that finds every place taken stops when it is within its reach of the footprint,
+    /// its spacing and one step: behind the units that have the places, further from them than
+    /// their spacing, and no further out than that.
+    /// </summary>
+    [Fact]
+    public void AUnitWithNoPlaceLeftStopsItsSpacingBehindThePlaces()
+    {
+        var siege = Siege(Wall, Hoplite, 8);
+        var match = siege.Match;
+        siege.RunAndCountHits(500);
+        Assert.All(siege.Units, unit => Assert.True(match.UnitOf(unit).HasPlace));
+
+        var late = match.Unit(0, Hoplite, "8.5", "10.5");
+        match.OrderAttack(0, siege.Target, late);
+        siege.Units.Add(late);
+        var hits = siege.RunAndCountHits(300);
+
+        Assert.Equal(0, hits[late]);
+        Assert.False(match.UnitOf(late).HasPlace);
+        Assert.Equal(MoveState.Idle, match.Movers.Get(late).State);
+        var behind = (match.Combat.StructureReach + Fixed.One).Raw;
+        Assert.InRange(siege.GapOf(late), behind - 2, behind + match.Movers.Get(late).Speed.Raw);
+        match.AssertKeepTheirSpacing([.. siege.Units]);
+    }
+
+    /// <summary>
     /// What a place by a structure may not be: closer than their spacing to a unit of its side
     /// that has a place or fights, or to an enemy unit; and for an idle unit, further from its
     /// post than it acquires. A unit of its side that only stands there makes way.
@@ -424,9 +480,13 @@ public class StructurePlacesTests
         Assert.False(crowded);
         Assert.Equal(match.PositionOf(bystander), facing);
 
-        // An enemy unit stands by the structure, closer to that point than their spacing.
+        // An enemy unit stands by the structure, closer to that point than their spacing. It
+        // takes the point away from a unit that looks for a place, and not from one that stands
+        // there in reach: where a unit stands is its place whatever enemies are near.
         var enemy = match.Unit(1, Hoplite, "15", "12.5");
         match.RefreshDerivedState();
+        Assert.True(PlacesOf(match).IsFreeWhereItStands(
+            bystander, match.Bodies.Get(bystander), match.Combat.ProfileOf(0, match.UnitOf(bystander).Chassis), capitol, match.PositionOf(capitol)));
         Assert.True(Find(match, seeker, capitol, out var clear, out crowded));
         Assert.False(crowded);
         Assert.NotEqual(facing, clear);
