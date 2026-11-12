@@ -30,10 +30,12 @@ public sealed class DataLoadResult
 /// </summary>
 public static class DataLoader
 {
-    private const string Layout = "tracks.jsonc, rules.jsonc, research.jsonc, resources.jsonc, accents.jsonc, lines/<id>.jsonc and maps/<id>.jsonc";
+    private const string Layout = "tracks.jsonc, rules.jsonc, research.jsonc, resources.jsonc, accents.jsonc, lines/<id>.jsonc, structures/<id>.jsonc and maps/<id>.jsonc";
 
     private static readonly string[] RequiredFiles =
         [DataRules.TracksFile, DataRules.RulesFile, DataRules.ResearchFile, DataRules.ResourcesFile, DataRules.AccentsFile];
+
+    private const string StartStructureFile = DataRules.StructuresFolder + DataRules.StartStructure + DataRules.FileExtension;
 
     private static readonly JsonDocumentOptions JsonOptions = new()
     {
@@ -53,10 +55,11 @@ public static class DataLoader
         {
             var roots = new SortedDictionary<string, JsonElement>(StringComparer.Ordinal);
             var linePaths = new List<string>();
+            var structurePaths = new List<string>();
             var mapPaths = new List<string>();
             foreach (var path in paths)
             {
-                if (!Classify(path, linePaths, mapPaths, errors))
+                if (!Classify(path, linePaths, structurePaths, mapPaths, errors))
                 {
                     continue;
                 }
@@ -68,8 +71,8 @@ public static class DataLoader
                 }
             }
 
-            ReportMissing(paths, linePaths, mapPaths, errors);
-            var data = Read(roots, linePaths, mapPaths, errors);
+            ReportMissing(paths, linePaths, structurePaths, mapPaths, errors);
+            var data = Read(roots, linePaths, structurePaths, mapPaths, errors);
             if (data is not null && errors.Count == 0)
             {
                 Tech.FormulaCheck.Check(data, errors);
@@ -94,14 +97,14 @@ public static class DataLoader
         }
     }
 
-    private static bool Classify(string path, List<string> linePaths, List<string> mapPaths, ErrorList errors)
+    private static bool Classify(string path, List<string> linePaths, List<string> structurePaths, List<string> mapPaths, ErrorList errors)
     {
         if (Array.IndexOf(RequiredFiles, path) >= 0)
         {
             return true;
         }
 
-        foreach (var (folder, found) in new[] { (DataRules.LinesFolder, linePaths), (DataRules.MapsFolder, mapPaths) })
+        foreach (var (folder, found) in new[] { (DataRules.LinesFolder, linePaths), (DataRules.StructuresFolder, structurePaths), (DataRules.MapsFolder, mapPaths) })
         {
             if (path.StartsWith(folder, StringComparison.Ordinal)
                 && path.EndsWith(DataRules.FileExtension, StringComparison.Ordinal)
@@ -153,7 +156,7 @@ public static class DataLoader
         }
     }
 
-    private static void ReportMissing(SortedSet<string> paths, List<string> linePaths, List<string> mapPaths, ErrorList errors)
+    private static void ReportMissing(SortedSet<string> paths, List<string> linePaths, List<string> structurePaths, List<string> mapPaths, ErrorList errors)
     {
         foreach (var required in RequiredFiles)
         {
@@ -166,6 +169,11 @@ public static class DataLoader
         if (linePaths.Count == 0)
         {
             errors.Add(DataRules.LinesFolder, "", "needs at least one line file");
+        }
+
+        if (!structurePaths.Contains(StartStructureFile))
+        {
+            errors.Add(StartStructureFile, "", "this file is required and is missing: every player starts with this structure");
         }
 
         if (mapPaths.Count == 0)
@@ -181,6 +189,7 @@ public static class DataLoader
     private static GameData? Read(
         SortedDictionary<string, JsonElement> roots,
         List<string> linePaths,
+        List<string> structurePaths,
         List<string> mapPaths,
         ErrorList errors)
     {
@@ -267,14 +276,41 @@ public static class DataLoader
             }
         }
 
-        var maps = new List<MapDef>();
-        if (rules is not null)
+        // Of the structures only the one every player starts with must have a file.
+        var structures = new List<StructureDef>();
+        if (tracksAreValid && rules is not null)
         {
+            foreach (var path in structurePaths)
+            {
+                if (Root(path) is not { } structureRoot)
+                {
+                    continue;
+                }
+
+                var errorsBefore = errors.Count;
+                var structure = StructureReader.Read(structureRoot, IdOf(path, DataRules.StructuresFolder), tracks, epochNames.Count, rules);
+                if (errors.Count == errorsBefore)
+                {
+                    structures.Add(structure);
+                }
+            }
+
+            structures.Sort((left, right) => left.Index.CompareTo(right.Index));
+            StructureChecker.Check(structures, lines, rules, errors);
+        }
+
+        // A map's starts are measured with the starting structure's footprint and territory, so
+        // the maps are read only when that file was valid.
+        var maps = new List<MapDef>();
+        if (rules is not null
+            && structures.Find(structure => structure.Id == DataRules.StartStructure) is { TerritoryRadius: { } startRadius } start)
+        {
+            var capitol = new MapStartRules(start.Footprint, startRadius);
             foreach (var path in mapPaths)
             {
                 if (Root(path) is { } mapRoot)
                 {
-                    maps.Add(MapReader.Read(mapRoot, IdOf(path, DataRules.MapsFolder), rules.Map));
+                    maps.Add(MapReader.Read(mapRoot, IdOf(path, DataRules.MapsFolder), rules.Map, capitol));
                 }
             }
 
@@ -282,7 +318,7 @@ public static class DataLoader
         }
 
         return tracksAreValid && roles is not null && rules is not null && resources is not null
-            ? new GameData(epochNames, tracks, roles, rules, research, resources, accents, lines, chassis, maps, ContentHash: "")
+            ? new GameData(epochNames, tracks, roles, rules, research, resources, accents, lines, chassis, structures, maps, ContentHash: "")
             : null;
     }
 }
