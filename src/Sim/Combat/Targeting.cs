@@ -240,7 +240,24 @@ public sealed class Targeting
     /// gate, ever. The search reads positions and nothing that an attack of this tick changes, so
     /// the order in which units pick does not matter.
     /// </remarks>
-    public EntityId Pick(World world, EntityId self, in Body body, AttackProfile profile, UnitOrder order, FixedVector2 post)
+    public EntityId Pick(World world, EntityId self, in Body body, AttackProfile profile, UnitOrder order, FixedVector2 post) =>
+        Nearest(world, self, in body, profile, order, post, inReachOnly: false);
+
+    /// <summary>
+    /// The target of a unit that enemy units have stopped on its way (design 2.4, "a blocked unit
+    /// keeps its order"): the nearest enemy it can hit from where it stands, the lowest ID among
+    /// equally near ones, or <see cref="EntityId.None"/> when none is in reach.
+    /// </summary>
+    /// <remarks>
+    /// The nearest enemy is not always one the unit can get to: the spacing of a unit beside it
+    /// may hold the attacker a hair outside its reach. The unit in its way is within reach, so a
+    /// stopped unit fights that one and does not stand idle before it.
+    /// </remarks>
+    public EntityId PickInReach(World world, EntityId self, in Body body, AttackProfile profile) =>
+        Nearest(world, self, in body, profile, UnitOrder.Idle, body.Position, inReachOnly: true);
+
+    private EntityId Nearest(
+        World world, EntityId self, in Body body, AttackProfile profile, UnitOrder order, FixedVector2 post, bool inReachOnly)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(profile);
@@ -287,9 +304,9 @@ public sealed class Targeting
                 continue;
             }
 
-            if (order == UnitOrder.Idle
+            if ((inReachOnly || order == UnitOrder.Idle)
                 && !Reaches(profile, position, in mark)
-                && !TryFindStand(profile, position, post, in mark, out _))
+                && (inReachOnly || !TryFindStand(profile, position, post, in mark, out _)))
             {
                 continue;
             }

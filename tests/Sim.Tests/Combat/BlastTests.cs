@@ -17,7 +17,8 @@ namespace Sim.Tests.Combat;
 /// A Ballista fires one shell of 48 every 4 seconds, with a blast radius of 1.5 tiles, at 10 tiles
 /// per second. In most of these tests a wall stands between the Ballista and the enemies, so
 /// that those who would fight back cannot come at it and stay where the test put them. A shell
-/// does not mind the wall.
+/// does not mind the wall. Units of one player stand at least their spacing apart (1 tile, or
+/// 1.5 beside a Knight), so that they stay where they were made: closer than that, they step apart.
 /// </remarks>
 public class BlastTests
 {
@@ -64,12 +65,14 @@ public class BlastTests
         var match = Field();
         var ballista = match.Spawn(0, Ballista, "2.5", "5.5");
         var target = match.SpawnWorker(1, "9.5", "5.5");
-        var beside = match.SpawnWorker(1, "10.5", "5.5");
+        var beside = match.SpawnWorker(1, "9.5", "4.5");
         var onTheEdge = match.SpawnWorker(1, "11", "5.5");
         var insideDiagonally = match.SpawnWorker(1, "10.56", "6.56");
-        var pastTheEdge = match.SpawnWorker(1, "11.0001", "5.5");
-        var outsideDiagonally = match.SpawnWorker(1, "10.57", "6.57");
-        var onTheEdgeOfTheSquare = match.SpawnWorker(1, "8", "4");
+        var pastTheEdge = match.SpawnWorker(1, "7.9999", "5.5");
+        var outsideDiagonally = match.SpawnWorker(1, "8.43", "4.43");
+        var onTheEdgeOfTheSquare = match.SpawnWorker(1, "8", "7");
+        var workers = new[] { target, beside, onTheEdge, insideDiagonally, pastTheEdge, outsideDiagonally, onTheEdgeOfTheSquare };
+        var made = workers.Select(match.PositionOf).ToArray();
         match.OrderAttack(0, target, ballista);
 
         // 7 tiles at 10 tiles per second: fired in tick 0, it lands in tick 14.
@@ -90,6 +93,9 @@ public class BlastTests
         Assert.Equal(WorkerHitPoints, match.HitPointsOf(outsideDiagonally));
         Assert.Equal(WorkerHitPoints, match.HitPointsOf(onTheEdgeOfTheSquare));
         Assert.Equal(Squared("1.5"), match.DistanceSquared(target, onTheEdge));
+
+        // Each stood a tile or more from the others, so none has stepped away from where it was made.
+        Assert.Equal(made, workers.Select(match.PositionOf));
     }
 
     [Fact]
@@ -98,16 +104,16 @@ public class BlastTests
         var match = Field();
         var ballista = match.Spawn(0, Ballista, "2.5", "5.5");
         var hoplite = match.Spawn(1, Hoplite, "9.5", "5.5");
-        var knight = match.Spawn(1, "knight", "10.5", "5.5");
-        var peltast = match.Spawn(1, Peltast, "10.5", "6.5");
+        var knight = match.Spawn(1, "knight", "9.5", "7");
+        var peltast = match.Spawn(1, Peltast, "10.6", "5.5");
         var worker = match.SpawnWorker(1, "9.5", "4.5");
         var before = new[] { hoplite, knight, peltast, worker }.ToDictionary(unit => unit, unit => match.HitPointsOf(unit));
         match.OrderAttack(0, hoplite, ballista);
         RunToBlast(match);
 
         // Nobody has moved: the wall keeps the melee units away, and the Ballista is further off than the Peltast looks.
-        Assert.Equal(TestMatches.Point("10.5", "6.5"), match.PositionOf(peltast));
-        Assert.Equal(TestMatches.Point("10.5", "5.5"), match.PositionOf(knight));
+        Assert.Equal(TestMatches.Point("10.6", "5.5"), match.PositionOf(peltast));
+        Assert.Equal(TestMatches.Point("9.5", "7"), match.PositionOf(knight));
 
         // Artillery counts half against Cavalry/Armor (design 2.4): one shell, 48 to the others and 24 to the Knight.
         Assert.Equal(Shell, before[hoplite] - match.HitPointsOf(hoplite));
@@ -122,7 +128,7 @@ public class BlastTests
         var match = Field();
         var ballista = match.Spawn(0, Ballista, "2.5", "5.5");
         var knight = match.Spawn(1, "knight", "9.5", "5.5");
-        var hoplite = match.Spawn(1, Hoplite, "10.5", "5.5");
+        var hoplite = match.Spawn(1, Hoplite, "11", "5.5");
         var knightBefore = match.HitPointsOf(knight);
         var hopliteBefore = match.HitPointsOf(hoplite);
         match.OrderAttack(0, knight, ballista);
@@ -160,14 +166,14 @@ public class BlastTests
         var air = CombatMatches.Data.Chassis.First(chassis => chassis.Line == Line("air")).Id;
         var ballista = match.Spawn(0, Ballista, "2.5", "2.5");
         var target = match.SpawnWorker(1, "2.5", "6");
-        var flyer = match.Spawn(1, air, "2.5", "6.5");
+        var flyer = match.Spawn(1, air, "3.5", "6");
         var flyerBefore = match.HitPointsOf(flyer);
         match.OrderAttack(0, target, ballista);
         RunToBlast(match);
 
         // The flyer is still inside the blast: it has the Ballista in range from where it was
         // made, so it fires from there.
-        Assert.Equal(TestMatches.Point("2.5", "6.5"), match.PositionOf(flyer));
+        Assert.Equal(TestMatches.Point("3.5", "6"), match.PositionOf(flyer));
         Assert.True(match.DistanceSquared(target, flyer) <= Squared("1.5"));
 
         // Artillery cannot hit Air, so its blast passes a flyer by.
@@ -366,7 +372,7 @@ public class BlastTests
         var match = Field();
         var ballista = match.Spawn(0, Ballista, "2.5", "5.5");
         var third = match.SpawnWorker(1, "10.5", "5.5");
-        var knight = match.Spawn(1, "knight", "9.5", "6.5");
+        var knight = match.Spawn(1, "knight", "9.5", "7");
         var target = match.SpawnWorker(1, "9.5", "5.5");
         match.SpawnWorker(1, "13.5", "5.5");
         match.OrderAttack(0, target, ballista);

@@ -90,6 +90,13 @@ public sealed class Approach
             destination = MapGrid.TileCenter(tileX, tileY);
         }
 
+        if (destination == position)
+        {
+            // It stands as near as it can get, so there is no walk to start.
+            mover.Stop();
+            return;
+        }
+
         var goal = (tileY * _grid.Width) + tileX;
         var tile = (position.Y.FloorToInt() * _grid.Width) + position.X.FloorToInt();
         if (tile == goal || _grid.IsCorridorClear(position, destination, Mover.Clearance))
