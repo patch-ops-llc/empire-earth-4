@@ -123,14 +123,14 @@ public class BenchmarkToolTests
         {
             var heading = Array.FindIndex(lines, line => line.StartsWith($"{scenario}, {units} units: the worst tick was tick ", StringComparison.Ordinal));
             Assert.True(heading >= 0, $"No shares for {scenario}.");
-            Assert.Matches(@"^  part +average +share +worst tick$", lines[heading + 1]);
+            Assert.Matches(@"^  part +average +share +worst tick +its worst$", lines[heading + 1]);
 
-            var parts = new List<(string Name, double Average, double Share, double Worst)>();
+            var parts = new List<(string Name, double Average, double Share, double InWorstTick, double Worst)>();
             for (var i = heading + 2; i < lines.Length && lines[i].Length > 0; i++)
             {
                 var columns = lines[i].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                var numbers = columns[^3..].Select(column => double.Parse(column.TrimEnd('%'), CultureInfo.InvariantCulture)).ToArray();
-                parts.Add((string.Join(' ', columns[..^3]), numbers[0], numbers[1], numbers[2]));
+                var numbers = columns[^4..].Select(column => double.Parse(column.TrimEnd('%'), CultureInfo.InvariantCulture)).ToArray();
+                parts.Add((string.Join(' ', columns[..^4]), numbers[0], numbers[1], numbers[2], numbers[3]));
             }
 
             // The systems of a match, whatever they are, between the commands and the rest.
@@ -139,7 +139,7 @@ public class BenchmarkToolTests
             Assert.Contains("MovementSystem", parts.Select(part => part.Name));
             Assert.Contains("AttackSystem", parts.Select(part => part.Name));
             Assert.All(parts[1..^1], part => Assert.EndsWith("System", part.Name, StringComparison.Ordinal));
-            Assert.All(parts, part => Assert.True(part.Average >= 0 && part.Worst >= 0));
+            Assert.All(parts, part => Assert.True(part.Average >= 0 && part.Worst >= part.InWorstTick && part.Worst >= part.Average));
             Assert.InRange(parts.Sum(part => part.Share), 99, 101);
             Assert.True(parts.Single(part => part.Name == "MovementSystem").Average > 0);
             Assert.Equal(scenario == "fight", parts.Single(part => part.Name == "AttackSystem").Average > 0.0005);

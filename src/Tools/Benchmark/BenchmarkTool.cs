@@ -71,7 +71,7 @@ public sealed class BenchmarkTool : ITool
         --units     The number of units in the scenarios that play the budget's 500, from 20 to 1000.
                     The plan's stretch is 1000.
         --systems   After the table, where the time of a tick goes in each scenario: what the
-                    commands and each system took, on average and in the worst tick.
+                    commands and each system took, on average, in the worst tick, and at its most.
         --quick     Fewer units and ticks, to see that the scenarios run. The times mean little.
         """;
 
@@ -221,7 +221,7 @@ public sealed class BenchmarkTool : ITool
     {
         var toMilliseconds = 1000.0 / Stopwatch.Frequency;
         output.WriteLine();
-        output.WriteLine("benchmark: where the time of a tick goes, in milliseconds: on average, as a share of the average tick, and in the scenario's worst tick.");
+        output.WriteLine("benchmark: where the time of a tick goes, in milliseconds: on average, as a share of the average tick, in the scenario's worst tick, and the most the part took in any tick.");
         foreach (var (scenario, result, times, parts) in shares)
         {
             var ticks = result.Ticks;
@@ -239,18 +239,20 @@ public sealed class BenchmarkTool : ITool
 
             output.WriteLine();
             output.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{scenario}, {result.Units} units: the worst tick was tick {worst} of {ticks}"));
-            output.WriteLine($"  {"part",-24} {"average",9} {"share",7} {"worst tick",11}");
+            output.WriteLine($"  {"part",-24} {"average",9} {"share",7} {"worst tick",11} {"its worst",10}");
             for (var part = 0; part < parts.Count; part++)
             {
                 long sum = 0;
+                long most = 0;
                 for (var tick = 0; tick < ticks; tick++)
                 {
                     sum += times.Parts[tick][part];
+                    most = Math.Max(most, times.Parts[tick][part]);
                 }
 
                 output.WriteLine(string.Create(
                     CultureInfo.InvariantCulture,
-                    $"  {parts[part],-24} {sum * toMilliseconds / ticks,9:0.000} {(all == 0 ? 0 : 100.0 * sum / all),6:0.0}% {times.Parts[worst][part] * toMilliseconds,11:0.000}"));
+                    $"  {parts[part],-24} {sum * toMilliseconds / ticks,9:0.000} {(all == 0 ? 0 : 100.0 * sum / all),6:0.0}% {times.Parts[worst][part] * toMilliseconds,11:0.000} {most * toMilliseconds,10:0.000}"));
             }
         }
     }
