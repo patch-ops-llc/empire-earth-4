@@ -3,7 +3,9 @@ using Ai;
 using Sim;
 using Sim.Core;
 using Sim.Data;
+using Sim.Outcome;
 using Sim.Setup;
+using Tools.Battles;
 
 namespace Tools.AiMatch;
 
@@ -54,7 +56,14 @@ public sealed record SeatResult(
     int TicksAtSupplyCap,
     int TicksAboveSupplyCap,
     int MostAboveSupplyCap,
-    IReadOnlyList<SeatSample> Samples);
+    IReadOnlyList<SeatSample> Samples)
+{
+    /// <summary>The shells its units fired that landed, and how many units each caught.</summary>
+    public ShellCount Shells { get; init; } = ShellCount.None;
+
+    /// <summary>The hits of its units that splash (design 2.3, Overgunned II), and how many other units each reached.</summary>
+    public SplashCount Splashes { get; init; } = SplashCount.None;
+}
 
 /// <summary>How a headless match ended.</summary>
 public enum MatchEnd
@@ -62,7 +71,7 @@ public enum MatchEnd
     /// <summary>The time ran out with two or more players still in the match.</summary>
     TimeLimit,
 
-    /// <summary>By conquest (design 5.1): at most one player still had a Capitol or an Outpost.</summary>
+    /// <summary>By conquest (design 5.1): the standings of the match say it is decided, with at most one player still holding a Capitol or an Outpost.</summary>
     Conquest,
 }
 
@@ -109,12 +118,13 @@ public sealed record HeadlessResult(
 /// which seat, who has which start, the map, and the command delay.
 /// </para>
 /// <para>
-/// <b>When it ends.</b> At the time limit, or by conquest (design 5.1): a player with a start who
-/// has no Capitol and no Outpost left on the map, finished or still building itself, is out,
-/// and the match ends when at most one player is still in. That player has won. Players who
-/// lose their last one in the same tick go out together, and then nobody has won. This is the
-/// rule the simulation itself gets with the end of a match (plan M24), counted here from
-/// outside so that the tool needs nothing of that piece.
+/// <b>When it ends.</b> At the time limit, or when the match is decided (design 5.1), as a
+/// match that is played ends: the standings of the match say who is out and who has won. A
+/// player with a start who has no Capitol and no Outpost left on the map, finished or still
+/// building itself, is out, and the match is decided when at most one player is still in. That
+/// player has won. Players who lose their last one in the same tick go out together, and then
+/// nobody has won. The tool counts nothing of this itself. A computer player does not concede,
+/// so every match that is decided here was decided by conquest.
 /// </para>
 /// </remarks>
 public static class HeadlessMatch
@@ -181,7 +191,6 @@ public static class HeadlessMatch
         var fallen = new HashSet<EntityId>();
         var watches = Enumerable.Range(0, seats).Select(player => new SeatWatch(match, player)).ToArray();
         var outTicks = Enumerable.Repeat(-1, seats).ToArray();
-        var holds = new bool[seats];
         var (given, tickTime, worstTick, thinkTime, firstHit) = (0, 0L, 0L, 0L, -1);
         var ended = MatchEnd.TimeLimit;
 
@@ -247,13 +256,21 @@ public static class HeadlessMatch
                 }
             }
 
-            if (StillIn(match, holds, outTicks) <= 1)
+            for (var player = 0; player < seats; player++)
+            {
+                if (outTicks[player] < 0 && !match.Standings.IsPlaying(player))
+                {
+                    outTicks[player] = match.World.Tick;
+                }
+            }
+
+            if (match.Standings.IsDecided)
             {
                 ended = MatchEnd.Conquest;
             }
         }
 
-        int? winner = ended == MatchEnd.Conquest && Array.IndexOf(outTicks, -1) is var last and >= 0 ? last : null;
+        int? winner = match.Standings.Winner == Standings.None ? null : match.Standings.Winner;
 
         var toSeconds = 1.0 / Stopwatch.Frequency;
         return new HeadlessResult(
@@ -269,41 +286,6 @@ public static class HeadlessMatch
             tickTime * toSeconds,
             worstTick * toSeconds,
             thinkTime * toSeconds);
-    }
-
-    /// <summary>
-    /// Takes out every player with a start who holds no Capitol and no Outpost on the map as the
-    /// tick left it, and says how many are still in. A player without a start has none to lose
-    /// and stays in.
-    /// </summary>
-    private static int StillIn(Match match, bool[] holds, int[] outTicks)
-    {
-        Array.Clear(holds);
-        for (var i = 0; i < match.Structures.Count; i++)
-        {
-            var entity = match.Structures.EntityAt(i);
-            if (match.World.Entities.IsAlive(entity)
-                && match.Data.StructureOf(match.Structures.ValueAt(i).Type)?.TerritoryRadius is not null
-                && match.Bodies.TryGet(entity, out var body)
-                && body.Owner >= 0
-                && body.Owner < holds.Length)
-            {
-                holds[body.Owner] = true;
-            }
-        }
-
-        var stillIn = 0;
-        for (var player = 0; player < holds.Length; player++)
-        {
-            if (outTicks[player] < 0 && match.Players[player].HasStart && !holds[player])
-            {
-                outTicks[player] = match.World.Tick;
-            }
-
-            stillIn += outTicks[player] < 0 ? 1 : 0;
-        }
-
-        return stillIn;
     }
 
     private static SeatResult Seat(
@@ -367,6 +349,10 @@ public static class HeadlessMatch
             watch.TicksAtSupplyCap,
             watch.TicksAboveSupplyCap,
             watch.MostAboveSupplyCap,
-            [.. watch.Samples]);
+            [.. watch.Samples])
+        {
+            Shells = watch.Shells,
+            Splashes = watch.Splashes,
+        };
     }
 }

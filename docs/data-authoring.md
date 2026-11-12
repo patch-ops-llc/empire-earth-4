@@ -62,7 +62,8 @@ Every battle is fought twice, the second time with the armies' sides of the map 
 Under each fight the report has two more lines to tune by:
 
 - **Attacks made of those its units had time for.** From the first attack of the fight, how many attacks each army made, against how many its units could have made had each attacked at every chance while it lived. A unit attacks only while it stands still with an enemy in range, so a low share means an army that spent the fight walking, waiting behind its own front rank, or being pushed about. The share of the first 10 seconds is given apart, because that is when a large army is still arriving.
-- **Shells.** In a fight with Artillery, how many shells landed and how many units a shell caught, on average and at most.
+- **Shells.** In a fight with Artillery, how many shells landed and how many units a shell caught, its target among them, on average and at most. The design counts what a blast catches of infantry in a square grid (2.4): 9 inside the grid and 6 in the front rank at radius 1.5, and 21 and 13 at radius 2.25.
+- **Splash.** In a fight with units whose hits splash (Overgunned II), how many hits splashed, how many of them reached another unit besides the target, and how many other units a hit reached, on average and at most. In a square grid a unit has four others within 1 tile, and three in the front rank.
 
 A missed target is not an error: the targets are what the numbers are tuned toward, and the design expects some to be missed with its starting numbers. `battles` exits with 1 only when a battle cannot be fought with the data, for example because a chassis of an army is gone or no longer unlocked at the army's tiers.
 
@@ -70,6 +71,7 @@ A missed target is not an error: the targets are what the numbers are tuned towa
 | --- | --- |
 | `--battle <number>` | Fight only this battle. May be given more than once. |
 | `--seconds <number>` | The longest a fight may take, in seconds of game time. The default is 600. A fight that runs out of time has no winner and meets no target. |
+| `--splash` | Fight one more battle after those of the design: the mass army of battle 1 against 20 Legionaries at the elite army's tiers, whose every hit splashes. It is no battle of the design and has no target; it is fought to count what splash reaches, which no battle of the design shows, because no unit in them has a hit that splashes. |
 | `--chokepoint <tiles>` | The width of the chokepoint of battle 3, and of the blocks in it, 4 to 8. The default is the design's 6. For tuning the test itself, which the design names as the second thing to adjust when battle 3 misses its target, after the range of Line infantry; a result at another width is not a result against the design. |
 | `--data <folder>` | Read another data folder. The default is `game/data`. |
 
@@ -90,13 +92,13 @@ dotnet run -c Release --project src/Tools -- ai-match
 | `--seed <number>` | The seed of the match. The default is 1. Nothing in a match is random, so it changes the state hash and nothing else. |
 | `--data <folder>` | Read another data folder. The default is `game/data`. |
 
-A match ends at the time limit, or by conquest (design 5.1): a player with no Capitol and no Outpost left, finished or still building itself, is out, and the last player in has won. The computer player does not attack yet, so for now every match runs to the time limit without a winner, and the report shows how each personality builds up.
+A match ends at the time limit, or as a match that is played ends (design 5.1): its standings say who is out and who has won, and the tool counts nothing of that itself. A player with no Capitol and no Outpost left, finished or still building itself, is out, and the last player in has won. The computer players scout from the third minute and attack, so a match on `ridge` with the game's numbers is decided in about eight minutes; a computer player does not concede. For each player the report says when it reached each epoch and first ordered an attack, what it paid for research on which track, what it had at the end, and what its shells caught and its hits that splash reached.
 
 ```sh
 dotnet run -c Release --project src/Tools -- ai-series --delays 1,2,3,4,5,6,7,8 --csv series.csv
 ```
 
-`ai-series` plays many such matches and adds them up against the things the design sets targets for: how the matches ended and how long they were, who won from which seat and which start, when each personality reached each epoch and had every track at the epoch cap, when it first ordered an attack, what it paid for research on which track, how long it stood at and above its supply cap, and how long a match went on after the loser had fallen behind for good. It plays every personality against every one, itself too, from both seats, with the starts both ways round, on every map, at every command delay named.
+`ai-series` plays many such matches and adds them up against the things the design sets targets for: how the matches ended and how long they were, who won from which seat and which start, when each personality reached each epoch and had every track at the epoch cap, when it first ordered an attack, what it paid for research on which track, how long it stood at and above its supply cap, what its shells caught and its hits that splash reached, and how long a match went on after the loser had fallen behind for good. It plays every personality against every one, itself too, from both seats, with the starts both ways round, on every map, at every command delay named.
 
 Seeds are not varied, because nothing in a match is random: two matches that differ in their seed alone are the same match. The command delay is what makes one match of a pairing differ from the next, by moving every order of both players a twentieth of a second per tick. The matches of a series are the same match disturbed a little, so a share of wins from them says how stable a result is, not how likely.
 

@@ -3,6 +3,7 @@ using Sim.Core;
 using Sim.Data;
 using Sim.Setup;
 using Tools.AiMatch;
+using Tools.Battles;
 
 namespace Tools.Tests;
 
@@ -17,6 +18,10 @@ namespace Tools.Tests;
 public class AiMatchToolTests
 {
     private const int FourMinutes = 4 * 60 * Sim.SimInfo.TicksPerSecond;
+
+    private const int ThreeMinutes = 3 * 60 * Sim.SimInfo.TicksPerSecond;
+
+    private const int HalfAnHour = 30 * 60 * Sim.SimInfo.TicksPerSecond;
 
     private static readonly Lazy<GameData> Loaded = new(() => DataLoader.Load(new DiskDataFiles(Repository.DataFolder)).Data!);
 
@@ -35,7 +40,10 @@ public class AiMatchToolTests
         Assert.Equal(240.0, result.GameSeconds);
         Assert.Equal(MatchEnd.TimeLimit, result.Ended);
         Assert.Null(result.Winner);
-        Assert.Equal((HeadlessMatch.CommandDelay, -1), (result.CommandDelay, result.FirstHitTick));
+        Assert.Equal(HeadlessMatch.CommandDelay, result.CommandDelay);
+
+        // Each player sends its first scout at three minutes, and a scout is shot at before four.
+        Assert.InRange(result.FirstHitTick, ThreeMinutes, FourMinutes);
         Assert.Equal(0, result.CommandsDropped);
         Assert.True(result.CommandsGiven > 20, $"{result.CommandsGiven} commands in four minutes.");
         Assert.Equal(["swarm", "elite"], result.Seats.Select(seat => seat.Personality));
@@ -53,13 +61,70 @@ public class AiMatchToolTests
             Assert.True(seat.Structures.Count > 1, $"{seat.Personality} built nothing.");
             Assert.Equal(seat.Units, seat.UnitsByChassis.Sum(entry => entry.Count));
             Assert.Equal(seat.Units == 0, seat.ArmyValue == 0);
-            Assert.Equal((0, 0), (seat.UnitsLost, seat.StructuresLost));
+
+            // A scout may have fallen. Nobody has attacked, so no structure has.
+            Assert.InRange(seat.UnitsLost, 0, 2);
+            Assert.Equal(0, seat.StructuresLost);
             Assert.True(seat.Materials >= 0 && seat.Energy >= 0);
             Assert.Equal((-1, -1, -1), (seat.OutTick, seat.FirstAttackOrderTick, seat.EveryTrackAtCapTick));
             Assert.Equal((0, 0, 0), (seat.TicksAtSupplyCap, seat.TicksAboveSupplyCap, seat.MostAboveSupplyCap));
         });
         Assert.True(result.TickSeconds > 0 && result.WorstTickSeconds > 0 && result.ThinkSeconds > 0);
         Assert.True(result.WorstTickSeconds <= result.TickSeconds);
+    }
+
+    /// <summary>
+    /// A whole match of the game's data, in which the computer players attack, ends as a match
+    /// that is played ends: when its standings say it is decided, with the winner they name.
+    /// The tool counts nothing of that itself. Who wins is not asked: that changes with every
+    /// number that is tuned.
+    /// </summary>
+    [Fact]
+    public void AWholeMatchEndsWhenItsStandingsSayItIsDecided()
+    {
+        var match = MatchSetup.Create(Data, Ridge, 1, [new PlayerSetup(0), new PlayerSetup(1)]);
+
+        var result = HeadlessMatch.Play(match, [Data.PersonalityOf("swarm")!, Data.PersonalityOf("elite")!], HalfAnHour);
+
+        Assert.True(
+            match.Standings.IsDecided,
+            "With the game's data a match on Ridge is decided within half an hour. If tuning has made matches longer, raise the limit of this test.");
+        Assert.Equal(MatchEnd.Conquest, result.Ended);
+        var winner = Assert.NotNull(result.Winner);
+        Assert.Equal(match.Standings.Winner, winner);
+        var loser = result.Seats[1 - winner];
+        Assert.Equal(Sim.Outcome.PlayerStanding.Eliminated, match.Standings.Of(loser.Player));
+        Assert.Equal((result.Ticks, -1), (loser.OutTick, result.Seats[winner].OutTick));
+        Assert.Equal(match.Standings.DecidedTick + 1, result.Ticks);
+        Assert.Equal(match.World.Tick, result.Ticks);
+        Assert.DoesNotContain(loser.Structures, entry => entry.Structure is "capitol" or "outpost");
+        Assert.Contains(result.Seats[winner].Structures, entry => entry.Structure is "capitol" or "outpost");
+
+        // Both attacked, after the scouts had met, and the loser lost structures to it.
+        Assert.All(result.Seats, seat => Assert.InRange(seat.FirstAttackOrderTick, result.FirstHitTick, result.Ticks));
+        Assert.InRange(result.FirstHitTick, ThreeMinutes, FourMinutes);
+        Assert.True(loser.StructuresLost > 0 && loser.UnitsLost > 0);
+
+        // Elite trains Artillery and Swarm has none: the shells are counted for the player who fired them.
+        Assert.True(result.Seats[1].Shells.Landed > 0);
+        Assert.InRange(result.Seats[1].Shells.MostCaught, 1, result.Seats[1].Shells.Caught);
+        Assert.Equal(ShellCount.None, result.Seats[0].Shells);
+        Assert.StartsWith($"{result.Seats[1].Shells.Landed} shells landed and caught ", AiMatchTool.AreaDamage(result.Seats[1]), StringComparison.Ordinal);
+    }
+
+    /// <summary>What a seat's shells caught and what its hits that splash reached, in a line, and nothing for a seat with neither.</summary>
+    [Fact]
+    public void TheAreaDamageOfASeatIsSaidInALine()
+    {
+        var seat = FourMinutesOnRidge.Value.Seats[0];
+
+        Assert.Equal("", AiMatchTool.AreaDamage(seat with { Shells = ShellCount.None, Splashes = SplashCount.None }));
+        Assert.Equal(
+            "1,200 shells landed and caught 1.5 units on average, 7 at most",
+            AiMatchTool.AreaDamage(seat with { Shells = new ShellCount(1200, 1800, 7), Splashes = SplashCount.None }));
+        Assert.Equal(
+            "2 shells landed and caught 1.0 units on average, 1 at most; 40 hits that splash, of which 10 (25%) reached another unit, 0.30 other units on average, 2 at most",
+            AiMatchTool.AreaDamage(seat with { Shells = new ShellCount(2, 2, 1), Splashes = new SplashCount(40, 10, 12, 2) }));
     }
 
     /// <summary>Nothing is random beyond the seed, so the same match ends in the same state after the same commands.</summary>
@@ -289,7 +354,7 @@ public class AiMatchToolTests
         Assert.Throws<ArgumentException>(() => HeadlessMatch.Play(Data, Ridge, [swarm, swarm], 1, 100, starts: [0, Ridge.Starts.Count]));
     }
 
-    /// <summary>The tool the way the command line runs it: each pairing both ways round, and what a build without attacks comes to.</summary>
+    /// <summary>The tool the way the command line runs it: each pairing both ways round, and what four minutes come to, in which a scout is shot at and nobody has attacked.</summary>
     [Fact]
     public void TheToolPlaysBothWaysRoundAndReportsEachMatch()
     {
@@ -302,7 +367,7 @@ public class AiMatchToolTests
         Assert.Equal(
             ["swarm (player 0, start 0) against elite (player 1, start 1)", "elite (player 0, start 0) against swarm (player 1, start 1)"],
             lines.Where(line => line.Contains(" against ", StringComparison.Ordinal)));
-        Assert.Equal(2, lines.Count(line => line == "  ended after 4:00 of game time, at the time limit, with no winner; nothing was hit"));
+        Assert.Equal(2, lines.Count(line => Regex.IsMatch(line, @"^  ended after 4:00 of game time, at the time limit, with no winner; the first hit landed at 3:\d\d$")));
         Assert.Equal(2, lines.Count(line => Regex.IsMatch(line, @"^  speed: 4,800 ticks in \d+\.\d s, \d+ times the speed of play; a tick took \d+\.\d{3} ms on average and \d+\.\d ms at worst; the players thought for \d+\.\d s in all$")));
         Assert.Equal(2, lines.Count(line => Regex.IsMatch(line, @"^  commands: \d+ given, 0 dropped; state hash [0-9a-f]{16}$")));
         Assert.Equal(["  swarm, player 0:", "  elite, player 1:", "  elite, player 0:", "  swarm, player 1:"], lines.Where(line => line.EndsWith(':')));
@@ -311,8 +376,8 @@ public class AiMatchToolTests
         Assert.Equal(4, lines.Count(line => line == "    first attack order: none"));
         Assert.Equal(4, lines.Count(line => Regex.IsMatch(line, @"^    supply \d+ of \d+; \d+ workers; \d+ fighting units worth [\d,]+( \(.+\))?$")));
         Assert.Equal(4, lines.Count(line => Regex.IsMatch(line, @"^    structures: (\d+ [a-z_]+, )*1 capitol(, \d+ [a-z_]+)*$")));
-        Assert.Equal(4, lines.Count(line => Regex.IsMatch(line, @"^    lost 0 units and 0 structures; stockpile [\d,]+ Materials and [\d,]+ Energy$")));
-        Assert.Equal("ai-match: no winner. A computer player of this build builds, researches and trains, and does not attack.", lines[^2]);
+        Assert.Equal(4, lines.Count(line => Regex.IsMatch(line, @"^    lost [0-2] units and 0 structures; stockpile [\d,]+ Materials and [\d,]+ Energy$")));
+        Assert.Equal("ai-match: no winner. No match was decided within the time limit.", lines[^2]);
     }
 
     /// <summary>A pairing that reads the same both ways round is played once.</summary>

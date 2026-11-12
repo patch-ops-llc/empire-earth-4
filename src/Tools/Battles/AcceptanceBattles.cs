@@ -70,6 +70,9 @@ public sealed record BattleDef(
     Target Target,
     string Expected)
 {
+    /// <summary>True for a fight that is not one of the design's battles and has no target: it is fought for what it counts.</summary>
+    public bool IsMeasure { get; init; }
+
     public ArmyDef Army(Side side) => side == Side.Mass ? Mass : Elite;
 }
 
@@ -99,6 +102,7 @@ public static class AcceptanceBattles
     private const string Auxiliary = "auxiliary";
     private const string Grenadier = "grenadier";
     private const string Onager = "onager";
+    private const string Legionary = "legionary";
 
     /// <summary>The swarm player of example B at first-playable tiers.</summary>
     public static IReadOnlyList<int> MassTiers { get; } = [1, 1, 2, 4, 4, 2];
@@ -145,6 +149,26 @@ public static class AcceptanceBattles
             new Target(null, null, 35, "either side may win, and keeps at most 35%"),
             "close: elite wins and keeps about 28%"),
     ];
+
+    /// <summary>
+    /// A fight that is not one of the design's four and has no target: battle 1 with the elite
+    /// player's Legionaries in place of its Grenadiers. At the elite player's tiers a Legionary
+    /// is two tiers of Firepower ahead of its chassis and so Overgunned II (design 2.3): every
+    /// hit of it splashes, which no unit of the four battles does. It is fought to count what
+    /// splash reaches in the layout the design counts blasts in, a square grid at 1 tile.
+    /// </summary>
+    public static BattleDef SplashMeasure { get; } = new(
+        5,
+        "Not a battle of the design: what splash reaches, open field",
+        ArenaKind.OpenField,
+        OpenWidth,
+        Mass(80),
+        new ArmyDef(EliteTiers, new ArmyPart(Legionary, 20)),
+        new Target(null, null, null, "none; it is fought to count what the splash of the Legionaries reaches"),
+        "nothing")
+    {
+        IsMeasure = true,
+    };
 
     /// <summary>
     /// The four battles with the chokepoint of battle 3 another width than the design's 6: the

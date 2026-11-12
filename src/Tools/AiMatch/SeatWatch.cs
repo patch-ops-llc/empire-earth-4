@@ -1,6 +1,7 @@
 using Sim.Core;
 using Sim.Research;
 using Sim.Setup;
+using Tools.Battles;
 
 namespace Tools.AiMatch;
 
@@ -14,7 +15,8 @@ public readonly record struct SeatSample(int Tick, int Workers, int Units, long 
 /// <summary>
 /// What a headless match notes of one player while it runs, from outside: when it first ordered
 /// an attack, what it paid for research on each track, when every track reached the epoch cap,
-/// how long it stood at and above its supply cap, and what it had every ten seconds. It reads the state after each tick and the
+/// how long it stood at and above its supply cap, what its shells caught and its splash reached,
+/// and what it had every ten seconds. It reads the state after each tick and the
 /// commands the player gives, and changes nothing.
 /// </summary>
 /// <remarks>
@@ -36,6 +38,8 @@ public sealed class SeatWatch
     private readonly long[] _materials;
     private readonly long[] _energy;
     private readonly List<SeatSample> _samples = [];
+    private readonly ShellCounter _shells;
+    private readonly SplashCounter _splashes;
 
     public SeatWatch(Match match, int player)
     {
@@ -46,6 +50,8 @@ public sealed class SeatWatch
         _player = player;
         _materials = new long[match.Data.Tracks.Count];
         _energy = new long[match.Data.Tracks.Count];
+        _shells = new ShellCounter(player);
+        _splashes = new SplashCounter(player);
         ReadSlots();
     }
 
@@ -69,6 +75,12 @@ public sealed class SeatWatch
 
     /// <summary>The Energy paid for research on each track and not given back, in the order of the data.</summary>
     public IReadOnlyList<long> ResearchEnergy => _energy;
+
+    /// <summary>The shells the player's units fired that have landed, and how many units each caught.</summary>
+    public ShellCount Shells => _shells.Count;
+
+    /// <summary>The hits of the player's units that splash, and how many other units each reached.</summary>
+    public SplashCount Splashes => _splashes.Count;
 
     /// <summary>What the player had after every <see cref="SampleEvery"/> ticks, in order.</summary>
     public IReadOnlyList<SeatSample> Samples => _samples;
@@ -104,6 +116,8 @@ public sealed class SeatWatch
             }
         }
 
+        _shells.AfterTick(_match);
+        _splashes.AfterTick(_match);
         ReadSlots();
         ReadTheRest();
     }
