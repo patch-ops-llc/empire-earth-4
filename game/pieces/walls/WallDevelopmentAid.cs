@@ -42,7 +42,7 @@ public partial class WallDevelopmentAid : InterfacePart
             if (_button is not null)
             {
                 var whose = MatchPanel.PlayerName(OtherSeat);
-                _button.Text = _forOtherSeat ? $"Laid for {whose}: ON" : $"Laid for {whose}: off";
+                _button.Text = _forOtherSeat ? $"Aid: walls for {whose}: ON" : $"Aid: walls for {whose}: off";
                 _button.AddThemeColorOverride("font_color", _forOtherSeat ? UiStyle.Warning : ResearchColors.Ink);
             }
         }
@@ -76,28 +76,24 @@ public partial class WallDevelopmentAid : InterfacePart
             return;
         }
 
+        // No wider than its button, so that a third aid in the column leaves the panel at the
+        // bottom of a small window its room.
         var panel = new PanelContainer
         {
             Name = "DevelopmentWalls",
+            SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin,
             TooltipText = "Not part of the game. While this is on, the run you draw with the Wall entry of the build menu\nis laid at once as finished wall of the other seat, free of charge, in or out of any territory.",
         };
-        var box = UiStyle.PanelStyle(10f);
+        var box = UiStyle.PanelStyle(6f);
         box.BorderColor = UiStyle.Warning;
         box.SetBorderWidthAll(1);
         panel.AddThemeStyleboxOverride("panel", box);
         Frame.DevelopmentAids.AddChild(panel);
 
-        // One line, so that a third aid leaves the panel at the bottom its room in a small window.
-        var row = UiStyle.Row(8);
-        panel.AddChild(row);
-        var title = new Label { Text = "Development aid: walls", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        title.AddThemeColorOverride("font_color", UiStyle.Warning);
-        row.AddChild(title);
-
         _button = UiStyle.FrameButton(string.Empty);
         _button.AddThemeFontSizeOverride("font_size", 13);
         _button.Pressed += () => ForOtherSeat = !ForOtherSeat;
-        row.AddChild(_button);
+        panel.AddChild(_button);
         ForOtherSeat = false;
     }
 }

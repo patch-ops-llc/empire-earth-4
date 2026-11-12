@@ -195,7 +195,7 @@ A wall is a line of tiles that no unit walks through, your own units neither: th
 
 **Walls in the fog of war.** A wall is under the fog like every structure. You see another player's wall while a unit or a structure of yours sees it. Out of sight it stays on your screen and on the minimap as you last saw it, darker, also when it has been broken or built on since. A wall you have never seen is not drawn at all.
 
-**The development aid for walls.** Nobody plays the other seat when you play alone, so this build has a third development aid in an orange panel at the left edge: "Development aid: walls". Click its button, which then reads "Laid for Player 2: ON", and the next runs you lay are laid at once as finished wall of the other player, free of charge and anywhere on open ground. Click it again to lay your own. It is not part of the game. To see units break through a wall, close a place off with such walls, as both ends of the pass on the ridge, make units of your own inside with G, and order them out.
+**The development aid for walls.** Nobody plays the other seat when you play alone, so this build has a third development aid, in a small orange box under the other two at the left edge: a button that reads "Aid: walls for Player 2: off". Click it, so that it reads ON, and the next runs you lay are laid at once as finished wall of the other player, free of charge and anywhere on open ground. Click it again to lay your own. It is not part of the game. To see units break through a wall, close a place off with such walls, as both ends of the pass on the ridge, make units of your own inside with G, and order them out.
 
 ## What your units are
 
