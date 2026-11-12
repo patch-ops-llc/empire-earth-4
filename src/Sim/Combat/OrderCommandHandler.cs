@@ -37,7 +37,8 @@ namespace Sim.Combat;
 /// </remarks>
 public sealed class OrderCommandHandler : ICommandHandler
 {
-    private readonly ICommandHandler _move;
+    private readonly MoveCommandHandler _move;
+    private readonly WallRule _walls;
     private readonly MapGrid _grid;
     private readonly ComponentStore<Body> _bodies;
     private readonly ComponentStore<Mover> _movers;
@@ -49,7 +50,7 @@ public sealed class OrderCommandHandler : ICommandHandler
 
     /// <param name="move">The handler that walks a move order. It is given attack-move commands too, as they are.</param>
     public OrderCommandHandler(
-        ICommandHandler move,
+        MoveCommandHandler move,
         MapGrid grid,
         ComponentStore<Body> bodies,
         ComponentStore<Mover> movers,
@@ -57,6 +58,7 @@ public sealed class OrderCommandHandler : ICommandHandler
         Targeting targeting,
         Approach approach,
         SimEventList events,
+        WallRule walls,
         int playerCount)
     {
         ArgumentNullException.ThrowIfNull(move);
@@ -67,6 +69,8 @@ public sealed class OrderCommandHandler : ICommandHandler
         ArgumentNullException.ThrowIfNull(targeting);
         ArgumentNullException.ThrowIfNull(approach);
         ArgumentNullException.ThrowIfNull(events);
+        ArgumentNullException.ThrowIfNull(walls);
+        _walls = walls;
         _move = move;
         _grid = grid;
         _bodies = bodies;
@@ -115,6 +119,7 @@ public sealed class OrderCommandHandler : ICommandHandler
             return false;
         }
 
+        _walls.BeginOrder();
         foreach (var entity in command.Entities)
         {
             // The units the move order sent: it skips one that stands where no unit can.
@@ -131,10 +136,21 @@ public sealed class OrderCommandHandler : ICommandHandler
             }
 
             ref var unit = ref _combatants.ValueAt(index);
+            ref var walk = ref _movers.ValueAt(mover);
             unit.Order = order;
             unit.Target = EntityId.None;
             unit.Engaged = false;
-            unit.Anchor = _movers.ValueAt(mover).Destination;
+            unit.Anchor = walk.Destination;
+
+            // The wall rule of design 2.5: enemy walls that keep the unit from its place come
+            // first, and the unit goes for the tile in its way.
+            var place = _move.TryGetOrderedPlace(mover, out var ordered) ? ordered : walk.Destination;
+            unit.Goal = _walls.GoalFor(body.Owner, body.Position, place);
+            unit.WallInWay = _walls.FindForOrder(body.Owner, body.Position, unit.Goal);
+            if (unit.WallInWay != EntityId.None)
+            {
+                _walls.WalkToWall(world, ref unit, ref walk, in body, _targeting.Rules.ProfileOf(body.Owner, unit.Chassis));
+            }
         }
 
         return true;
@@ -156,6 +172,7 @@ public sealed class OrderCommandHandler : ICommandHandler
         var mark = _targeting.MarkOf(command.TargetEntity, in target);
         var targetLine = mark.Line;
         var taken = false;
+        _walls.BeginOrder();
         foreach (var entity in command.Entities)
         {
             var index = _combatants.IndexOf(entity);
@@ -174,6 +191,7 @@ public sealed class OrderCommandHandler : ICommandHandler
             taken = true;
             unit.Order = UnitOrder.Attack;
             unit.Target = command.TargetEntity;
+            unit.WallInWay = EntityId.None;
             unit.Engaged = true;
             unit.AimedAt = target.Position;
             unit.Anchor = target.Position;
@@ -188,6 +206,12 @@ public sealed class OrderCommandHandler : ICommandHandler
                 || Targeting.IsTooClose(profile, body.Position, mark.NearestTo(body.Position)))
             {
                 _movers.ValueAt(mover).Stop();
+            }
+            else if (_walls.TryFindStand(body.Owner, profile, body.Position, in mark, out var stand)
+                && (unit.WallInWay = _walls.FindForOrder(body.Owner, body.Position, stand)) != EntityId.None)
+            {
+                // Enemy walls keep it from its target: the tile in its way comes first.
+                _walls.WalkToWall(world, ref unit, ref _movers.ValueAt(mover), in body, profile);
             }
             else if (mark.IsStructure)
             {
@@ -234,6 +258,7 @@ public sealed class OrderCommandHandler : ICommandHandler
             {
                 unit.Order = UnitOrder.Move;
                 unit.Anchor = walk.Destination;
+                unit.Goal = _walls.GoalFor(body.Owner, body.Position, remembered.Center);
             }
         }
 

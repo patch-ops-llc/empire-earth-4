@@ -3,6 +3,7 @@ using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
 using Sim.Perks;
+using Sim.Walls;
 
 namespace Sim.Combat;
 
@@ -99,6 +100,20 @@ namespace Sim.Combat;
 /// (<see cref="SplashDamage"/>). What a target's accents take off a hit is the target's side,
 /// read when the hit lands (<see cref="CombatRules.DamageToUnit"/>).
 /// </para>
+/// <para>
+/// <b>Enemy walls in the way</b> (design 2.5, <see cref="WallRule"/>). A unit on a move or an
+/// attack-move order whose place enemy walls keep it from attacks the wall tile in its way,
+/// <see cref="Combatant.WallInWay"/>, and keeps its order meanwhile; a move order fights nothing
+/// else. So does a unit on an attack order whose target enemy walls keep it from. Once the tile
+/// is destroyed the unit goes on with its order: to its place, after its target, or to the next
+/// wall in its way. It does the same when the way has opened elsewhere, which it sees on its
+/// turn to look. A unit on an attack-move still turns on whatever it picks and can get to, and
+/// returns to the wall afterwards. A target it has picked that enemy walls keep out of its
+/// reach does not hold it: it goes on with its order, and attacks that target once it is in
+/// reach. A unit that was not given its wall with its order finds it here, on its turn to look
+/// or when its walk has ended, while the tick has some of
+/// <see cref="Breaching.ExpansionsPerTick"/> left. An idle unit never attacks a wall.
+/// </para>
 /// </remarks>
 public sealed class AttackSystem : ISystem
 {
@@ -112,6 +127,11 @@ public sealed class AttackSystem : ISystem
     private readonly MeleePlaces _places;
     private readonly PerkCounters _counters;
     private readonly SimEventList _events;
+    private readonly WallRule _walls;
+
+    // What the searches for walls may still expand in this tick. Set at the start of each run,
+    // so nothing of it lasts from one tick to the next. Not state.
+    private int _wallBudget;
 
     // Scratch for one splash, emptied at its start. Not state.
     private readonly List<EntityId> _splashed = [];
@@ -126,7 +146,8 @@ public sealed class AttackSystem : ISystem
         Fighters fighters,
         MeleePlaces places,
         PerkCounters counters,
-        SimEventList events)
+        SimEventList events,
+        WallRule walls)
     {
         ArgumentNullException.ThrowIfNull(bodies);
         ArgumentNullException.ThrowIfNull(movers);
@@ -138,6 +159,8 @@ public sealed class AttackSystem : ISystem
         ArgumentNullException.ThrowIfNull(places);
         ArgumentNullException.ThrowIfNull(counters);
         ArgumentNullException.ThrowIfNull(events);
+        ArgumentNullException.ThrowIfNull(walls);
+        _walls = walls;
         _bodies = bodies;
         _movers = movers;
         _combatants = combatants;
@@ -154,6 +177,7 @@ public sealed class AttackSystem : ISystem
     {
         ArgumentNullException.ThrowIfNull(world);
 
+        _wallBudget = Breaching.ExpansionsPerTick;
         for (var i = 0; i < _combatants.Count; i++)
         {
             var entity = _combatants.EntityAt(i);
@@ -201,6 +225,11 @@ public sealed class AttackSystem : ISystem
         switch (unit.Order)
         {
             case UnitOrder.Move:
+                if (BreakThrough(ref unit, in turn, out var hitWall))
+                {
+                    return hitWall;
+                }
+
                 if (!IsWalking(turn.Mover))
                 {
                     BecomeIdle(ref unit, position);
@@ -238,7 +267,7 @@ public sealed class AttackSystem : ISystem
 
                 // While its owner sees the target, the unit notes where: the point the order is tied to.
                 unit.Anchor = named.Position;
-                return Fight(ref unit, in turn, in named, retargeted: false);
+                return Pursue(ref unit, in turn, in named, retargeted: false);
         }
 
         // Idle or on an attack-move: the unit picks for itself.
@@ -285,15 +314,175 @@ public sealed class AttackSystem : ISystem
                 _targeting.IsEnemy(turn.World, owner, unit.Target, out target);
             }
 
-            return Fight(ref unit, in turn, in target, retargeted);
+            return unit.Order == UnitOrder.Idle
+                ? Fight(ref unit, in turn, unit.Target, in target, retargeted)
+                : Pursue(ref unit, in turn, in target, retargeted);
         }
 
-        if (unit.Order == UnitOrder.AttackMove && !unit.Engaged && !IsWalking(turn.Mover))
+        if (unit.Order == UnitOrder.AttackMove)
         {
-            BecomeIdle(ref unit, position);
+            if (BreakThrough(ref unit, in turn, out var hitWall))
+            {
+                return hitWall;
+            }
+
+            if (!unit.Engaged && !IsWalking(turn.Mover))
+            {
+                BecomeIdle(ref unit, position);
+            }
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The wall rule for a unit on a move or an attack-move order that has no target: attacks the
+    /// wall in its way, goes on once that is destroyed or the way is open, and looks for a wall
+    /// when enemy walls keep it from its place. False when no enemy wall is in its way, and the
+    /// order goes on as it would without walls. <paramref name="attacked"/> is true when it
+    /// attacked.
+    /// </summary>
+    private bool BreakThrough(ref Combatant unit, in Turn turn, out bool attacked)
+    {
+        attacked = false;
+        if (turn.Mover < 0)
+        {
+            return false;
+        }
+
+        var owner = turn.Body.Owner;
+        var position = turn.Body.Position;
+        if (unit.WallInWay != EntityId.None)
+        {
+            // The way may have opened elsewhere: another unit broke through, or the wall's owner
+            // took a tile down. Then this tile is no longer in the way.
+            if (_targeting.IsEnemyThere(turn.World, owner, unit.WallInWay, out var wall)
+                && !(turn.TurnToLook && !_walls.IsCutOff(owner, position, unit.Goal)))
+            {
+                attacked = Fight(ref unit, in turn, unit.WallInWay, in wall, retargeted: false);
+                return true;
+            }
+
+            unit.WallInWay = EntityId.None;
+            GoOn(ref unit, in turn);
+            return true;
+        }
+
+        if (!_walls.IsCutOff(owner, position, unit.Goal))
+        {
+            return false;
+        }
+
+        // Enemy walls keep it from its place and it has not found the tile in its way yet. It
+        // keeps its order, also when it stands at the nearest tile it could reach.
+        if (turn.TurnToLook || !IsWalking(turn.Mover))
+        {
+            unit.WallInWay = _walls.Find(owner, position, unit.Goal, ref _wallBudget);
+            _walls.WalkToWall(turn.World, ref unit, ref _movers.ValueAt(turn.Mover), turn.Body, turn.Profile);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Sends a unit on a move or an attack-move order on with it after the wall in its way: to
+    /// the place of its order, or to the next wall that keeps it from there.
+    /// </summary>
+    private void GoOn(ref Combatant unit, in Turn turn)
+    {
+        var position = turn.Body.Position;
+        ref var mover = ref _movers.ValueAt(turn.Mover);
+        unit.Engaged = false;
+        if (_walls.IsCutOff(turn.Body.Owner, position, unit.Goal))
+        {
+            unit.WallInWay = _walls.Find(turn.Body.Owner, position, unit.Goal, ref _wallBudget);
+            if (unit.WallInWay != EntityId.None)
+            {
+                _walls.WalkToWall(turn.World, ref unit, ref mover, turn.Body, turn.Profile);
+                return;
+            }
+        }
+
+        _approach.WalkTo(ref mover, position, unit.Goal);
+        unit.Anchor = mover.State == MoveState.Idle ? position : mover.Destination;
+    }
+
+    /// <summary>
+    /// Goes after the target of a unit on an attack or an attack-move order: attacks it or walks
+    /// after it, unless enemy walls keep the unit from it. Then a unit on an attack order
+    /// attacks the wall tile in its way to the target. A unit on an attack-move does not follow
+    /// such a target: it goes on with its order, which takes it through the wall if its place
+    /// lies behind it, and attacks the target once it is in reach. True when it attacked.
+    /// </summary>
+    private bool Pursue(ref Combatant unit, in Turn turn, in Body target, bool retargeted)
+    {
+        var owner = turn.Body.Owner;
+        var position = turn.Body.Position;
+        var mark = _targeting.MarkOf(unit.Target, in target);
+        var named = unit.Order == UnitOrder.Attack;
+        if (turn.Mover < 0
+            || _targeting.Reaches(turn.Profile, position, in mark)
+            || Targeting.IsTooClose(turn.Profile, position, mark.NearestTo(position)))
+        {
+            // It has its target before it. The wall of an attack order was in the way to this
+            // target; that of an attack-move is in the way to its place, and stays.
+            if (named)
+            {
+                unit.WallInWay = EntityId.None;
+            }
+
+            return Fight(ref unit, in turn, unit.Target, in target, retargeted);
+        }
+
+        if (!named)
+        {
+            if (!_walls.TryFindStand(owner, turn.Profile, position, in mark, out _))
+            {
+                return Fight(ref unit, in turn, unit.Target, in target, retargeted);
+            }
+
+            Resume(ref unit, in turn);
+            if (BreakThrough(ref unit, in turn, out var hitWall))
+            {
+                return hitWall;
+            }
+
+            if (!unit.Engaged && !IsWalking(turn.Mover))
+            {
+                BecomeIdle(ref unit, position);
+            }
+
+            return false;
+        }
+
+        ref var mover = ref _movers.ValueAt(turn.Mover);
+        var think = turn.TurnToLook || mover.State == MoveState.Idle;
+        if (unit.WallInWay != EntityId.None)
+        {
+            if (_targeting.IsEnemyThere(turn.World, owner, unit.WallInWay, out var wall)
+                && !(think && !_walls.TryFindStand(owner, turn.Profile, position, in mark, out _)))
+            {
+                return Fight(ref unit, in turn, unit.WallInWay, in wall, retargeted: false);
+            }
+
+            // The tile is destroyed, or the unit can get to its target without that. It walks
+            // after the target again, or turns to the next wall.
+            unit.WallInWay = EntityId.None;
+            retargeted = true;
+            think = true;
+        }
+
+        if (think && _walls.TryFindStand(owner, turn.Profile, position, in mark, out var stand))
+        {
+            unit.WallInWay = _walls.Find(owner, position, stand, ref _wallBudget);
+            if (unit.WallInWay != EntityId.None)
+            {
+                _walls.WalkToWall(turn.World, ref unit, ref mover, turn.Body, turn.Profile);
+                return false;
+            }
+        }
+
+        return Fight(ref unit, in turn, unit.Target, in target, retargeted);
     }
 
     /// <summary>
@@ -354,8 +543,9 @@ public sealed class AttackSystem : ISystem
         }
 
         unit.Engaged = false;
-        if (turn.Mover < 0)
+        if (turn.Mover < 0 || unit.WallInWay != EntityId.None)
         {
+            // A unit with a wall in its way walks back to that; its turn sends it.
             return;
         }
 
@@ -393,20 +583,23 @@ public sealed class AttackSystem : ISystem
         _approach.WalkTo(ref mover, position, lastSeen);
         if (mover.State != MoveState.Idle)
         {
+            // As a move order: the place may lie behind enemy walls, and then the unit breaks in.
             unit.Order = UnitOrder.Move;
             unit.Anchor = mover.Destination;
+            unit.Goal = _walls.GoalFor(turn.Body.Owner, position, lastSeen);
         }
     }
 
     /// <summary>
-    /// Attacks the unit's target if it can, and otherwise stops within reach of it, walks after
-    /// it, or goes to a free place by it. True when it attacked.
+    /// Attacks an enemy if the unit can, and otherwise stops within reach of it, walks after it,
+    /// or goes to a free place by it. The enemy is the unit's target or the wall in its way.
+    /// True when it attacked.
     /// </summary>
-    private bool Fight(ref Combatant unit, in Turn turn, in Body target, bool retargeted)
+    private bool Fight(ref Combatant unit, in Turn turn, EntityId enemy, in Body target, bool retargeted)
     {
         var profile = turn.Profile;
         var position = turn.Body.Position;
-        var mark = _targeting.MarkOf(unit.Target, in target);
+        var mark = _targeting.MarkOf(enemy, in target);
         var nearest = mark.NearestTo(position);
         var reaches = _targeting.Reaches(profile, position, in mark);
 
@@ -416,7 +609,7 @@ public sealed class AttackSystem : ISystem
 
         if (unit.PlaceFor != EntityId.None)
         {
-            if (!KeepsPlace(in unit, in turn, in target, retargeted))
+            if (!KeepsPlace(in unit, in turn, enemy, in target, retargeted))
             {
                 unit.PlaceFor = EntityId.None;
             }
@@ -462,16 +655,16 @@ public sealed class AttackSystem : ISystem
                     unit.PlaceFor = EntityId.None;
                     if (stopped || turn.TurnToLook)
                     {
-                        TakePlace(ref unit, in turn, in target, blocked, out _);
+                        TakePlace(ref unit, in turn, enemy, in target, blocked, out _);
                     }
 
                     return false;
                 }
 
                 if (unit.PlaceFor == EntityId.None
-                    && _places.IsFreeWhereItStands(turn.Entity, turn.Body, profile, unit.Target, target.Position))
+                    && _places.IsFreeWhereItStands(turn.Entity, turn.Body, profile, enemy, target.Position))
                 {
-                    unit.PlaceFor = unit.Target;
+                    unit.PlaceFor = enemy;
                     unit.Place = position;
                 }
             }
@@ -498,12 +691,12 @@ public sealed class AttackSystem : ISystem
 
             if (profile.Melee)
             {
-                var damage = _targeting.Hit(unit.Target, side, profile.Line, profile.Firepower);
-                _events.Add(SimEventKind.MeleeHit, turn.Body.Owner, unit.Target, turn.Entity, nearest, damage);
+                var damage = _targeting.Hit(enemy, side, profile.Line, profile.Firepower);
+                _events.Add(SimEventKind.MeleeHit, turn.Body.Owner, enemy, turn.Entity, nearest, damage);
                 if (profile.SplashRadius > Fixed.Zero)
                 {
                     var hit = new SplashingHit(
-                        turn.Body.Owner, turn.Entity, unit.Target, target.Position, profile.SplashRadius, side, profile.SplashShare,
+                        turn.Body.Owner, turn.Entity, enemy, target.Position, profile.SplashRadius, side, profile.SplashShare,
                         profile.Line, profile.Firepower);
                     SplashDamage.Land(turn.World, _targeting, _bodies, _events, _splashed, in hit);
                 }
@@ -514,7 +707,7 @@ public sealed class AttackSystem : ISystem
                 _shots.Add(shot, new Shot
                 {
                     Position = position,
-                    Target = unit.Target,
+                    Target = enemy,
                     Aim = target.Position,
                     Speed = profile.ShotSpeed,
                     Damage = side,
@@ -555,7 +748,7 @@ public sealed class AttackSystem : ISystem
                 return false;
             }
 
-            if (TakePlace(ref unit, in turn, in target, blocked, out var crowded) || crowded)
+            if (TakePlace(ref unit, in turn, enemy, in target, blocked, out var crowded) || crowded)
             {
                 return false;
             }
@@ -566,7 +759,7 @@ public sealed class AttackSystem : ISystem
             // now and walks onto it: the point that faces it, where it would have stopped anyway,
             // or the nearest free one when its own side is in the way there. When its own side
             // has every place it stops here, behind them, and does not walk in among them.
-            if (TakePlace(ref unit, in turn, in target, blocked, out var crowded))
+            if (TakePlace(ref unit, in turn, enemy, in target, blocked, out var crowded))
             {
                 return false;
             }
@@ -631,9 +824,9 @@ public sealed class AttackSystem : ISystem
     /// the unit stands on the place or is on its way there. A unit that enemy units have stopped
     /// on the way gives the place up on its turn to look.
     /// </summary>
-    private bool KeepsPlace(in Combatant unit, in Turn turn, in Body target, bool retargeted)
+    private bool KeepsPlace(in Combatant unit, in Turn turn, EntityId enemy, in Body target, bool retargeted)
     {
-        if (retargeted || !unit.HasPlace || unit.AimedAt != target.Position || turn.Mover < 0)
+        if (retargeted || unit.PlaceFor != enemy || unit.AimedAt != target.Position || turn.Mover < 0)
         {
             return false;
         }
@@ -651,7 +844,7 @@ public sealed class AttackSystem : ISystem
     /// Finds a free place by the unit's target and sends the unit there. False when there is
     /// none; <paramref name="crowded"/> then says whether its own side has taken the room.
     /// </summary>
-    private bool TakePlace(ref Combatant unit, in Turn turn, in Body target, bool blocked, out bool crowded)
+    private bool TakePlace(ref Combatant unit, in Turn turn, EntityId enemy, in Body target, bool blocked, out bool crowded)
     {
         var position = turn.Body.Position;
         crowded = false;
@@ -663,12 +856,12 @@ public sealed class AttackSystem : ISystem
         }
 
         if (!_places.TryFind(
-            turn.Entity, turn.Body, turn.Profile, unit.Order, unit.Anchor, unit.Target, target.Position, blocked, out var place, out crowded))
+            turn.Entity, turn.Body, turn.Profile, unit.Order, unit.Anchor, enemy, target.Position, blocked, out var place, out crowded))
         {
             return false;
         }
 
-        unit.PlaceFor = unit.Target;
+        unit.PlaceFor = enemy;
         unit.Place = place;
         unit.Engaged = true;
         unit.AimedAt = target.Position;
@@ -695,6 +888,7 @@ public sealed class AttackSystem : ISystem
     {
         unit.Order = UnitOrder.Idle;
         unit.Target = EntityId.None;
+        unit.WallInWay = EntityId.None;
         unit.Engaged = false;
         unit.Anchor = position;
     }

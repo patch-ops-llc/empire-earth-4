@@ -655,6 +655,7 @@ public class PlayerViewTests
             SimEventKind.RallyPointSet, SimEventKind.TrainOrdered, SimEventKind.TrainCancelled, SimEventKind.TrainRefunded,
             SimEventKind.TrainRefused, SimEventKind.UnitTrained, SimEventKind.ReservesRefunded,
             SimEventKind.ResearchCancelled, SimEventKind.ResearchFinished, SimEventKind.ResearchLost, SimEventKind.ResearchStarted,
+            SimEventKind.WallTileSkipped,
         ];
 
         // A change of epoch is announced to all players (design 1.4).

@@ -22,4 +22,11 @@ internal static class TestBuild
         + "(a regeneration of a unit that carries Charge, a regeneration that stops at the maximum). "
         + "ridge-perks-in-fog.replay reaches thirteen: no charged melee attack. "
         + "It is not melee places (#54): with them switched off the result is the same. Which piece it is was not found out.";
+
+    /// <summary>Plain walls (#68) with the pieces it has not met, the fog first among them.</summary>
+    public const string WallsMeetTheRest =
+        "Test build only. With every piece in, ridge-walls.replay plays out differently: 7 of its 11 development placements "
+        + "and all 5 of its attack orders are refused, 17 wall orders are refused as outside the player's territory, and no "
+        + "unit comes to a wall in its way. Seven rules of the list are not reached. #68 has not met the fog (#63); its "
+        + "description says the tests of that join are its owner's.";
 }

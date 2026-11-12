@@ -68,10 +68,26 @@ public struct Combatant : IStateValue
     public FixedVector2 Fought { get; set; }
 
     /// <summary>
-    /// The target that <see cref="Place"/> is a place by, or <see cref="EntityId.None"/>. The unit
-    /// has the place only while this is its <see cref="Target"/> (<see cref="HasPlace"/>), so a
-    /// unit that takes another target or another order has given the place up without anything
-    /// being cleared.
+    /// The enemy wall tile in its way, which it attacks by the wall rule of design 2.5: it was
+    /// ordered to a place it cannot reach, and this tile is the first on the way there through
+    /// enemy walls. When the tile is destroyed, or the way is open without that, the unit goes
+    /// on with its order. <see cref="EntityId.None"/> when no wall is in its way.
+    /// </summary>
+    public EntityId WallInWay { get; set; }
+
+    /// <summary>
+    /// The place its move or attack-move order takes it to once no enemy wall is in its way: the
+    /// place that was ordered, or the nearest tile to it that the unit could then reach. Not used
+    /// by the other orders.
+    /// </summary>
+    public FixedVector2 Goal { get; set; }
+
+    /// <summary>
+    /// What <see cref="Place"/> is a place by: the unit's target or the wall in its way, or
+    /// <see cref="EntityId.None"/>. The unit has the place only while this is its
+    /// <see cref="Target"/> or its <see cref="WallInWay"/> (<see cref="HasPlace"/>), so a unit
+    /// that takes another target or another order, or whose wall has fallen, has given the place
+    /// up without anything being cleared.
     /// </summary>
     public EntityId PlaceFor { get; set; }
 
@@ -83,8 +99,8 @@ public struct Combatant : IStateValue
     /// </summary>
     public FixedVector2 Place { get; set; }
 
-    /// <summary>True when the unit has a place by the target it has now.</summary>
-    public readonly bool HasPlace => PlaceFor != EntityId.None && PlaceFor == Target;
+    /// <summary>True when the unit has a place by the target it has now or by the wall in its way.</summary>
+    public readonly bool HasPlace => PlaceFor != EntityId.None && (PlaceFor == Target || PlaceFor == WallInWay);
 
     public void Walk(IStateWalker walker)
     {
@@ -98,6 +114,8 @@ public struct Combatant : IStateValue
         Wait = walker.Field(Wait);
         Stood = new FixedVector2(walker.Field(Stood.X), walker.Field(Stood.Y));
         Fought = new FixedVector2(walker.Field(Fought.X), walker.Field(Fought.Y));
+        WallInWay = walker.Field(WallInWay);
+        Goal = new FixedVector2(walker.Field(Goal.X), walker.Field(Goal.Y));
         PlaceFor = walker.Field(PlaceFor);
         Place = new FixedVector2(walker.Field(Place.X), walker.Field(Place.Y));
     }

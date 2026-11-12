@@ -17,6 +17,7 @@ public enum CommandType
     Attack = 4,
     AttackMove = 5,
     Build = 9,
+    BuildWall = 14,
     CancelBuild = 10,
     CancelResearch = 2,
     CancelTrain = 12,
