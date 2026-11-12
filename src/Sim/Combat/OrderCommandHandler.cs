@@ -18,10 +18,11 @@ namespace Sim.Combat;
 /// For a unit that is not of a chassis, a worker, an attack-move is a move order.
 /// </para>
 /// <para>
-/// <b>Attack</b> names one entity. The command is valid when its player is in the match, the entity
-/// is alive, belongs to another player and can be damaged, and at least one listed unit can take
-/// the order: alive, owned by the player, of a chassis, and of a line that can hit the target. The
-/// others are skipped, workers among them, and keep the order they had.
+/// <b>Attack</b> names one entity, a unit or a structure. The command is valid when its player is
+/// in the match, the entity is alive, belongs to another player and can be damaged, and at least
+/// one listed unit can take the order: alive, owned by the player, of a chassis, and of a line
+/// that can hit the target. The others are skipped, workers among them, and keep the order they
+/// had. Any structure can be named, a wall too, and every line can hit one.
 /// </para>
 /// <para>
 /// <b>Stop</b> is valid when at least one listed entity is alive, owned by the player and either
@@ -146,7 +147,8 @@ public sealed class OrderCommandHandler : ICommandHandler
             return false;
         }
 
-        var targetLine = _targeting.LineOf(command.TargetEntity);
+        var mark = _targeting.MarkOf(command.TargetEntity, in target);
+        var targetLine = mark.Line;
         var taken = false;
         foreach (var entity in command.Entities)
         {
@@ -175,10 +177,14 @@ public sealed class OrderCommandHandler : ICommandHandler
                 continue;
             }
 
-            if (_targeting.Reaches(profile, body.Position, target.Position, targetLine)
-                || Targeting.IsTooClose(profile, body.Position, target.Position))
+            if (_targeting.Reaches(profile, body.Position, in mark)
+                || Targeting.IsTooClose(profile, body.Position, mark.NearestTo(body.Position)))
             {
                 _movers.ValueAt(mover).Stop();
+            }
+            else if (mark.IsStructure)
+            {
+                _approach.WalkToStructure(ref _movers.ValueAt(mover), body.Position, mark.Tiles);
             }
             else
             {
