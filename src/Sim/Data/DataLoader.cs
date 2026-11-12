@@ -30,10 +30,10 @@ public sealed class DataLoadResult
 /// </summary>
 public static class DataLoader
 {
-    private const string Layout = "tracks.jsonc, rules.jsonc, research.jsonc, accents.jsonc, lines/<id>.jsonc and maps/<id>.jsonc";
+    private const string Layout = "tracks.jsonc, rules.jsonc, research.jsonc, resources.jsonc, accents.jsonc, lines/<id>.jsonc and maps/<id>.jsonc";
 
     private static readonly string[] RequiredFiles =
-        [DataRules.TracksFile, DataRules.RulesFile, DataRules.ResearchFile, DataRules.AccentsFile];
+        [DataRules.TracksFile, DataRules.RulesFile, DataRules.ResearchFile, DataRules.ResourcesFile, DataRules.AccentsFile];
 
     private static readonly JsonDocumentOptions JsonOptions = new()
     {
@@ -73,6 +73,11 @@ public static class DataLoader
             if (data is not null && errors.Count == 0)
             {
                 Tech.FormulaCheck.Check(data, errors);
+            }
+
+            if (data is not null && errors.Count == 0)
+            {
+                Economy.IncomeRules.Check(data, errors);
             }
 
             var sorted = errors.ToList().OrderBy(error => error.File, StringComparer.Ordinal).ToList();
@@ -218,6 +223,14 @@ public static class DataLoader
             rules = errors.Count == errorsBefore ? read : null;
         }
 
+        ResourceRules? resources = null;
+        if (Root(DataRules.ResourcesFile) is { } resourcesRoot)
+        {
+            var errorsBefore = errors.Count;
+            var read = ResourcesReader.Read(resourcesRoot);
+            resources = errors.Count == errorsBefore ? read : null;
+        }
+
         var lines = new List<LineDef>();
         var chassis = new List<ChassisDef>();
         if (tracksAreValid && rules is not null)
@@ -268,8 +281,8 @@ public static class DataLoader
             maps.Sort((left, right) => string.CompareOrdinal(left.Id, right.Id));
         }
 
-        return tracksAreValid && roles is not null && rules is not null
-            ? new GameData(epochNames, tracks, roles, rules, research, accents, lines, chassis, maps, ContentHash: "")
+        return tracksAreValid && roles is not null && rules is not null && resources is not null
+            ? new GameData(epochNames, tracks, roles, rules, research, resources, accents, lines, chassis, maps, ContentHash: "")
             : null;
     }
 }

@@ -136,6 +136,7 @@ public class DataLoaderTests
     [InlineData(SampleData.TracksPath, "tracks.jsonc")]
     [InlineData(SampleData.RulesPath, "rules.jsonc")]
     [InlineData(SampleData.ResearchPath, "research.jsonc")]
+    [InlineData(SampleData.ResourcesPath, "resources.jsonc")]
     [InlineData(SampleData.AccentsPath, "accents.jsonc")]
     [InlineData(SampleData.GuardPath, "lines/")]
     [InlineData(SampleData.MapPath, "maps/")]
@@ -265,7 +266,7 @@ public class DataLoaderTests
                 "lines/guard.jsonc: $.base.hp: must be above 0 and at most 1000000, found 0",
                 "lines/guard.jsonc: $.base.sight: must be between 1 and 64, found 0",
                 "maps/arena.jsonc: $.symmetry: unknown symmetry 'rotate'; use mirror_x or mirror_y",
-                "notes.txt: unexpected file; the loader reads tracks.jsonc, rules.jsonc, research.jsonc, accents.jsonc, lines/<id>.jsonc and maps/<id>.jsonc",
+                "notes.txt: unexpected file; the loader reads tracks.jsonc, rules.jsonc, research.jsonc, resources.jsonc, accents.jsonc, lines/<id>.jsonc and maps/<id>.jsonc",
             ],
             result.Errors.Select(error => error.ToString()));
     }

@@ -27,7 +27,7 @@ namespace Sim.Research;
 /// is free is dropped, and the player gives it again when one is.
 /// </para>
 /// </remarks>
-public sealed class MatchResearch
+public sealed class MatchResearch : IPlayerTechSource
 {
     private readonly GameData _data;
     private readonly World _world;

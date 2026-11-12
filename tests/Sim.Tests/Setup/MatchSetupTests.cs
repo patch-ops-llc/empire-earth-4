@@ -4,6 +4,7 @@ using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
 using Sim.Setup;
+using Sim.Tests.Data;
 using Sim.Tests.Map;
 
 namespace Sim.Tests.Setup;
@@ -69,16 +70,20 @@ public class MatchSetupTests
             Assert.Equal(i + 1, entity.Value);
             Assert.Equal(i / 6, body.Owner);
             Assert.Equal(MapGrid.TileCenter(body.Position.X.FloorToInt(), body.Position.Y.FloorToInt()), body.Position);
-            Assert.Equal(MatchSetup.StartingWorkerSpeed, mover.Speed);
+            Assert.Equal(Mover.SpeedPerTick(3), mover.Speed);
             Assert.Equal(MoveState.Idle, mover.State);
         }
     }
 
+    /// <summary>Design 4.1: 3 tiles per second, from the worker profile in the data.</summary>
     [Fact]
-    public void TheStartingWorkerSpeedIsThreeTilesPerSecond()
+    public void TheStartingWorkerSpeedIsTheWorkerProfiles()
     {
-        Assert.Equal(Mover.SpeedPerTick(3), MatchSetup.StartingWorkerSpeed);
-        Assert.Equal(9830, MatchSetup.StartingWorkerSpeed.Raw);
+        var files = SampleData.With(SampleData.ResourcesPath, "\"speed\": 3", "\"speed\": \"4.5\"");
+        var faster = DataAssert.Valid(files);
+
+        Assert.Equal(9830, SampleMatch().Movers.ValueAt(0).Speed.Raw);
+        Assert.Equal(Mover.SpeedPerTick(Fraction.Parse("4.5")), MatchSetup.Create(faster, faster.Maps[0], 1, TwoPlayers).Movers.ValueAt(0).Speed);
     }
 
     /// <summary>Design 5.2: every player starts identically. On a mirrored map that means as mirror images.</summary>

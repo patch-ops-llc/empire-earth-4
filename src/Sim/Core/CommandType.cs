@@ -15,6 +15,7 @@ public enum CommandType
     /// <summary>Not a command. The default value, which no handler can be registered for.</summary>
     None = 0,
     CancelResearch = 2,
+    Gather = 7,
     Move = 1,
     StartResearch = 3,
 }

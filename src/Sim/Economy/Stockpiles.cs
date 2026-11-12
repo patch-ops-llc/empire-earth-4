@@ -71,6 +71,17 @@ public sealed class Stockpiles : IStateStore
         _energy[player] = checked(_energy[player] + (energy * PerResource));
     }
 
+    /// <summary>
+    /// Adds to one of the player's resources an amount in thousandths that is not negative:
+    /// income, which arrives in fractions of a resource.
+    /// </summary>
+    public void AddThousandths(int player, Resource resource, long thousandths)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(thousandths);
+        var amounts = resource == Resource.Materials ? _materials : _energy;
+        amounts[player] = checked(amounts[player] + thousandths);
+    }
+
     public void RemoveEntities(ReadOnlySpan<EntityId> destroyed)
     {
     }
