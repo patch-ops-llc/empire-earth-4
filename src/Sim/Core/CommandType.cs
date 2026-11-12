@@ -16,6 +16,8 @@ public enum CommandType
     None = 0,
     Attack = 4,
     AttackMove = 5,
+    Build = 9,
+    CancelBuild = 10,
     CancelResearch = 2,
     DebugSpawn = 8,
     Gather = 7,
