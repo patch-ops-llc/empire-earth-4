@@ -1,6 +1,7 @@
 using Sim.Core;
 using Sim.Map;
 using Sim.Movement;
+using Sim.Numerics;
 
 namespace Sim.Combat;
 
@@ -26,6 +27,10 @@ namespace Sim.Combat;
 /// <b>Stop</b> is valid when at least one listed entity is alive, owned by the player and either
 /// walks or is of a chassis. Each stands where it is and is idle there.
 /// </para>
+/// <para>
+/// A command that is not valid changes nothing and is reported as a
+/// <see cref="SimEventKind.OrderRefused"/>, so that the player who gave it can be told.
+/// </para>
 /// </remarks>
 public sealed class OrderCommandHandler : ICommandHandler
 {
@@ -36,6 +41,7 @@ public sealed class OrderCommandHandler : ICommandHandler
     private readonly ComponentStore<Combatant> _combatants;
     private readonly Targeting _targeting;
     private readonly Approach _approach;
+    private readonly SimEventList _events;
     private readonly int _playerCount;
 
     /// <param name="move">The handler that walks a move order. It is given attack-move commands too, as they are.</param>
@@ -47,6 +53,7 @@ public sealed class OrderCommandHandler : ICommandHandler
         ComponentStore<Combatant> combatants,
         Targeting targeting,
         Approach approach,
+        SimEventList events,
         int playerCount)
     {
         ArgumentNullException.ThrowIfNull(move);
@@ -56,6 +63,7 @@ public sealed class OrderCommandHandler : ICommandHandler
         ArgumentNullException.ThrowIfNull(combatants);
         ArgumentNullException.ThrowIfNull(targeting);
         ArgumentNullException.ThrowIfNull(approach);
+        ArgumentNullException.ThrowIfNull(events);
         _move = move;
         _grid = grid;
         _bodies = bodies;
@@ -63,13 +71,14 @@ public sealed class OrderCommandHandler : ICommandHandler
         _combatants = combatants;
         _targeting = targeting;
         _approach = approach;
+        _events = events;
         _playerCount = playerCount;
     }
 
     public bool Execute(World world, in Command command)
     {
         ArgumentNullException.ThrowIfNull(world);
-        return command.Type switch
+        var carriedOut = command.Type switch
         {
             CommandType.Move => Walk(world, in command, UnitOrder.Move),
             CommandType.AttackMove => Walk(world, in command, UnitOrder.AttackMove),
@@ -77,7 +86,24 @@ public sealed class OrderCommandHandler : ICommandHandler
             CommandType.Stop => Stop(world, in command),
             _ => false,
         };
+
+        if (!carriedOut)
+        {
+            Refuse(_events, in command);
+        }
+
+        return carriedOut;
     }
+
+    /// <summary>Reports a command that was not carried out as a <see cref="SimEventKind.OrderRefused"/>.</summary>
+    internal static void Refuse(SimEventList events, in Command command) =>
+        events.Add(
+            SimEventKind.OrderRefused,
+            command.Player,
+            command.Entities.IsEmpty ? EntityId.None : command.Entities[0],
+            command.TargetEntity,
+            new FixedVector2(command.TargetX, command.TargetY),
+            (long)command.Type);
 
     private bool Walk(World world, in Command command, UnitOrder order)
     {
