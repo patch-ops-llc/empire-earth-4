@@ -113,6 +113,7 @@ public partial class MatchPanel : InterfacePart
         {
             HostRun host => string.Create(CultureInfo.InvariantCulture, $"Hosting on port {host.Port}."),
             JoinRun join => $"Joined {join.HostAddress}.",
+            _ when View.Run.Computers is { Count: > 0 } computers => $"Playing against the computer{ComputerNames(computers)}.",
             _ => "Playing alone.",
         };
 
@@ -134,6 +135,16 @@ public partial class MatchPanel : InterfacePart
         }
 
         AddForm(who);
+    }
+
+    // The personalities of the computer's seats, as the end of a sentence: " (Swarm)".
+    private string ComputerNames(ComputerSeats computers)
+    {
+        var names = Enumerable.Range(0, View.Match.Players.Count)
+            .Select(computers.PersonalityOf)
+            .Where(personality => personality is not null)
+            .Select(personality => personality!.Name);
+        return $" ({string.Join(", ", names)})";
     }
 
     private void AddForm(string text)

@@ -1,3 +1,6 @@
+using Ai;
+using Net;
+using Sim.Core;
 using Sim.Outcome;
 
 namespace Game;
@@ -6,12 +9,16 @@ namespace Game;
 /// The smoke test's match flow: the match is paused, let go on and run at another speed for no
 /// time at all, and the part checks that the local player's side of the session and the view
 /// follow. The end screen is asked what it says of standings the part makes up, because the
-/// smoke test's match must go on to its end with every player in it.
+/// smoke test's match must go on to its end with every player in it. The computer player is
+/// made for the other seat with each personality of the data and asked what it would order.
 /// </summary>
 /// <remarks>
 /// It gives no order and changes nothing in the match. That a pause holds the ticks back, and
 /// that conceding and conquest take a player out, is tested with the network and the
 /// simulation. Here it is the path from the host's controls to what the player sees.
+/// The computer's orders are read and not given: nobody sits at the other seat of the smoke
+/// test's match, and the parts after this one count on that. What is checked is that an
+/// exported game has the computer player and its personalities, and that the lobby offers them.
 /// </remarks>
 public sealed class MatchFlowSmoke : SmokePart
 {
@@ -21,8 +28,13 @@ public sealed class MatchFlowSmoke : SmokePart
 
     public override int Ticks => Length;
 
+    private readonly List<AiPlayer> _computers = [];
+    private readonly List<Command> _commands = [];
+    private int _computerOrders;
+
     public override void GiveOrders(int tick, SmokeOrders orders)
     {
+        ThinkForTheOtherSeat(tick, orders);
         if (tick != 0)
         {
             return;
@@ -40,6 +52,49 @@ public sealed class MatchFlowSmoke : SmokePart
         CheckPace(orders, pace);
         CheckScreen(orders, screen);
         CheckWords(orders);
+    }
+
+    // One computer player of each personality reads the match as the other seat's player for the
+    // length of the part. Its orders are counted and dropped here: none reaches the session.
+    private void ThinkForTheOtherSeat(int tick, SmokeOrders orders)
+    {
+        var data = orders.Match.Data;
+        var seat = (orders.Player + 1) % orders.Match.Players.Count;
+        if (tick == 0)
+        {
+            var choices = SeatChoices.For(data);
+            foreach (var personality in data.Personalities)
+            {
+                _computers.Add(new AiPlayer(orders.Match, seat, personality));
+                var setting = new SeatSetting(SeatKind.Computer, Personality: personality.Id);
+                var choice = choices[SeatChoices.IndexOf(choices, setting)];
+                if (choice.Kind != SeatKind.Computer || choice.Personality != personality.Id || !choice.Offered)
+                {
+                    orders.Fail($"the lobby does not offer the computer with the personality '{personality.Id}'.");
+                }
+            }
+
+            if (_computers.Count == 0)
+            {
+                orders.Fail("the data has no personality for the computer.");
+            }
+        }
+
+        foreach (var computer in _computers)
+        {
+            _commands.Clear();
+            computer.Think(_commands);
+            _computerOrders += _commands.Count(command => command.Player == seat);
+            if (_commands.Any(command => command.Player != seat))
+            {
+                orders.Fail("the computer gave an order in the name of a seat it does not play.");
+            }
+        }
+
+        if (tick == Length - 1 && _computerOrders == 0)
+        {
+            orders.Fail("the computer had nothing to order in the first second of a match.");
+        }
     }
 
     // The session is given no time while the pace changes, so that the smoke test's ticks stay

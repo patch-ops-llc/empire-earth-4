@@ -29,6 +29,12 @@ public abstract class MatchRun : IDisposable
     public MatchFiles? Files { get; protected set; }
 
     /// <summary>
+    /// The seats the computer plays, on the machine that hosts the match or plays it alone. Null
+    /// on a guest's machine, which is not told what sits at a seat.
+    /// </summary>
+    public ComputerSeats? Computers { get; protected set; }
+
+    /// <summary>
     /// True when this machine sets the pace of the match: when it hosts it or plays it alone
     /// (design: pause and speed are the host's). A guest is told the pace and cannot change it.
     /// </summary>
@@ -85,11 +91,16 @@ public sealed class LocalRun : MatchRun
     /// <param name="data">The game data the match is built from.</param>
     /// <param name="localPlayer">The seat of the player at this machine.</param>
     /// <param name="keepFiles">False for a match that leaves no replay, as the smoke test's.</param>
-    public LocalRun(MatchDescription description, GameData data, int localPlayer, bool keepFiles = true)
+    /// <param name="seats">What takes each seat, as the settings of the match have it. Left out, nobody sits at the other seats.</param>
+    public LocalRun(MatchDescription description, GameData data, int localPlayer, bool keepFiles = true, IReadOnlyList<SeatSetting>? seats = null)
     {
         Description = description;
         _match = description.CreateMatch(data);
         Session = new LocalSession(_match.Simulation, description.Players.Count, localPlayer);
+        Computers = new ComputerSeats(_match, Session.Host, seats ?? []);
+
+        // The computer thinks after every tick this machine has run, before the view reads it.
+        Session.Client.TickCompleted += _ => Computers.Think();
         if (keepFiles)
         {
             Files = new MatchFiles(Session.Client, description, _match, localPlayer);
@@ -125,9 +136,13 @@ public sealed class HostRun : MatchRun
 
     /// <param name="seats">What takes each seat, as the settings of the match have it. Left out, every seat is a person's.</param>
     /// <exception cref="IOException">The port could not be opened.</exception>
-    public HostRun(MatchDescription description, GameData data, int port, bool localOnly, IReadOnlyList<SeatKind>? seats = null)
+    public HostRun(MatchDescription description, GameData data, int port, bool localOnly, IReadOnlyList<SeatSetting>? seats = null)
     {
-        Host = new MatchHost(data, description, seats: seats);
+        Host = new MatchHost(data, description, seats: seats is null ? null : [.. seats.Select(seat => seat.Kind)]);
+        Computers = new ComputerSeats(Host.Local.Match!, Host.Session, seats ?? []);
+
+        // The computer thinks after every tick the host's own match has run.
+        Host.Local.Session.TickCompleted += _ => Computers.Think();
         _listener = new UdpListener(localOnly ? IPAddress.Loopback : IPAddress.Any, port);
         Files = new MatchFiles(Host.Local.Session, description, Host.Local.Match!, Host.LocalPlayer);
     }

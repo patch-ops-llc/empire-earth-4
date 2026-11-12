@@ -1,4 +1,5 @@
 using Sim.Core;
+using Sim.Data;
 using Sim.Setup;
 
 namespace Net.Tests;
@@ -84,6 +85,8 @@ public class MatchSettingsTests
         { "two seats on one start", "Seats 1 and 2 are both set to start 2. Each player needs a start of its own." },
         { "a kind that does not exist", "Seat 2 is set to something this build does not know." },
         { "more seats than a match has", "A match has 1 to 8 players, and these settings have 9 seats." },
+        { "the computer without a personality", "Seat 2 is set to the computer, which needs a personality." },
+        { "a personality the data does not have", "Seat 2 is set to the computer with the personality 'elite', which the data does not have." },
     };
 
     [Theory]
@@ -100,10 +103,41 @@ public class MatchSettingsTests
             "two seats on one start" => two.WithSeat(0, new SeatSetting(Start: 1)).WithSeat(1, new SeatSetting(Start: 1)),
             "a kind that does not exist" => two.WithSeat(1, new SeatSetting((SeatKind)7)),
             "more seats than a match has" => MatchSettings.Default("ridge", 9),
+            "the computer without a personality" => two.WithSeat(1, new SeatSetting(SeatKind.Computer)),
+            "a personality the data does not have" => two.WithSeat(1, new SeatSetting(SeatKind.Computer, Personality: "elite")),
             _ => throw new ArgumentOutOfRangeException(nameof(what)),
         };
 
-        Assert.Equal(expected, settings.FindProblem(TestData.Data));
-        Assert.Equal(expected, Assert.Throws<ArgumentException>(() => settings.Describe(TestData.Data, TestData.GameVersion, 1, _ => 0)).Message);
+        Assert.Equal(expected, settings.FindProblem(WithSwarm()));
+        Assert.Equal(expected, Assert.Throws<ArgumentException>(() => settings.Describe(WithSwarm(), TestData.GameVersion, 1, _ => 0)).Message);
     }
+
+    [Fact]
+    public void TheComputerTakesASeatWithAPersonalityOfTheData()
+    {
+        var data = WithSwarm();
+        var settings = MatchSettings.Default("ridge", 2).WithSeat(1, new SeatSetting(SeatKind.Computer, Start: 0, Personality: "swarm"));
+
+        Assert.Null(settings.FindProblem(data));
+        Assert.Equal([SeatKind.Person, SeatKind.Computer], settings.Kinds);
+
+        // The match that travels says where the seat starts and nothing of who plays it.
+        var match = settings.Describe(data, TestData.GameVersion, 5, _ => 0);
+        Assert.Equal([new PlayerSetup(1), new PlayerSetup(0)], match.Players);
+        Assert.Null(match.FindProblem(TestData.Data));
+    }
+
+    [Fact]
+    public void APersonalityOnASeatTheComputerDoesNotTakeSaysNothing()
+    {
+        var settings = MatchSettings.Default("ridge", 2).WithSeat(1, new SeatSetting(SeatKind.Nobody, Personality: "nobody has this"));
+
+        Assert.Null(settings.FindProblem(TestData.Data));
+    }
+
+    // The data with one personality, "swarm". The data of the tests has none.
+    private static GameData WithSwarm() => TestData.Data with
+    {
+        Personalities = [new AiPersonalityDef("swarm", "Swarm", [new AiWorkerTarget(1, 6)], 600, [.. TestData.Data.Tracks.Select(_ => 1)], [])],
+    };
 }

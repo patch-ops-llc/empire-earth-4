@@ -161,7 +161,12 @@ public partial class EndScreen : InterfacePart
     private void Refresh()
     {
         var standings = View.Match.Standings;
-        Reading = EndReading.Of(standings, View.Player, View.Match.World.Tick, seat => _left.TryGetValue(seat, out var reason) ? reason : null);
+        Reading = EndReading.Of(
+            standings,
+            View.Player,
+            View.Match.World.Tick,
+            seat => _left.TryGetValue(seat, out var reason) ? reason : null,
+            seat => View.Run.Computers?.PersonalityOf(seat) is { } personality ? SeatChoices.ComputerLabel(personality).ToLowerInvariant() : null);
 
         var decided = Reading.Headline is not null;
         _title.Text = Reading.Headline ?? "Leave the match?";
@@ -278,12 +283,15 @@ public sealed record EndReading(string? Headline, string Why, IReadOnlyList<stri
     /// <param name="player">The player the screen is for.</param>
     /// <param name="tick">The tick the match is at.</param>
     /// <param name="left">Why a seat's player is gone from the session, or null when it is not.</param>
-    public static EndReading Of(Standings standings, int player, int tick, Func<int, SessionEndReason?>? left = null)
+    /// <param name="who">What sits at a seat, when it is worth saying, as "computer, swarm"; or null.</param>
+    public static EndReading Of(Standings standings, int player, int tick, Func<int, SessionEndReason?>? left = null, Func<int, string?>? who = null)
     {
         var players = new string[standings.PlayerCount];
         for (var seat = 0; seat < players.Length; seat++)
         {
-            var you = seat == player ? " (you)" : string.Empty;
+            var you = seat == player ? " (you)"
+                : who?.Invoke(seat) is { } sitter ? $" ({sitter})"
+                : string.Empty;
             players[seat] = $"{MatchPanel.PlayerName(seat)}, {PlayerColors.NameOf(seat)}{you}: {OutcomeWords.Standing(standings, seat)}";
         }
 

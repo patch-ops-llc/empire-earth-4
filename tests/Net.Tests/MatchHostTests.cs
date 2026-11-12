@@ -267,15 +267,17 @@ public class MatchHostTests
 
     /// <summary>
     /// A seat nobody takes needs no connection and nobody's word to start. Its player's orders
-    /// come from the hosting machine, which is where a computer opponent will give them.
+    /// come from the hosting machine, which is where the computer opponent gives them.
     /// </summary>
-    [Fact]
-    public void ASeatThatIsNoPersonsIsNotWaitedForAndTakesOrdersFromTheHost()
+    [Theory]
+    [InlineData(SeatKind.Nobody)]
+    [InlineData(SeatKind.Computer)]
+    public void ASeatThatIsNoPersonsIsNotWaitedForAndTakesOrdersFromTheHost(SeatKind kind)
     {
-        var host = new MatchHost(TestData.Data, TestData.Description(), seats: [SeatKind.Person, SeatKind.Nobody]);
+        var host = new MatchHost(TestData.Data, TestData.Description(), seats: [SeatKind.Person, kind]);
         var network = new LoopbackNetwork();
 
-        Assert.Equal((SeatKind.Person, SeatKind.Nobody), (host.SeatOf(0), host.SeatOf(1)));
+        Assert.Equal((SeatKind.Person, kind), (host.SeatOf(0), host.SeatOf(1)));
         Assert.False(host.TryAttach(network.Connect().HostEnd));
         Assert.True(host.CanStart);
         host.Start();

@@ -6,11 +6,10 @@ namespace Net;
 
 /// <summary>What takes a seat of a match.</summary>
 /// <remarks>
-/// The computer opponent (M21) is the kind to add here. Everything under it is in place: the host
-/// keeps such a seat free of connections and does not wait for it (<see cref="MatchHost"/>, which
-/// treats every kind but <see cref="Person"/> alike), and the orders of its player go in with
-/// <see cref="HostSession.Submit"/> on the hosting machine, which is the only one that runs it.
-/// What M21 adds is the kind, the thing that gives the orders, and the choice in the lobby.
+/// The host keeps a seat of any kind but <see cref="Person"/> free of connections and does not
+/// wait for it (<see cref="MatchHost"/>). The orders of such a seat's player go in with
+/// <see cref="HostSession.Submit"/> on the hosting machine, which is the only one that knows
+/// what sits there: the other machines get the commands and nothing else.
 /// </remarks>
 public enum SeatKind
 {
@@ -22,6 +21,13 @@ public enum SeatKind
     /// the other player of a match played alone.
     /// </summary>
     Nobody = 1,
+
+    /// <summary>
+    /// The computer: the hosting machine plays the seat, with the personality the seat's setting
+    /// names (design 5.5). This library does not know the computer player. Whoever runs the match
+    /// on the hosting machine makes it and hands its orders to <see cref="HostSession.Submit"/>.
+    /// </summary>
+    Computer = 2,
 }
 
 /// <summary>What the host sets for one seat of a match.</summary>
@@ -30,7 +36,11 @@ public enum SeatKind
 /// The index of the seat's start among the map's, or null to have it drawn from the starts no
 /// seat names (design 5.2), which is the default.
 /// </param>
-public sealed record SeatSetting(SeatKind Kind = SeatKind.Person, int? Start = null);
+/// <param name="Personality">
+/// For a seat the computer takes, the ID of its personality, one of the data's
+/// (<see cref="GameData.Personalities"/>). It says nothing for a seat of another kind.
+/// </param>
+public sealed record SeatSetting(SeatKind Kind = SeatKind.Person, int? Start = null, string? Personality = null);
 
 /// <summary>
 /// The settings of a match, as the host chooses them before it begins: the map and, for every
@@ -108,6 +118,19 @@ public sealed record MatchSettings
             if (!Enum.IsDefined(Seats[seat].Kind))
             {
                 return $"Seat {seat + 1} is set to something this build does not know.";
+            }
+
+            if (Seats[seat].Kind == SeatKind.Computer)
+            {
+                if (Seats[seat].Personality is not { } personality)
+                {
+                    return $"Seat {seat + 1} is set to the computer, which needs a personality.";
+                }
+
+                if (data.PersonalityOf(personality) is null)
+                {
+                    return $"Seat {seat + 1} is set to the computer with the personality '{personality}', which the data does not have.";
+                }
             }
 
             if (Seats[seat].Start is not { } start)

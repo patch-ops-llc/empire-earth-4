@@ -32,6 +32,7 @@ public partial class MatchMenu : CanvasLayer
     private static string s_lastPort = GameInfo.DefaultPort.ToString(CultureInfo.InvariantCulture);
     private static bool s_requestUsed;
     private static MatchSettings? s_settings;
+    private static string? s_personality;
 
     private GameData _data = null!;
     private StartRequest _request = StartRequest.Menu;
@@ -105,6 +106,9 @@ public partial class MatchMenu : CanvasLayer
             s_requestUsed = true;
             switch (_request.Kind)
             {
+                case StartKind.Alone when _request.Computer.Length > 0:
+                    PlayAgainstComputer(_request.Computer);
+                    break;
                 case StartKind.Alone:
                     PlayAlone();
                     break;
@@ -175,11 +179,30 @@ public partial class MatchMenu : CanvasLayer
     // One click, with every start drawn: nobody sits at the other seats.
     private void PlayAlone() => PlayHere(AloneSettings());
 
+    /// <summary>
+    /// Starts a match alone against the computer, as the button of the first page does: the
+    /// player in the first seat, the computer with this personality in the second, every start
+    /// drawn. A personality the data does not have starts nothing, and the page says so.
+    /// </summary>
+    public void PlayAgainstComputer(string personality)
+    {
+        var settings = AloneSettings().WithSeat(1, new SeatSetting(SeatKind.Computer, Personality: personality));
+        if (settings.FindProblem(_data) is not null)
+        {
+            var known = string.Join(", ", _data.Personalities.Select(candidate => candidate.Id));
+            ShowNotice($"The computer has no personality '{personality}'. It has: {known}.");
+            return;
+        }
+
+        s_personality = personality;
+        PlayHere(settings);
+    }
+
     // A match nobody joins has no network in it: no port is opened and nothing is sent, so the
     // system has nothing to ask the player about.
     private void PlayHere(MatchSettings settings)
     {
-        var run = new LocalRun(Describe(settings), _data, localPlayer: 0);
+        var run = new LocalRun(Describe(settings), _data, localPlayer: 0, seats: settings.Seats);
         Begin(run);
         ShowPage(Page.Playing);
     }
@@ -201,7 +224,7 @@ public partial class MatchMenu : CanvasLayer
         HostRun run;
         try
         {
-            run = new HostRun(Describe(settings), _data, port, localOnly, settings.Kinds);
+            run = new HostRun(Describe(settings), _data, port, localOnly, settings.Seats);
         }
         catch (Exception failed) when (failed is IOException or SocketException)
         {
@@ -253,6 +276,13 @@ public partial class MatchMenu : CanvasLayer
             var description = run.Description!;
             var seat = run.Client.Player;
             GD.Print($"Match on '{description.MapId}' with seed {description.Seed}. This is player {seat + 1} of {description.Players.Count}, at start {description.Players[seat].Start}. Data sha256:{description.ContentHash}.");
+            for (var other = 0; other < description.Players.Count; other++)
+            {
+                if (run.Computers?.PersonalityOf(other) is { } personality)
+                {
+                    GD.Print($"The computer plays player {other + 1} with the personality '{personality.Id}', at start {description.Players[other].Start}.");
+                }
+            }
         }
     }
 
@@ -347,9 +377,15 @@ public partial class MatchMenu : CanvasLayer
         _setupGo.Text = joins
             ? string.Create(CultureInfo.InvariantCulture, $"Open the match on port {_setupPort}")
             : "Start the match";
-        _setupNote.Text = joins
+        var note = joins
             ? "A start that is drawn is one of those no player is set to, each as likely as the next. The other player sees the starts when the match begins."
             : "A start that is drawn is one of those no player is set to, each as likely as the next. Nobody joins this match, so it is played on this machine only and nothing is opened to the network.";
+        if (_settings.Seats.Any(seat => seat.Kind == SeatKind.Computer))
+        {
+            note += $" {SeatChoices.ComputerNote}";
+        }
+
+        _setupNote.Text = note;
     }
 
     // A start as the page names it: its number, and where on the map it lies.
@@ -440,6 +476,7 @@ public partial class MatchMenu : CanvasLayer
             for (var seat = 0; seat < host.Host.PlayerCount; seat++)
             {
                 var state = seat == host.Host.LocalPlayer ? "you"
+                    : host.Computers?.PersonalityOf(seat) is { } personality ? SeatChoices.ComputerLabel(personality).ToLowerInvariant()
                     : host.Host.SeatOf(seat) != SeatKind.Person ? "nobody"
                     : !host.Host.Session.IsAttached(seat) ? "nobody yet"
                     : !host.Host.Session.IsReady(seat) ? "joining"
@@ -563,6 +600,35 @@ public partial class MatchMenu : CanvasLayer
         var alone = UiStyle.PushButton("Play alone");
         alone.Pressed += PlayAlone;
         page.AddChild(alone);
+
+        // A match alone against the computer, with the personality chosen beside the button. The
+        // personalities are those of the data.
+        if (_data.Personalities.Count > 0)
+        {
+            var computerRow = UiStyle.Row();
+            var against = UiStyle.PushButton("Play against the computer");
+            against.Name = "AgainstComputer";
+            against.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            computerRow.AddChild(against);
+            var personality = Options("Personality");
+            personality.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
+            personality.CustomMinimumSize = new Vector2(150f, 0f);
+            personality.TooltipText = "The personality of the computer opponent";
+            for (var i = 0; i < _data.Personalities.Count; i++)
+            {
+                personality.AddItem(_data.Personalities[i].Name);
+                if (_data.Personalities[i].Id == s_personality)
+                {
+                    personality.Selected = i;
+                }
+            }
+
+            against.Pressed += () => PlayAgainstComputer(_data.Personalities[Math.Max(0, personality.Selected)].Id);
+            computerRow.AddChild(personality);
+            page.AddChild(computerRow);
+            page.AddChild(UiStyle.Text(SeatChoices.ComputerNote));
+        }
+
         page.AddChild(new HSeparator());
 
         page.AddChild(UiStyle.Text("Host a match for another player to join, and choose its settings first. The port is the number they need beside this machine's address."));

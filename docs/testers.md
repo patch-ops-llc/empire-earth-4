@@ -39,9 +39,10 @@ If the button does not appear, open Terminal instead. Type `xattr -dr com.apple.
 
 ## Starting a match
 
-The game opens on a menu with three choices.
+The game opens on a menu with four choices.
 
 - **Play alone** starts a match at once, on your machine only. Nothing is opened to the network, so the system asks no question about connections, and no second copy of the game or second player is needed. The other player's workers are there, and nothing controls them.
+- **Play against the computer** starts a match at once against a computer opponent, on your machine only. The list beside the button chooses its personality. See Playing against the computer.
 - **Host a match** shows the settings of the match first, then opens it for one other player and waits. See the next section.
 - **Join** joins a match someone else hosts. Type their address into the box first.
 
@@ -54,7 +55,7 @@ Both players need the same build. The name of the zip file carries the version, 
 One player hosts:
 
 1. Click Host a match. The port can stay as it is.
-2. The page of the match's settings has a row for each player. Under Start, each player gets a start of the map by name, or Drawn, which is how it stands unless you change it: a drawn start is one of those no player is set to, each as likely as the next. Two players cannot have the same start, and the page says so. Under Played by, Player 2 is a player who joins. Set it to Nobody and the match is played on your machine only, as Play alone does, with the starts you chose. The computer opponent is listed and cannot be chosen yet. Click Open the match.
+2. The page of the match's settings has a row for each player. Under Start, each player gets a start of the map by name, or Drawn, which is how it stands unless you change it: a drawn start is one of those no player is set to, each as likely as the next. Two players cannot have the same start, and the page says so. Under Played by, Player 2 is a player who joins. Set it to Nobody and the match is played on your machine only, as Play alone does, with the starts you chose. Set it to Computer, with a personality, and you play the computer on your machine only, with the starts you chose. Click Open the match, or Start the match when nobody joins.
 3. The first time, the system may ask whether the game may accept connections from the network. On Windows the question comes from Windows Defender Firewall: tick private networks and click Allow access. On macOS it asks whether the application may accept incoming network connections: click Allow. If you refuse, nobody can join.
 4. The game shows this machine's address on its network, something like `192.168.1.20`. Tell the other player. If it shows two, the one that starts like the other player's own address is the right one.
 5. When the other player has joined, the page says Player 2: ready. Click Start the match.
@@ -131,6 +132,17 @@ The brown blocks on the map are deposits. Select workers and right-click a depos
 - The ground a player holds is tinted in the player's color, with a line along its edge. It reaches 16 tiles from the middle of the Capitol. The line follows the sides of the tiles, so it has steps: a tile is either held or it is not. A deposit pays only when all of it is inside, and every structure but a Capitol and an Outpost has to stand inside.
 - Click your Capitol to select it. A green line runs round it, and the panel at the bottom of the window names it and its hit points. Nothing can damage a structure yet, so they stay full.
 - Structures and units are not selected together. A box takes units only, and a structure leaves the selection as soon as a unit joins it. A selected structure takes no orders yet, so a right-click does nothing while one is selected.
+
+## Playing against the computer
+
+Click Play against the computer on the menu. The computer takes Player 2, in red, on the other side of the map. Nothing is opened to the network.
+
+- **This is the first part of the computer opponent. It builds up its base, researches and trains an army. It does not attack yet**, so nothing comes for you, and the match ends when you concede or leave.
+- It has two personalities, chosen in the list beside the button. Swarm keeps more workers, researches Manufacturing and Logistics first and trains line infantry with some cavalry. Elite keeps a few workers fewer, researches Firepower and Protection first and trains guards with some artillery.
+- To watch it, move the camera across the map to its base: nothing hides it yet. You will see its workers go to the deposits, more workers come out of its Capitol, Generators and then a Barracks or a Works go up, and units gather beside them. A banner says when it reaches a new epoch. The speed buttons under the bar at the top make the wait shorter.
+- It plays by the rules you play by: it pays for everything, its orders are commands like yours, and they are in the replay.
+- To set the starts as well, click Host a match and set Player 2 to Computer on the page of the settings.
+- The end screen names it: Player 2, red (computer, swarm).
 
 ## How a match ends
 
