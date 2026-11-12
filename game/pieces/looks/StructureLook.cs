@@ -95,9 +95,9 @@ public static class StructureLooks
                 placed.Y,
                 placed.Size,
 
-                // Nothing stands unfinished until construction (15c) is in: a foundation is then
-                // one that the match's foundations hold, and 17b says so in IsFinished.
-                IsFinished: true,
+                // A structure is unfinished while the match holds a foundation for it. Under
+                // the fog this is the IsFinished of the structure as the player last saw it.
+                IsFinished: !match.Foundations.Contains(entity),
                 LookTier: def.Track is { } track ? research.Tier(body.Owner, track) : 0,
                 Banner: BannerOf(research, body.Owner, entity)));
         }
