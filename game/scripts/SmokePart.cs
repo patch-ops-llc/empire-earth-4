@@ -35,8 +35,8 @@ public abstract class SmokePart
 }
 
 /// <summary>
-/// What a <see cref="SmokePart"/> works with: the match to read, and the session to give orders
-/// through, the way a player's orders go.
+/// What a <see cref="SmokePart"/> works with: the match to read, the session to give orders
+/// through, the way a player's orders go, and the view the match is shown through.
 /// </summary>
 public sealed class SmokeOrders
 {
@@ -56,7 +56,9 @@ public sealed class SmokeOrders
     /// <summary>
     /// The view of the match, as the main scene shows it. It has read every tick that has run,
     /// so a part can test what the player is shown: which units are drawn, and what the local
-    /// player's <see cref="PlayerSight"/> answers.
+    /// player's <see cref="PlayerSight"/> answers. A part can also select units as a player does
+    /// and ask a piece's part of the interface what it then shows. Selecting gives no order and
+    /// changes nothing in the match.
     /// </summary>
     public MatchView View { get; }
 

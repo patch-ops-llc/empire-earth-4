@@ -79,6 +79,17 @@ public sealed class StructuresInFogSmoke : SmokePart
             }
         }
 
+        // Before the step, which may flip the development switch: the layers have read the
+        // sight as it was after the last tick, and that is what the screen shows now.
+        if (tick > 0)
+        {
+            TerritoryMustFollowTheCapitol(orders);
+            if (orders.Failed)
+            {
+                return;
+            }
+        }
+
         if (tick == 0)
         {
             OrderStructure(orders);
@@ -94,11 +105,6 @@ public sealed class StructuresInFogSmoke : SmokePart
         else
         {
             Follow(orders, tick);
-        }
-
-        if (!orders.Failed && tick > 0)
-        {
-            TerritoryMustFollowTheCapitol(orders);
         }
     }
 

@@ -21,10 +21,11 @@ namespace Game;
 /// structure's condition is drawn as the player last saw it.
 /// </para>
 /// <para>
-/// A structure is drawn the same from the moment it is laid. Construction (15c) brings
-/// structures that are not finished yet, and their look is decided here, in
-/// <see cref="Create"/>, from <see cref="SeenStructure.IsFinished"/> and
-/// <see cref="SeenStructure.Built"/>.
+/// A structure that is still building itself (15c) is drawn unfinished, as
+/// <see cref="FoundationLook"/> has it, for as long as <see cref="SeenStructure.IsFinished"/>
+/// is false, and as far built as <see cref="SeenStructure.Built"/> says. For another player's
+/// structure both are as the player last saw them, so a remembered foundation stays as far
+/// built as it was then, also when it has long been finished.
 /// </para>
 /// </remarks>
 public partial class StructureLayer : WorldLayer
@@ -59,6 +60,27 @@ public partial class StructureLayer : WorldLayer
     /// <summary>True when this structure is drawn as a memory: dimmed, as the player last saw it.</summary>
     public bool DrawsAsMemory(EntityId entity) => _structures.TryGetValue(entity, out var node) && node.Drawn.IsRemembered;
 
+    /// <summary>
+    /// How much of a structure that is building itself is drawn as built, from 0 to 1, or null
+    /// for one that is drawn finished or not drawn.
+    /// </summary>
+    public float? DrawnBuilt(EntityId entity) => _structures.TryGetValue(entity, out var node) ? node.Unfinished?.Shown : null;
+
+    /// <summary>
+    /// Adds every structure that is drawn unfinished to a list, for what is drawn over one, as
+    /// the bar of its progress: nothing then shows a foundation this layer does not.
+    /// </summary>
+    public void CollectUnfinished(List<UnfinishedStructure> into)
+    {
+        foreach (var (entity, node) in _structures)
+        {
+            if (node.Unfinished is { } look)
+            {
+                into.Add(new UnfinishedStructure(entity, node.Body.Position, look.Height, look.Shown, node.Dimmed));
+            }
+        }
+    }
+
     protected override void Attach() => View.Selection.Changed += ShowSelection;
 
     // Draws what the player knows of and nothing else, whatever was drawn before.
@@ -68,7 +90,11 @@ public partial class StructureLayer : WorldLayer
         _pass++;
         foreach (var seen in _known)
         {
-            if (_structures.TryGetValue(seen.Entity, out var node) && !SameShape(node.Drawn, seen))
+            // A structure drawn finished that the player knows as unfinished is made anew: that
+            // happens only when the development switch has shown it as it stands and the fog is
+            // laid back over a memory of its foundation.
+            if (_structures.TryGetValue(seen.Entity, out var node)
+                && (!SameShape(node.Drawn, seen) || (node.Unfinished is null && !seen.IsFinished)))
             {
                 Remove(seen.Entity);
                 node = null;
@@ -77,6 +103,7 @@ public partial class StructureLayer : WorldLayer
             node ??= Add(seen);
             if (node is not null)
             {
+                ShowProgress(node, in seen);
                 node.Drawn = seen;
                 node.Pass = _pass;
                 _settled &= node.Dimmed == Wanted(seen);
@@ -144,6 +171,28 @@ public partial class StructureLayer : WorldLayer
         return node;
     }
 
+    // Fills an unfinished structure as far as the player knows it to be built, and gives one
+    // the player knows to be finished the look of a finished one.
+    private static void ShowProgress(StructureNode node, in SeenStructure seen)
+    {
+        if (node.Unfinished is not { } look)
+        {
+            return;
+        }
+
+        if (!seen.IsFinished)
+        {
+            look.Show(seen.Built);
+            return;
+        }
+
+        node.Unfinished = null;
+        node.Body.SetSurfaceOverrideMaterial(StructureShapes.WallsSurface, node.Walls);
+        node.Body.SetSurfaceOverrideMaterial(StructureShapes.RoofSurface, node.Roof);
+        node.Body.CastShadow = GeometryInstance3D.ShadowCastingSetting.On;
+        Paint(node);
+    }
+
     private void Remove(EntityId entity)
     {
         if (_structures.Remove(entity, out var node))
@@ -186,8 +235,17 @@ public partial class StructureLayer : WorldLayer
         var color = PlayerColors.Of(seen.Owner);
         var walls = PlaceholderMeshes.Flat(Stone.Lerp(color, WallTint));
         var roof = PlaceholderMeshes.Flat(color);
-        body.SetSurfaceOverrideMaterial(StructureShapes.WallsSurface, walls);
-        body.SetSurfaceOverrideMaterial(StructureShapes.RoofSurface, roof);
+        FoundationLook? unfinished = null;
+        if (seen.IsFinished)
+        {
+            body.SetSurfaceOverrideMaterial(StructureShapes.WallsSurface, walls);
+            body.SetSurfaceOverrideMaterial(StructureShapes.RoofSurface, roof);
+        }
+        else
+        {
+            unfinished = FoundationLook.On(body, structure, walls.AlbedoColor, color);
+            unfinished.Show(seen.Built);
+        }
 
         var line = new MeshInstance3D
         {
@@ -201,13 +259,14 @@ public partial class StructureLayer : WorldLayer
         AddChild(body);
 
         // A structure that is first drawn as a memory, as after the development switch, is dim from the start.
-        var node = new StructureNode(body, line, walls, roof, walls.AlbedoColor, color) { Dimmed = Wanted(seen) };
+        var node = new StructureNode(body, line, walls, roof, walls.AlbedoColor, color) { Dimmed = Wanted(seen), Unfinished = unfinished };
         Paint(node);
         return node;
     }
 
     private static void Paint(StructureNode node)
     {
+        node.Unfinished?.Dim(node.Dimmed);
         node.Walls.AlbedoColor = Dim(node.WallColor, node.Dimmed);
         node.Roof.AlbedoColor = Dim(node.RoofColor, node.Dimmed);
     }
@@ -234,6 +293,9 @@ public partial class StructureLayer : WorldLayer
 
         public Color RoofColor { get; } = roofColor;
 
+        /// <summary>The look of a structure that is drawn unfinished, or null for one drawn finished.</summary>
+        public FoundationLook? Unfinished { get; set; }
+
         /// <summary>What the node was last made or checked against.</summary>
         public SeenStructure Drawn { get; set; }
 
@@ -243,3 +305,11 @@ public partial class StructureLayer : WorldLayer
         public int Pass { get; set; }
     }
 }
+
+/// <summary>A structure the <see cref="StructureLayer"/> draws unfinished.</summary>
+/// <param name="Entity">The structure.</param>
+/// <param name="Middle">The middle of its footprint, on the ground.</param>
+/// <param name="Height">How tall its shape is, in tiles.</param>
+/// <param name="Built">How much of it is drawn as built, from 0 to 1.</param>
+/// <param name="Dimmed">How far it is drawn as a memory, from 0 for a structure seen now to 1 for one remembered.</param>
+public readonly record struct UnfinishedStructure(EntityId Entity, Vector3 Middle, float Height, float Built, float Dimmed);

@@ -81,11 +81,14 @@ public sealed class SmokeTest
         new FightSmoke(),
 
         // 13v. Economy: a work order.
+        new GatherOrdersSmoke(),
 
         // 14v. Research: one research.
+        new ResearchSmoke(),
 
         // 15v. Construction and production.
         new StructuresSmoke(),
+        new BuildSmoke(),
 
         // 17v. Fog of war: a unit out of sight, found and attacked; a structure seen and remembered.
         new FogSmoke(),
@@ -93,6 +96,9 @@ public sealed class SmokeTest
 
         // 24v. Minimap: an order given on it.
         new MinimapSmoke(),
+
+        // Inspection: what the panel shows for a selection.
+        new InspectionSmoke(),
 
         // Later pieces.
     ];
