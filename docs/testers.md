@@ -95,7 +95,7 @@ If joining fails, the menu says why in orange:
 - When you play alone, the other player's workers never move. Nothing controls them.
 - In a shared match, both players see the same workers in the same places. An order takes a moment longer to start than it does alone, because it travels to the host first.
 - If the other player leaves or closes the game, the bar at the top says so and your match goes on without them. If the host leaves, the match ends for both.
-- There is no Capitol and nothing to build.
+- Each player has a Capitol where they start, on the empty square that their workers stand around. It is not drawn yet, but it is there: nobody can stand on it, and units walk round it. Nothing can be built yet.
 
 ## What to know about multiplayer
 
@@ -104,6 +104,8 @@ Every player's machine runs the whole game and they exchange only commands. That
 - A modified copy of the game can show what should be hidden: the fog of war and an opponent's tracks.
 - A player who drops out cannot rejoin the match.
 - A slow machine or connection on the host's side slows the match for everyone.
+
+This build also has a development switch on. No match can train a fighting unit yet, so the game accepts an order that makes units from nothing, for either player, to try out fights. Nothing in the game sends that order yet. It is switched off again once units can be trained.
 
 The two games check each other all the time. If they ever disagree about the state of the match, both stop and say so. That is a fault in the game, and its files are what finds it: see the next section.
 
