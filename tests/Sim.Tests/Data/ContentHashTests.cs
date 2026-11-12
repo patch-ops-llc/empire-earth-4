@@ -24,7 +24,7 @@ public class ContentHashTests
     [Fact]
     public void TheHashOfTheSampleDataIsPinned()
     {
-        Assert.Equal("07fb69258bd14c92ab808a94ce722abe03c9886c70c0b77662f7d474603c9933", SampleHash);
+        Assert.Equal("48aef687d2187e62c929b5b1b095a8337b933c355e20c308340047e213daa601", SampleHash);
     }
 
     [Fact]

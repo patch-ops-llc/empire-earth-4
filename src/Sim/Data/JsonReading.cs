@@ -144,6 +144,23 @@ internal readonly struct JsonValue
         return text;
     }
 
+    /// <summary>A switch: <c>true</c> or <c>false</c>. False when it is missing or is something else, which is an error.</summary>
+    public bool Boolean()
+    {
+        if (!_present)
+        {
+            return false;
+        }
+
+        if (_element.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+        {
+            Error($"expected true or false, found {Describe()}");
+            return false;
+        }
+
+        return _element.ValueKind == JsonValueKind.True;
+    }
+
     public int Integer(int min, int max)
     {
         if (!_present)
