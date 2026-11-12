@@ -47,6 +47,17 @@ public enum SimEventKind
     BuildRefused,
 
     /// <summary>
+    /// An attack was made with Charge (design 2.3): the unit had walked the distance of its
+    /// perk since its last attack, and all damage of this one attack is multiplied. It comes
+    /// just before the <see cref="MeleeHit"/> or the <see cref="ShotFired"/> of that attack.
+    /// <see cref="SimEvent.Player"/> is the attacker's owner, <see cref="SimEvent.Entity"/> the
+    /// attacker, <see cref="SimEvent.Other"/> its target, <see cref="SimEvent.Position"/> where
+    /// the attacker stood, and <see cref="SimEvent.Amount"/> the multiplier in thousandths,
+    /// 1500 for +50%.
+    /// </summary>
+    ChargedAttack,
+
+    /// <summary>
     /// Something was destroyed because its hit points were at zero when the attacks of the tick
     /// had been made. <see cref="SimEvent.Player"/> is its owner, <see cref="SimEvent.Entity"/>
     /// is what died, and <see cref="SimEvent.Position"/> is where it stood. Nothing says who
@@ -109,6 +120,24 @@ public enum SimEventKind
     /// No position.
     /// </summary>
     ResearchStarted,
+
+    /// <summary>
+    /// A unit with Regeneration (design 2.3) got hit points back. <see cref="SimEvent.Player"/>
+    /// is its owner, <see cref="SimEvent.Entity"/> the unit, <see cref="SimEvent.Position"/>
+    /// where it stood, and <see cref="SimEvent.Amount"/> what was added, in thousandths of a hit
+    /// point: less than the perk's share when the unit reached its maximum.
+    /// </summary>
+    Regenerated,
+
+    /// <summary>
+    /// A unit with Reserves (design 2.3) died and its owner got back a share of the Materials
+    /// paid for it. It comes in the tick of the unit's <see cref="Death"/>, after it.
+    /// <see cref="SimEvent.Player"/> is the owner, for whom alone the event is meant,
+    /// <see cref="SimEvent.Entity"/> the unit, <see cref="SimEvent.Position"/> where it stood,
+    /// and <see cref="SimEvent.Amount"/> the refund in whole Materials. A unit whose refund
+    /// rounds to nothing reports none.
+    /// </summary>
+    ReservesRefunded,
 
     /// <summary>
     /// A ranged attack was made. <see cref="SimEvent.Player"/> is the attacker's owner,

@@ -2,6 +2,7 @@ using Sim.Core;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
+using Sim.Perks;
 
 namespace Sim.Combat;
 
@@ -36,6 +37,15 @@ namespace Sim.Combat;
 /// no place because its own side has them all stops where it is and looks again on each turn to
 /// look. A structure has places like a unit: they lie round its footprint, at the unit's reach
 /// from its nearest edge.
+/// </para>
+/// <para>
+/// <b>Charge</b> (design 2.3). "The distance is what the unit has actually moved since its last
+/// attack. The bonus applies to all damage of one attack, then the count restarts." A unit whose
+/// chassis carries Charge in this tick and that has walked the perk's distance or more since its
+/// last attack, or since it was made when it has not attacked, makes this attack with the
+/// attacker's side multiplied: the melee hit, or the shot, which keeps it until it lands. Every
+/// attack, with the bonus or without, sets the count of <see cref="PerkCounts.Walked"/> back to
+/// zero. Such an attack is reported as a <see cref="SimEventKind.ChargedAttack"/> first.
 /// </para>
 /// <para>
 /// <b>Nothing between enemies depends on the order of the units.</b> A unit decides from positions,
@@ -100,6 +110,7 @@ public sealed class AttackSystem : ISystem
     private readonly Approach _approach;
     private readonly Fighters _fighters;
     private readonly MeleePlaces _places;
+    private readonly PerkCounters _counters;
     private readonly SimEventList _events;
 
     // Scratch for one splash, emptied at its start. Not state.
@@ -114,6 +125,7 @@ public sealed class AttackSystem : ISystem
         Approach approach,
         Fighters fighters,
         MeleePlaces places,
+        PerkCounters counters,
         SimEventList events)
     {
         ArgumentNullException.ThrowIfNull(bodies);
@@ -124,6 +136,7 @@ public sealed class AttackSystem : ISystem
         ArgumentNullException.ThrowIfNull(approach);
         ArgumentNullException.ThrowIfNull(fighters);
         ArgumentNullException.ThrowIfNull(places);
+        ArgumentNullException.ThrowIfNull(counters);
         ArgumentNullException.ThrowIfNull(events);
         _bodies = bodies;
         _movers = movers;
@@ -133,6 +146,7 @@ public sealed class AttackSystem : ISystem
         _approach = approach;
         _fighters = fighters;
         _places = places;
+        _counters = counters;
         _events = events;
     }
 
@@ -473,9 +487,16 @@ public sealed class AttackSystem : ISystem
                 _movers.ValueAt(turn.Mover).Facing = (target.Position - position).ToAngle();
             }
 
-            // The attacker's side is settled now, also for a shot that lands later, and the splash of
-            // the hit is a share of the same side.
+            // The attacker's side is settled now, Charge included, also for a shot that lands later,
+            // and the splash of the hit is a share of the same side.
             var side = profile.Damage;
+            var walked = _counters.TakeWalked(turn.Entity);
+            if (profile.Charge is { } charge && walked >= charge.Distance)
+            {
+                side *= charge.Multiplier;
+                _events.Add(SimEventKind.ChargedAttack, turn.Body.Owner, turn.Entity, unit.Target, position, charge.Multiplier.RoundHalfUp(1000));
+            }
+
             if (profile.Melee)
             {
                 var damage = _targeting.Hit(unit.Target, side, profile.Line, profile.Firepower);
