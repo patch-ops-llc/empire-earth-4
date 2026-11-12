@@ -8,7 +8,8 @@ namespace Game;
 /// <summary>
 /// The smoke test's fight: 25 seconds of play in which two small forces are made with the
 /// development spawn in an empty corner of the map and the local player's is sent at the other
-/// with the three fighting orders. The part fails when the fight lands no hit or kills nobody.
+/// with the three fighting orders. The part fails when the fight lands no hit, kills nobody or
+/// has no blast: one unit of the local force fires shells.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -36,21 +37,23 @@ public sealed class FightSmoke : SmokePart
     private const int StopAt = 460;
     private const int Length = 500;
 
-    // The local force: melee units in front, ranged units a tile behind them. The other force
-    // stands twelve tiles to the east, out of sight, so that nothing happens before the orders.
-    // Points are in sixteenths of a tile. On ridge this is the open ground along the south edge.
+    // The local force: melee units in front, ranged units a tile behind them, and one unit that
+    // fires shells behind those. The other force stands twelve tiles to the east, out of sight,
+    // so that nothing happens before the orders. Points are in sixteenths of a tile. On ridge
+    // this is the open ground along the south edge.
     private static readonly Spawn[] Spawns =
     [
-        new(Local: true, Melee: true, X16: 136, Y16: 1480),
-        new(Local: true, Melee: true, X16: 136, Y16: 1496),
-        new(Local: true, Melee: true, X16: 136, Y16: 1512),
-        new(Local: true, Melee: false, X16: 112, Y16: 1480),
-        new(Local: true, Melee: false, X16: 112, Y16: 1496),
-        new(Local: true, Melee: false, X16: 112, Y16: 1512),
-        new(Local: false, Melee: true, X16: 328, Y16: 1488),
-        new(Local: false, Melee: true, X16: 328, Y16: 1504),
-        new(Local: false, Melee: false, X16: 344, Y16: 1488),
-        new(Local: false, Melee: false, X16: 344, Y16: 1504),
+        new(Local: true, Arm.Melee, X16: 136, Y16: 1480),
+        new(Local: true, Arm.Melee, X16: 136, Y16: 1496),
+        new(Local: true, Arm.Melee, X16: 136, Y16: 1512),
+        new(Local: true, Arm.Ranged, X16: 112, Y16: 1480),
+        new(Local: true, Arm.Ranged, X16: 112, Y16: 1496),
+        new(Local: true, Arm.Ranged, X16: 112, Y16: 1512),
+        new(Local: true, Arm.Shells, X16: 88, Y16: 1496),
+        new(Local: false, Arm.Melee, X16: 328, Y16: 1488),
+        new(Local: false, Arm.Melee, X16: 328, Y16: 1504),
+        new(Local: false, Arm.Ranged, X16: 344, Y16: 1488),
+        new(Local: false, Arm.Ranged, X16: 344, Y16: 1504),
     ];
 
     private readonly HashSet<EntityId> _before = [];
@@ -61,6 +64,7 @@ public sealed class FightSmoke : SmokePart
     private int _hits;
     private int _shots;
     private int _lost;
+    private int _blasts;
     private int _deaths;
     private int _localDeaths;
     private int _lastDeathAt;
@@ -116,6 +120,9 @@ public sealed class FightSmoke : SmokePart
                 case SimEventKind.ShotLost:
                     _lost++;
                     break;
+                case SimEventKind.Blast:
+                    _blasts++;
+                    break;
                 case SimEventKind.Death:
                     _deaths++;
                     _localDeaths += happened.Player == orders.Player ? 1 : 0;
@@ -146,12 +153,13 @@ public sealed class FightSmoke : SmokePart
         }
 
         // The cheapest fighters of each kind: the first chassis of the first epoch that fights
-        // hand to hand, and the first that shoots at any distance.
+        // hand to hand, the first that shoots at any distance, and the first whose shots are shells.
         var melee = DevelopmentSpawn.FirstChassis(match.Data, chassis => chassis.Attack.Kind == AttackKind.Melee);
         var ranged = DevelopmentSpawn.FirstChassis(match.Data, chassis => chassis.Attack.Kind == AttackKind.Ranged && chassis.Attack.MinRange is null);
-        if (melee is null || ranged is null)
+        var shells = DevelopmentSpawn.FirstChassis(match.Data, chassis => chassis.Attack.Kind == AttackKind.Ranged && chassis.Attack.BlastRadius is not null);
+        if (melee is null || ranged is null || shells is null)
         {
-            orders.Fail("the data has no melee chassis, or no ranged chassis without a minimum range.");
+            orders.Fail("the data has no melee chassis, no ranged chassis without a minimum range, or no chassis that fires shells.");
             return;
         }
 
@@ -175,7 +183,12 @@ public sealed class FightSmoke : SmokePart
                 spawn.Local ? orders.Player : other,
                 targetX: point.X,
                 targetY: point.Y,
-                contentId: (spawn.Melee ? melee : ranged).Index);
+                contentId: spawn.Arm switch
+                {
+                    Arm.Melee => melee.Index,
+                    Arm.Shells => shells.Index,
+                    _ => ranged.Index,
+                });
             orders.SubmitFor(command);
         }
     }
@@ -273,7 +286,7 @@ public sealed class FightSmoke : SmokePart
     private void Judge(SmokeOrders orders)
     {
         GD.Print(
-            $"Smoke test, the fight: {_hits} hits, {_shots} shots fired and {_lost} lost, {_deaths} deaths, {_localDeaths} of them the local player's, " +
+            $"Smoke test, the fight: {_hits} hits, {_shots} shots fired and {_lost} lost, {_blasts} blasts, {_deaths} deaths, {_localDeaths} of them the local player's, " +
             $"the last at tick {_lastDeathAt} of the part.");
         if (!_attackGiven)
         {
@@ -284,6 +297,12 @@ public sealed class FightSmoke : SmokePart
         if (_hits == 0 || _deaths == 0)
         {
             orders.Fail($"the fight produced {_hits} hits, {_shots} shots and {_deaths} deaths in {Length - 1} ticks. It needs at least one hit and one death.");
+            return;
+        }
+
+        if (_blasts == 0)
+        {
+            orders.Fail($"no shell of the local force landed in {Length - 1} ticks, with {_shots} shots fired. The fight needs at least one blast.");
             return;
         }
 
@@ -299,5 +318,12 @@ public sealed class FightSmoke : SmokePart
     private static EntityId[] Alive(SmokeOrders orders, EntityId[] units) =>
         Array.FindAll(units, orders.Match.World.Entities.IsAlive);
 
-    private readonly record struct Spawn(bool Local, bool Melee, int X16, int Y16);
+    private enum Arm
+    {
+        Melee,
+        Ranged,
+        Shells,
+    }
+
+    private readonly record struct Spawn(bool Local, Arm Arm, int X16, int Y16);
 }
