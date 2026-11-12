@@ -155,8 +155,8 @@ public static class InspectionWords
     /// "An order makes a pair in 27 s".
     /// </summary>
     public static string Order(ChassisBlueprint blueprint) => blueprint.BatchSize <= 1
-        ? $"An order makes one in {Seconds(blueprint.BuildTicks)}"
-        : $"An order makes {Batch(blueprint.BatchSize)} in {Seconds(blueprint.BatchBuildTicks)}";
+        ? $"An order makes one in {BuildTime(blueprint.BuildTicks)}"
+        : $"An order makes {Batch(blueprint.BatchSize)} in {BuildTime(blueprint.BatchBuildTicks)}";
 
     /// <summary>
     /// What an order for a chassis makes, in full: with Batch, the pair's price and supply, since
@@ -166,7 +166,7 @@ public static class InspectionWords
     public static string OrderInFull(ChassisBlueprint blueprint)
     {
         var size = blueprint.BatchSize;
-        var one = Seconds(blueprint.BuildTicks);
+        var one = BuildTime(blueprint.BuildTicks);
         var each = string.Create(CultureInfo.InvariantCulture, $"{Price(blueprint.Materials, blueprint.Energy)} and {blueprint.Supply} supply");
         if (size <= 1)
         {
@@ -176,7 +176,7 @@ public static class InspectionWords
         var all = string.Create(
             CultureInfo.InvariantCulture,
             $"{Price(size * blueprint.Materials, size * blueprint.Energy)} and {size * blueprint.Supply} supply");
-        return $"An order makes {Batch(size)} in {Seconds(blueprint.BatchBuildTicks)}, for {all}: each unit costs the full price and supply. " +
+        return $"An order makes {Batch(size)} in {BuildTime(blueprint.BatchBuildTicks)}, for {all}: each unit costs the full price and supply. " +
             $"When you cannot pay for {Batch(size)}, it makes one unit in {one}, for {each}.";
     }
 
@@ -310,6 +310,10 @@ public static class InspectionWords
     }
 
     private static string Tenths(double value) => value.ToString("0.0", CultureInfo.InvariantCulture);
+
+    // A build time in seconds to one decimal at most: "18 s", "16.6 s".
+    private static string BuildTime(int ticks) =>
+        (ticks / (double)SimInfo.TicksPerSecond).ToString("0.#", CultureInfo.InvariantCulture) + " s";
 
     private static string Batch(int size) => size == 2 ? "a pair" : string.Create(CultureInfo.InvariantCulture, $"{size} units");
 
