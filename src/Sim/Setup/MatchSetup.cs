@@ -8,6 +8,7 @@ using Sim.Movement;
 using Sim.Production;
 using Sim.Research;
 using Sim.Structures;
+using Sim.Vision;
 
 namespace Sim.Setup;
 
@@ -49,10 +50,13 @@ public static class MatchSetup
         var movers = world.AddStore(new ComponentStore<Mover>(Mover.StoreName));
         var producers = world.AddStore(new ComponentStore<Producer>(Producer.StoreName));
         var researchState = world.AddStore(new ResearchState(players.Count, data.Tracks.Count, data.TierCount, data.Rules.Match.StartEpoch));
+        var structureMemory = world.AddStore(new StructureMemory(players.Count, map.Width, map.Height));
         var shots = world.AddStore(new ComponentStore<Shot>(Shot.StoreName));
         var stockpiles = world.AddStore(new Stockpiles(players.Count));
         var structures = world.AddStore(new ComponentStore<PlacedStructure>(PlacedStructure.StoreName));
         var territories = world.AddStore(new ComponentStore<Territory>(Territory.StoreName));
+        var turrets = world.AddStore(new ComponentStore<Turret>(Turret.StoreName));
+        var visionGrid = world.AddStore(new VisionGrid(players.Count, map.Width, map.Height));
         var workers = world.AddStore(new ComponentStore<Worker>(Worker.StoreName));
         var workSites = world.AddStore(new ComponentStore<WorkSite>(WorkSite.StoreName));
 
@@ -64,9 +68,15 @@ public static class MatchSetup
         var supply = new SupplyAccount(data, research, world.Entities, bodies, workers);
         supply.AddUser(new CombatSupply(research, world.Entities, bodies, combatants));
 
+        // What each player sees and remembers. The grid and the memories are state; this works
+        // them out and answers who sees whom.
+        var vision = new MatchVision(
+            data, world, grid, visionGrid, structureMemory, bodies, combatants, foundations, health, structures, workers,
+            researchState, research.Tech);
+
         // The combat numbers are worked out from the data and from each player's tech as research has it.
         var combat = new CombatRules(data, players.Count, research.Tech);
-        var targeting = new Targeting(grid, bodies, combatants, health, spatialIndex, combat) { Structures = structures };
+        var targeting = new Targeting(grid, bodies, combatants, health, spatialIndex, combat, vision) { Structures = structures };
         var approach = new Approach(grid);
         var fighters = new Fighters(data, combat, combatants, bodies, movers, spatialIndex);
 
@@ -91,10 +101,14 @@ public static class MatchSetup
         // order it is given ends the build order: the handlers of those orders are wrapped once
         // more. An attack order is not, because a worker never takes one.
         var structureFactory = new StructureFactory(
-            data, world, bodies, health, structures, territories, workSites, structureTiles, research, production, simulation.Events, players.Count);
+            data, world, bodies, health, structures, territories, turrets, workSites, structureTiles, research, production,
+            simulation.Events, players.Count);
         var construction = new ConstructionRules(
             data, world, grid, bodies, buildOrders, combatants, foundations, movers, structures, territories, workers,
-            stockpiles, research, work, structureFactory, spatialIndex, move, simulation.Events, players.Count);
+            stockpiles, research, work, structureFactory, spatialIndex, move, simulation.Events, players.Count)
+        {
+            Vision = vision,
+        };
         simulation.SetCommandHandler(CommandType.Attack, orders);
         simulation.SetCommandHandler(CommandType.AttackMove, new OtherOrderHandler(walkOrders, construction));
         simulation.SetCommandHandler(CommandType.Build, new BuildCommandHandler(construction));
@@ -120,11 +134,14 @@ public static class MatchSetup
         // walk left them, except a worker that holds a place and a unit that is fighting, which
         // stay where they are. The spatial index is rebuilt after both, so that every system after it
         // sees where things stand now. A system that moves bodies goes before it.
+        // Vision comes after movement and the spatial index and before combat: what a player sees
+        // is worked out from where things stand in this tick, before any unit picks a target.
         // Combat comes after movement, so that it sees where everything stands in this tick and
         // which units have moved in it: a unit attacks only in a tick in which it does not move.
-        // Shots land before the attacks, so a shot fired in one tick flies from the next. Deaths
-        // come after both: every attack due in a tick is made before any death of that tick takes
-        // effect.
+        // Shots land before the attacks, so a shot fired in one tick flies from the next. Towers
+        // attack right after the units: theirs are attacks of the tick like any other. Deaths
+        // come after all three: every attack due in a tick is made before any death of that tick
+        // takes effect.
         // Structures leave the map right after the deaths: a structure destroyed in this tick
         // frees its tiles in this tick, so income, research and the orders of the next tick see
         // the tiles, the territory and the research slots as they are without it.
@@ -146,8 +163,10 @@ public static class MatchSetup
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
         simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, new PlaceHolders(workers), fighters));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
+        simulation.AddSystem(new VisionSystem(vision));
         simulation.AddSystem(new ShotSystem(bodies, shots, targeting, simulation.Events));
         simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, simulation.Events));
+        simulation.AddSystem(new TurretSystem(bodies, structures, turrets, shots, targeting, simulation.Events));
         simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
         simulation.AddSystem(new StructureSystem(data, bodies, structures, foundations, structureTiles, research, simulation.Events));
         simulation.AddSystem(new ConstructionSystem(construction, data));
@@ -182,6 +201,8 @@ public static class MatchSetup
             Structures = structures,
             Supply = supply,
             Territories = territories,
+            Turrets = turrets,
+            Vision = vision,
             Work = work,
             Workers = workers,
             WorkSites = workSites,
@@ -190,10 +211,12 @@ public static class MatchSetup
         // Production places its units through the match, which exists only now.
         producing.Attach(match);
 
-        // The development spawn places its units through the match, so its handler comes after
-        // it. Only while the rules switch it on: otherwise the command has no handler and is dropped.
+        // The development spawn and placement put their units and structures on the map through
+        // the match, so their handlers come after it. Only while the rules switch them on:
+        // otherwise the commands have no handler and are dropped.
         if (data.Rules.Debug.Spawn)
         {
+            simulation.SetCommandHandler(CommandType.DebugPlace, new DebugPlaceHandler(match, simulation.Events));
             simulation.SetCommandHandler(CommandType.DebugSpawn, new DebugSpawnHandler(match, simulation.Events));
         }
 
@@ -219,6 +242,9 @@ public static class MatchSetup
         }
 
         EconomySetup.PlaceDeposits(match);
+
+        // Design 5.3: at the start everything is unexplored except what the players' own see.
+        vision.Refresh();
 
         match.RefreshDerivedState();
         return match;

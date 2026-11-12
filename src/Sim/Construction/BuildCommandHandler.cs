@@ -21,10 +21,11 @@ namespace Sim.Construction;
 /// </para>
 /// <para>
 /// The order is given when the structure can be ordered (it has a file, is no wall, and its
-/// tier is reached), the site is open ground free of structures and deposits and, for all but
-/// a Capitol or an Outpost, inside the player's territory, a listed entity is a living worker of
-/// the player, the player is not at the limit of the structure, and the stockpile covers the
-/// price. The limit does not count an order that this one replaces, and the price counts what
+/// tier is reached), the site is, as far as the player may know, open ground free of structures
+/// and deposits and, for all but a Capitol or an Outpost, inside the player's territory, or, for
+/// those two, ground the player has explored, a listed entity is a living worker of the player,
+/// the player is not at the limit of the structure, and the stockpile covers the price. What
+/// the player may know is in <see cref="ConstructionRules.CheckSiteAsKnown"/>. The limit does not count an order that this one replaces, and the price counts what
 /// that order gives back. Units on the site and enemy territory nearby are judged when the
 /// worker arrives. A site the worker cannot reach is not refused here either: the worker walks
 /// as near as it can and the order ends there.
@@ -87,7 +88,7 @@ public sealed class BuildCommandHandler : ICommandHandler
             return BuildProblem.Locked;
         }
 
-        var ground = _rules.CheckSite(player, structure, x, y);
+        var ground = _rules.CheckSiteAsKnown(player, structure, x, y);
         if (_rules.Grid.Contains(x, y))
         {
             site = new TileSquare(x, y, structure.Footprint).Center;

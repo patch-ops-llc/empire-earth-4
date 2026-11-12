@@ -24,11 +24,17 @@ public enum BuildProblem
     /// <summary>The player has not reached the tier the structure needs.</summary>
     Locked,
 
-    /// <summary>A tile of the footprint is off the map, not open ground, under a deposit or under a structure.</summary>
+    /// <summary>
+    /// A tile of the footprint is off the map, not open ground, under a deposit or under a
+    /// structure. When the order is given, this counts only what the player knows of.
+    /// </summary>
     SiteNotFree,
 
     /// <summary>A tile of the footprint is outside the player's territory, and the structure is neither a Capitol nor an Outpost.</summary>
     OutsideTerritory,
+
+    /// <summary>The structure is a Capitol or an Outpost, and the player has not explored every tile of the footprint.</summary>
+    NotExplored,
 
     /// <summary>The player has as many of the structure as a player may have, counting those under way.</summary>
     LimitReached,

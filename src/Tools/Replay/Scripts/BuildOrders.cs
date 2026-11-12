@@ -190,7 +190,7 @@ internal sealed class BuildOrders : OrderScript
                 y = _random.NextInt(Match.Grid.Height);
             }
 
-            if (Match.Construction.CheckSite(player, def, x, y) == BuildProblem.None)
+            if (Match.Construction.CheckSiteAsKnown(player, def, x, y) == BuildProblem.None)
             {
                 break;
             }

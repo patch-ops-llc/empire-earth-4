@@ -155,7 +155,7 @@ public class ReachTests
     {
         var match = Create(TestMaps.Open(24, 12));
         var hoplite = match.Spawn(0, Hoplite, "2.5", "5.5");
-        var worker = match.SpawnWorker(1, "12.5", "7.5");
+        var worker = match.SpawnWorker(1, "9.5", "7.5");
         match.SetHitPoints(worker, 1_000_000);
         match.OrderAttack(0, worker, hoplite);
         match.Run(120);
