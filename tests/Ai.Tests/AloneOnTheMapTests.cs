@@ -21,6 +21,8 @@ public class AloneOnTheMapTests
     [InlineData("swarm", 5)]
     [InlineData("elite", 1)]
     [InlineData("elite", 5)]
+    [InlineData("swarm", 12)]
+    [InlineData("elite", 20)]
     public void ItReachesTheEpochCapAndFillsItsSupply(string personality, int commandDelay)
     {
         var run = new AiMatch(GameFiles.Data, "ridge", playerCount: 1, commandDelay);
@@ -140,7 +142,12 @@ public class AloneOnTheMapTests
         var afterFirst = commands.Count;
         Assert.NotEqual(0, afterFirst);
 
-        // Its orders are not scheduled here, so the match is as it was: a second round would give them again.
+        // Its orders are carried out in the next tick. Until the next round it gives none.
+        foreach (var command in commands)
+        {
+            match.Simulation.Commands.Enqueue(match.World.Tick, command);
+        }
+
         for (var tick = 1; tick < AiPlayer.ThinkInterval; tick++)
         {
             match.Simulation.Tick();
@@ -148,9 +155,11 @@ public class AloneOnTheMapTests
             Assert.Equal(afterFirst, commands.Count);
         }
 
+        // The Capitol can now pay for the next worker, so the round has an order to give.
         match.Simulation.Tick();
         ai.Think(commands);
         Assert.True(commands.Count > afterFirst);
+        Assert.Equal(0, match.Simulation.DroppedCommandCount);
     }
 
     private static bool HasEpochCapAndFullSupply(Match match) =>

@@ -189,7 +189,7 @@ internal sealed class AiFight
             return;
         }
 
-        var mayAttack = !IsDefending && (atSupplyCap || _fight.IsEnoughToAttack(ArmyValue, EnemyEstimate));
+        var mayAttack = !_fight.IsNone && !IsDefending && (atSupplyCap || _fight.IsEnoughToAttack(ArmyValue, EnemyEstimate));
         var setsOut = Phase == FightPhase.Gather
             && _attackReaction.Holds(mayAttack && _homeUnits.Count > 0, _sight.Tick, _fight.ReactionTicks);
         var joins = Phase == FightPhase.Attack

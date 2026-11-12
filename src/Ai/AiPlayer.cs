@@ -17,14 +17,16 @@ namespace Ai;
 /// <b>How a match uses it.</b> Whoever runs the match makes one of these for every seat a
 /// computer plays, and after every tick calls <see cref="Think"/> with a list. The commands it
 /// adds are that seat's orders, and go where a person's orders go: to the host's session, which
-/// schedules them and sends them to every peer. It runs on the host only. The other peers get
-/// its commands and need neither this class nor its personality.
+/// schedules them and sends them to every peer. In the game it runs on the host only. The other
+/// peers get its commands and need neither this class nor its personality.
 /// </para>
 /// <para>
 /// <b>When it thinks.</b> <see cref="Think"/> may be called as often as wished. It does something
 /// once every <see cref="ThinkInterval"/> ticks and nothing in between, which is longer than the
-/// longest command delay, so the orders of one round have been carried out before the next round
-/// reads the match.
+/// command delay a host chooses, so the orders of one round have been carried out before the next
+/// round reads the match. Where its orders take longer, as from a machine that is not the host,
+/// it finds that out from the first worker it sends to work and thinks as much later
+/// (<see cref="AiPace"/>).
 /// </para>
 /// <para>
 /// <b>Determinism.</b> What it orders depends only on the state of the match in the tick it
@@ -55,12 +57,14 @@ public sealed class AiPlayer
     private readonly AiIntel _intel;
     private readonly AiResponses _responses;
     private readonly AiScout _scout;
+    private readonly AiWay _way;
     private readonly StructureDef? _generator;
     private readonly StructureDef? _academy;
     private readonly StructureDef? _outpost;
     private readonly List<EntityId> _withoutRallyPoint = [];
     private readonly List<int> _deposits = [];
     private readonly List<Command> _gathers = [];
+    private readonly AiPace _pace;
     private int _nextThink;
 
     /// <param name="match">The match, as the host runs it.</param>
@@ -83,11 +87,13 @@ public sealed class AiPlayer
         _research = new AiResearch(_sight, personality, _responses);
         _economy = new AiEconomy(_sight, personality);
         _construction = new AiConstruction(_sight);
-        _army = new AiArmy(_sight, personality, _responses);
+        _pace = new AiPace(_sight);
+        _army = new AiArmy(_sight, personality, _responses, _pace);
         _search = new AiSearch(_sight);
         _explorer = new AiExplorer(_sight, _search);
         _fight = new AiFight(_sight, _search, personality.Fight, _intel, _responses);
         _scout = new AiScout(_sight, personality.Scouting);
+        _way = new AiWay(_sight);
 
         // What each structure is for is in its file, so none is named here.
         var start = match.Data.StartStructure;
@@ -124,8 +130,13 @@ public sealed class AiPlayer
     /// <summary>Its scout, for the same.</summary>
     internal AiScout Scout => _scout;
 
+    internal AiWay Way => _way;
+
     /// <summary>What it remembers of the enemy, for the same.</summary>
     internal AiIntel Intel => _intel;
+
+    /// <summary>How long its orders take, for the same.</summary>
+    internal AiPace Pace => _pace;
 
     /// <summary>The rows of its response table, for the same.</summary>
     internal AiResponses Responses => _responses;
@@ -140,12 +151,13 @@ public sealed class AiPlayer
 
         // What it saw happen is read after every tick: the events of a tick are gone after the next.
         _intel.Watch();
-        if (_sight.Tick < _nextThink)
+        _pace.Watch();
+        if (_sight.Tick < _nextThink || _pace.IsWaiting)
         {
             return;
         }
 
-        _nextThink = _sight.Tick + ThinkInterval;
+        _nextThink = _sight.Tick + _pace.Interval;
         _sight.Refresh();
         _search.Update();
         _intel.Update();
@@ -175,6 +187,7 @@ public sealed class AiPlayer
         // The scout is chosen before the army is sorted, so that no force takes it along.
         _scout.Think(_fight, hasMuster, musterX, musterY, commands);
         _fight.Think(hasMuster, musterX, musterY, _army.IsAtSupplyCap, commands);
+        _way.Think(_pace.Interval, commands, first);
 
         // The workers are divided last, when the budget knows every purchase of the round, and
         // their orders go first. An order to build is taken by the nearest of the workers, which
@@ -183,6 +196,7 @@ public sealed class AiPlayer
         _gathers.Clear();
         _economy.AssignWorkers(_budget, _gathers);
         commands.InsertRange(first, _gathers);
+        _pace.Note(_gathers);
     }
 
     /// <summary>The middle of its Capitol, or of the first structure that gives it territory, and that territory's radius.</summary>

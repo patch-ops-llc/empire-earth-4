@@ -350,6 +350,71 @@ public class AiEconomyTests
         Assert.Equal([waiting], order.Entities.ToArray());
     }
 
+    /// <summary>
+    /// A worker that waits for a place earns nothing, so it goes where a place is free, whatever
+    /// the division asks for: here nothing is missing, and the only free places are at a
+    /// depleted deposit.
+    /// </summary>
+    [Fact]
+    public void AWorkerThatWaitsForAPlaceGoesWhereOneIsFree()
+    {
+        var fixture = new AiFixture();
+        var deposits = HeldDeposits(fixture);
+        Assert.True(deposits.Count >= 2);
+        var full = deposits[0];
+        fixture.SpawnWorkers(full.Places + 1 - fixture.Sight.Workers.Count);
+        foreach (var worker in fixture.Sight.Workers)
+        {
+            fixture.Commands.Add(new Command(CommandType.Gather, AiFixture.Player, [worker.Entity], targetEntity: full.Entity));
+        }
+
+        fixture.Carry();
+        var waiting = fixture.Sight.Workers.Single(worker => worker.State == WorkerState.Waiting).Entity;
+        foreach (var site in deposits.Skip(1))
+        {
+            Deplete(fixture, site.Entity);
+        }
+
+        var economy = new AiEconomy(fixture.Sight, AiFixture.Personality());
+        economy.AssignWorkers(fixture.With(0, 0), fixture.Commands);
+
+        var order = Assert.Single(fixture.Commands);
+        Assert.Equal(CommandType.Gather, order.Type);
+        Assert.Equal([waiting], order.Entities.ToArray());
+        Assert.NotEqual(full.Entity, order.TargetEntity);
+        Assert.True(fixture.SiteOf(order.TargetEntity).IsDepleted);
+
+        // It has a place there from the tick the order runs, and is not sent again.
+        fixture.Carry();
+        Assert.DoesNotContain(fixture.Sight.Workers, worker => worker.State == WorkerState.Waiting);
+        economy.AssignWorkers(fixture.With(0, 0), fixture.Commands);
+        Assert.Empty(fixture.Commands);
+    }
+
+    [Fact]
+    public void AWorkerThatWaitsIsLeftWhereItIsWhileNoOtherSiteHasAPlaceFree()
+    {
+        var fixture = new AiFixture();
+        var deposits = HeldDeposits(fixture);
+        var places = deposits.Sum(site => site.Places);
+        fixture.SpawnWorkers(places + 1 - fixture.Sight.Workers.Count);
+        var economy = new AiEconomy(fixture.Sight, AiFixture.Personality());
+        economy.AssignWorkers(fixture.With(0, 0), fixture.Commands);
+        Assert.Equal(places, fixture.Commands.Count);
+        fixture.Carry();
+        var left = fixture.Sight.Workers.Single(worker => worker.State == WorkerState.Idle).Entity;
+        fixture.Commands.Add(new Command(CommandType.Gather, AiFixture.Player, [left], targetEntity: deposits[0].Entity));
+        fixture.Carry();
+        Assert.Equal(WorkerState.Waiting, fixture.Sight.Workers.Single(worker => worker.Entity == left).State);
+
+        for (var round = 0; round < 3; round++)
+        {
+            economy.AssignWorkers(fixture.With(0, 0), fixture.Commands);
+            Assert.Empty(fixture.Commands);
+            fixture.Run(AiEconomy.RebalanceInterval);
+        }
+    }
+
     /// <summary>Moving costs the walk, so the division follows the purchases one worker at a time.</summary>
     [Fact]
     public void OneWorkerChangesResourceAtATime()
