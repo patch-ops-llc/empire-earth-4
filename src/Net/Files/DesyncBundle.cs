@@ -34,15 +34,7 @@ public enum SecondRunOutcome
 /// <param name="To">The last tick it compared, or -1.</param>
 /// <param name="PartedAt">The first tick whose state was not the first run's, or -1.</param>
 /// <param name="Detail">The parts that differed in that tick, or why there was no second run.</param>
-public sealed record SecondRun(SecondRunOutcome Outcome, int From = -1, int To = -1, int PartedAt = -1, string Detail = "")
-{
-    /// <summary>
-    /// True when the second run gave the first run's state when this many ticks had run, so that
-    /// a state the second run wrote for that tick is the state the match had.
-    /// </summary>
-    public bool Holds(int tick) =>
-        tick >= From && tick <= To && Outcome != SecondRunOutcome.NotRun && (Outcome == SecondRunOutcome.Repeated || tick < PartedAt);
-}
+public sealed record SecondRun(SecondRunOutcome Outcome, int From = -1, int To = -1, int PartedAt = -1, string Detail = "");
 
 /// <summary>
 /// Everything one machine knows about a match that stopped because the machines no longer agreed
@@ -60,7 +52,7 @@ public sealed record SecondRun(SecondRunOutcome Outcome, int From = -1, int To =
 /// agreed.snapshot      the last state the machines agreed on, as Snapshot.Restore reads it
 /// final.snapshot       the state the match stopped in
 /// hashes.txt           a line of part names, then for each tick its number and one hash for each part
-/// states/tick-N.snapshot  the state after N ticks, from the machine's second run
+/// states/tick-N.snapshot  the state after N ticks, for each tick the fault may have happened in
 /// </code>
 /// <para>
 /// Reading takes nothing on trust: a file that is not such an archive, or lacks a part, or holds
@@ -157,8 +149,9 @@ public sealed class DesyncBundle
 
     /// <summary>
     /// The whole state for each tick in which the machines may first have differed: those after
-    /// the last comparison they passed, up to the one they failed. They are the second run's,
-    /// and only those for which <see cref="SecondRun.Holds"/> is true are kept.
+    /// the last comparison they passed, up to the one they failed. Each is the state the match
+    /// had after that tick: as it was kept while the match ran, or, for a tick too long ago for
+    /// that, as the second run gave it while its hashes were those of the first.
     /// </summary>
     public ImmutableArray<TickState> States { get; init; } = [];
 

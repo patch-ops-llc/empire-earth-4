@@ -89,11 +89,45 @@ public class DesyncBundleTests
         Assert.Equal(new SecondRun(SecondRunOutcome.Repeated, From: 20, To: end.FinalTick), bundles[0].SecondRun);
         Assert.Equal(new SecondRun(SecondRunOutcome.Parted, From: 20, To: faultAfter + 1, PartedAt: faultAfter + 1, Detail: "bodies"), bundles[1].SecondRun);
 
-        // The states are those of the ticks the fault may have been in, as far as the second run held.
+        // Each has the state its match had in every tick the fault may have been in: the machine
+        // that went wrong too, whose own second run could not give them.
+        Assert.All(bundles, bundle =>
+        {
+            Assert.Equal(Enumerable.Range(21, 20), bundle.States.Select(state => state.Tick));
+            var recorded = Replay.Read(new ByteReader(bundle.Replay)).Hashes.ToDictionary(hash => hash.Tick, hash => hash.Hash);
+            Assert.All(bundle.States, state => Assert.Equal(recorded[state.Tick], Restore(bundle, state.Snapshot).ComputeHash()));
+        });
+        Assert.Equal(bundles[0].StateAt(faultAfter)!.Snapshot, bundles[1].StateAt(faultAfter)!.Snapshot);
+        Assert.NotEqual(bundles[0].StateAt(faultAfter + 1)!.Snapshot, bundles[1].StateAt(faultAfter + 1)!.Snapshot);
+    }
+
+    /// <summary>
+    /// A machine that no longer has the states of those ticks as the match ran, because it was
+    /// far behind or its states are large, has them from its second run instead, for as long as
+    /// that run gave the hashes of the first.
+    /// </summary>
+    [Theory]
+    [InlineData(0, 1L << 30)]
+    [InlineData(64, 1L)]
+    public void StatesThatAreNoLongerKeptComeFromTheSecondRun(int liveStatesKept, long liveStateBytes)
+    {
+        var options = new DesyncWatchOptions { LiveStatesKept = liveStatesKept, LiveStateBytes = liveStateBytes };
+        var match = new WatchedMatch(watch: _ => options);
+        match.Start();
+        Assert.True(match.Clients[0].Move(40, 30));
+        match.Run(seconds: 1.7);
+        var faultAfter = match.Clients[1].Tick;
+        Nudge(match.Clients[1]);
+        match.UntilStopped();
+
+        var bundles = match.Bundles();
+
+        // The machine that stayed right has them all. The other has them up to the fault.
         Assert.Equal(Enumerable.Range(21, 20), bundles[0].States.Select(state => state.Tick));
         Assert.Equal(Enumerable.Range(21, faultAfter - 20), bundles[1].States.Select(state => state.Tick));
         var recorded = Replay.Read(new ByteReader(bundles[0].Replay)).Hashes.ToDictionary(hash => hash.Tick, hash => hash.Hash);
         Assert.All(bundles[0].States, state => Assert.Equal(recorded[state.Tick], Restore(bundles[0], state.Snapshot).ComputeHash()));
+        Assert.All(bundles[1].States, state => Assert.Equal(recorded[state.Tick], Restore(bundles[1], state.Snapshot).ComputeHash()));
     }
 
     [Fact]
@@ -203,8 +237,10 @@ public class DesyncBundleTests
             Assert.Null(bundle.AgreedSnapshot);
             Assert.Equal(SecondRunOutcome.NotRun, bundle.SecondRun.Outcome);
             Assert.Contains("first comparison", bundle.SecondRun.Detail, StringComparison.Ordinal);
-            Assert.Empty(bundle.States);
             Assert.Equal(0, bundle.Hashes[0].Tick);
+
+            // The state each began with is there, which is where two such games differ.
+            Assert.Equal([0], bundle.States.Select(state => state.Tick));
 
             var read = DesyncBundle.Read(bundle.ToArray());
             Assert.Null(read.AgreedSnapshot);
@@ -280,7 +316,7 @@ public class DesyncBundleTests
 
         Assert.Equal(SecondRunOutcome.NotRun, bundle.SecondRun.Outcome);
         Assert.StartsWith("it failed: ", bundle.SecondRun.Detail, StringComparison.Ordinal);
-        Assert.Empty(bundle.States);
+        Assert.Equal(Enumerable.Range(21, 20), bundle.States.Select(state => state.Tick));
         Assert.Equal(20, bundle.AgreedTick);
         Assert.NotNull(bundle.AgreedSnapshot);
         Assert.Equal(bundle.SecondRun, DesyncBundle.Read(bundle.ToArray()).SecondRun);
@@ -368,23 +404,6 @@ public class DesyncBundleTests
     }
 
     [Fact]
-    public void TheSecondRunHoldsOnlyUpToWhereItParted()
-    {
-        var repeated = new SecondRun(SecondRunOutcome.Repeated, From: 20, To: 45);
-        var parted = new SecondRun(SecondRunOutcome.Parted, From: 20, To: 31, PartedAt: 31, Detail: "bodies");
-        var notRun = new SecondRun(SecondRunOutcome.NotRun, Detail: "why");
-
-        Assert.True(repeated.Holds(20));
-        Assert.True(repeated.Holds(45));
-        Assert.False(repeated.Holds(19));
-        Assert.False(repeated.Holds(46));
-        Assert.True(parted.Holds(30));
-        Assert.False(parted.Holds(31));
-        Assert.False(notRun.Holds(0));
-        Assert.False(notRun.Holds(-1));
-    }
-
-    [Fact]
     public void OptionsThatKeepNothingAreRefused()
     {
         var match = new WatchedMatch(watch: _ => null);
@@ -395,6 +414,8 @@ public class DesyncBundleTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new DesyncWatch(client.Session, client.Match!, new DesyncWatchOptions { SnapshotsKept = 0 }));
         Assert.Throws<ArgumentOutOfRangeException>(() => new DesyncWatch(client.Session, client.Match!, new DesyncWatchOptions { HashTicksKept = 0 }));
         Assert.Throws<ArgumentOutOfRangeException>(() => new DesyncWatch(client.Session, client.Match!, new DesyncWatchOptions { MaxStates = -1 }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DesyncWatch(client.Session, client.Match!, new DesyncWatchOptions { LiveStatesKept = -1 }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DesyncWatch(client.Session, client.Match!, new DesyncWatchOptions { LiveStateBytes = -1 }));
     }
 
     /// <summary>Moves one of the player's own units by the smallest step there is, on that player's machine only.</summary>

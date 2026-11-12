@@ -18,7 +18,16 @@ public sealed record DesyncWatchOptions
     /// <summary>The number of ticks whose part hashes are kept.</summary>
     public int HashTicksKept { get; init; } = 512;
 
-    /// <summary>The most states the second run writes into the bundle.</summary>
+    /// <summary>
+    /// The whole state is also kept after every tick, for this many of the last ticks, so that
+    /// the bundle has the state the match really had in the tick the fault happened in. 0 keeps none.
+    /// </summary>
+    public int LiveStatesKept { get; init; } = 64;
+
+    /// <summary>The most memory those states may take, in bytes. When they take more, fewer ticks are kept.</summary>
+    public long LiveStateBytes { get; init; } = 32L * 1024 * 1024;
+
+    /// <summary>The most states the bundle holds for the ticks the fault may have happened in.</summary>
     public int MaxStates { get; init; } = 64;
 
     internal void Validate()
@@ -26,6 +35,8 @@ public sealed record DesyncWatchOptions
         ArgumentOutOfRangeException.ThrowIfLessThan(SnapshotInterval, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(SnapshotsKept, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(HashTicksKept, 1);
+        ArgumentOutOfRangeException.ThrowIfNegative(LiveStatesKept);
+        ArgumentOutOfRangeException.ThrowIfNegative(LiveStateBytes);
         ArgumentOutOfRangeException.ThrowIfNegative(MaxStates);
     }
 }
@@ -33,9 +44,9 @@ public sealed record DesyncWatchOptions
 /// <summary>
 /// Follows a match that a <see cref="ClientSession"/> runs and keeps, for the last stretch of it,
 /// what is needed to find the cause if the machines stop agreeing: the whole state once a second,
-/// the commands since the oldest of those states, and the hash of every part of the state after
-/// every tick. When the session stops on a desync, <see cref="CreateBundle"/> makes the
-/// <see cref="DesyncBundle"/> from them.
+/// the commands since the oldest of those states, the hash of every part of the state after
+/// every tick, and the whole state after each of the last few ticks. When the session stops on a
+/// desync, <see cref="CreateBundle"/> makes the <see cref="DesyncBundle"/> from them.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -51,9 +62,15 @@ public sealed record DesyncWatchOptions
 /// and the state kept from then or earlier is the "agreed" state of the bundle.
 /// </para>
 /// <para>
-/// What is kept is bounded: with the defaults, the state of the last 24 seconds and the hashes
-/// of the last 25. A machine that was further behind than that when the host stopped the match
-/// has no agreed state in its bundle, and the bundle says so.
+/// What is kept is bounded: with the defaults, the state once a second for the last 24 seconds,
+/// the hashes of the last 25, and the state after every tick for the last 3 seconds or 32
+/// megabytes, whichever is less. A machine that was further behind than that when the host
+/// stopped the match has no agreed state in its bundle, and the bundle says so.
+/// </para>
+/// <para>
+/// The states of the ticks the fault may have happened in come from the last of these where it
+/// reaches back far enough: they are the states the match had. Where it does not, they come from
+/// the machine's second run of those ticks, for as long as that run gave the hashes of the first.
 /// </para>
 /// <para>
 /// The parts of the state are those the match's world has: its own fields and every store
@@ -81,6 +98,11 @@ public sealed class DesyncWatch
     private int _snapshotNext;
     private int _snapshotCount;
 
+    // The state after each of the last ticks, oldest first, and the writers that are free to use again.
+    private readonly Queue<(int Tick, ByteWriter State)> _live = new();
+    private readonly Stack<ByteWriter> _freeWriters = new();
+    private long _liveBytes;
+
     // The commands of every tick from the oldest state kept on, in the order they were scheduled.
     private readonly Queue<(int Tick, ImmutableArray<Command> Commands)> _commands = new();
 
@@ -104,6 +126,7 @@ public sealed class DesyncWatch
         _snapshotTicks = new int[_options.SnapshotsKept];
 
         KeepHashes();
+        KeepLiveState();
         KeepSnapshot();
 
         session.CommandsScheduled += (tick, commands) =>
@@ -116,6 +139,7 @@ public sealed class DesyncWatch
         session.TickCompleted += _ =>
         {
             KeepHashes();
+            KeepLiveState();
             if (_world.Tick % _options.SnapshotInterval == 0)
             {
                 KeepSnapshot();
@@ -157,7 +181,17 @@ public sealed class DesyncWatch
         var agreedTick = agreed < 0 ? -1 : _snapshotTicks[agreed];
         var agreedBytes = agreed < 0 ? null : _snapshots[agreed].ToArray();
 
-        var states = ImmutableArray.CreateBuilder<TickState>();
+        // The states the match had in the ticks the fault may have happened in: those after the
+        // last comparison every machine passed, up to the one that failed.
+        var states = new SortedDictionary<int, byte[]>();
+        foreach (var (tick, state) in _live)
+        {
+            if (InFaultWindow(tick, end.DesyncTick, interval) && states.Count < _options.MaxStates)
+            {
+                states.Add(tick, state.ToArray());
+            }
+        }
+
         SecondRun second;
         if (agreedBytes is null)
         {
@@ -176,13 +210,11 @@ public sealed class DesyncWatch
             catch (Exception failed)
             {
                 // The second run is a help in finding the fault. It must not cost the tester the rest.
-                states.Clear();
                 second = new SecondRun(SecondRunOutcome.NotRun, Detail: $"it failed: {failed.GetType().Name}: {failed.Message.TrimEnd('.')}");
             }
         }
 
-        // What the second run wrote after it had parted from the first is not the state the match had.
-        var held = states.Where(state => second.Holds(state.Tick)).ToImmutableArray();
+        var held = states.Select(state => new TickState(state.Key, state.Value)).ToImmutableArray();
 
         return new DesyncBundle
         {
@@ -214,6 +246,30 @@ public sealed class DesyncWatch
         _hashNext = (_hashNext + 1) % _hashTicks.Length;
         _hashCount = Math.Min(_hashCount + 1, _hashTicks.Length);
     }
+
+    private void KeepLiveState()
+    {
+        if (_options.LiveStatesKept == 0)
+        {
+            return;
+        }
+
+        var writer = _freeWriters.Count > 0 ? _freeWriters.Pop() : new ByteWriter(1024);
+        writer.Clear();
+        Snapshot.Write(_world, writer);
+        _live.Enqueue((_world.Tick, writer));
+        _liveBytes += writer.Length;
+
+        // The newest is always kept, however large it is.
+        while (_live.Count > _options.LiveStatesKept || (_liveBytes > _options.LiveStateBytes && _live.Count > 1))
+        {
+            var oldest = _live.Dequeue().State;
+            _liveBytes -= oldest.Length;
+            _freeWriters.Push(oldest);
+        }
+    }
+
+    private static bool InFaultWindow(int tick, int desyncTick, int interval) => tick > desyncTick - interval && tick <= desyncTick;
 
     private void KeepSnapshot()
     {
@@ -298,7 +354,7 @@ public sealed class DesyncWatch
         int finalTick,
         int desyncTick,
         int interval,
-        ImmutableArray<TickState>.Builder states)
+        SortedDictionary<int, byte[]> states)
     {
         var again = description.CreateMatch(_match.Data);
         var parts = StoreHasher.PartNames(again.World);
@@ -347,12 +403,13 @@ public sealed class DesyncWatch
                 detail = string.Join(", ", differing);
             }
 
-            // The fault is in one of the ticks after the last comparison passed, up to the one that failed.
-            if (partedAt < 0 && tick > desyncTick - interval && tick <= desyncTick && states.Count < _options.MaxStates)
+            // While the second run gives the hashes of the first, its state is the state the match
+            // had, and stands in for a tick whose state is no longer kept.
+            if (partedAt < 0 && slot >= 0 && InFaultWindow(tick, desyncTick, interval) && !states.ContainsKey(tick) && states.Count < _options.MaxStates)
             {
                 writer.Clear();
                 Snapshot.Write(again.World, writer);
-                states.Add(new TickState(tick, writer.ToArray()));
+                states.Add(tick, writer.ToArray());
             }
 
             if (tick >= finalTick || partedAt >= 0)

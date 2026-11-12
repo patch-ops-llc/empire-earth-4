@@ -107,14 +107,11 @@ public class DesyncBundleDiffTests
         Assert.Contains(lines, line => line.StartsWith("Reading: B's machine does not repeat its own run.", StringComparison.Ordinal));
         Assert.Contains("This machine agrees with A.", lines);
 
-        // B's state at that tick is on no machine any more, so the final states are compared, the store that differed first in front.
-        var heading = Array.FindIndex(lines, line => line.StartsWith("The fields after ", StringComparison.Ordinal));
+        // The bundle has the state B's match really had in that tick, so the one field is all that differs.
         Assert.Equal(
-            $"The fields after {tick} ticks cannot be compared: B's state at that tick is not on file, and this machine's run does not give it. "
-            + $"The states the match stopped in are compared, after {pair.End.FinalTick} ticks: later than the first difference, so some of what follows came of it.",
-            lines[heading]);
-        Assert.Matches("^[0-9]+ differences? between the final states, A \\| B:$", lines[heading + 1]);
-        Assert.Matches($"^  bodies entity {unit.Value} +Position\\.X: [0-9.]+ \\(raw [0-9]+\\) \\| [0-9.]+ \\(raw [0-9]+\\)$", lines[heading + 2]);
+            [$"1 difference after {tick} ticks, the first tick that differs, A | B:", $"  bodies entity {unit.Value}  Position.X: "],
+            [lines[^2], lines[^1][..lines[^1].IndexOf(": ", StringComparison.Ordinal)] + ": "]);
+        Assert.Matches("Position\\.X: [0-9.]+ \\(raw [0-9]+\\) \\| [0-9.]+ \\(raw [0-9]+\\)$", lines[^1]);
     }
 
     [Fact]
@@ -161,7 +158,7 @@ public class DesyncBundleDiffTests
     }
 
     [Fact]
-    public void OneBundleOfAMachineThatDidNotRepeatItselfIsComparedAtTheEnd()
+    public void OneBundleOfAMachineThatDidNotRepeatItselfShowsTheFieldToo()
     {
         EntityId unit = default;
         using var pair = DesyncedPair.Play(fault: guest =>
@@ -178,9 +175,50 @@ public class DesyncBundleDiffTests
         var lines = Lines(output);
         var tick = pair.FaultAfter + 1;
         Assert.Contains(lines, line => line.EndsWith($"give another state than that machine had, first after {tick} ticks, in: bodies.", StringComparison.Ordinal));
-        var heading = Array.FindIndex(lines, line => line.StartsWith("The bundle has no state for the tick that differs", StringComparison.Ordinal));
-        Assert.Matches("^[0-9]+ differences? between the final states, the bundle \\| here:$", lines[heading + 1]);
-        Assert.Matches($"^  bodies entity {unit.Value} +Position\\.Y: [0-9.]+ \\(raw [0-9]+\\) \\| [0-9.]+ \\(raw [0-9]+\\)$", lines[heading + 2]);
+        Assert.Equal($"1 difference after {tick} ticks, the first tick that differs, the bundle | here:", lines[^2]);
+        Assert.Matches($"^  bodies entity {unit.Value}  Position\\.Y: [0-9.]+ \\(raw [0-9]+\\) \\| [0-9.]+ \\(raw [0-9]+\\)$", lines[^1]);
+    }
+
+    /// <summary>
+    /// Bundles that lack the state of the tick that differs, as those of a machine that was far
+    /// behind when the match stopped: the states the match stopped in are compared instead, the
+    /// store that differed first in front, and the report says that they are from later.
+    /// </summary>
+    [Fact]
+    public void WithoutTheStateOfTheTickTheFinalStatesAreCompared()
+    {
+        EntityId unit = default;
+        using var pair = DesyncedPair.Play(fault: guest =>
+        {
+            unit = UnitsOf(guest, 1)[2];
+            ref var body = ref guest.Bodies.Get(unit);
+            body.Position = new FixedVector2(body.Position.X + Fixed.Half, body.Position.Y);
+        });
+        WithoutStates(pair.HostBundle);
+        WithoutStates(pair.GuestBundle);
+        var tick = pair.FaultAfter + 1;
+        var later = pair.End.FinalTick - tick;
+        var field = $"^  bodies entity {unit.Value} +Position\\.X: [0-9.]+ \\(raw [0-9]+\\) \\| [0-9.]+ \\(raw [0-9]+\\)$";
+
+        // The host's machine repeated itself, and this one repeats it, so the host's state is known. The guest's is not.
+        var both = Lines(Run(pair.HostBundle, pair.GuestBundle).Output);
+        var heading = Array.FindIndex(both, line => line.StartsWith("The fields after ", StringComparison.Ordinal));
+        Assert.Equal(
+            $"The fields after {tick} ticks cannot be compared: B's state at that tick is not on file, and this machine's run does not give it. "
+            + $"The states the match stopped in are compared, after {pair.End.FinalTick} ticks: later than the first difference, so some of what follows came of it.",
+            both[heading]);
+        Assert.Matches("^[0-9]+ differences? between the final states, A \\| B:$", both[heading + 1]);
+        Assert.StartsWith("  bodies ", both[heading + 2]);
+        Assert.Contains(both[(heading + 2)..], line => Regex.IsMatch(line, field));
+
+        var one = Lines(Run(pair.GuestBundle).Output);
+        heading = Array.FindIndex(one, line => line.StartsWith("The bundle has no state for the tick that differs", StringComparison.Ordinal));
+        Assert.Equal(
+            $"The bundle has no state for the tick that differs, so the states the match stopped in are compared, after {pair.End.FinalTick} ticks: {later} ticks later, so some of what follows came of the first difference.",
+            one[heading]);
+        Assert.Matches("^[0-9]+ differences? between the final states, the bundle \\| here:$", one[heading + 1]);
+        Assert.StartsWith("  bodies ", one[heading + 2]);
+        Assert.Contains(one[(heading + 2)..], line => Regex.IsMatch(line, field));
     }
 
     /// <summary>
@@ -223,8 +261,8 @@ public class DesyncBundleDiffTests
         var cut = Lines(Run(pair.HostBundle, pair.GuestBundle, "--limit", "2").Output);
         var all = Lines(Run(pair.HostBundle, pair.GuestBundle, "--limit", "0").Output);
 
-        Assert.Matches("^[0-9]+ differences between the final states. The first 2, A \\| B:$", cut[^3]);
-        Assert.Matches("^[0-9]+ differences between the final states, A \\| B:$", all[cut.Length - 3]);
+        Assert.Matches("^[0-9]+ differences after [0-9]+ ticks, the first tick that differs. The first 2, A \\| B:$", cut[^3]);
+        Assert.Matches("^[0-9]+ differences after [0-9]+ ticks, the first tick that differs, A \\| B:$", all[cut.Length - 3]);
         Assert.True(all.Length > cut.Length);
 
         // One unit more: the list of entities differs, which is the world's own, and the stores that hold the unit.
@@ -285,6 +323,34 @@ public class DesyncBundleDiffTests
 
         var three = Run(pair.HostBundle, pair.GuestBundle, pair.HostBundle);
         Assert.Equal(ExitCodes.Usage, three.ExitCode);
+    }
+
+    /// <summary>Writes the bundle again without the states of the ticks the fault may have happened in.</summary>
+    private static void WithoutStates(string path)
+    {
+        var bundle = DesyncBundle.Read(File.ReadAllBytes(path));
+        Assert.NotEmpty(bundle.States);
+        var stripped = new DesyncBundle
+        {
+            Player = bundle.Player,
+            PlayerCount = bundle.PlayerCount,
+            GameVersion = bundle.GameVersion,
+            ContentHash = bundle.ContentHash,
+            MapId = bundle.MapId,
+            Seed = bundle.Seed,
+            HashInterval = bundle.HashInterval,
+            DesyncTick = bundle.DesyncTick,
+            FinalTick = bundle.FinalTick,
+            Replay = bundle.Replay,
+            FinalSnapshot = bundle.FinalSnapshot,
+            AgreedTick = bundle.AgreedTick,
+            AgreedSnapshot = bundle.AgreedSnapshot,
+            Parts = bundle.Parts,
+            Hashes = bundle.Hashes,
+            SecondRun = bundle.SecondRun,
+            Machine = bundle.Machine,
+        };
+        File.WriteAllBytes(path, stripped.ToArray());
     }
 
     private static void Nudge(Match guest)

@@ -19,10 +19,10 @@ namespace Tools.DesyncDiff;
 /// </para>
 /// <para>
 /// To name entities and fields, the whole state at that tick is needed from both sides. A bundle
-/// has it from the machine's own second run, for as long as that run gave the states of the
-/// first. For a side that lacks it, this machine's run stands in when its hashes for that tick
-/// are that side's. When that fails too, the states the match stopped in are compared instead,
-/// and the report says how many ticks later they are.
+/// has the state its match had in each tick the fault may have happened in, unless its machine
+/// was too far behind when the match stopped. For a side that lacks it, this machine's run
+/// stands in when its hashes for that tick are that side's. When that fails too, the states the
+/// match stopped in are compared instead, and the report says how many ticks later they are.
 /// </para>
 /// </remarks>
 internal static class BundleDiff
