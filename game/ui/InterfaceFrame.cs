@@ -96,6 +96,9 @@ public partial class InterfaceFrame : CanvasLayer
     private const int RowsLeft = 16;
 
     private const int MessageLimit = 5;
+
+    // The mark of an announcement that stands for as long as something holds: see Announce.
+    private static readonly StringName StandingAnnouncement = "standing_announcement";
     private const double MessageFadeSeconds = 1.0;
 
     private readonly List<InterfacePart> _parts = [];
@@ -146,13 +149,39 @@ public partial class InterfaceFrame : CanvasLayer
     public VBoxContainer RowsUnderBarAtRight { get; private set; } = null!;
 
     /// <summary>
-    /// The place under the messages, in the middle of the window, for what a part announces for
-    /// a while, as a new epoch is: one announcement under another, each in the middle. It takes
-    /// no click and is drawn over a full-screen panel. What is added is no wider than
-    /// <see cref="MiddleWidth"/>. The messages leave it the height it needs above the bottom
-    /// panel, by giving up their oldest.
+    /// The place under the messages, in the middle of the window, for what a part announces, as
+    /// a new epoch is: one announcement under another, each in the middle. It takes no click
+    /// and is drawn over a full-screen panel. A part adds to it with <see cref="Announce"/>.
     /// </summary>
     public VBoxContainer UnderMessages { get; private set; } = null!;
+
+    /// <summary>
+    /// Adds what a part announces to <see cref="UnderMessages"/>. The announcement is no wider
+    /// than <see cref="MiddleWidth"/>, and the part takes it away again itself.
+    /// </summary>
+    /// <remarks>
+    /// The messages leave the announcements the height they need above the bottom panel, by
+    /// giving up their oldest. When that is not enough with one message left, the announcements
+    /// that pass, as a new epoch does, give way too: the frame hides the oldest of them, for
+    /// good, until those that are left fit. An announcement that stands for as long as
+    /// something holds, as the one that the match is paused does, is never hidden by the frame,
+    /// and stands above those that pass.
+    /// </remarks>
+    /// <param name="announcement">What is shown. A part leaves the visibility of one that passes alone.</param>
+    /// <param name="standing">True for an announcement that stands for as long as something holds.</param>
+    public void Announce(Control announcement, bool standing = false)
+    {
+        ArgumentNullException.ThrowIfNull(announcement);
+        UnderMessages.AddChild(announcement);
+        if (!standing)
+        {
+            return;
+        }
+
+        var before = UnderMessages.GetChildren().Count(child => child.HasMeta(StandingAnnouncement));
+        announcement.SetMeta(StandingAnnouncement, true);
+        UnderMessages.MoveChild(announcement, before);
+    }
 
     /// <summary>
     /// The column of the development aids, at the left edge. They are not part of the game, and
@@ -577,8 +606,31 @@ public partial class InterfaceFrame : CanvasLayer
             Drop(_messages[0].Label);
             _messages.RemoveAt(0);
         }
+
+        // With one message left and still no room, the announcements that pass give way too,
+        // the oldest first.
+        while (_messages.Count <= 1
+            && HasVisibleChild(UnderMessages)
+            && _messageLines.GlobalPosition.Y + _messageLines.GetCombinedMinimumSize().Y + EdgeGap + UnderMessages.GetCombinedMinimumSize().Y > MiddleEnd
+            && HideOldestPassingAnnouncement())
+        {
+        }
     }
 
+
+    private bool HideOldestPassingAnnouncement()
+    {
+        foreach (var child in UnderMessages.GetChildren())
+        {
+            if (child is Control { Visible: true } announcement && !announcement.HasMeta(StandingAnnouncement))
+            {
+                announcement.Visible = false;
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     // The bottom panel stands in the middle of the window's lower edge. Where it would reach the
     // part in the bottom right corner it stands as far left as clears that part.

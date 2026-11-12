@@ -150,7 +150,7 @@ public partial class EpochAnnouncement : InterfacePart
         under.HorizontalAlignment = HorizontalAlignment.Center;
         lines.AddChild(under);
 
-        _place.AddChild(banner);
+        Frame.Announce(banner);
         var width = banner.GetCombinedMinimumSize().X;
         Fit(banner, width, Frame.MiddleWidth);
         _banners.Add((banner, ShownSeconds, width));

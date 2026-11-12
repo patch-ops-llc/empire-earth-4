@@ -25,7 +25,8 @@ namespace Game;
 /// the summary are as wide as the panel may be (<see cref="InspectionPart.WidestShown"/>),
 /// which the inspection's own part holds every chassis to. The development aids and readouts
 /// are shown throughout, as they are for a tester, with one aid more that is taller than the
-/// window, and a row stands at the right under the top bar. The part gives no order and
+/// window, a row stands at the right under the top bar, and two announcements stand under the
+/// messages, of which there is room for one over the tallest detail. The part gives no order and
 /// leaves the selection, the groups and the message line empty.
 /// </para>
 /// <para>
@@ -50,6 +51,7 @@ public sealed class InterfaceLayoutSmoke : SmokePart
     private bool _held;
     private Control? _aid;
     private Control? _row;
+    private readonly List<Control> _announcements = [];
 
     public override string Name => "Interface layout";
 
@@ -69,6 +71,7 @@ public sealed class InterfaceLayoutSmoke : SmokePart
                 FillGroups(frame);
                 AddTallAid(frame);
                 AddRowAtRight(frame);
+                AddAnnouncements(frame);
 
                 // As many as the line holds: it has to give some up to stay above the panel.
                 for (var i = 0; i < 5; i++)
@@ -90,8 +93,9 @@ public sealed class InterfaceLayoutSmoke : SmokePart
                 break;
 
             case Settle:
-                Look(orders, "the tallest detail of a unit", _held || _fighting.Count > 0 ? "BottomPanel" : null);
+                Look(orders, "the tallest detail of a unit", _held || _fighting.Count > 0 ? "BottomPanel" : null, _held ? "/UnderMessages/" : null);
                 CheckHeldWidth(orders);
+                CheckAnnouncements(orders);
                 panel?.Release();
                 _held = false;
                 if (_workers.Count > 0 && menu is not null)
@@ -140,6 +144,12 @@ public sealed class InterfaceLayoutSmoke : SmokePart
                 _aid = null;
                 _row?.QueueFree();
                 _row = null;
+                foreach (var announcement in _announcements)
+                {
+                    announcement.QueueFree();
+                }
+
+                _announcements.Clear();
                 break;
         }
     }
@@ -199,6 +209,42 @@ public sealed class InterfaceLayoutSmoke : SmokePart
         }
 
         _aid = lines.GetParent().GetParent<Control>();
+    }
+
+    // Two announcements that pass, each as high as the banner of a new epoch on three lines.
+    // Under one message and over the tallest detail there is room for one of them.
+    private void AddAnnouncements(InterfaceFrame frame)
+    {
+        for (var i = 1; i <= 2; i++)
+        {
+            var announcement = new PanelContainer
+            {
+                Name = "SmokeAnnouncement",
+                CustomMinimumSize = new Vector2(400f, 100f),
+                SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter,
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+            };
+            announcement.AddChild(new Label { Text = string.Create(CultureInfo.InvariantCulture, $"Smoke test: announcement {i} of 2") });
+            frame.Announce(announcement);
+            _announcements.Add(announcement);
+        }
+    }
+
+    // With the tallest detail shown there is no room for both announcements under the newest
+    // message: the older has given way, as the older messages have, and the newer is shown.
+    private void CheckAnnouncements(SmokeOrders orders)
+    {
+        if (!_held || _announcements.Count < 2)
+        {
+            return;
+        }
+
+        if (_announcements[0].Visible || !_announcements[1].Visible)
+        {
+            orders.Fail(
+                $"with the tallest detail of a unit shown, the older announcement is {(_announcements[0].Visible ? "shown" : "hidden")} and the newer is {(_announcements[1].Visible ? "shown" : "hidden")}. " +
+                "The older gives way and the newer stays.");
+        }
     }
 
     // A row at the right under the top bar, as wide as the host's pause and speed buttons are,
