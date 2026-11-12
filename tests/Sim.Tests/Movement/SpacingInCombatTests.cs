@@ -318,6 +318,43 @@ public class SpacingInCombatTests
     }
 
     /// <summary>
+    /// A Guard fights a worker. A second Guard and a Line infantry unit stand inside its spacing,
+    /// in reach of the same worker, and cannot step away. The Guard beside it has no room in the
+    /// rank and does not attack; the unit that shoots does, as ranks behind a front rank may. When
+    /// the first Guard is gone, the second has room and fights.
+    /// </summary>
+    [Fact]
+    public void AMeleeUnitWithNoRoomInTheRankDoesNotAttackAndAUnitThatShootsDoes()
+    {
+        var match = Create(TestMaps.Open(20, 20));
+        var first = match.Spawn(0, Hoplite, "10", "10");
+        var worker = match.SpawnWorker(1, "11.1", "10");
+        match.SetHitPoints(worker, 100_000_000);
+        match.OrderAttack(0, worker, first);
+        match.Run(10);
+
+        // The two arrive while the first is fighting, and are kept from stepping away.
+        var second = match.Spawn(0, Hoplite, "10.05", "10.4");
+        var archer = match.Spawn(0, Peltast, "10.05", "9.6");
+        match.Movers.Get(second).Speed = Fixed.Zero;
+        match.Movers.Get(archer).Speed = Fixed.Zero;
+        match.RefreshDerivedState();
+        match.Run(100);
+
+        Assert.Equal(match.PositionOf(first), match.UnitOf(first).Fought);
+        Assert.Equal(worker, match.UnitOf(second).Target);
+        Assert.Equal(default, match.UnitOf(second).Fought);
+        Assert.Equal(Fraction.Zero, match.UnitOf(second).Wait);
+        Assert.Equal(match.PositionOf(archer), match.UnitOf(archer).Fought);
+
+        match.World.Entities.Destroy(first);
+        match.Run(30);
+
+        Assert.Equal(match.PositionOf(second), match.UnitOf(second).Fought);
+        Assert.True(match.UnitOf(second).Wait > Fraction.Zero);
+    }
+
+    /// <summary>
     /// A unit sent at a target it cannot get to walks to the nearest ground it can reach and
     /// stands there: looking again every few ticks starts no new walk.
     /// </summary>
