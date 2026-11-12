@@ -307,6 +307,7 @@ public sealed class InspectionSmoke : SmokePart
 
             var tech = TechResolver.Resolve(data, mix);
             var combat = new CombatRules(data, 1, _ => tech);
+            var kinds = new List<UnitGroup>();
             foreach (var blueprint in tech.Blueprints)
             {
                 var perks = blueprint.Perks;
@@ -314,15 +315,16 @@ public sealed class InspectionSmoke : SmokePart
                 var stages = Stages(blueprint, combat);
 
                 // Every unit: its armor, and what an order makes.
-                var fresh = panel.ShownFor(UnitGroup.OfOne(stages.Ready), enemy: false);
+                kinds.Add(UnitGroup.Of([stages.Ready, stages.Spent, stages.Regaining])[0]);
+                var fresh = Shown(orders, panel, who, UnitGroup.OfOne(stages.Ready), enemy: false);
                 Says(orders, who, fresh, perks.AreaDamageReduction is null ? "full area damage" : "less area damage");
                 Says(orders, who, fresh, perks.Plating is null ? "no plating" : $"from attackers below Firepower {blueprint.EffectiveTiers[protection]}");
                 Says(orders, who, fresh, blueprint.BatchSize == 2 ? "An order makes a pair in" : "An order makes one in");
                 hardened += perks.AreaDamageReduction is null ? 0 : 1;
 
-                var spent = panel.ShownFor(UnitGroup.OfOne(stages.Spent), enemy: false);
-                var regaining = panel.ShownFor(UnitGroup.OfOne(stages.Regaining), enemy: false);
-                var three = panel.ShownFor(UnitGroup.Of([stages.Ready, stages.Spent, stages.Regaining])[0], enemy: false);
+                var spent = Shown(orders, panel, who, UnitGroup.OfOne(stages.Spent), enemy: false);
+                var regaining = Shown(orders, panel, who, UnitGroup.OfOne(stages.Regaining), enemy: false);
+                var three = Shown(orders, panel, who, UnitGroup.Of([stages.Ready, stages.Spent, stages.Regaining])[0], enemy: false);
 
                 if (perks.Charge is not null)
                 {
@@ -366,13 +368,22 @@ public sealed class InspectionSmoke : SmokePart
                 // and nothing of what its owner alone knows.
                 foreach (var stage in new[] { stages.Ready, stages.Spent, stages.Regaining })
                 {
-                    var theirs = panel.ShownFor(UnitGroup.OfOne(stage), enemy: true);
+                    var theirs = Shown(orders, panel, who, UnitGroup.OfOne(stage), enemy: true);
                     Says(orders, who, theirs, InspectionWords.Armor(stage.Armor!));
                     if (Hidden(theirs) is { } hidden)
                     {
                         orders.Fail($"{who}: the panel shows '{hidden}' of another player's unit. It says: {theirs.ReplaceLineEndings(" / ")}");
                     }
                 }
+            }
+
+            // A summary of several kinds, with every chassis under this mix as one of them.
+            var summary = panel.WidthOfSummary(kinds);
+            if (summary > InspectionPart.WidestShown)
+            {
+                orders.Fail(string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"under tiers {string.Join(',', mix)}, a summary of several kinds needs a width of {summary:F0} and may have {InspectionPart.WidestShown:F0}."));
             }
         }
 
@@ -389,6 +400,82 @@ public sealed class InspectionSmoke : SmokePart
         {
             orders.Fail("none of the tier mixes gives a chassis less area damage, so the panel was not asked about that armor.");
         }
+    }
+
+    // What the panel shows for units of one kind. It may need no more width than the window
+    // was laid out for: a longer headline or a wider row of cards pushes the bottom panel into
+    // the minimap in the narrowest window.
+    private static string Shown(SmokeOrders orders, InspectionPart panel, string who, UnitGroup group, bool enemy)
+    {
+        var shown = panel.ShownFor(group, enemy);
+        if (panel.WidthNeeded > InspectionPart.WidestShown)
+        {
+            orders.Fail(string.Create(
+                CultureInfo.InvariantCulture,
+                $"{who}: the detail of {(enemy ? "another player's unit" : "a unit")} needs a width of {panel.WidthNeeded:F0} and may have {InspectionPart.WidestShown:F0}. It says: {shown.ReplaceLineEndings(" / ")}"));
+        }
+
+        return shown;
+    }
+
+    /// <summary>
+    /// The units of one kind, of the player's own, for which the panel shows the most text of
+    /// all chassis under the tier mixes: the tallest detail there is, or null when the data has
+    /// no chassis. The part that tests where the interface stands holds it in the panel.
+    /// </summary>
+    internal static UnitGroup? LongestDetail(GameData data, InspectionPart panel)
+    {
+        UnitGroup? longest = null;
+        var most = 0;
+        foreach (var mix in TierMixes)
+        {
+            if (mix.Length != data.Tracks.Count || mix.Any(tier => tier > data.TierCount))
+            {
+                continue;
+            }
+
+            var tech = TechResolver.Resolve(data, mix);
+            var combat = new CombatRules(data, 1, _ => tech);
+            foreach (var blueprint in tech.Blueprints)
+            {
+                var stages = Stages(blueprint, combat);
+                foreach (var group in new[] { UnitGroup.OfOne(stages.Spent), UnitGroup.Of([stages.Ready, stages.Spent, stages.Regaining])[0] })
+                {
+                    var length = panel.ShownFor(group, enemy: false).Length;
+                    if (length > most)
+                    {
+                        most = length;
+                        longest = group;
+                    }
+                }
+            }
+        }
+
+        return longest;
+    }
+
+    /// <summary>
+    /// One kind more than a summary has rows for, each of three units of a chassis under the
+    /// last of the tier mixes: the tallest summary there is.
+    /// </summary>
+    internal static List<UnitGroup> MostKinds(GameData data)
+    {
+        var kinds = new List<UnitGroup>();
+        var mix = TierMixes[^1];
+        if (mix.Length != data.Tracks.Count || mix.Any(tier => tier > data.TierCount))
+        {
+            return kinds;
+        }
+
+        var tech = TechResolver.Resolve(data, mix);
+        var combat = new CombatRules(data, 1, _ => tech);
+        foreach (var blueprint in tech.Blueprints.Take(InspectionPart.MostRows + 1))
+        {
+            var stages = Stages(blueprint, combat);
+            kinds.Add(UnitGroup.Of([stages.Ready, stages.Spent, stages.Regaining])[0]);
+        }
+
+        return kinds;
     }
 
     // A unit of a chassis at three stages of its perks. Ready: it has walked the distance of

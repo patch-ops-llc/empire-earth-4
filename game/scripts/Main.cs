@@ -190,6 +190,7 @@ public partial class Main : Node3D
         var overlay = GetNode<DebugOverlay>("DebugOverlay");
         overlay.Match = match;
         overlay.Selection = _view.Selection;
+        overlay.StandIn(frame.DevelopmentReadouts);
     }
 
     private void StartSmokeTest(GameData data)
@@ -262,6 +263,13 @@ public partial class Main : Node3D
         }
 
         _menu?.CloseRun();
+
+        // What the collector has taken and not yet released is released now. The engine
+        // releases the rest itself when it shuts down, but an object the collector's own
+        // thread is still releasing by then is released into an engine that is half gone,
+        // which ends the program with an error instead of the exit code.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
         GetTree().Quit(exitCode);
     }
 

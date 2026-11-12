@@ -85,6 +85,40 @@ public static class UiStyle
         CustomMinimumSize = new Vector2(480f, 0f),
     };
 
+    /// <summary>
+    /// The width a line of text needs to stand on one line, with the box round it if it has one.
+    /// Ask once the label is in the tree, so that it has its font.
+    /// </summary>
+    public static float WidthOf(Label label)
+    {
+        var text = label.GetThemeFont("font").GetStringSize(label.Text, HorizontalAlignment.Left, -1f, label.GetThemeFontSize("font_size")).X;
+        var box = label.GetThemeStylebox("normal");
+        return Mathf.Ceil(text + box.GetMargin(Side.Left) + box.GetMargin(Side.Right));
+    }
+
+    /// <summary>
+    /// Keeps a line of text no wider than a limit: on one line while it fits, and wrapped at the
+    /// limit when it does not.
+    /// </summary>
+    /// <param name="label">The line.</param>
+    /// <param name="width">The width it needs on one line, from <see cref="WidthOf"/>.</param>
+    /// <param name="limit">The most it may have.</param>
+    public static void FitWidth(Label label, float width, float limit)
+    {
+        var wraps = width > limit;
+        var mode = wraps ? TextServer.AutowrapMode.WordSmart : TextServer.AutowrapMode.Off;
+        var least = new Vector2(wraps ? limit : 0f, 0f);
+        if (label.AutowrapMode != mode)
+        {
+            label.AutowrapMode = mode;
+        }
+
+        if (label.CustomMinimumSize != least)
+        {
+            label.CustomMinimumSize = least;
+        }
+    }
+
     /// <summary>The box of a panel, with this much room between its edge and what is in it.</summary>
     public static StyleBoxFlat PanelStyle(float margin, int cornerRadius = 6)
     {

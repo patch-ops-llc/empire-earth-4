@@ -82,28 +82,18 @@ public partial class DevelopmentFog : InterfacePart
 
     private void Build()
     {
-        var panel = new PanelContainer { Name = "DevelopmentFog" };
-        var box = UiStyle.PanelStyle(10f);
-        box.BorderColor = UiStyle.Warning;
-        box.SetBorderWidthAll(1);
-        panel.AddThemeStyleboxOverride("panel", box);
-        Frame.DevelopmentAids.AddChild(panel);
-
-        var column = UiStyle.Column(6);
-        panel.AddChild(column);
-
-        var title = new Label { Text = "Development aid: fog of war" };
-        title.AddThemeColorOverride("font_color", UiStyle.Warning);
-        column.AddChild(title);
-
         if (!IsOffered)
         {
-            column.AddChild(Small("Not part of the game. In a shared match the fog\nstays on: each player sees their own picture."));
+            var shared = Frame.AddDevelopmentAid(
+                "Development aid: fog of war",
+                "Not part of the game. In a shared match the fog stays on: each player sees their own picture.");
+            shared.AddChild(Small("In a shared match the fog stays on."));
             return;
         }
 
-        column.AddChild(Small("Not part of the game. Shows the whole map and\nevery unit on this screen. The units still see\nonly what they see, and attack only that."));
-
+        var column = Frame.AddDevelopmentAid(
+            "Development aid: fog of war",
+            "Not part of the game. Shows the whole map and every unit on this screen. The units still see only what they see, and attack only that.");
         _state = Small(string.Empty);
         column.AddChild(_state);
         _button = UiStyle.FrameButton(string.Empty);
@@ -127,9 +117,10 @@ public partial class DevelopmentFog : InterfacePart
         _button.Text = off ? $"Lay the fog back ({key})" : $"Lift the fog ({key})";
     }
 
+    // A line of small print, which wraps at the width of the aid.
     private static Label Small(string text)
     {
-        var label = new Label { Text = text };
+        var label = new Label { Text = text, AutowrapMode = TextServer.AutowrapMode.WordSmart };
         label.AddThemeFontSizeOverride("font_size", 13);
         return label;
     }

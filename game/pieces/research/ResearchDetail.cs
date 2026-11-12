@@ -23,11 +23,28 @@ public partial class ResearchDetail : PanelContainer
     {
         AddThemeStyleboxOverride("panel", ResearchColors.Boxed(ResearchColors.Box, 12f, 12f, 12f));
 
-        _text = new RichTextLabel { BbcodeEnabled = true, SelectionEnabled = false };
+        // The text scrolls in a place that keeps the room of its scroll bar whether the bar is
+        // shown or not. With the text's own bar, a sentence that made the text one line too long
+        // brought the bar in, and every line was wrapped again in a narrower column.
+        var scroll = new ScrollContainer
+        {
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Reserve,
+        };
+        AddChild(scroll);
+
+        _text = new RichTextLabel
+        {
+            BbcodeEnabled = true,
+            SelectionEnabled = false,
+            ScrollActive = false,
+            FitContent = true,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+        };
         _text.AddThemeFontSizeOverride("normal_font_size", 13);
         _text.AddThemeConstantOverride("line_separation", 2);
         _text.Text = _shown;
-        AddChild(_text);
+        scroll.AddChild(_text);
     }
 
     /// <summary>Shows the next tier of a track as the match stands.</summary>

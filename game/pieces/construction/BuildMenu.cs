@@ -480,6 +480,7 @@ public partial class BuildMenu : InterfacePart
         _panel = new PanelContainer { Name = "BuildMenuPanel", Visible = false };
         _panel.AddThemeStyleboxOverride("panel", UiStyle.PanelStyle(PanelPadding));
         AddChild(_panel);
+        Frame.KeepClear(_panel);
 
         var column = UiStyle.Column(6);
         _panel.AddChild(column);

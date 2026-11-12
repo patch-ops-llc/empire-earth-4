@@ -3,9 +3,10 @@ using Godot;
 namespace Game;
 
 /// <summary>
-/// The frame of the interface round a match. It has four places for the game and one for the
+/// The frame of the interface round a match. It has five places for the game and two for the
 /// aids of development, and it puts nothing of its own into them: every readout, button and
-/// panel belongs to an <see cref="InterfacePart"/>.
+/// panel belongs to an <see cref="InterfacePart"/>. The frame decides where each place stands,
+/// so that no two of them cover one another in any window.
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
@@ -29,16 +30,37 @@ namespace Game;
 /// is open the pointer and the keys are its own: the camera, selection and orders rest.
 /// </item>
 /// <item>
-/// <b>The message line</b>, under the top bar: <see cref="Say"/> shows a sentence to the player
-/// for a while. Nothing of the frame lies under it: a full-screen panel begins below it, with
+/// <b>The rows under the top bar</b>, at its left: <see cref="RowsUnderBar"/> for a row of a
+/// part's own that is always at hand, as the row of the control groups is.
+/// </item>
+/// <item>
+/// <b>The message line</b>, under the rows, in the middle: <see cref="Say"/> shows a sentence to
+/// the player for a while. A sentence wider than the middle of the window is written on more
+/// lines. Nothing of the frame lies under the line: a full-screen panel begins below it, with
 /// room kept for one message, so that the panel moves only when two are shown at once.
 /// </item>
 /// <item>
-/// <b>The development aids</b>, at the left edge, half way down: <see cref="DevelopmentAids"/>
-/// for what a tester needs and the game does not have, each in a box of its own that says so.
-/// They stand one under another, clear of the message line and of the corners.
+/// <b>The development aids</b>, in a column at either edge of the window:
+/// <see cref="AddDevelopmentAid"/> for what a tester needs and the game does not have, at the
+/// left, and <see cref="DevelopmentReadouts"/> for what a developer reads, at the right. See
+/// below for where a column may stand.
 /// </item>
 /// </list>
+/// <para>
+/// <b>Where the development aids stand.</b> There is one rule, and the frame keeps it, so that an
+/// aid cannot land on a panel of the game whatever it holds. A column is
+/// <see cref="DevelopmentWidth"/> wide and begins under the rows. It ends where the first thing
+/// of the game begins that reaches into its width: the bottom panel, the part in the bottom
+/// right corner, and every control a part has named with <see cref="KeepClear"/>. An aid is as
+/// wide as its column and as high as it needs. When the aids of a column need more height than
+/// the column has, the column scrolls. What the game shows in the middle under the top bar, as
+/// the messages are, stays between the columns: <see cref="MiddleWidth"/>.
+/// </para>
+/// <para>
+/// A part that shows a control of its own over the world, outside the places above, names it
+/// with <see cref="KeepClear"/>. <see cref="LayoutProblems"/> then says whether anything on the
+/// screen covers anything else, which the smoke test asks with the interface at its fullest.
+/// </para>
 /// </remarks>
 public partial class InterfaceFrame : CanvasLayer
 {
@@ -57,7 +79,16 @@ public partial class InterfaceFrame : CanvasLayer
     private const int PanelMargin = 12;
     private const float PanelPadding = 12f;
 
-    private const float AidsLeft = 8f;
+    /// <summary>The width of a column of development aids, in the interface's units.</summary>
+    public const float DevelopmentWidth = 264f;
+
+    // The room between the edge of the window and what stands at it, and between two things of
+    // the frame that stand one over the other.
+    private const float EdgeGap = 8f;
+
+    // The rows under the top bar keep the width of the camera's edge-scroll border from the
+    // window's edge, so that the pointer on them never scrolls the view.
+    private const int RowsLeft = 16;
 
     private const int MessageLimit = 5;
     private const double MessageFadeSeconds = 1.0;
@@ -65,9 +96,14 @@ public partial class InterfaceFrame : CanvasLayer
     private readonly List<InterfacePart> _parts = [];
     private readonly List<(SelectionCommand Command, Button Button)> _commands = [];
     private readonly List<FramePanel> _panels = [];
-    private readonly List<(Label Label, double Left)> _messages = [];
+    private readonly List<(Label Label, double Left, float Width)> _messages = [];
+    private readonly List<Control> _clear = [];
 
     private MatchView? _view;
+    private Control _root = null!;
+    private Control _rowsPlace = null!;
+    private ScrollContainer _aidsColumn = null!;
+    private ScrollContainer _readoutsColumn = null!;
     private PanelContainer _bottom = null!;
     private Control? _corner;
     private HBoxContainer _commandArea = null!;
@@ -91,10 +127,24 @@ public partial class InterfaceFrame : CanvasLayer
     public VBoxContainer SelectionArea { get; private set; } = null!;
 
     /// <summary>
-    /// The column of the development aids, which are not part of the game: a part adds a box of
-    /// its own, marked as an aid. It is not shown while a full-screen panel is open.
+    /// The rows under the top bar, at its left: a part adds a row of its own, which is shown
+    /// while it has something in it. The message line stands under the rows, so that a long
+    /// message is never written over one. They are not shown while a full-screen panel is open.
+    /// </summary>
+    public VBoxContainer RowsUnderBar { get; private set; } = null!;
+
+    /// <summary>
+    /// The column of the development aids, at the left edge. They are not part of the game, and
+    /// each is a box that says so: <see cref="AddDevelopmentAid"/> makes one. The frame decides
+    /// where the column stands and how high it is. It is not shown while a full-screen panel is open.
     /// </summary>
     public VBoxContainer DevelopmentAids { get; private set; } = null!;
+
+    /// <summary>
+    /// The column at the right edge for what a developer reads and a tester does not need, as
+    /// the readout of frame time is. It stands by the same rule as <see cref="DevelopmentAids"/>.
+    /// </summary>
+    public VBoxContainer DevelopmentReadouts { get; private set; } = null!;
 
     /// <summary>
     /// The place of the part that describes the selection in full. While it shows something, the
@@ -183,6 +233,45 @@ public partial class InterfaceFrame : CanvasLayer
     }
 
     /// <summary>
+    /// Adds a development aid: a box in the column at the left edge, marked as an aid by its
+    /// border and its title. Returns the column inside it, under the title, for the aid to fill.
+    /// What it holds is as wide as the box: a line of text that is longer has to wrap.
+    /// </summary>
+    /// <param name="title">The title, which says that this is an aid and what for.</param>
+    /// <param name="about">What the aid does and that it is not part of the game, shown when the pointer rests on the box.</param>
+    public VBoxContainer AddDevelopmentAid(string title, string about)
+    {
+        var box = new PanelContainer { Name = "DevelopmentAid", TooltipText = about };
+        var style = UiStyle.PanelStyle(8f);
+        style.BorderColor = UiStyle.Warning;
+        style.SetBorderWidthAll(1);
+        box.AddThemeStyleboxOverride("panel", style);
+        DevelopmentAids.AddChild(box);
+
+        var column = UiStyle.Column(4);
+        box.AddChild(column);
+        var heading = new Label { Text = title, ClipText = true };
+        heading.AddThemeFontSizeOverride("font_size", 15);
+        heading.AddThemeColorOverride("font_color", UiStyle.Warning);
+        column.AddChild(heading);
+        return column;
+    }
+
+    /// <summary>
+    /// Names a control that a part shows over the world by itself, outside the places of the
+    /// frame, as a menu over the bottom panel is. The development aids end where it begins, and
+    /// <see cref="LayoutProblems"/> knows whose it is.
+    /// </summary>
+    public void KeepClear(Control control) => _clear.Add(control);
+
+    /// <summary>
+    /// The width in the middle of the window that the development aids leave free: all of it but
+    /// the gap at either edge while no column of aids is shown. What a part shows in the middle
+    /// under the top bar, as a banner, is no wider than this.
+    /// </summary>
+    public float MiddleWidth => Mathf.Max(0f, _root.Size.X - (2f * Mathf.Max(RoomOf(DevelopmentAids), RoomOf(DevelopmentReadouts))));
+
+    /// <summary>
     /// The width a control in the top bar can have before the bar is wider than the window, with
     /// everything else in the bar at the least width it needs. A part whose control can give
     /// way, as one that can say less, fits what it shows to this, so that the bar's buttons
@@ -237,7 +326,9 @@ public partial class InterfaceFrame : CanvasLayer
 
         var label = MessageLabel(message);
         _messageLines.AddChild(label);
-        _messages.Add((label, seconds));
+        var width = UiStyle.WidthOf(label);
+        UiStyle.FitWidth(label, width, MiddleWidth);
+        _messages.Add((label, seconds, width));
         KeepMessageRoom();
 
         if (OS.IsStdOutVerbose())
@@ -263,11 +354,6 @@ public partial class InterfaceFrame : CanvasLayer
             return;
         }
 
-        foreach (var part in _parts)
-        {
-            part.EveryFrame(delta);
-        }
-
         if (_commandsStale)
         {
             _commandsStale = false;
@@ -277,12 +363,21 @@ public partial class InterfaceFrame : CanvasLayer
             }
         }
 
-        // A full-screen panel covers the bottom panel, which is not shown round its edge.
+        // A full-screen panel covers the bottom panel, which is not shown round its edge. The
+        // panel is placed before the parts are called, which stand what they show against it.
         var detailed = HasVisibleChild(SelectionDetail);
         SelectionDetail.Visible = detailed;
         SelectionArea.Visible = !detailed;
         _bottom.Visible = !IsPanelOpen && (detailed || HasVisibleChild(SelectionArea) || HasVisibleChild(_commandArea));
-        DevelopmentAids.Visible = !IsPanelOpen;
+        PlaceBottomPanel();
+        _rowsPlace.Visible = !IsPanelOpen && RowsUnderBar.GetCombinedMinimumSize().Y > 0f;
+
+        foreach (var part in _parts)
+        {
+            part.EveryFrame(delta);
+        }
+
+        PlaceDevelopmentAids();
         FadeMessages(delta);
     }
 
@@ -367,7 +462,7 @@ public partial class InterfaceFrame : CanvasLayer
     {
         for (var i = _messages.Count - 1; i >= 0; i--)
         {
-            var (label, left) = _messages[i];
+            var (label, left, width) = _messages[i];
             left -= delta;
             if (left <= 0.0)
             {
@@ -378,9 +473,107 @@ public partial class InterfaceFrame : CanvasLayer
             }
 
             label.Modulate = new Color(1f, 1f, 1f, (float)Math.Min(1.0, left / MessageFadeSeconds));
-            _messages[i] = (label, left);
+            _messages[i] = (label, left, width);
+        }
+
+        // A message stays between the columns of the development aids, on as many lines as it needs.
+        var middle = MiddleWidth;
+        foreach (var (label, _, width) in _messages)
+        {
+            UiStyle.FitWidth(label, width, middle);
         }
     }
+
+    // The bottom panel stands in the middle of the window's lower edge. Where it would reach the
+    // part in the bottom right corner it stands as far left as clears that part.
+    private void PlaceBottomPanel()
+    {
+        if (!_bottom.Visible)
+        {
+            return;
+        }
+
+        var window = _root.Size;
+        var size = _bottom.GetCombinedMinimumSize();
+        var x = (window.X - size.X) / 2f;
+        var end = FreeWidthAboveBottomPanel - EdgeGap;
+        if (x + size.X > end)
+        {
+            x = Mathf.Max(EdgeGap, end - size.X);
+        }
+
+        _bottom.Size = size;
+        _bottom.Position = new Vector2(Mathf.Round(x), Mathf.Round(window.Y - EdgeGap - size.Y));
+    }
+
+    // The one rule for the development aids: see the remarks of the class.
+    private void PlaceDevelopmentAids()
+    {
+        var window = _root.Size;
+        var top = (_rowsPlace.Visible ? _rowsPlace.GetGlobalRect().End.Y : BarHeight) + EdgeGap;
+        PlaceColumn(_aidsColumn, DevelopmentAids, EdgeGap, top, window);
+        PlaceColumn(_readoutsColumn, DevelopmentReadouts, window.X - EdgeGap - DevelopmentWidth, top, window);
+    }
+
+    private void PlaceColumn(ScrollContainer column, VBoxContainer aids, float left, float top, Vector2 window)
+    {
+        column.Visible = !IsPanelOpen && HasVisibleChild(aids);
+        if (!column.Visible)
+        {
+            return;
+        }
+
+        // What reaches into the column's width from above pushes its top down, and what reaches
+        // into it from below lifts its end.
+        var bottom = window.Y - EdgeGap;
+        foreach (var taken in TakenByTheGame())
+        {
+            if (taken.End.X + EdgeGap <= left || taken.Position.X - EdgeGap >= left + DevelopmentWidth)
+            {
+                continue;
+            }
+
+            if (taken.GetCenter().Y < window.Y / 2f)
+            {
+                top = Mathf.Max(top, taken.End.Y + EdgeGap);
+            }
+            else
+            {
+                bottom = Mathf.Min(bottom, taken.Position.Y - EdgeGap);
+            }
+        }
+
+        var height = Mathf.Clamp(aids.GetCombinedMinimumSize().Y, 0f, Mathf.Max(0f, bottom - top));
+        column.Position = new Vector2(left, top);
+        column.Size = new Vector2(DevelopmentWidth, Mathf.Floor(height));
+    }
+
+    // The rectangles of what the game shows over the world outside the middle of the top: the
+    // bottom panel, the corner part and what the parts have named.
+    private IEnumerable<Rect2> TakenByTheGame()
+    {
+        if (_bottom.Visible)
+        {
+            yield return _bottom.GetGlobalRect();
+        }
+
+        if (_corner is not null && IsInstanceValid(_corner) && _corner.IsVisibleInTree())
+        {
+            yield return _corner.GetGlobalRect();
+        }
+
+        foreach (var control in _clear)
+        {
+            if (IsInstanceValid(control) && control.IsVisibleInTree())
+            {
+                yield return control.GetGlobalRect();
+            }
+        }
+    }
+
+    // The width a column of development aids takes from the window's edge while it shows something.
+    private float RoomOf(VBoxContainer aids) =>
+        !IsPanelOpen && HasVisibleChild(aids) ? EdgeGap + DevelopmentWidth + EdgeGap : EdgeGap;
 
     private static Label MessageLabel(string message)
     {
@@ -406,6 +599,109 @@ public partial class InterfaceFrame : CanvasLayer
     // While a full-screen panel is open and no message is shown, an unseen line keeps the room
     // of one message, so that the first message to come does not move the panel.
     private void KeepMessageRoom() => _messageRoom.Visible = IsPanelOpen && _messages.Count == 0;
+
+    /// <summary>
+    /// Every box the interface shows now, with its rectangle in the interface's units: each
+    /// panel, button and boxed line of text that is not inside another box. A box that a
+    /// scrolling place shows a part of is that part.
+    /// </summary>
+    public List<(string Name, Rect2 Rect)> Boxes()
+    {
+        var boxes = new List<(string, Rect2)>();
+        foreach (var child in GetChildren())
+        {
+            CollectBoxes(child, null, boxes);
+        }
+
+        return boxes;
+    }
+
+    /// <summary>
+    /// What is wrong with where the boxes of the interface stand now, a sentence for each: a box
+    /// that reaches outside the window, and two boxes of which one lies over the other. While a
+    /// full-screen panel is open it lies over the world and what is shown there, and only the
+    /// window is asked about. The list is empty when nothing is wrong.
+    /// </summary>
+    public List<string> LayoutProblems()
+    {
+        const float Slack = 0.5f;
+        var problems = new List<string>();
+        var window = new Rect2(Vector2.Zero, _root.Size).Grow(Slack);
+        var boxes = Boxes();
+        foreach (var (name, rect) in boxes)
+        {
+            if (!window.Encloses(rect))
+            {
+                problems.Add($"{name} at {Describe(rect)} reaches outside the window of {_root.Size.X:F0} by {_root.Size.Y:F0}.");
+            }
+        }
+
+        if (IsPanelOpen)
+        {
+            return problems;
+        }
+
+        for (var i = 0; i < boxes.Count; i++)
+        {
+            for (var j = i + 1; j < boxes.Count; j++)
+            {
+                var shared = boxes[i].Rect.Intersection(boxes[j].Rect);
+                if (shared.Size.X > Slack && shared.Size.Y > Slack)
+                {
+                    problems.Add($"{boxes[j].Name} at {Describe(boxes[j].Rect)} lies over {boxes[i].Name} at {Describe(boxes[i].Rect)}.");
+                }
+            }
+        }
+
+        return problems;
+    }
+
+    private static string Describe(Rect2 rect) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{rect.Position.X:F0},{rect.Position.Y:F0} to {rect.End.X:F0},{rect.End.Y:F0}");
+
+    private void CollectBoxes(Node node, Rect2? clip, List<(string Name, Rect2 Rect)> boxes)
+    {
+        if (node is Control control)
+        {
+            // The shade behind a full-screen panel is not a box: it is the world, darkened.
+            if (!control.Visible || control == _panelShade)
+            {
+                return;
+            }
+
+            var rect = control.GetGlobalRect();
+            if (IsBox(control))
+            {
+                var shown = clip is { } inside ? rect.Intersection(inside) : rect;
+                if (shown.HasArea())
+                {
+                    boxes.Add((GetPathTo(control).ToString(), shown));
+                }
+
+                return;
+            }
+
+            if (control is ScrollContainer || control.ClipContents)
+            {
+                clip = clip is { } outer ? rect.Intersection(outer) : rect;
+            }
+        }
+        else if (node is not InterfacePart)
+        {
+            // A popup or a timer of a part is not on the frame's own canvas.
+            return;
+        }
+
+        foreach (var child in node.GetChildren())
+        {
+            CollectBoxes(child, clip, boxes);
+        }
+    }
+
+    // What draws a box round itself: a panel, a button, and a line of text with a box of its own.
+    private static bool IsBox(Control control) =>
+        control is PanelContainer or Panel or BaseButton
+        || (control is Label label && label.HasThemeStyleboxOverride("normal") && label.Text.Trim().Length > 0);
 
     /// <summary>The key an action is given with, as the player knows it, or null when it has none.</summary>
     public static string? KeyOf(StringName action)
@@ -446,11 +742,13 @@ public partial class InterfaceFrame : CanvasLayer
         var root = new Control { Name = "Frame", MouseFilter = Control.MouseFilterEnum.Ignore };
         root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(root);
+        _root = root;
 
         // Each is drawn over those before it: the bottom panel, the development aids, then what
         // stands under the top bar, a full-screen panel among it, then the top bar.
         BuildBottomPanel(root);
-        BuildDevelopmentAids(root);
+        (_aidsColumn, DevelopmentAids) = BuildDevelopmentColumn(root, "DevelopmentAids");
+        (_readoutsColumn, DevelopmentReadouts) = BuildDevelopmentColumn(root, "DevelopmentReadouts");
         BuildUnderBar(root);
         BuildTopBar(root);
     }
@@ -481,9 +779,6 @@ public partial class InterfaceFrame : CanvasLayer
         _bottom = new PanelContainer { Name = "BottomPanel", Visible = false };
         _bottom.AddThemeStyleboxOverride("panel", UiStyle.PanelStyle(10f));
         root.AddChild(_bottom);
-        _bottom.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterBottom, Control.LayoutPresetMode.Minsize, 8);
-        _bottom.GrowHorizontal = Control.GrowDirection.Both;
-        _bottom.GrowVertical = Control.GrowDirection.Begin;
 
         var bottomRow = UiStyle.Row(16);
         _bottom.AddChild(bottomRow);
@@ -501,24 +796,32 @@ public partial class InterfaceFrame : CanvasLayer
         bottomRow.AddChild(_commandArea);
     }
 
-    // The column grows up and down from the middle of the left edge as boxes are added. Only
-    // the boxes take clicks: between and beside them a click is the world's.
-    private void BuildDevelopmentAids(Control root)
+    // A column of development aids: its boxes one under another, as wide as the column, in a
+    // place that scrolls when the frame can give it less height than they need. The frame sets
+    // where it stands in every frame.
+    private static (ScrollContainer Column, VBoxContainer Aids) BuildDevelopmentColumn(Control root, string name)
     {
-        DevelopmentAids = UiStyle.Column(8);
-        DevelopmentAids.Name = "DevelopmentAids";
-        DevelopmentAids.MouseFilter = Control.MouseFilterEnum.Ignore;
-        root.AddChild(DevelopmentAids);
-        DevelopmentAids.SetAnchorsPreset(Control.LayoutPreset.CenterLeft);
-        DevelopmentAids.GrowVertical = Control.GrowDirection.Both;
-        DevelopmentAids.OffsetLeft = AidsLeft;
-        DevelopmentAids.OffsetRight = AidsLeft;
-        DevelopmentAids.OffsetTop = 0f;
-        DevelopmentAids.OffsetBottom = 0f;
+        var column = new ScrollContainer
+        {
+            Name = $"{name}Column",
+            Visible = false,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.ShowNever,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
+        };
+        root.AddChild(column);
+
+        // Only the boxes take clicks: between them a click is the world's.
+        var aids = UiStyle.Column(8);
+        aids.Name = name;
+        aids.MouseFilter = Control.MouseFilterEnum.Ignore;
+        aids.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        column.AddChild(aids);
+        return (column, aids);
     }
 
-    // Under the top bar the message line and the full-screen panel stand in one column, the
-    // messages first, so that neither is drawn over the other: the panel begins where they end.
+    // Under the top bar the rows of the parts, the message line and the full-screen panel stand
+    // in one column, in that order, so that none is drawn over another: each begins where the
+    // one before it ends.
     private void BuildUnderBar(Control root)
     {
         // The shade and the panel's place take every click, so that nothing behind the panel
@@ -534,6 +837,17 @@ public partial class InterfaceFrame : CanvasLayer
         root.AddChild(column);
         column.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
         column.OffsetTop = BarHeight;
+
+        var rowsPlace = new MarginContainer { Name = "RowsPlace", Visible = false, MouseFilter = Control.MouseFilterEnum.Ignore };
+        rowsPlace.AddThemeConstantOverride("margin_top", MessageTop);
+        rowsPlace.AddThemeConstantOverride("margin_left", RowsLeft);
+        rowsPlace.AddThemeConstantOverride("margin_right", RowsLeft);
+        column.AddChild(rowsPlace);
+        _rowsPlace = rowsPlace;
+        RowsUnderBar = UiStyle.Column(4);
+        RowsUnderBar.Name = "RowsUnderBar";
+        RowsUnderBar.MouseFilter = Control.MouseFilterEnum.Ignore;
+        rowsPlace.AddChild(RowsUnderBar);
 
         var messagePlace = new MarginContainer { Name = "MessagePlace", MouseFilter = Control.MouseFilterEnum.Ignore };
         messagePlace.AddThemeConstantOverride("margin_top", MessageTop);

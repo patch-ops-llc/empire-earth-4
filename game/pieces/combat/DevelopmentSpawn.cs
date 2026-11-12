@@ -160,20 +160,9 @@ public partial class DevelopmentSpawn : InterfacePart
     private void Build()
     {
         var data = View.Match.Data;
-        var panel = new PanelContainer { Name = "DevelopmentSpawn" };
-        var box = UiStyle.PanelStyle(10f);
-        box.BorderColor = UiStyle.Warning;
-        box.SetBorderWidthAll(1);
-        panel.AddThemeStyleboxOverride("panel", box);
-        Frame.DevelopmentAids.AddChild(panel);
-
-        var column = UiStyle.Column(6);
-        panel.AddChild(column);
-
-        var title = new Label { Text = "Development aid: make units" };
-        title.AddThemeColorOverride("font_color", UiStyle.Warning);
-        column.AddChild(title);
-        column.AddChild(Small("Not part of the game. Units appear from nothing,\nfree of charge, so that a fight can be tried."));
+        var column = Frame.AddDevelopmentAid(
+            "Development aid: make units",
+            "Not part of the game. Units appear from nothing, free of charge, so that a fight can be tried.");
 
         _chassis = Choice();
         foreach (var line in data.Lines.OrderBy(line => line.Index))
@@ -201,32 +190,42 @@ public partial class DevelopmentSpawn : InterfacePart
         _count.Select(DefaultCount);
         column.AddChild(Row("At a time", _count));
 
-        column.AddChild(Small($"{KeyOf(SpawnOwnAction)}: yours, where the pointer is"));
         column.AddChild(Small(CanSpawnForOther
-            ? $"{KeyOf(SpawnOtherAction)}: the other player's, where the pointer is"
-            : "The other player makes their own."));
+            ? $"{KeyOf(SpawnOwnAction)} makes yours where the pointer is, {KeyOf(SpawnOtherAction)} the other player's."
+            : $"{KeyOf(SpawnOwnAction)} makes yours where the pointer is. The other player makes their own."));
     }
 
     private static HBoxContainer Row(string name, Control control)
     {
         var row = UiStyle.Row(8);
-        row.AddChild(Small(name));
+        var label = new Label { Text = name };
+        label.AddThemeFontSizeOverride("font_size", 13);
+        row.AddChild(label);
         control.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         row.AddChild(control);
         return row;
     }
 
+    // A line of small print, which wraps at the width of the aid.
     private static Label Small(string text)
     {
-        var label = new Label { Text = text };
+        var label = new Label { Text = text, AutowrapMode = TextServer.AutowrapMode.WordSmart };
         label.AddThemeFontSizeOverride("font_size", 13);
         return label;
     }
 
-    // A list to choose from that never takes the keyboard, so that the keys keep moving the camera after a click on it.
+    // A list to choose from that never takes the keyboard, so that the keys keep moving the
+    // camera after a click on it. It is as wide as the aid has room, whatever the longest name
+    // in it: a name that is longer is cut short there, and whole in the list that opens.
     private static OptionButton Choice()
     {
-        var choice = new OptionButton { FocusMode = Control.FocusModeEnum.None };
+        var choice = new OptionButton
+        {
+            FocusMode = Control.FocusModeEnum.None,
+            FitToLongestItem = false,
+            ClipText = true,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+        };
         choice.AddThemeFontSizeOverride("font_size", 13);
         choice.GetPopup().AddThemeFontSizeOverride("font_size", 13);
         return choice;

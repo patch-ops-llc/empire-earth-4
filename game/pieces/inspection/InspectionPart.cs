@@ -55,6 +55,17 @@ public partial class InspectionPart : InterfacePart
     // A press that moves less than this many pixels before its release is a click, as for the unit control.
     private const float ClickSlack = 6f;
 
+    /// <summary>
+    /// The most width, in the interface's units, that what the panel shows may need. The lines
+    /// of sentences wrap, so what sets the width is the headline, the row of cards and the rows
+    /// of a summary, which grow with the names in the data. The smoke test asks that none of
+    /// them needs more for any chassis, and that a detail this wide and as tall as the tallest
+    /// stands clear of everything else in the narrowest window.
+    /// </summary>
+    public const float WidestShown = 720f;
+
+    // The least widths of a detail: of a unit of the player's own, of another player's unit,
+    // which has two cards fewer, and of a worker.
     private const float DetailWidth = 600f;
     private const float EnemyWidth = 520f;
     private const float WorkerWidth = 420f;
@@ -66,6 +77,8 @@ public partial class InspectionPart : InterfacePart
     private VBoxContainer _root = null!;
     private string _signature = string.Empty;
     private EntityId _enemy;
+    private bool _held;
+    private int _mostRows = MostRows;
     private bool _pressed;
     private Vector2 _pressedAt;
 
@@ -101,17 +114,101 @@ public partial class InspectionPart : InterfacePart
     /// </summary>
     public string ShownFor(UnitGroup group, bool enemy)
     {
-        _groups = [group];
-        Mode = enemy ? InspectionMode.Enemy : group.Count == 1 ? InspectionMode.One : InspectionMode.Group;
-        Build();
-        Present();
+        Show(group, enemy);
         var text = new StringBuilder();
         Collect(_root, text);
+        WidthNeeded = NeededByWhatIsBuilt();
 
         // What is built now is not what the signature stands for, so the panel builds again.
         _signature = string.Empty;
         Refresh();
         return text.ToString();
+    }
+
+    /// <summary>
+    /// The width that what <see cref="ShownFor"/> last built needs at the least. A detail is
+    /// given more than this when its least width is more.
+    /// </summary>
+    public float WidthNeeded { get; private set; }
+
+    /// <summary>
+    /// The width a summary of these kinds needs with a row for every one of them, which is as
+    /// much as a summary of any <see cref="MostRows"/> of them can need: each of its columns is
+    /// as wide as its widest cell.
+    /// </summary>
+    public float WidthOfSummary(IReadOnlyList<UnitGroup> kinds)
+    {
+        _groups = [.. kinds];
+        Mode = InspectionMode.Mixed;
+        _mostRows = kinds.Count;
+        Build();
+        Present();
+        _mostRows = MostRows;
+        var needed = NeededByWhatIsBuilt();
+
+        _signature = string.Empty;
+        Refresh();
+        return needed;
+    }
+
+    /// <summary>
+    /// Shows these kinds of units, one kind in detail as <see cref="ShownFor"/> builds it and
+    /// several as a summary, and keeps showing them whatever is selected until
+    /// <see cref="Release"/>. The smoke test holds the tallest and the widest the panel can
+    /// show while it asks the frame whether anything covers anything.
+    /// </summary>
+    /// <param name="widest">Whether the panel is as wide as <see cref="WidestShown"/>, and not as wide as what it shows needs.</param>
+    public void Hold(IReadOnlyList<UnitGroup> kinds, bool widest)
+    {
+        if (kinds.Count == 1)
+        {
+            Show(kinds[0], enemy: false);
+        }
+        else
+        {
+            _groups = [.. kinds];
+            Mode = InspectionMode.Mixed;
+            Build();
+            Present();
+        }
+
+        if (widest)
+        {
+            _root.CustomMinimumSize = new Vector2(WidestShown, 0f);
+        }
+
+        _root.Visible = true;
+        _held = true;
+    }
+
+    /// <summary>Ends a <see cref="Hold"/>: the panel shows the selection again.</summary>
+    public void Release()
+    {
+        _held = false;
+        _signature = string.Empty;
+        Refresh();
+    }
+
+    private void Show(UnitGroup group, bool enemy)
+    {
+        _groups = [group];
+        Mode = enemy ? InspectionMode.Enemy : group.Count == 1 ? InspectionMode.One : InspectionMode.Group;
+        Build();
+        Present();
+    }
+
+    private float NeededByWhatIsBuilt()
+    {
+        var needed = 0f;
+        foreach (var child in _root.GetChildren())
+        {
+            if (child is Control control)
+            {
+                needed = Math.Max(needed, control.GetCombinedMinimumSize().X);
+            }
+        }
+
+        return needed;
     }
 
     /// <summary>
@@ -157,6 +254,12 @@ public partial class InspectionPart : InterfacePart
 
     private void Refresh()
     {
+        if (_held)
+        {
+            Present();
+            return;
+        }
+
         var match = View.Match;
         if (View.Selection.Count > 0)
         {
@@ -325,6 +428,7 @@ public partial class InspectionPart : InterfacePart
             line.MouseFilter = Control.MouseFilterEnum.Pass;
         }
 
+        line.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _root.AddChild(line);
 
         // The armor follows from the Protection tier and the accents, which an opponent may see.
@@ -332,6 +436,7 @@ public partial class InspectionPart : InterfacePart
         {
             var protects = InspectionUi.Text(InspectionWords.Armor(armor), ResearchColors.Faint, 13);
             protects.Name = "Armor";
+            protects.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             _root.AddChild(protects);
         }
 
@@ -342,10 +447,12 @@ public partial class InspectionPart : InterfacePart
     {
         if (blueprint.Accents.Count == 0)
         {
-            _root.AddChild(InspectionUi.Text(
+            var none = InspectionUi.Text(
                 enemy ? "No accents." : "No accents. A track that is one or two tiers ahead of this chassis's epoch gives one.",
                 ResearchColors.Faint,
-                13));
+                13);
+            none.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            _root.AddChild(none);
             return;
         }
 
@@ -382,6 +489,7 @@ public partial class InspectionPart : InterfacePart
                 ResearchColors.Faint,
                 12);
             also.Name = "AheadToo";
+            also.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             _root.AddChild(also);
         }
     }
@@ -409,6 +517,7 @@ public partial class InspectionPart : InterfacePart
     {
         var label = InspectionUi.Text(string.Empty, ResearchColors.Faint, 13);
         label.Name = $"Now{perk}";
+        label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         lines.AddChild(label);
         _now.Add(new NowLine(label, words, lit));
     }
@@ -456,7 +565,9 @@ public partial class InspectionPart : InterfacePart
         var doing = !enemy && unit.Builds is { } builds && View.Match.Data.StructureOf(builds) is { } structure
             ? $"On its way to build the {StructureWords.NameOf(structure)}"
             : InspectionWords.Work(unit.Work, unit.AtGenerator);
-        _root.AddChild(InspectionUi.Text(Mode == InspectionMode.Group ? facts : $"{doing} · {facts}", ResearchColors.Faint, 13));
+        var line = InspectionUi.Text(Mode == InspectionMode.Group ? facts : $"{doing} · {facts}", ResearchColors.Faint, 13);
+        line.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _root.AddChild(line);
 
         var why = enemy
             ? "A worker is not a chassis: it has no tiers and no accents."
@@ -475,7 +586,7 @@ public partial class InspectionPart : InterfacePart
         _root.CustomMinimumSize = Vector2.Zero;
 
         var grid = new GridContainer { Name = "Kinds", Columns = 4 };
-        grid.AddThemeConstantOverride("h_separation", 14);
+        grid.AddThemeConstantOverride("h_separation", 10);
         grid.AddThemeConstantOverride("v_separation", 5);
         _root.AddChild(grid);
         var units = 0;
@@ -489,7 +600,7 @@ public partial class InspectionPart : InterfacePart
             grid.AddChild(InspectionUi.Text(heading, ResearchColors.Faint, 11));
         }
 
-        var rows = Math.Min(_groups.Count, MostRows);
+        var rows = Math.Min(_groups.Count, _mostRows);
         for (var i = 0; i < rows; i++)
         {
             var group = _groups[i];
@@ -504,7 +615,7 @@ public partial class InspectionPart : InterfacePart
             grid.AddChild(health);
             if (first.HasHealth)
             {
-                _health.Add(HealthLine.AddTo(health, barWidth: 90f, withNote: false));
+                _health.Add(HealthLine.AddTo(health, barWidth: 64f, withNote: false));
             }
             else
             {
@@ -524,7 +635,7 @@ public partial class InspectionPart : InterfacePart
             tiers.AddChild(InspectionUi.TierChip(data, blueprint, roles.Mobility));
             grid.AddChild(tiers);
 
-            var accents = UiStyle.Row(12);
+            var accents = UiStyle.Row(8);
             foreach (var accent in blueprint.Accents)
             {
                 var badge = InspectionUi.AccentName(data, accent, 13);

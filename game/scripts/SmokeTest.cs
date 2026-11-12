@@ -103,6 +103,10 @@ public sealed class SmokeTest
         // Inspection: what the panel shows for a selection.
         new InspectionSmoke(),
 
+        // The frame: where everything stands with the interface at its fullest. After the
+        // inspection, whose units it selects.
+        new InterfaceLayoutSmoke(),
+
         // Later pieces.
     ];
 

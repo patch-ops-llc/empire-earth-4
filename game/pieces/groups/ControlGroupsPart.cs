@@ -37,11 +37,6 @@ public partial class ControlGroupsPart : InterfacePart
     // A second press of a group's key within this many milliseconds of the first looks at the group.
     private const ulong SecondPressMsec = 500;
 
-    // The row keeps the width of the camera's edge-scroll border from the window's edge, so that
-    // the pointer on it never scrolls the view, and stands this far under the top bar's row.
-    private const float StripLeft = 16f;
-    private const float StripGap = 13f;
-
     private readonly ControlGroups _groups = new();
     private readonly List<EntityId> _idle = [];
     private readonly List<EntityId> _found = [];
@@ -52,6 +47,9 @@ public partial class ControlGroupsPart : InterfacePart
     private EntityId _lastIdle;
     private bool _stale = true;
 
+    /// <summary>The groups, which the row shows as they stand.</summary>
+    public ControlGroups Groups => _groups;
+
     protected override void Attach()
     {
         _strip = new GroupStrip();
@@ -59,10 +57,9 @@ public partial class ControlGroupsPart : InterfacePart
         _strip.GroupPressed += PressGroup;
         _strip.IdlePressed += NextIdleWorker;
 
-        // The message line stands beside the row, in the middle of the window. A long message
-        // reaches over a long row, and is then drawn over it: it goes away by itself.
-        _strip.ZIndex = -1;
-        AddChild(_strip);
+        // The frame has a place for such a row, under the top bar and over the message line,
+        // and does not show it while a full-screen panel covers the world.
+        Frame.RowsUnderBar.AddChild(_strip);
 
         _groups.Changed += () => _stale = true;
         View.Selection.Changed += () => _stale = true;
@@ -80,11 +77,6 @@ public partial class ControlGroupsPart : InterfacePart
 
     public override void EveryFrame(double delta)
     {
-        // A full-screen panel covers the world, and the row with it.
-        _strip.Visible = !Frame.IsPanelOpen;
-        _strip.Position = new Vector2(StripLeft, Frame.TopLeft.GetGlobalRect().End.Y + StripGap);
-        _strip.ResetSize();
-
         if (_stale)
         {
             _stale = false;

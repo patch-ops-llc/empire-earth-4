@@ -11,7 +11,10 @@ namespace Game;
 /// It finds a new epoch by comparing each player's epoch with that of the tick before, so it
 /// works the same alone, hosting and joined, and needs nothing from the simulation but the tiers.
 /// The banner is drawn over a full-screen panel, because the research panel is where the player
-/// is likely to be when a research raises the epoch. It takes no click.
+/// is likely to be when a research raises the epoch. It takes no click. It stands in the middle
+/// of the window, under the messages, and is no wider than the development aids at the edges
+/// leave free (<see cref="InterfaceFrame.MiddleWidth"/>): a banner that is wider on one line is
+/// written on more.
 /// </remarks>
 public partial class EpochAnnouncement : InterfacePart
 {
@@ -21,13 +24,16 @@ public partial class EpochAnnouncement : InterfacePart
     // Between the message line, which a research that finishes writes to in the same tick, and the banner.
     private const float Gap = 8f;
 
-    private readonly List<(Control Banner, double Left)> _banners = [];
+    private readonly List<(PanelContainer Banner, double Left, float Width)> _banners = [];
     private int[] _epochs = [];
     private VBoxContainer _place = null!;
     private float _top;
 
     /// <summary>The number of announcements made since the match was shown.</summary>
     public int Count { get; private set; }
+
+    /// <summary>The banners that are shown now, the oldest first.</summary>
+    public IEnumerable<PanelContainer> Shown => _banners.Select(shown => shown.Banner);
 
     protected override void Attach()
     {
@@ -73,9 +79,10 @@ public partial class EpochAnnouncement : InterfacePart
         _top = Math.Max(_top, Frame.MessagesEnd + Gap);
         _place.OffsetTop = _top;
 
+        var middle = Frame.MiddleWidth;
         for (var i = _banners.Count - 1; i >= 0; i--)
         {
-            var (banner, left) = _banners[i];
+            var (banner, left, width) = _banners[i];
             left -= delta;
             if (left <= 0.0)
             {
@@ -86,7 +93,26 @@ public partial class EpochAnnouncement : InterfacePart
             }
 
             banner.Modulate = new Color(1f, 1f, 1f, (float)Math.Min(1.0, left / FadeSeconds));
-            _banners[i] = (banner, left);
+            Fit(banner, width, middle);
+            _banners[i] = (banner, left, width);
+        }
+    }
+
+    // A banner is on one line while that fits in the middle of the window, and as wide as the
+    // middle with its lines wrapped when it does not.
+    private static void Fit(PanelContainer banner, float width, float limit)
+    {
+        var wraps = width > limit;
+        var least = new Vector2(wraps ? limit : 0f, 0f);
+        if (banner.CustomMinimumSize == least)
+        {
+            return;
+        }
+
+        banner.CustomMinimumSize = least;
+        foreach (var line in banner.GetChild(0).GetChildren().OfType<Label>())
+        {
+            line.AutowrapMode = wraps ? TextServer.AutowrapMode.WordSmart : TextServer.AutowrapMode.Off;
         }
     }
 
@@ -128,7 +154,9 @@ public partial class EpochAnnouncement : InterfacePart
         }
 
         _place.AddChild(banner);
-        _banners.Add((banner, ShownSeconds));
+        var width = banner.GetCombinedMinimumSize().X;
+        Fit(banner, width, Frame.MiddleWidth);
+        _banners.Add((banner, ShownSeconds, width));
         Count++;
         if (OS.IsStdOutVerbose())
         {
