@@ -101,7 +101,7 @@ public class BattleTests
         Assert.Contains(Enumerable.Range(0, early.Combatants.Count), i => early.Combatants.ValueAt(i).Order == UnitOrder.Attack);
         Assert.Contains(Enumerable.Range(0, early.Movers.Count), i => early.Movers.ValueAt(i).State == MoveState.Following);
 
-        var middle = Run(150);
+        var middle = Run(140);
         Assert.NotEqual(0, middle.Shots.Count);
         Assert.Contains(Enumerable.Range(0, middle.Combatants.Count), i => middle.Combatants.ValueAt(i).Wait > Fraction.Zero);
         Assert.Contains(Enumerable.Range(0, middle.Combatants.Count), i => middle.Combatants.ValueAt(i).Engaged);
@@ -118,7 +118,7 @@ public class BattleTests
     [InlineData(2)]
     [InlineData(30)]
     [InlineData(91)]
-    [InlineData(150)]
+    [InlineData(140)]
     [InlineData(263)]
     [InlineData(420)]
     [InlineData(700)]

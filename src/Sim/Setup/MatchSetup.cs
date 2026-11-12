@@ -66,6 +66,7 @@ public static class MatchSetup
         var combat = new CombatRules(data, players.Count, research.Tech);
         var targeting = new Targeting(grid, bodies, combatants, health, spatialIndex, combat) { Structures = structures };
         var approach = new Approach(grid);
+        var fighters = new Fighters(data, combat, combatants, bodies, movers, spatialIndex);
 
         var simulation = new Simulation(world);
 
@@ -104,8 +105,10 @@ public static class MatchSetup
         // goes and why.
         //
         // Routes are found before anyone moves, so that a unit ordered in this tick can take its
-        // first step in this tick. The spatial index is rebuilt right after movement, so that every
-        // system after it sees where things stand now. A system that moves bodies goes before it.
+        // first step in this tick. Units step apart right after they have walked, from where the
+        // walk left them, except a worker that holds a place and a unit that is fighting, which
+        // stay where they are. The spatial index is rebuilt after both, so that every system after it
+        // sees where things stand now. A system that moves bodies goes before it.
         // Combat comes after movement, so that it sees where everything stands in this tick and
         // which units have moved in it: a unit attacks only in a tick in which it does not move.
         // Shots land before the attacks, so a shot fired in one tick flies from the next. Deaths
@@ -126,9 +129,10 @@ public static class MatchSetup
         // that a research cannot finish in the tick in which its building falls.
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
+        simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, new PlaceHolders(workers), fighters));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
         simulation.AddSystem(new ShotSystem(bodies, shots, targeting, simulation.Events));
-        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, simulation.Events));
+        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, simulation.Events));
         simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
         simulation.AddSystem(new StructureSystem(data, bodies, structures, foundations, structureTiles, research, simulation.Events));
         simulation.AddSystem(new ConstructionSystem(construction, data));
