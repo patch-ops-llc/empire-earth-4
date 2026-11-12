@@ -77,6 +77,9 @@ public class WallSnapshotTests
         EntityId[] shooters = [match.Spawn(0, SiegeMatches.Peltast, "18.5", "2.5"), match.Spawn(0, SiegeMatches.Peltast, "19.5", "2.5")];
         var lone = match.Spawn(0, SiegeMatches.Hoplite, "29.5", "12.5");
         var inside = match.SpawnWorker(1, "18.5", "12.5");
+
+        // Between the two rings, so that player 0 sees the worker its attack order names.
+        match.Watcher(0, "15.5", "9.5");
         match.RefreshDerivedState();
         return (match, group, shooters, lone, inside);
     }

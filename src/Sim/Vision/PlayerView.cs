@@ -9,6 +9,7 @@ using Sim.Numerics;
 using Sim.Research;
 using Sim.Setup;
 using Sim.Tech;
+using Sim.Walls;
 
 namespace Sim.Vision;
 
@@ -46,8 +47,13 @@ namespace Sim.Vision;
 /// <see cref="CheckSite"/>, <see cref="CanBuildOnTile"/> and
 /// <see cref="IsTooCloseToSeenEnemyTerritory"/> for a placement preview. They answer what the
 /// order itself will be judged by when it is given.</item>
-/// <item>What only the owner knows of its own units: <see cref="TryGetOwnOrder"/>,
-/// <see cref="TryGetOwnWalk"/>, <see cref="TryGetOwnWork"/> and <see cref="TryGetOwnBuildOrder"/>.</item>
+/// <item>Walls: a wall tile is a structure, listed and asked about as any other, so the walls of
+/// others are those the player sees or remembers. <see cref="WallRun"/> gives the tiles and so
+/// the price of a wall order before it is given, and <see cref="CollectWallPlans"/> the tiles
+/// the player's own wall orders have yet to lay.</item>
+/// <item>What only the owner knows of its own units: <see cref="TryGetOwnOrder"/>, which holds
+/// the wall in a unit's way, <see cref="TryGetOwnWalk"/>, <see cref="TryGetOwnWork"/> and
+/// <see cref="TryGetOwnBuildOrder"/>.</item>
 /// <item>Shots in flight: <see cref="CollectShots"/>.</item>
 /// <item>The events of the last tick that the player may know of: <see cref="CollectEvents"/>.</item>
 /// <item>The player's account: <see cref="Materials"/>, <see cref="Energy"/>,
@@ -390,6 +396,35 @@ public sealed class PlayerView
     /// </summary>
     public bool IsTooCloseToSeenEnemyTerritory(StructureDef structure, int x, int y) =>
         _match.Construction.IsTooCloseToSeenEnemyTerritory(Player, structure, x, y);
+
+    /// <summary>
+    /// The tiles of the wall run from one tile to another that an order would pay for now, in
+    /// the order of the run, added to <paramref name="tiles"/>: those the player could lay as far
+    /// as it may know (design 2.5 and 5.4). The order is judged by the same rule. See
+    /// <see cref="WallOrders.TilesToLay"/> for what is returned.
+    /// </summary>
+    public BuildProblem WallRun(int firstX, int firstY, int lastX, int lastY, List<(int X, int Y)> tiles) =>
+        _match.Walls.TilesToLay(Player, firstX, firstY, lastX, lastY, tiles);
+
+    /// <summary>
+    /// Lists the tiles that the player's own wall orders have paid for and not yet laid, in the
+    /// order they will be laid. The wall orders of other players are theirs alone to know. The
+    /// list is emptied first.
+    /// </summary>
+    public void CollectWallPlans(List<WallPlan> plans)
+    {
+        ArgumentNullException.ThrowIfNull(plans);
+        plans.Clear();
+        var all = _match.WallPlans;
+        for (var i = 0; i < all.Count; i++)
+        {
+            var plan = all.ValueAt(i);
+            if (plan.Owner == Player && _match.World.Entities.IsAlive(all.EntityAt(i)))
+            {
+                plans.Add(plan);
+            }
+        }
+    }
 
     /// <summary>
     /// What inspecting a unit or a structure shows (design 3.2). For a unit of a chassis: the

@@ -145,6 +145,7 @@ public sealed class OrderCommandHandler : ICommandHandler
             // The wall rule of design 2.5: enemy walls that keep the unit from its place come
             // first, and the unit goes for the tile in its way.
             var place = _move.TryGetOrderedPlace(mover, out var ordered) ? ordered : walk.Destination;
+            unit.Ordered = place;
             unit.Goal = _walls.GoalFor(body.Owner, body.Position, place);
             unit.WallInWay = _walls.FindForOrder(body.Owner, body.Position, unit.Goal);
             if (unit.WallInWay != EntityId.None)
@@ -230,11 +231,13 @@ public sealed class OrderCommandHandler : ICommandHandler
     /// An attack order on a structure that is gone and that the player still remembers. Refusing it
     /// would tell the player what it cannot know, so the order is taken: every listed unit that
     /// can attack walks to where the structure is remembered, as on a move order, and is idle
-    /// there. By then its owner sees the tiles, and the memory ends.
+    /// there. By then its owner sees the tiles, and the memory ends. As on a move order, enemy
+    /// walls its owner knows of that keep the unit from there come first.
     /// </summary>
     private bool GoToLook(World world, in Command command, TileSquare remembered)
     {
         var taken = false;
+        _walls.BeginOrder();
         foreach (var entity in command.Entities)
         {
             var index = _combatants.IndexOf(entity);
@@ -254,10 +257,19 @@ public sealed class OrderCommandHandler : ICommandHandler
 
             ref var walk = ref _movers.ValueAt(mover);
             _approach.WalkTo(ref walk, body.Position, remembered.Center);
-            if (walk.State != MoveState.Idle)
+            unit.Ordered = remembered.Center;
+            unit.Goal = _walls.GoalFor(body.Owner, body.Position, remembered.Center);
+            var wall = _walls.FindForOrder(body.Owner, body.Position, unit.Goal);
+            if (walk.State != MoveState.Idle || _walls.IsCutOff(body.Owner, body.Position, unit.Goal))
             {
                 unit.Order = UnitOrder.Move;
-                unit.Anchor = walk.Destination;
+                unit.Anchor = walk.State != MoveState.Idle ? walk.Destination : body.Position;
+            }
+
+            unit.WallInWay = wall;
+            if (wall != EntityId.None)
+            {
+                _walls.WalkToWall(world, ref unit, ref walk, in body, _targeting.Rules.ProfileOf(body.Owner, unit.Chassis));
             }
         }
 

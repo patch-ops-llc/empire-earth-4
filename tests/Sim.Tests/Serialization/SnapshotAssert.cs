@@ -177,7 +177,7 @@ internal static class SnapshotAssert
     /// What a match works out from its state must be the same in both matches: every tile must
     /// be passable or not in both and have the same region, the spatial index must list the same
     /// entities for every square of two tiles on the map, and every player must have the table
-    /// of blueprints of their tiers.
+    /// of blueprints of their tiers and know of the same enemy walls.
     /// </summary>
     public static void AssertSameDerivedState(Match expected, Match actual, string what)
     {
@@ -199,6 +199,21 @@ internal static class SnapshotAssert
         for (var player = 0; player < expected.Players.Count; player++)
         {
             Research.TechAssert.Same(expected.Research.Tech(player), actual.Research.Tech(player));
+
+            // The walls each player knows of, and the ground it could reach if none of them stood.
+            for (var y = 0; y < expected.Grid.Height; y++)
+            {
+                for (var x = 0; x < expected.Grid.Width; x++)
+                {
+                    if (expected.WallMap.KnownWallAt(player, x, y) != actual.WallMap.KnownWallAt(player, x, y)
+                        || expected.WallMap.PastWallsOf(player, x, y) != actual.WallMap.PastWallsOf(player, x, y))
+                    {
+                        Assert.Fail(
+                            $"{what}: for player {player} the wall map has {actual.WallMap.KnownWallAt(player, x, y)} known on tile ({x}, {y}), past walls {actual.WallMap.PastWallsOf(player, x, y)}, " +
+                            $"and the match the snapshot was taken from has {expected.WallMap.KnownWallAt(player, x, y)}, past walls {expected.WallMap.PastWallsOf(player, x, y)}.");
+                    }
+                }
+            }
         }
 
         Assert.Equal(expected.SpatialIndex.Count, actual.SpatialIndex.Count);

@@ -342,7 +342,9 @@ public sealed class AttackSystem : ISystem
         {
             // The way may have opened elsewhere: another unit broke through, or the wall's owner
             // took a tile down. Then this tile is no longer in the way.
-            if (_targeting.IsEnemy(turn.World, owner, unit.WallInWay, out var wall)
+            // It is not asked through the fog: its owner knows the tile, and it is in the way
+            // while it stands, seen or not.
+            if (_targeting.IsEnemyThere(turn.World, owner, unit.WallInWay, out var wall)
                 && !(turn.TurnToLook && !_walls.IsCutOff(owner, position, unit.Goal)))
             {
                 attacked = Fight(ref unit, in turn, unit.WallInWay, in wall, retargeted: false);
@@ -356,7 +358,16 @@ public sealed class AttackSystem : ISystem
 
         if (!_walls.IsCutOff(owner, position, unit.Goal))
         {
-            return false;
+            // A wall its owner had never seen kept it from the place it was ordered to, and it
+            // went for the nearest tile it could reach. Its owner knows of the wall now: the
+            // unit's order takes it through.
+            if (unit.Goal == unit.Ordered
+                || !_walls.LearnedGoal(owner, position, unit.Ordered, IsWalking(turn.Mover), out var goal))
+            {
+                return false;
+            }
+
+            unit.Goal = goal;
         }
 
         // Enemy walls keep it from its place and it has not found the tile in its way yet. It
@@ -445,7 +456,7 @@ public sealed class AttackSystem : ISystem
         var think = turn.TurnToLook || mover.State == MoveState.Idle;
         if (unit.WallInWay != EntityId.None)
         {
-            if (_targeting.IsEnemy(turn.World, owner, unit.WallInWay, out var wall)
+            if (_targeting.IsEnemyThere(turn.World, owner, unit.WallInWay, out var wall)
                 && !(think && !_walls.TryFindStand(owner, turn.Profile, position, in mark, out _)))
             {
                 return Fight(ref unit, in turn, unit.WallInWay, in wall, retargeted: false);
@@ -554,9 +565,12 @@ public sealed class AttackSystem : ISystem
     /// <remarks>
     /// The walk is a move order, so the unit does not fight on the way, and does not take the
     /// attack up again should the target come back into sight. Once idle it picks for itself.
+    /// As on any move order, enemy walls that keep it from the place come first: the unit breaks
+    /// in, also when it stands at the nearest tile it can reach already.
     /// </remarks>
     private void GoWhereLastSeen(ref Combatant unit, in Turn turn)
     {
+        var owner = turn.Body.Owner;
         var position = turn.Body.Position;
         var lastSeen = unit.Anchor;
         BecomeIdle(ref unit, position);
@@ -567,10 +581,18 @@ public sealed class AttackSystem : ISystem
 
         ref var mover = ref _movers.ValueAt(turn.Mover);
         _approach.WalkTo(ref mover, position, lastSeen);
+        unit.Ordered = lastSeen;
+        unit.Goal = _walls.GoalFor(owner, position, lastSeen);
         if (mover.State != MoveState.Idle)
         {
             unit.Order = UnitOrder.Move;
             unit.Anchor = mover.Destination;
+        }
+        else if (_walls.IsCutOff(owner, position, unit.Goal))
+        {
+            // It can walk no nearer, and walls its owner knows of are why. Its next turn, as a
+            // unit on a move order, finds the tile in its way.
+            unit.Order = UnitOrder.Move;
         }
     }
 

@@ -94,7 +94,7 @@ public static class MatchSetup
 
         // The wall rule: where the walls stand follows the tiles, and the orders and the attacks
         // of units share one judge of which wall is in a unit's way.
-        var wallMap = new WallMap(data, grid, world.Entities, bodies, structures, players.Count);
+        var wallMap = new WallMap(data, grid, world.Entities, bodies, structures, vision, players.Count);
         structureTiles.Follow(wallMap);
         var breaching = new Breaching(grid, wallMap, data.Rules.WallCrossingCost);
         var wallRule = new WallRule(grid, breaching, targeting, approach);

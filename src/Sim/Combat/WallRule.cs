@@ -17,6 +17,14 @@ namespace Sim.Combat;
 /// nearest tile it can reach (design 5.3).
 /// </para>
 /// <para>
+/// <b>Which walls.</b> Only those the unit's owner sees or remembers (design 5.3,
+/// <see cref="WallMap"/>): every question here is asked of the ground past the walls the player
+/// knows, so a wall the player has never seen is never in a unit's way. It blocks the unit as
+/// the ground does, and the unit goes to the nearest tile it can reach. Once its owner knows of
+/// the wall, the unit's next turn finds it: <see cref="LearnedGoal"/> for a move or an
+/// attack-move order, <see cref="TryFindStand"/> for an attack order.
+/// </para>
+/// <para>
 /// <b>The place</b> of a move or an attack-move order is where the order would take the unit if
 /// the walls of its enemies were out of the way (<see cref="Breaching.GoalFor"/>), so that an
 /// order onto a building inside a walled camp, or one whose place in the group falls on a tree
@@ -73,8 +81,41 @@ public sealed class WallRule
     public FixedVector2 GoalFor(int player, FixedVector2 position, FixedVector2 place) =>
         _breaching.GoalFor(player, position, place, position);
 
-    /// <summary>True when enemy walls, and nothing else, keep a unit from a place.</summary>
+    /// <summary>True when enemy walls that the player knows of, and nothing else, keep a unit from a place.</summary>
     public bool IsCutOff(int player, FixedVector2 position, FixedVector2 place) => _breaching.IsCutOff(player, position, place);
+
+    /// <summary>
+    /// For a unit on a move or an attack-move order whose goal is not the place the order named:
+    /// whether walls its owner has come to know of since are what keeps it from that place. Then
+    /// <paramref name="goal"/> is where the order takes it now, and enemy walls keep it from
+    /// there.
+    /// </summary>
+    /// <remarks>
+    /// While the unit walks only the place itself is asked about, which is a lookup. When its
+    /// walk has ended, at the nearest tile it could reach, the goal is worked out again as it
+    /// was when the order was given, so that an order onto a building or a tree behind the wall
+    /// leads through the wall too.
+    /// </remarks>
+    /// <param name="player">The unit's owner.</param>
+    /// <param name="position">Where the unit stands.</param>
+    /// <param name="ordered">The place its order named.</param>
+    /// <param name="walking">True while the unit is on its way.</param>
+    /// <param name="goal">The unit's new goal.</param>
+    public bool LearnedGoal(int player, FixedVector2 position, FixedVector2 ordered, bool walking, out FixedVector2 goal)
+    {
+        goal = ordered;
+        if (!_grid.Contains(ordered))
+        {
+            return false;
+        }
+
+        if (!walking)
+        {
+            goal = _breaching.GoalFor(player, position, ordered, position);
+        }
+
+        return _breaching.IsCutOff(player, position, goal);
+    }
 
     /// <summary>
     /// The wall in the way of a unit of the order that is being given, or none: none is in its
@@ -215,7 +256,9 @@ public sealed class WallRule
     /// </summary>
     public void WalkToWall(World world, ref Combatant unit, ref Mover mover, in Body body, AttackProfile profile)
     {
-        if (!_targeting.IsEnemy(world, body.Owner, unit.WallInWay, out var wall))
+        // Not asked through the fog: the wall was found among those its owner knows, and it is
+        // known for as long as it stands, also while nobody sees it.
+        if (!_targeting.IsEnemyThere(world, body.Owner, unit.WallInWay, out var wall))
         {
             return;
         }

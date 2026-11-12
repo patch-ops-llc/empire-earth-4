@@ -19,7 +19,10 @@ namespace Sim.Tests.Walls;
 /// The camp of these tests is a ring of player 1's wall on the edge of the box from tile (14, 8)
 /// to tile (22, 16), so the ground inside is tiles 15 to 21 by 9 to 15 and its middle is
 /// (18.5, 12.5). Units of player 0 come from the west along y = 12.5, so the tile in their way
-/// is (14, 12).
+/// is (14, 12). Player 0 remembers every wall (<see cref="WalledMatches"/>), and where an attack
+/// order names somebody inside the camp, a worker of player 0 stands in a corner of it and sees
+/// the target, as an attack order asks (design 5.3). What the rule does with walls a player has
+/// not seen is in <see cref="WallsInFogTests"/>.
 /// </remarks>
 public class WallRuleTests
 {
@@ -193,6 +196,7 @@ public class WallRuleTests
         var match = WithCamp();
         var unit = match.Spawn(0, Hoplite, "5.5", "12.5");
         var target = match.SpawnWorker(1, "18.5", "12.5");
+        match.Watcher(0, "20.5", "14.5");
         var inWay = match.WallOn(14, 12);
         var walls = match.WallHitPoints();
         match.OrderAttack(0, target, unit);
@@ -221,6 +225,7 @@ public class WallRuleTests
         var match = WithCamp();
         var unit = match.Spawn(0, Peltast, "5.5", "12.5");
         var target = match.SpawnWorker(1, "16.5", "12.5");
+        match.Watcher(0, "20.5", "14.5");
         var walls = match.WallHitPoints();
         match.OrderAttack(0, target, unit);
 
@@ -245,6 +250,7 @@ public class WallRuleTests
         match.WeakenWalls(24);
         var unit = match.Spawn(0, Peltast, "3.5", "12.5");
         var target = match.SpawnWorker(1, "18.5", "12.5");
+        match.Watcher(0, "20.5", "14.5");
         var inWay = match.WallOn(10, 12);
         var walls = match.WallHitPoints();
         match.OrderAttack(0, target, unit);
@@ -363,6 +369,7 @@ public class WallRuleTests
             }
         }
 
+        match.Watcher(0, "20.5", "14.5");
         match.RefreshDerivedState();
         var walls = match.WallHitPoints();
         if (attackOrder)

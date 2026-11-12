@@ -15,12 +15,20 @@ namespace Sim.Walls;
 /// <remarks>
 /// <para>
 /// <b>What is paid.</b> The run is paid in full when the order is given: the price of one tile
-/// for every tile of the run that can be laid at that moment. A tile that cannot be laid then,
-/// because it is off the map, not open ground, under a deposit or a structure, or outside the
-/// player's territory, is skipped at once and never paid for, so that a run drawn from an
-/// existing wall or across a wood costs what it adds. <see cref="TilesToLay"/> gives those
-/// tiles, for the order and for the interface, which shows the run and its price before the
-/// order is given.
+/// for every tile of the run that can be laid at that moment as far as the player may know. A
+/// tile that cannot be laid then, because it is off the map, not open ground, under a deposit or
+/// a structure, or outside the player's territory, is skipped at once and never paid for, so
+/// that a run drawn from an existing wall or across a wood costs what it adds.
+/// <see cref="TilesToLay"/> gives those tiles, for the order and for the interface, which shows
+/// the run and its price before the order is given.
+/// </para>
+/// <para>
+/// <b>What the player may know</b> of a tile is what it may know of the site of any build order
+/// (design 5.4, <see cref="ConstructionRules.CheckSiteAsKnown"/>): the ground it has explored,
+/// its own structures, and the structures of others that it sees or remembers. A tile on ground
+/// the player has not explored is therefore paid for, and skipped with its price back when the
+/// worker comes to it and finds a tree there. The price of a run would otherwise count the
+/// trees under the fog.
 /// </para>
 /// <para>
 /// <b>What is given back.</b> A tile that cannot be laid when the worker comes to it is skipped
@@ -59,9 +67,9 @@ public sealed class WallOrders : IWorkerOrders
     public ComponentStore<WallPlan> Plans { get; }
 
     /// <summary>
-    /// The tiles of the run from one tile to another that a player could lay now, in the order
-    /// of the run, added to <paramref name="tiles"/>. The price of the order is the price of
-    /// <see cref="Wall"/> times their number.
+    /// The tiles of the run from one tile to another that a player could lay now as far as it
+    /// may know, in the order of the run, added to <paramref name="tiles"/>. The price of the
+    /// order is the price of <see cref="Wall"/> times their number.
     /// </summary>
     /// <returns>
     /// <see cref="BuildProblem.None"/> when at least one tile can be laid. Otherwise why the
@@ -93,7 +101,7 @@ public sealed class WallOrders : IWorkerOrders
         for (var step = 0; step < length; step++)
         {
             var (x, y) = WallRun.TileAt(firstX, firstY, lastX, lastY, step);
-            var problem = _rules.CheckSite(player, wall, x, y);
+            var problem = _rules.CheckSiteAsKnown(player, wall, x, y);
             if (problem == BuildProblem.None)
             {
                 tiles.Add((x, y));

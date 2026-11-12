@@ -76,11 +76,19 @@ public struct Combatant : IStateValue
     public EntityId WallInWay { get; set; }
 
     /// <summary>
-    /// The place its move or attack-move order takes it to once no enemy wall is in its way: the
-    /// place that was ordered, or the nearest tile to it that the unit could then reach. Not used
-    /// by the other orders.
+    /// The place its move or attack-move order takes it to once no enemy wall that its owner
+    /// knows of is in its way: the place that was ordered, or the nearest tile to it that the
+    /// unit could then reach. Not used by the other orders.
     /// </summary>
     public FixedVector2 Goal { get; set; }
+
+    /// <summary>
+    /// The place its move or attack-move order named, with its own offset in the group. It
+    /// differs from <see cref="Goal"/> when the unit could not get there even past the walls its
+    /// owner knew of; when its owner comes to know of a wall that keeps the unit from here, this
+    /// becomes the unit's goal (design 5.3). Not used by the other orders.
+    /// </summary>
+    public FixedVector2 Ordered { get; set; }
 
     /// <summary>
     /// What <see cref="Place"/> is a place by: the unit's target or the wall in its way, or
@@ -116,6 +124,7 @@ public struct Combatant : IStateValue
         Fought = new FixedVector2(walker.Field(Fought.X), walker.Field(Fought.Y));
         WallInWay = walker.Field(WallInWay);
         Goal = new FixedVector2(walker.Field(Goal.X), walker.Field(Goal.Y));
+        Ordered = new FixedVector2(walker.Field(Ordered.X), walker.Field(Ordered.Y));
         PlaceFor = walker.Field(PlaceFor);
         Place = new FixedVector2(walker.Field(Place.X), walker.Field(Place.Y));
     }

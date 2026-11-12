@@ -13,11 +13,60 @@ namespace Sim.Tests.Walls;
 /// What the tests of the wall rule share: walls that stand finished before the first tick, on the
 /// open field of <see cref="SiegeMatches"/>, where a wall tile has 400 hit points.
 /// </summary>
+/// <remarks>
+/// The wall rule knows only the walls a unit's owner sees or remembers (design 5.3). The walls of
+/// these tests are remembered by every player from the moment they stand, as if each had seen
+/// them once, so that the tests ask what the rule does with a wall and not how a player came to
+/// know of it. <see cref="UnseenWallTile"/> and <see cref="UnseenRing"/> place walls that nobody
+/// has seen; <c>WallsInFogTests</c> is about those.
+/// </remarks>
 internal static class WalledMatches
 {
-    /// <summary>A finished wall tile of a player.</summary>
-    public static EntityId WallTile(this Match match, int player, int x, int y) =>
+    /// <summary>A finished wall tile of a player, which every other player remembers.</summary>
+    public static EntityId WallTile(this Match match, int player, int x, int y)
+    {
+        var wall = match.UnseenWallTile(player, x, y);
+        match.MakeKnown(wall);
+        return wall;
+    }
+
+    /// <summary>A finished wall tile of a player that no other player has seen.</summary>
+    public static EntityId UnseenWallTile(this Match match, int player, int x, int y) =>
         match.PlaceStructure(player, SiegeMatches.Wall, x, y);
+
+    /// <summary>Lets every other player remember a structure as it is now, as if each had seen it.</summary>
+    public static void MakeKnown(this Match match, EntityId structure)
+    {
+        Assert.True(match.Vision.TryDescribeStructure(structure, out var seen));
+        for (var player = 0; player < match.Vision.Memory.PlayerCount; player++)
+        {
+            if (player != seen.Owner)
+            {
+                match.Vision.Memory.Set(player, in seen);
+            }
+        }
+    }
+
+    /// <summary><see cref="Ring"/> of wall tiles that no other player has seen.</summary>
+    public static void UnseenRing(this Match match, int player, (int X, int Y) low, (int X, int Y) high)
+    {
+        for (var y = low.Y; y <= high.Y; y++)
+        {
+            for (var x = low.X; x <= high.X; x++)
+            {
+                if (x == low.X || x == high.X || y == low.Y || y == high.Y)
+                {
+                    match.UnseenWallTile(player, x, y);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// A worker of a player, which sees 6 tiles round it and does nothing else: it gives its
+    /// player sight of a target that an attack order is to name.
+    /// </summary>
+    public static EntityId Watcher(this Match match, int player, string x, string y) => match.SpawnWorker(player, x, y);
 
     /// <summary>
     /// A closed ring of wall: every tile on the edge of the box from one corner tile to the

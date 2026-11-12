@@ -128,6 +128,14 @@ public sealed class StructureMemory : IStateStore
 
     public int PlayerCount { get; }
 
+    /// <summary>
+    /// Goes up whenever a memory is written or forgotten, and when a snapshot is restored. What
+    /// is worked out from the memories and kept, such as the walls each player knows, looks
+    /// again when this is another number than last time. It is not state: what is worked out
+    /// depends on the memories and never on this number.
+    /// </summary>
+    public int Writes { get; private set; }
+
     /// <summary>How many structures the player remembers, those it sees now among them.</summary>
     public int Count(int player)
     {
@@ -190,6 +198,7 @@ public sealed class StructureMemory : IStateStore
     {
         CheckPlayer(player);
         Check(player, in seen);
+        Writes++;
         var index = IndexOf(player, seen.Entity);
         if (index >= 0)
         {
@@ -216,6 +225,7 @@ public sealed class StructureMemory : IStateStore
         CheckPlayer(player);
         ArgumentOutOfRangeException.ThrowIfNegative(index);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, _counts[player]);
+        Writes++;
         var items = _items[player];
         var count = --_counts[player];
         Array.Copy(items, index + 1, items, index, count - index);
@@ -230,6 +240,11 @@ public sealed class StructureMemory : IStateStore
     public void Walk(IStateWalker walker)
     {
         ArgumentNullException.ThrowIfNull(walker);
+        if (walker.IsRestoring)
+        {
+            Writes++;
+        }
+
         for (var player = 0; player < PlayerCount; player++)
         {
             var oldCount = _counts[player];

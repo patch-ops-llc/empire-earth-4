@@ -90,6 +90,15 @@ public sealed class VisionGrid : IStateStore
     /// </summary>
     public int Revision { get; private set; }
 
+    /// <summary>
+    /// Goes up whenever the grid is written, whether or not that changed it: when sight is worked
+    /// out again, when something is revealed, and when a snapshot is restored. What is worked out
+    /// from the grid and kept, such as the walls each player knows, looks again when this is
+    /// another number than last time. It is not state: what is worked out depends on the grid and
+    /// never on this number.
+    /// </summary>
+    public int Writes { get; private set; }
+
     /// <summary>True when the player sees the tile now. False for a tile off the map and for a player who is not in the match.</summary>
     public bool IsVisible(int player, int x, int y) => Has(_visible, player, x, y);
 
@@ -195,6 +204,7 @@ public sealed class VisionGrid : IStateStore
         }
 
         Revision++;
+        Writes++;
         for (var word = 0; word < _explored.Length; word++)
         {
             var isLast = (word + 1) % _wordsPerPlane == 0;
@@ -219,6 +229,7 @@ public sealed class VisionGrid : IStateStore
     {
         _visible.CopyTo(_visibleBefore, 0);
         Array.Clear(_visible);
+        Writes++;
     }
 
     /// <summary>Ends what <see cref="BeginRefresh"/> began.</summary>
@@ -244,6 +255,8 @@ public sealed class VisionGrid : IStateStore
         {
             return;
         }
+
+        Writes++;
 
         // A tile's center is half a tile past its corner. With every length in raw units, tile
         // (x, y) is seen when (x * one + half - center.X)^2 + (y * one + half - center.Y)^2 is
@@ -289,6 +302,7 @@ public sealed class VisionGrid : IStateStore
             return;
         }
 
+        Writes++;
         var plane = player * _wordsPerPlane;
         var lastRow = Math.Min(Height - 1, tiles.Y + tiles.Size - 1);
         for (var y = Math.Max(0, tiles.Y); y <= lastRow; y++)
