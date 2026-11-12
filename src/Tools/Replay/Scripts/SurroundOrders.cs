@@ -11,8 +11,17 @@ namespace Tools.Replay.Scripts;
 /// <remarks>
 /// Like <c>fight</c> it makes its forces from nothing and needs <c>debug.spawn</c> in the rules
 /// of the data. A band is of one chassis and is made close together beside the field; a target is
-/// made on the field, and a band is sent at a target of another player wherever that stands, a
-/// worker at its deposit as well.
+/// made on the field, and a band goes for a target of another player wherever that stands, a
+/// worker at its deposit and a structure as well.
+/// <para>
+/// An attack order names only a target that the band has in sight: one that a unit of it stands
+/// a tile nearer to than it sees. A player may order an attack only on what it sees (design
+/// 5.3), so an order at anything else is one that a match with fog refuses, and a match recorded
+/// with such orders takes another course once there is fog. To a target out of sight the band is
+/// sent by attack-move, and it can be sent at it when it has come near. The script works sight
+/// out from the positions and the profiles and asks the match nothing about fog, so it gives
+/// the same orders with it and without.
+/// </para>
 /// </remarks>
 [OrderScript("surround")]
 internal sealed class SurroundOrders : OrderScript
@@ -39,6 +48,7 @@ internal sealed class SurroundOrders : OrderScript
     private readonly List<int> _melee = [];
     private readonly List<EntityId> _band = [];
     private readonly List<EntityId> _targets = [];
+    private readonly List<EntityId> _inSight = [];
     private readonly FixedVector2 _field;
     private int _nextTick;
 
@@ -98,14 +108,15 @@ internal sealed class SurroundOrders : OrderScript
             var other = (player + 1 + _random.NextInt(players - 1)) % players;
             commands.Add(Spawn(other, _random.NextInt(Match.Data.Chassis.Count), OnTheField()));
         }
-        else if (kind < 85)
+        else if (kind < 85 && _inSight.Count > 0)
         {
-            // The whole band at one target.
-            commands.Add(new Command(CommandType.Attack, player, [.. _band], targetEntity: AnyTarget()));
+            // The whole band at one target it has in sight.
+            commands.Add(new Command(CommandType.Attack, player, [.. _band], targetEntity: _inSight[_random.NextInt(_inSight.Count)]));
         }
         else
         {
-            // The whole band to where a target stands, fighting what it meets.
+            // The whole band to where a target stands, fighting what it meets: its turn, or the
+            // band has nothing in sight to be sent at.
             var point = Match.Bodies.Get(AnyTarget()).Position;
             commands.Add(new Command(CommandType.AttackMove, player, [.. _band], point.X, point.Y));
         }
@@ -115,8 +126,8 @@ internal sealed class SurroundOrders : OrderScript
         new(CommandType.DebugSpawn, player, targetX: point.X, targetY: point.Y, contentId: chassis);
 
     /// <summary>
-    /// Sorts what there is for a player: its melee units, and everything of the other players
-    /// that can be attacked.
+    /// Sorts what there is for a player: its melee units, everything of the other players that
+    /// can be attacked, and what of that the band has in sight.
     /// </summary>
     private void Collect(int player)
     {
@@ -140,6 +151,39 @@ internal sealed class SurroundOrders : OrderScript
                 _targets.Add(entity);
             }
         }
+
+        _inSight.Clear();
+        foreach (var target in _targets)
+        {
+            if (IsInSightOfTheBand(player, target))
+            {
+                _inSight.Add(target);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a unit of the band stands at least a tile nearer to a target than it sees. A
+    /// structure is as far as the nearest edge of its footprint. A melee unit picks targets as
+    /// far as it sees, so its sight is the acquisition distance of its profile; the tile less
+    /// keeps the answer the same however sight is rounded to tiles.
+    /// </summary>
+    private bool IsInSightOfTheBand(int player, EntityId target)
+    {
+        var at = Match.Bodies.Get(target).Position;
+        var isStructure = Match.Structures.TryGet(target, out var structure);
+        foreach (var unit in _band)
+        {
+            var sight = Match.Combat.ProfileOf(player, Match.Combatants.Get(unit).Chassis).Acquisition - Fixed.One;
+            var from = Match.Bodies.Get(unit).Position;
+            var distance = isStructure ? structure.Tiles.DistanceSquaredRawTo(from) : FixedVector2.DistanceSquaredRaw(from, at);
+            if (sight > Fixed.Zero && distance <= FixedVector2.SquareRaw(sight))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private EntityId AnyTarget() => _targets[_random.NextInt(_targets.Count)];

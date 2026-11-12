@@ -1,5 +1,6 @@
 using Sim.Combat;
 using Sim.Core;
+using Sim.Movement;
 using Sim.Numerics;
 using Sim.Setup;
 
@@ -49,6 +50,11 @@ public class SiegeScriptTests
         "a Tower destroyed",
         "a unit that picked a Tower by itself",
         "a unit on an attack-move that picked a structure that does not attack",
+        "a melee unit walking to its place by a structure",
+        "a melee unit that attacks a structure from its place",
+        "a melee unit with a place by a wall",
+        "three melee units on their places by one structure",
+        "a melee unit that stands out of reach of a structure while another is on its place by it",
     ];
 
     /// <summary>The rules a match reaches only while both sides place Towers and make units for a long time.</summary>
@@ -58,6 +64,25 @@ public class SiegeScriptTests
         "a Tower's shot hits a Tower",
         "a Tower destroyed",
         "a blast that reaches a structure and a unit",
+    ];
+
+    /// <summary>
+    /// Test build only, the join of places round structures (#66) with the two recorded sieges
+    /// (#65): the rules of the places that the first recorded match does not reach with every
+    /// piece in. The last of them neither match reaches; <c>ridge-footprints.replay</c> has
+    /// the stronger form of it.
+    /// </summary>
+    private static readonly string[] PlacesTheFirstMatchLacks =
+    [
+        "three melee units on their places by one structure",
+        "a melee unit that stands out of reach of a structure while another is on its place by it",
+    ];
+
+    /// <summary>The same for the second recorded match.</summary>
+    private static readonly string[] PlacesTheSecondMatchLacks =
+    [
+        "a melee unit with a place by a wall",
+        "a melee unit that stands out of reach of a structure while another is on its place by it",
     ];
 
     /// <summary>
@@ -105,7 +130,7 @@ public class SiegeScriptTests
     {
         var seen = WhatItReaches(GoldenReplay);
 
-        AssertReached([.. EveryKindOfOrder, .. EveryRule.Except(NeedsBothSidesForLong)], seen);
+        AssertReached([.. EveryKindOfOrder, .. EveryRule.Except(NeedsBothSidesForLong).Except(PlacesTheFirstMatchLacks)], seen);
     }
 
     /// <summary>
@@ -118,7 +143,7 @@ public class SiegeScriptTests
         var replay = ReplayRuns.ReadGolden(SecondGoldenReplay);
         var seen = WhatItReaches(SecondGoldenReplay);
 
-        AssertReached([.. EveryKindOfOrder, .. EveryRule], seen);
+        AssertReached([.. EveryKindOfOrder, .. EveryRule.Except(PlacesTheSecondMatchLacks)], seen);
         var match = ReplayRuns.Start(replay);
         for (var tick = 0; tick < replay.TickCount; tick++)
         {
@@ -333,6 +358,72 @@ public class SiegeScriptTests
                 Assert.Equal(UnitOrder.AttackMove, unit.Order);
                 seen.Add("a unit on an attack-move that picked a structure that does not attack");
             }
+        }
+
+        seen.UnionWith(PlacesByStructures(match));
+        return seen;
+    }
+
+    /// <summary>
+    /// What the melee units have of the places round structures after the tick that has just
+    /// run, in the words of the list of <see cref="ItsGoldenReplayReachesTheRulesItGuards"/>.
+    /// </summary>
+    private static HashSet<string> PlacesByStructures(Match match)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var onPlaces = new Dictionary<EntityId, int>();
+        var waiting = new HashSet<EntityId>();
+        for (var i = 0; i < match.Combatants.Count; i++)
+        {
+            var entity = match.Combatants.EntityAt(i);
+            var unit = match.Combatants.ValueAt(i);
+            var body = match.Bodies.Get(entity);
+            if (!match.Combat.ProfileOf(body.Owner, unit.Chassis).Melee || !match.Structures.TryGet(unit.Target, out var structure))
+            {
+                continue;
+            }
+
+            if (!unit.HasPlace)
+            {
+                if (unit.Engaged
+                    && match.Movers.Get(entity).State == MoveState.Idle
+                    && structure.Tiles.DistanceSquaredRawTo(body.Position) > match.Combat.StructureReachSquared)
+                {
+                    waiting.Add(unit.Target);
+                }
+
+                continue;
+            }
+
+            Assert.True(
+                structure.Tiles.DistanceSquaredRawTo(unit.Place) <= match.Combat.StructureReachSquared,
+                "A place by a structure is out of reach of it.");
+            if (IsWall(match, structure.Type))
+            {
+                seen.Add("a melee unit with a place by a wall");
+            }
+
+            if (body.Position != unit.Place)
+            {
+                seen.Add("a melee unit walking to its place by a structure");
+                continue;
+            }
+
+            onPlaces[unit.Target] = onPlaces.GetValueOrDefault(unit.Target) + 1;
+            if (unit.Wait > Fraction.Zero && unit.Fought == unit.Place)
+            {
+                seen.Add("a melee unit that attacks a structure from its place");
+            }
+        }
+
+        if (onPlaces.Values.Any(count => count >= 3))
+        {
+            seen.Add("three melee units on their places by one structure");
+        }
+
+        if (waiting.Any(onPlaces.ContainsKey))
+        {
+            seen.Add("a melee unit that stands out of reach of a structure while another is on its place by it");
         }
 
         return seen;

@@ -9,17 +9,11 @@ namespace Tools.Tests.ReplayScripts;
 /// </summary>
 internal static class TestBuild
 {
-    /// <summary>Melee places (#54) with the fog of war (#44).</summary>
-    public const string SurroundMeetsFog =
-        "Test build only. The surround script sends a whole band at one target by an attack order, and under the fog (#44) "
-        + "an attack order may name only what its player sees: 72 of the 75 attack orders of ridge-surround.replay are refused, "
-        + "so seven units never stand on their places by one target.";
-
     /// <summary>Combat perks (#63) with the pieces it has not met.</summary>
     public const string CombatPerksMeetTheRest =
         "Test build only. The test asks that every attack order of switchback-combat-perks.replay names what its player sees "
-        + "when it is given. With the pieces #63 has not met (production #46, live refresh #37, melee places #54, conquest #56) "
-        + "the match runs differently and 154 of its 156 attack orders are refused. Which piece moves it was not found out.";
+        + "when it is given. With melee places (#54) the match takes another course from tick 126, and here 154 of its 156 "
+        + "attack orders are refused. #63 takes #54 in, changes the script and adds a second recording that carries the test.";
 
     /// <summary>The accent perks (#61, joined in #69) with the pieces #69 has not met.</summary>
     public const string PerksMeetTheRest =
