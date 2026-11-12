@@ -34,7 +34,8 @@ namespace Sim.Combat;
 /// when enemy units stop it on its way (on its turn to look; the next place it looks for must
 /// be one it can walk straight to), and when it has no room on it after all. A unit that finds
 /// no place because its own side has them all stops where it is and looks again on each turn to
-/// look. Only a target that is a unit has places.
+/// look. A structure has places like a unit: they lie round its footprint, at the unit's reach
+/// from its nearest edge.
 /// </para>
 /// <para>
 /// <b>Nothing between enemies depends on the order of the units.</b> A unit decides from positions,
@@ -61,7 +62,8 @@ namespace Sim.Combat;
 /// while it has such a structure it looks again on each of its turns to look: it turns on a unit
 /// or a Tower as soon as one can be picked, and otherwise keeps the structure it has. A wall or a
 /// gate is attacked only on an attack order. A unit sent at a structure walks up to the tile
-/// beside its footprint that is nearest to itself. Towers themselves attack in
+/// beside its footprint that is nearest to itself, and a melee unit takes its place by the
+/// footprint when it is nearly there. Towers themselves attack in
 /// <see cref="TurretSystem"/>.
 /// </para>
 /// <para>
@@ -460,7 +462,7 @@ public sealed class AttackSystem : ISystem
                 return false;
             }
         }
-        else if (settled && IsNear(in turn, in mover, target.Position, mark.Line))
+        else if (settled && IsNear(in turn, in mover, in mark))
         {
             // On its way to a target that stands still, and nearly there. It looks for its place
             // now and walks onto it: the point that faces it, where it would have stopped anyway,
@@ -520,9 +522,11 @@ public sealed class AttackSystem : ISystem
     /// reach, its own spacing and one step. A unit that finds no place stops there, and from
     /// further out than its spacing behind the units that have the places.
     /// </summary>
-    private bool IsNear(in Turn turn, in Mover mover, FixedVector2 target, int targetLine) =>
-        FixedVector2.DistanceSquaredRaw(turn.Body.Position, target)
-            <= FixedVector2.SquareRaw(_targeting.Rules.Reach(turn.Profile.Line, targetLine) + mover.Spacing + mover.Speed);
+    private bool IsNear(in Turn turn, in Mover mover, in Mark mark)
+    {
+        var reach = mark.IsStructure ? _targeting.Rules.StructureReach : _targeting.Rules.Reach(turn.Profile.Line, mark.Line);
+        return mark.DistanceSquaredRawTo(turn.Body.Position) <= FixedVector2.SquareRaw(reach + mover.Spacing + mover.Speed);
+    }
 
     /// <summary>
     /// True while the place a unit has is still its place: the target stands where it stood, and

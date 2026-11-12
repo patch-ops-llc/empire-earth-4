@@ -1,5 +1,6 @@
 using Sim.Combat;
 using Sim.Core;
+using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
 using Sim.Setup;
@@ -14,8 +15,25 @@ public class SurroundScriptTests
 {
     private const string GoldenReplay = "ridge-surround.replay";
 
+    /// <summary>The replay of the same script that was recorded with places round structures.</summary>
+    private const string GoldenReplayRoundStructures = "ridge-footprints.replay";
+
     /// <summary>A unit that has stood this many turns to look out of reach of a target that stands still has looked for a place and found none.</summary>
     private const int LooksOfWaiting = 2;
+
+    /// <summary>The rules of the places round a unit that both golden replays of the script reach.</summary>
+    private static readonly string[] RulesOfPlacesByUnits =
+    [
+        "a unit walking to its place",
+        "a unit on its place",
+        "a unit on its place that attacks from it",
+        "a unit that enemies stopped on the way to its place",
+        "a unit that gave up its place by a target that still stands",
+        "a unit that waits out of reach because every place is taken",
+        "a unit that waited and then had a place",
+        "a unit with a place by a worker",
+        "units of two players with places by each other",
+    ];
 
     private static readonly string[] EveryKindOfOrder =
     [
@@ -44,10 +62,49 @@ public class SurroundScriptTests
     /// that a change could break. The match has the orders of <c>gather</c> as well, so that
     /// workers stand at their deposits when a band comes for them.
     /// </summary>
+    /// <remarks>
+    /// The match was recorded when only a unit had places. Since a structure has them too, its
+    /// bands that come to a Capitol stand round it, the match takes another course from there,
+    /// and it no longer has seven units on their places by one target. The match of
+    /// <see cref="TheGoldenReplayWithPlacesRoundStructuresReachesTheRulesItGuards"/> has.
+    /// </remarks>
     [Fact]
     public void ItsGoldenReplayReachesTheRulesItGuards()
     {
-        var replay = ReplayRuns.ReadGolden(GoldenReplay);
+        string[] expected =
+        [
+            .. EveryKindOfOrder,
+            .. RulesOfPlacesByUnits,
+            "a unit on its place by a structure that attacks from it",
+        ];
+        Assert.Equal(expected.Order(StringComparer.Ordinal), Reached(ReplayRuns.ReadGolden(GoldenReplay)).Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// What the second recorded match of this script is for. It was recorded with places round
+    /// structures, with the same orders but for their seed, and reaches every rule of the places
+    /// round a unit and the rules of the places round a footprint: its bands stand round the two
+    /// Capitols, on every side of one, and wait behind when they have no place.
+    /// </summary>
+    [Fact]
+    public void TheGoldenReplayWithPlacesRoundStructuresReachesTheRulesItGuards()
+    {
+        string[] expected =
+        [
+            .. EveryKindOfOrder,
+            .. RulesOfPlacesByUnits,
+            "seven units on their places by one target",
+            "a unit on its place by a structure that attacks from it",
+            "nine units on their places by one structure",
+            "units on their places on all four sides of one structure",
+            "a unit that waits out of reach of a structure while five of its side are on their places by it",
+        ];
+        Assert.Equal(expected.Order(StringComparer.Ordinal), Reached(ReplayRuns.ReadGolden(GoldenReplayRoundStructures)).Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>What the match of a replay reaches, in the words of the list of <see cref="ItsGoldenReplayReachesTheRulesItGuards"/>.</summary>
+    private static HashSet<string> Reached(Sim.Serialization.Replay replay)
+    {
         var match = ReplayRuns.Start(replay);
         var seen = KindsOfOrders(replay);
         var before = new Dictionary<EntityId, Combatant>();
@@ -64,21 +121,7 @@ public class SurroundScriptTests
             seen.UnionWith(WhatTheTickDid(match, before, waited));
         }
 
-        string[] expected =
-        [
-            .. EveryKindOfOrder,
-            "a unit walking to its place",
-            "a unit on its place",
-            "a unit on its place that attacks from it",
-            "a unit that enemies stopped on the way to its place",
-            "a unit that gave up its place by a target that still stands",
-            "a unit that waits out of reach because every place is taken",
-            "a unit that waited and then had a place",
-            "a unit with a place by a worker",
-            "seven units on their places by one target",
-            "units of two players with places by each other",
-        ];
-        Assert.Equal(expected.Order(StringComparer.Ordinal), seen.Order(StringComparer.Ordinal));
+        return seen;
     }
 
     private static bool IsOfThisScript(Command command) =>
@@ -181,9 +224,87 @@ public class SurroundScriptTests
             }
         }
 
-        if (onPlaces.Values.Any(count => count >= 7))
+        foreach (var (target, count) in onPlaces)
         {
-            seen.Add("seven units on their places by one target");
+            if (!match.Structures.TryGet(target, out var structure))
+            {
+                if (count >= 7)
+                {
+                    seen.Add("seven units on their places by one target");
+                }
+
+                continue;
+            }
+
+            seen.UnionWith(RoundAStructure(match, target, structure.Tiles, count));
+        }
+
+        return seen;
+    }
+
+    /// <summary>
+    /// What the units on their places by one structure come to after a tick, in the words of the
+    /// lists of the tests of the golden replays.
+    /// </summary>
+    private static HashSet<string> RoundAStructure(Match match, EntityId target, TileSquare tiles, int onPlaces)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var (west, east) = (Fixed.FromInt(tiles.X), Fixed.FromInt(tiles.X + tiles.Size));
+        var (north, south) = (Fixed.FromInt(tiles.Y), Fixed.FromInt(tiles.Y + tiles.Size));
+        var sides = new HashSet<string>(StringComparer.Ordinal);
+        var waiting = false;
+        for (var i = 0; i < match.Combatants.Count; i++)
+        {
+            var entity = match.Combatants.EntityAt(i);
+            var unit = match.Combatants.ValueAt(i);
+            if (unit.Target != target)
+            {
+                continue;
+            }
+
+            var at = match.Bodies.Get(entity).Position;
+            if (!unit.HasPlace)
+            {
+                waiting |= unit.Engaged
+                    && match.Movers.Get(entity).State == MoveState.Idle
+                    && match.Combat.ProfileOf(match.Bodies.Get(entity).Owner, unit.Chassis).Melee
+                    && tiles.DistanceSquaredRawTo(at) > match.Combat.StructureReachSquared;
+                continue;
+            }
+
+            Assert.True(tiles.DistanceSquaredRawTo(unit.Place) <= match.Combat.StructureReachSquared, "A place by a structure is out of reach of it.");
+            if (at != unit.Place)
+            {
+                continue;
+            }
+
+            if (unit.Wait > Fraction.Zero && unit.Fought == unit.Place)
+            {
+                seen.Add("a unit on its place by a structure that attacks from it");
+            }
+
+            // A place round a corner is on neither of the two sides that meet there.
+            var alongX = at.X >= west && at.X <= east;
+            var alongY = at.Y >= north && at.Y <= south;
+            if (alongX != alongY)
+            {
+                sides.Add(alongY ? (at.X < west ? "west" : "east") : (at.Y < north ? "north" : "south"));
+            }
+        }
+
+        if (onPlaces >= 9)
+        {
+            seen.Add("nine units on their places by one structure");
+        }
+
+        if (sides.Count == 4)
+        {
+            seen.Add("units on their places on all four sides of one structure");
+        }
+
+        if (waiting && onPlaces >= 5)
+        {
+            seen.Add("a unit that waits out of reach of a structure while five of its side are on their places by it");
         }
 
         return seen;

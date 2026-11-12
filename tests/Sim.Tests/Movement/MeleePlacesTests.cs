@@ -655,11 +655,12 @@ public class MeleePlacesTests
     }
 
     /// <summary>
-    /// A structure has no circle round it, and a unit that cannot walk goes nowhere: the search
-    /// finds nothing for either, and they fight as they did before there were places.
+    /// A target that is neither a unit that can walk nor a structure has no places: the search
+    /// finds nothing for it, and it is fought as it was before there were places. The places
+    /// round a structure are in <see cref="StructurePlacesTests"/>.
     /// </summary>
     [Fact]
-    public void ThereAreNoPlacesByATargetThatIsNotAUnit()
+    public void ThereAreNoPlacesByATargetThatIsNeitherAUnitNorAStructure()
     {
         var match = Create(TestMaps.Open(40, 20));
         var seeker = match.Spawn(0, Hoplite, "16", "10");
