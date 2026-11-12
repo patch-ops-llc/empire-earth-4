@@ -101,7 +101,7 @@ If joining fails, the menu says why in orange:
 | Go somewhere and fight whatever is met on the way | Hold Ctrl and right-click the place |
 | Stop | X, or the Stop button in the panel at the bottom |
 | Development aid: make units where the pointer is | G for yours. Alone, H for the other player's. See Trying a fight |
-| Development aid: lift the fog of war from your screen, and lay it back | F, alone, or the button in the orange panel "Development aid: fog of war". See The fog of war |
+| Development aid: lift the fog of war from your screen, and lay it back | F4, alone, or the button in the orange panel "Development aid: fog of war". See The fog of war |
 | Quit | Close the window |
 
 ## Resources and workers
@@ -149,7 +149,7 @@ You are shown only what your own units see. Each unit sees a circle round itself
 - The edge of what you see moves in steps of a tile a few times a second, and the screen smooths that.
 - In a shared match each player has their own picture. What you see is not what the other player sees.
 
-**The development switch.** A tester alone has to see the other player's units, so this build has a second development aid, in an orange panel under the first: "Development aid: fog of war". Its button, or the F key, lifts the fog from your screen: the whole map and every unit, structure and territory on it are shown, as they are now. Press it again to lay the fog back. It is not part of the game, and it changes only what is drawn. Your units still see only what they see: they do not shoot at a unit outside their sight, and a right-click on such a unit sends them walking there, with a line of text that says so. The build menu also goes by what you know and not by what the switch shows. In a shared match the switch is not offered, and the panel says so. Like the aid that makes units, it goes away once units can be trained.
+**The development switch.** A tester alone has to see the other player's units, so this build has a second development aid, in an orange panel under the first: "Development aid: fog of war". Its button, or the F4 key, lifts the fog from your screen: the whole map and every unit, structure and territory on it are shown, as they are now. Press it again to lay the fog back. It is not part of the game, and it changes only what is drawn. Your units still see only what they see: they do not shoot at a unit outside their sight, and a right-click on such a unit sends them walking there, with a line of text that says so. The build menu also goes by what you know and not by what the switch shows. In a shared match the switch is not offered, and the panel says so. Like the aid that makes units, it goes away once units can be trained.
 
 ## Building
 
@@ -221,7 +221,7 @@ No match can train a fighting unit yet. Until one can, this build has a developm
 1. In the panel, choose a unit and how many to make at a time. There are four lines of units, each in four epochs. Line infantry shoots. Guards fight hand to hand. Cavalry fights hand to hand and is larger. Artillery shoots far and cannot shoot at what stands close to it. Its shells do not yet hit what stands round the target.
 2. Point at open ground and press G. Your units appear there.
 3. Alone, point somewhere else and press H. Units of the other player appear there, and nothing but their own reflexes controls them. In a shared match H makes nothing: each player makes their own units with G.
-4. Units of the other player made on ground you do not see are there and are not shown: see The fog of war. Make them close to your own units, or press F to lift the fog from your screen first.
+4. Units of the other player made on ground you do not see are there and are not shown: see The fog of war. Make them close to your own units, or press F4 to lift the fog from your screen first.
 
 What you will see:
 
