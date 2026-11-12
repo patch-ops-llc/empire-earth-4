@@ -140,9 +140,10 @@ public class ResearchSetupTests
     {
         var match = Create();
         var world = new World(1);
+        var events = new Simulation(world).Events;
 
-        Assert.Throws<ArgumentException>(() => new MatchResearch(match.Data, world, new ResearchState(2, 5, 9, 1), new Stockpiles(2), 9));
-        Assert.Throws<ArgumentException>(() => new MatchResearch(match.Data, world, new ResearchState(2, 6, 9, 1), new Stockpiles(3), 9));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new MatchResearch(match.Data, world, new ResearchState(2, 6, 9, 1), new Stockpiles(2), 10));
+        Assert.Throws<ArgumentException>(() => new MatchResearch(match.Data, world, new ResearchState(2, 5, 9, 1), new Stockpiles(2), 9, events));
+        Assert.Throws<ArgumentException>(() => new MatchResearch(match.Data, world, new ResearchState(2, 6, 9, 1), new Stockpiles(3), 9, events));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new MatchResearch(match.Data, world, new ResearchState(2, 6, 9, 1), new Stockpiles(2), 10, events));
     }
 }
