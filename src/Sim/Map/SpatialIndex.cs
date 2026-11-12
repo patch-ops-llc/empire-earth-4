@@ -17,7 +17,8 @@ namespace Sim.Map;
 /// <para>
 /// It is not part of the state and is not hashed: rebuilding it from the same bodies gives the same
 /// index, and a world restored from a snapshot rebuilds it. Every answer lists entities in ascending
-/// ID order, the order every system must use.
+/// ID order, the order every system must use, but for <see cref="QueryCircleUnsorted"/>, which is
+/// for searches whose outcome does not depend on the order.
 /// </para>
 /// </remarks>
 public sealed class SpatialIndex
@@ -78,10 +79,11 @@ public sealed class SpatialIndex
         for (var i = 0; i < _bodies.Count; i++)
         {
             var entity = _bodies.EntityAt(i);
-            if (_entities.IsAlive(entity))
+            var listed = _entities.PositionOf(entity);
+            if (_entities.IsAlive(entity, listed))
             {
                 var position = _bodies.ValueAt(i).Position;
-                _entries[_firstOfCell[CellOf(position)]++] = new Entry(entity, position);
+                _entries[_firstOfCell[CellOf(position)]++] = new Entry(entity, position, i, listed);
             }
         }
 
@@ -107,6 +109,56 @@ public sealed class SpatialIndex
         var reach = new FixedVector2(radius, radius);
         var limit = FixedVector2.SquareRaw(radius);
         Collect(center - reach, center + reach, results, withinCircle: true, center, limit);
+    }
+
+    /// <summary>
+    /// Lists what <see cref="QueryCircle"/> lists, each entity with where its body is in the
+    /// store, and without sorting: in the order of the squares, and by ID within a square. The
+    /// list is emptied first.
+    /// </summary>
+    /// <remarks>
+    /// For a search that looks at every candidate anyway and asks most of them very little, like
+    /// picking the nearest enemy among hundreds of units: the sort and a lookup for every
+    /// candidate are most of what such a search costs. The order is the same on every machine,
+    /// as it follows from the bodies alone, but it is not ID order. So use it only where the
+    /// outcome does not depend on the order in which the candidates come: a caller that picks one
+    /// of them must compare IDs itself where two are otherwise equal.
+    /// </remarks>
+    public void QueryCircleUnsorted(FixedVector2 center, Fixed radius, List<Filed> results)
+    {
+        ArgumentNullException.ThrowIfNull(results);
+        ArgumentOutOfRangeException.ThrowIfNegative(radius.Raw, nameof(radius));
+
+        results.Clear();
+        var reach = new FixedVector2(radius, radius);
+        var min = center - reach;
+        var max = center + reach;
+        var limit = FixedVector2.SquareRaw(radius);
+        var firstColumn = ColumnOf(min.X);
+        var lastColumn = ColumnOf(max.X);
+        var firstRow = RowOf(min.Y);
+        var lastRow = RowOf(max.Y);
+        for (var row = firstRow; row <= lastRow; row++)
+        {
+            for (var column = firstColumn; column <= lastColumn; column++)
+            {
+                var cell = (row * _columns) + column;
+                for (var i = _firstOfCell[cell]; i < _firstOfCell[cell + 1]; i++)
+                {
+                    ref readonly var entry = ref _entries[i];
+                    var position = entry.Position;
+                    if (position.X < min.X || position.X > max.X || position.Y < min.Y || position.Y > max.Y)
+                    {
+                        continue;
+                    }
+
+                    if (FixedVector2.DistanceSquaredRaw(position, center) <= limit && _entities.IsAlive(entry.Entity, entry.Listed))
+                    {
+                        results.Add(new Filed(entry.Entity, entry.Body));
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -154,7 +206,7 @@ public sealed class SpatialIndex
                         continue;
                     }
 
-                    if (_entities.IsAlive(entry.Entity))
+                    if (_entities.IsAlive(entry.Entity, entry.Listed))
                     {
                         results.Add(entry.Entity);
                     }
@@ -173,5 +225,16 @@ public sealed class SpatialIndex
 
     private int CellOf(FixedVector2 position) => (RowOf(position.Y) * _columns) + ColumnOf(position.X);
 
-    private readonly record struct Entry(EntityId Entity, FixedVector2 Position);
+    // Body and Listed are where the entity was in the body store and in the list of entities
+    // when it was filed: hints that save a search while nothing has been added or removed since.
+    private readonly record struct Entry(EntityId Entity, FixedVector2 Position, int Body, int Listed);
 }
+
+/// <summary>An entity that <see cref="SpatialIndex.QueryCircleUnsorted"/> found.</summary>
+/// <param name="Entity">The entity.</param>
+/// <param name="Body">
+/// Where its body was in the store when the index was last rebuilt: a hint for
+/// <see cref="ComponentStore{T}.IndexOf(EntityId, int)"/>, which finds the body without a search
+/// while nothing has been added to the store or taken from it since.
+/// </param>
+public readonly record struct Filed(EntityId Entity, int Body);

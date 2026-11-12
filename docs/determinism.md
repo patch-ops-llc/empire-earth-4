@@ -49,7 +49,7 @@ The kernel is in `src/Sim/Core/`, in the namespace `Sim.Core`.
 
 - **`World`** holds all state: the tick number, the random generator, the entities and the registered stores.
 - **`EntityId`** is an integer. IDs start at 1, ascend, and are never reused, so a lower ID is always an older entity. `EntityId.None` is 0.
-- **`ComponentStore<T>`** holds one value of a struct type per entity, in arrays kept in ascending ID order. The struct implements `IStateValue`. A system walks the store by index, oldest entity first. State that does not belong to an entity goes in a class of its own that implements `IStateStore`.
+- **`ComponentStore<T>`** holds one value of a struct type per entity, in arrays kept in ascending ID order. The struct implements `IStateValue`. A system walks the store by index, oldest entity first. A lookup by entity searches the IDs; a caller that knows where a value was a moment ago passes that as a hint (`IndexOf(entity, hint)`, and `IsAlive(entity, hint)` on the list of entities) and is answered without a search while the value is still there. A hint never changes an answer, only how it is found, so one that is out of date is safe. State that does not belong to an entity goes in a class of its own that implements `IStateStore`.
 - **`DeterministicRandom`** (`World.Random`) is a SplitMix64 generator. Every draw changes its state, so draw only inside a tick, from code that runs in a fixed order. Never draw from presentation code.
 
 Destroying an entity is settled in two steps. `Entities.Destroy(id)` makes `IsAlive(id)` false at once. The entity keeps its place and its values in every store until the end of the tick, when they are all removed together. So a system may destroy entities while it walks a store, and positions in the store stay valid for the whole tick. Check `IsAlive` where it matters that something was destroyed earlier in the same tick.
@@ -202,6 +202,7 @@ Some of what a match holds is worked out from the state and is not state: the sp
 - Nothing in the state may depend on how much derived data there is: on what a cache holds, how full it is or how many searches have run.
 - `Match.RefreshDerivedState()` rebuilds whatever must agree with the world before the next tick. Everything that changes the world from outside a tick calls it: `Snapshot.Restore(match, reader)` does, and a test that places units does.
 - New derived data is added to `RefreshDerivedState`, and to the comparison in `SnapshotAssert` that checks a restored match answers as the match it was taken from.
+- The spatial index answers in ascending ID order. `QueryCircleUnsorted` is the one exception: it lists square by square of the index, without the sort, and with where each body is in the store, so that a search among hundreds of units neither sorts them nor looks each one up. That order follows from the bodies alone, so it is the same on every machine and after a restore, but it is not ID order (rule 4). Use it only where the outcome does not depend on the order the candidates come in: a search that picks one of them compares IDs itself where two are otherwise equal.
 
 ## Bytes
 

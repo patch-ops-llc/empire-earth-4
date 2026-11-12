@@ -159,6 +159,7 @@ public class SpatialIndexTests
         }
 
         var found = new List<EntityId>();
+        var filed = new List<Filed>();
         for (var i = 0; i < 400; i++)
         {
             var center = RandomPoint();
@@ -168,6 +169,11 @@ public class SpatialIndexTests
                 units.Where(unit => match.World.Entities.IsAlive(unit)
                     && FixedVector2.DistanceSquaredRaw(match.PositionOf(unit), center) <= FixedVector2.SquareRaw(radius)),
                 found);
+
+            // Unsorted, the same entities, each with where its body is in the store.
+            match.SpatialIndex.QueryCircleUnsorted(center, radius, filed);
+            Assert.Equal(found, filed.Select(one => one.Entity).Order());
+            Assert.All(filed, one => Assert.Equal(one.Entity, match.Bodies.EntityAt(one.Body)));
 
             var corner = RandomPoint();
             var min = new FixedVector2(Fixed.Min(center.X, corner.X), Fixed.Min(center.Y, corner.Y));
@@ -201,12 +207,94 @@ public class SpatialIndexTests
 
         var found = new List<EntityId>();
         var expected = new List<EntityId>();
+        var filed = new List<Filed>();
+        var expectedFiled = new List<Filed>();
         for (var i = 0; i < 100; i++)
         {
             var center = MapGrid.TileCenter(random.NextInt(30), random.NextInt(30));
             match.SpatialIndex.QueryCircle(center, Fixed.FromInt(5), found);
             other.QueryCircle(center, Fixed.FromInt(5), expected);
             Assert.Equal(expected, found);
+
+            // The order of an unsorted answer follows from the bodies too, and from nothing before them.
+            match.SpatialIndex.QueryCircleUnsorted(center, Fixed.FromInt(5), filed);
+            other.QueryCircleUnsorted(center, Fixed.FromInt(5), expectedFiled);
+            Assert.Equal(expectedFiled, filed);
         }
+    }
+
+    /// <summary>
+    /// The unsorted query lists square by square of the index, by ID within a square, so a
+    /// caller that picks among what it lists must not lean on the order.
+    /// </summary>
+    [Fact]
+    public void TheUnsortedQueryListsTheSameEntitiesSquareBySquare()
+    {
+        var match = TestMatches.Create(TestMaps.Open(20, 20));
+        var southEast = match.SpawnUnit(0, Point("10.5", "10.5"), QuarterTile);
+        var northWest = match.SpawnUnit(1, Point("5.5", "5.5"), QuarterTile);
+        var besideIt = match.SpawnUnit(0, Point("6.5", "5.5"), QuarterTile);
+        var far = match.SpawnUnit(0, Point("18.5", "18.5"), QuarterTile);
+        var northEast = match.SpawnUnit(1, Point("10.5", "5.5"), QuarterTile);
+        match.RefreshDerivedState();
+        var found = new List<EntityId>();
+        var filed = new List<Filed> { new(far, 3) };
+
+        match.SpatialIndex.QueryCircle(Point("8.5", "8.5"), Fixed.FromInt(5), found);
+        match.SpatialIndex.QueryCircleUnsorted(Point("8.5", "8.5"), Fixed.FromInt(5), filed);
+
+        // The squares are 4 tiles wide: (5.5, 5.5) and (6.5, 5.5) share one, and rows come before columns.
+        Assert.Equal([southEast, northWest, besideIt, northEast], found);
+        Assert.Equal([new(northWest, 1), new(besideIt, 2), new(northEast, 4), new(southEast, 0)], filed);
+
+        // An entity destroyed since the index was built is left out at once, as from every answer.
+        match.World.Entities.Destroy(besideIt);
+        match.SpatialIndex.QueryCircleUnsorted(Point("8.5", "8.5"), Fixed.FromInt(5), filed);
+        Assert.Equal([new(northWest, 1), new(northEast, 4), new(southEast, 0)], filed);
+
+        // The edge of the circle counts, as in the sorted query.
+        match.SpatialIndex.QueryCircleUnsorted(Point("5.5", "8.5"), Fixed.FromInt(3), filed);
+        Assert.Equal([new(northWest, 1)], filed);
+        match.SpatialIndex.QueryCircleUnsorted(Point("5.5", "8.5"), Fixed.FromInt(3) - Fixed.Epsilon, filed);
+        Assert.Empty(filed);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => match.SpatialIndex.QueryCircleUnsorted(Point("1", "1"), -Fixed.Epsilon, filed));
+        Assert.Throws<ArgumentNullException>(() => match.SpatialIndex.QueryCircleUnsorted(Point("1", "1"), Fixed.One, null!));
+    }
+
+    /// <summary>
+    /// Where a body was in the store is a hint. The index may be older than the store, and the
+    /// hint then finds the body all the same, or finds that it is gone.
+    /// </summary>
+    [Fact]
+    public void WhereABodyWasFiledFindsItAfterTheStoreHasChanged()
+    {
+        var match = TestMatches.Create(TestMaps.Open(20, 20));
+        var units = Enumerable.Range(0, 6).Select(i => match.SpawnUnit(0, MapGrid.TileCenter(2 + (3 * i), 5), QuarterTile)).ToArray();
+        match.RefreshDerivedState();
+        var filed = new List<Filed>();
+        match.SpatialIndex.QueryCircleUnsorted(Point("10", "5"), Fixed.FromInt(20), filed);
+        Assert.Equal(units, filed.Select(one => one.Entity).Order());
+
+        // Bodies leave the store, which moves the ones after them, and the index is not rebuilt.
+        match.Bodies.Remove(units[1]);
+        match.World.Entities.Destroy(units[3]);
+        match.World.FlushDestroyedEntities();
+
+        Assert.Equal(4, match.Bodies.Count);
+        foreach (var one in filed)
+        {
+            var index = match.Bodies.IndexOf(one.Entity, one.Body);
+            Assert.Equal(match.Bodies.IndexOf(one.Entity), index);
+            Assert.Equal(one.Entity == units[1] || one.Entity == units[3], index < 0);
+            if (index >= 0)
+            {
+                Assert.Equal(one.Entity, match.Bodies.EntityAt(index));
+            }
+        }
+
+        // The index still lists the body that left the store by itself, as it always has, and not the one destroyed.
+        match.SpatialIndex.QueryCircleUnsorted(Point("10", "5"), Fixed.FromInt(20), filed);
+        Assert.Equal(units.Where(unit => unit != units[3]), filed.Select(one => one.Entity).Order());
     }
 }
