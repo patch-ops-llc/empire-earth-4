@@ -514,4 +514,59 @@ public class WallRuleTests
         Assert.Equal(10, match.Breaching.SearchCount);
         Assert.All(units, unit => Assert.NotEqual(EntityId.None, match.UnitOf(unit).WallInWay));
     }
+
+    /// <summary>
+    /// The limit of an order is the limit of all the orders a player gives in one tick: a tick
+    /// with an order for each unit runs no more searches than a tick with one order for all, so
+    /// its cost does not grow with the number of orders. The units past the limit find their wall
+    /// as those past the limit of one order do, on their turn to look.
+    /// </summary>
+    [Fact]
+    public void ManyOrdersInOneTickRunNoMoreSearchesThanOneAndTheRestFindTheirWallSoonAfter()
+    {
+        // Twenty units in stalls, as above, and an order for each of them in the same tick.
+        const int Count = 20;
+        var rows = Enumerable.Range(0, (2 * Count) + 4).Select(y => y % 2 == 1 ? "..###" + new string('.', 35) : new string('.', 40));
+        var match = Create(TestMaps.FromRows([.. rows]));
+        match.Ring(1, (20, 16), (30, 26));
+        var units = Enumerable.Range(0, Count).Select(i => match.Spawn(0, Hoplite, "3.5", $"{(2 * i) + 2}.5")).ToArray();
+        foreach (var unit in units)
+        {
+            match.Simulation.Commands.Enqueue(0, CombatMatches.MoveCommand(0, Center(25, 21), unit));
+        }
+
+        // The orders run eight searches between them. The attacks of the same tick find a wall
+        // for those of the others whose turn to look it is, which is one unit in four.
+        match.Run(1);
+        Assert.InRange(match.Breaching.SearchCount, WallRule.MaxSearchesPerOrder, WallRule.MaxSearchesPerOrder + (Count / match.Combat.LookInterval) + 1);
+        Assert.Contains(units, unit => match.UnitOf(unit).WallInWay == EntityId.None);
+
+        match.Run(match.Combat.LookInterval);
+
+        Assert.Equal(Count, match.Breaching.SearchCount);
+        Assert.All(units, unit => Assert.NotEqual(EntityId.None, match.UnitOf(unit).WallInWay));
+    }
+
+    /// <summary>Each player has the limit to itself: one player's orders take nothing from another's in the same tick.</summary>
+    [Fact]
+    public void TheOrdersOfOnePlayerTakeNoSearchFromAnothersInTheSameTick()
+    {
+        // Ten units of player 0 in stalls in the west and ten of player 2 in the east, and the
+        // camp of player 1 between them; an order for each unit, all in one tick.
+        var rows = Enumerable.Range(0, 24).Select(y => y % 2 == 1 ? "..###" + new string('.', 50) + "###.." : new string('.', 60));
+        var match = Create(TestMaps.FromRows([.. rows]), players: 3);
+        match.Ring(1, (25, 6), (35, 16));
+        var west = Enumerable.Range(0, 10).Select(i => match.Spawn(0, Hoplite, "3.5", $"{(2 * i) + 2}.5")).ToArray();
+        var east = Enumerable.Range(0, 10).Select(i => match.Spawn(2, Hoplite, "56.5", $"{(2 * i) + 2}.5")).ToArray();
+        for (var i = 0; i < 10; i++)
+        {
+            match.Simulation.Commands.Enqueue(0, CombatMatches.MoveCommand(0, Center(30, 11), west[i]));
+            match.Simulation.Commands.Enqueue(0, CombatMatches.MoveCommand(2, Center(30, 11), east[i]));
+        }
+
+        match.Run(1);
+
+        Assert.InRange(west.Count(unit => match.UnitOf(unit).WallInWay != EntityId.None), WallRule.MaxSearchesPerOrder, 10);
+        Assert.InRange(east.Count(unit => match.UnitOf(unit).WallInWay != EntityId.None), WallRule.MaxSearchesPerOrder, 10);
+    }
 }

@@ -117,7 +117,7 @@ public sealed class OrderCommandHandler : ICommandHandler
             return false;
         }
 
-        _walls.BeginOrder();
+        _walls.BeginOrder(world.Tick);
         foreach (var entity in command.Entities)
         {
             // The units the move order sent: it skips one that stands where no unit can.
@@ -166,7 +166,7 @@ public sealed class OrderCommandHandler : ICommandHandler
         var mark = _targeting.MarkOf(command.TargetEntity, in target);
         var targetLine = mark.Line;
         var taken = false;
-        _walls.BeginOrder();
+        _walls.BeginOrder(world.Tick);
         foreach (var entity in command.Entities)
         {
             var index = _combatants.IndexOf(entity);

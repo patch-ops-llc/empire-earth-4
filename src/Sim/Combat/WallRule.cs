@@ -30,15 +30,20 @@ namespace Sim.Combat;
 /// walls (<see cref="Breaching.IsCutOff"/>), which is a lookup, so the search runs only when it
 /// finds a wall. When an order is given, a unit takes the wall that an earlier unit of the same
 /// order found if it can walk straight to where that unit stands, so that a group breaks in at
-/// one tile; at most <see cref="MaxSearchesPerOrder"/> searches are run for one order. Any other
-/// unit finds its wall in the attacks of a later tick, on its turn to look, within the budget of
-/// <see cref="Breaching.ExpansionsPerTick"/>. That is also how a unit finds the next wall behind
-/// the one it broke, and a wall that closed its way after the order was given.
+/// one tile; at most <see cref="MaxSearchesPerOrder"/> searches are run for one order, and no
+/// more for all the orders one player gives in one tick, so that a tick with many orders costs
+/// no more than a tick with one. Any other unit finds its wall in the attacks of a later tick, on
+/// its turn to look, within the budget of <see cref="Breaching.ExpansionsPerTick"/>. That is also
+/// how a unit finds the next wall behind the one it broke, and a wall that closed its way after
+/// the order was given.
 /// </para>
 /// </remarks>
 public sealed class WallRule
 {
-    /// <summary>The most searches for a wall that one order runs when it is given.</summary>
+    /// <summary>
+    /// The most searches for a wall that one order runs when it is given, and the most that all
+    /// the orders of one player run in one tick.
+    /// </summary>
     public const int MaxSearchesPerOrder = MoveCommandHandler.MaxSharedRoutes;
 
     private readonly MapGrid _grid;
@@ -48,7 +53,12 @@ public sealed class WallRule
 
     // Scratch for one order, emptied by BeginOrder. Not state.
     private readonly List<(FixedVector2 Position, int Region, EntityId Wall)> _found = [];
-    private int _searches;
+
+    // The searches each player's orders have run in the tick _tick. Not state: orders are given
+    // at the start of a tick, before anything else of it, so the count of a tick is never needed
+    // in another, and a restored match that starts counting from nothing counts the same.
+    private int[] _searches = new int[2];
+    private int _tick = -1;
 
     public WallRule(MapGrid grid, Breaching breaching, Targeting targeting, Approach approach)
     {
@@ -63,10 +73,15 @@ public sealed class WallRule
     }
 
     /// <summary>Call it before the units of one order are asked for their walls: they share what they find.</summary>
-    public void BeginOrder()
+    /// <param name="tick">The tick the order is given in.</param>
+    public void BeginOrder(int tick)
     {
         _found.Clear();
-        _searches = 0;
+        if (tick != _tick)
+        {
+            _tick = tick;
+            Array.Clear(_searches);
+        }
     }
 
     /// <summary>Where a move or attack-move order to a place takes a unit once no enemy wall is in its way.</summary>
@@ -78,7 +93,8 @@ public sealed class WallRule
 
     /// <summary>
     /// The wall in the way of a unit of the order that is being given, or none: none is in its
-    /// way, or the order has run its searches and the unit finds its wall later.
+    /// way, or the player's orders of this tick have run their searches and the unit finds its
+    /// wall later.
     /// </summary>
     public EntityId FindForOrder(int player, FixedVector2 position, FixedVector2 place)
     {
@@ -98,12 +114,17 @@ public sealed class WallRule
             }
         }
 
-        if (_searches >= MaxSearchesPerOrder)
+        if (player >= _searches.Length)
+        {
+            Array.Resize(ref _searches, player + 1);
+        }
+
+        if (_searches[player] >= MaxSearchesPerOrder)
         {
             return EntityId.None;
         }
 
-        _searches++;
+        _searches[player]++;
         var wall = _breaching.FindWall(player, position, place, out _);
         _found.Add((position, region, wall));
         return wall;
