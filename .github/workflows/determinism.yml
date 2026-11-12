@@ -13,17 +13,27 @@ on:
     # Nightly, at an odd minute to stay clear of the top of the hour.
     - cron: "23 3 * * *"
   workflow_dispatch:
-  # A change to this file or to the build settings every project shares is checked before it
-  # merges. So is a change to the network transport: sockets behave differently from one system
-  # to the next, and its tests run on real ones. Other pull requests are covered by ci.yml on
-  # Linux and by the run on main.
+  # A pull request runs this before it merges when it changes anything these jobs build, run or
+  # read, because any of it can move a recorded value or a state hash on one system and not on
+  # another. Other pull requests (the game's scenes and scripts, the schemas, the docs) are
+  # covered by ci.yml on Linux and by the run on main.
   pull_request:
     paths:
+      # This file, and what decides how every project is built and which projects there are.
       - .github/workflows/determinism.yml
       - Directory.Build.props
       - global.json
-      - src/Net.Udp/**
-      - tests/Net.Udp.Tests/**
+      - empire-earth-4.sln
+      # The line endings of a checkout, which the content hash of the data files is made from.
+      - .gitattributes
+      # Every project: the simulation, the session that decides the tick a command runs in, the
+      # transport on real sockets, and the tools, which run the golden replays. A new project
+      # is covered without a change here.
+      - src/**
+      # Every test project with its recorded values, and the golden replays with their data.
+      - tests/**
+      # The content. The tests build matches from it, and its hash must be the same everywhere.
+      - game/data/**
 
 permissions:
   contents: read
