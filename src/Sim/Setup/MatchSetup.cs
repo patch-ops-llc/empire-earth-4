@@ -148,7 +148,7 @@ public static class MatchSetup
         simulation.AddSystem(producing);
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
-        simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, placeHolders, fighters));
+        simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, placeHolders, fighters, new StandFirm(targeting, combatants, bodies)));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
         simulation.AddSystem(new ShotSystem(bodies, shots, targeting, simulation.Events));
         simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, places, simulation.Events));
