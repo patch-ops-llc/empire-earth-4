@@ -16,17 +16,21 @@ namespace Game;
 /// <para>
 /// An entry says what the structure costs, and is dark when it cannot be ordered: locked behind
 /// research, at the limit of how many the player may have, or beyond what the player has, each
-/// as <see cref="ConstructionRules.CheckStructure"/> says. The line under the entries says more
+/// as the rules of construction say. The line under the entries says more
 /// about the entry under the pointer or the one being placed.
 /// </para>
 /// <para>
 /// While a structure is being placed, the select button places it and the order button goes
 /// back to the menu, so neither selects nor orders: this part takes them before the unit
-/// control does. The click is taken only for a site the rules accept
-/// (<see cref="ConstructionRules.CheckSite"/>). Too near an enemy's territory is a warning and
+/// control does. The click is taken only for a site the rules accept. Too near an enemy's territory is a warning and
 /// not a refusal, because that rule is judged when the worker arrives. This part decides
 /// nothing about the match: the order goes through the session like any other, and the
 /// simulation judges it again on the tick it runs.
+/// </para>
+/// <para>
+/// Everything this part and the preview ask of the rules, they ask through
+/// <see cref="BuildChecks"/>, which is where a fogged view gets its answers from the player's
+/// own picture of the match in place of the true state.
 /// </para>
 /// </remarks>
 public partial class BuildMenu : InterfacePart
@@ -138,8 +142,8 @@ public partial class BuildMenu : InterfacePart
             return false;
         }
 
-        var problem = View.Match.Construction.CheckStructure(View.Player, structure.Index);
-        if (BuildWords.WhyNot(View.Match, View.Player, structure, problem) is { } why)
+        var checks = BuildChecks.For(View);
+        if (BuildWords.WhyNot(checks, structure, checks.Structure(structure)) is { } why)
         {
             Frame.Say($"{StructureWords.NameOf(structure)}: {why}");
             return false;
@@ -160,17 +164,16 @@ public partial class BuildMenu : InterfacePart
     /// <param name="more">True to go on placing the same structure, false to close the menu.</param>
     public bool Place(StructureDef structure, int x, int y, bool more = false)
     {
-        var match = View.Match;
+        var checks = BuildChecks.For(View);
         var name = StructureWords.NameOf(structure);
-        var problem = match.Construction.CheckStructure(View.Player, structure.Index);
-        if (BuildWords.WhyNot(match, View.Player, structure, problem) is { } why)
+        if (BuildWords.WhyNot(checks, structure, checks.Structure(structure)) is { } why)
         {
             Frame.Say($"{name}: {why}");
             StopPlacing();
             return false;
         }
 
-        var site = Placement.Of(match, View.Player, structure, x, y);
+        var site = Placement.Of(checks, structure, x, y);
         if (!site.IsAccepted)
         {
             Frame.Say($"The {name} cannot go there: {BuildWords.SiteProblem(site.Problem)}.");
@@ -383,19 +386,19 @@ public partial class BuildMenu : InterfacePart
             return null;
         }
 
-        return Placement.At(View.Match, View.Player, structure, ground);
+        return Placement.At(BuildChecks.For(View), structure, ground);
     }
 
     private void Refresh()
     {
-        var match = View.Match;
+        var checks = BuildChecks.For(View);
         foreach (var entry in _entries)
         {
-            var problem = match.Construction.CheckStructure(View.Player, entry.Structure.Index);
+            var problem = checks.Structure(entry.Structure);
             entry.Problem = problem;
             entry.Button.Disabled = problem != BuildProblem.None;
             entry.Name.AddThemeColorOverride("font_color", problem == BuildProblem.None ? ResearchColors.Ink : ResearchColors.Faint);
-            entry.Line.Text = BuildWords.EntryLine(match, View.Player, entry.Structure, problem);
+            entry.Line.Text = BuildWords.EntryLine(checks, entry.Structure, problem);
             entry.Line.AddThemeColorOverride("font_color", problem == BuildProblem.CannotAfford ? UiStyle.Warning : ResearchColors.Faint);
             entry.Mark.Visible = entry == _placing;
         }
@@ -447,7 +450,7 @@ public partial class BuildMenu : InterfacePart
             ? $"It can stand outside your territory and claims the ground {radius} tiles round it."
             : "It stands inside your territory.";
         var text = $"{StructureWords.NameOf(structure)}: {BuildWords.Facts(structure)}. {where}";
-        if (BuildWords.WhyNot(View.Match, View.Player, structure, entry.Problem) is { } why)
+        if (BuildWords.WhyNot(BuildChecks.For(View), structure, entry.Problem) is { } why)
         {
             text += $" {why}";
         }
@@ -518,12 +521,11 @@ public partial class BuildMenu : InterfacePart
     // The structures a worker places, in the order of the menu.
     private List<StructureDef> ListedStructures()
     {
-        var data = View.Match.Data;
-        var rules = View.Match.Construction;
+        var checks = BuildChecks.For(View);
         var listed = new List<StructureDef>();
-        foreach (var structure in data.Structures)
+        foreach (var structure in View.Match.Data.Structures)
         {
-            if (rules.Buildable(structure.Index) is not null)
+            if (checks.Lists(structure))
             {
                 listed.Add(structure);
             }

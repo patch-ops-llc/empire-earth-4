@@ -10,7 +10,7 @@ namespace Game;
 /// The smoke test's construction: the local player builds through the build menu as a player
 /// does, and the part checks what the view shows at each step. One structure is built to the
 /// end. While it builds itself, a second order is cancelled while its worker is on the way, and
-/// a third after its foundation is laid.
+/// a third after its foundation is laid. A finished Generator is then given a worker.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -66,6 +66,7 @@ public sealed class BuildSmoke : SmokePart
         ThirdFoundation,
         ThirdCancelled,
         FirstFinished,
+        AtWork,
         Done,
     }
 
@@ -123,6 +124,9 @@ public sealed class BuildSmoke : SmokePart
             case Step.FirstFinished:
                 FirstFinished(tick, orders, parts);
                 break;
+            case Step.AtWork:
+                AtWork(tick, orders);
+                break;
         }
     }
 
@@ -148,17 +152,18 @@ public sealed class BuildSmoke : SmokePart
             return;
         }
 
+        var checks = new BuildChecks(match, orders.Player);
         StructureDef? quickest = null;
         var listed = 0;
         foreach (var structure in match.Data.Structures)
         {
-            if (match.Construction.Buildable(structure.Index) is null)
+            if (!checks.Lists(structure))
             {
                 continue;
             }
 
             listed++;
-            var problem = match.Construction.CheckStructure(orders.Player, structure.Index);
+            var problem = checks.Structure(structure);
             if (parts.Menu.ProblemShownFor(structure) != problem)
             {
                 orders.Fail($"the build menu shows the {structure.Id} as {parts.Menu.ProblemShownFor(structure)} and the rules say {problem}.");
@@ -213,7 +218,8 @@ public sealed class BuildSmoke : SmokePart
     private bool CheckPreview(SmokeOrders orders, Parts parts)
     {
         var match = orders.Match;
-        var good = Placement.Of(match, orders.Player, _structure, _firstSite.X, _firstSite.Y);
+        var checks = new BuildChecks(match, orders.Player);
+        var good = Placement.Of(checks, _structure, _firstSite.X, _firstSite.Y);
         parts.Preview.Show(_structure, good);
         parts.Preview.EveryFrame(0.0);
         if (!good.IsAccepted || parts.Preview.BlockedTiles != 0)
@@ -231,7 +237,7 @@ public sealed class BuildSmoke : SmokePart
                 continue;
             }
 
-            var taken = Placement.Of(match, orders.Player, _structure, placed.X, placed.Y);
+            var taken = Placement.Of(checks, _structure, placed.X, placed.Y);
             parts.Preview.Show(_structure, taken);
             parts.Preview.EveryFrame(0.0);
             var tiles = _structure.Footprint * _structure.Footprint;
@@ -457,9 +463,40 @@ public sealed class BuildSmoke : SmokePart
             return;
         }
 
+        if (!_structure.IsEnergyWorkSite)
+        {
+            Finish(tick, orders, worked: false);
+            return;
+        }
+
+        // The order button on the finished Generator, with its worker selected.
+        var view = orders.View;
+        view.Selection.Set([_firstWorker]);
+        var target = new PointerTarget(PointerTargets.OwnStructure, _first, match.Structures.TryGet(_first, out var placed) ? placed.Tiles.Center : default);
+        if (view.Orders.Give(view, target)?.Name != GeneratorWork.Row().Name)
+        {
+            orders.Fail("the order button on a finished Generator did not send the selected worker to work there.");
+            return;
+        }
+
+        _deadline = tick + TicksToCancel;
+        _step = Step.AtWork;
+    }
+
+    private void AtWork(int tick, SmokeOrders orders)
+    {
+        if (orders.Match.Workers.TryGet(_firstWorker, out var worker) && worker.Site == _first)
+        {
+            Finish(tick, orders, worked: true);
+        }
+    }
+
+    private void Finish(int tick, SmokeOrders orders, bool worked)
+    {
         orders.View.Selection.Clear();
         _step = Step.Done;
-        GD.Print($"Smoke test, construction: a {_structure.Id} built itself by tick {tick} of the part, one order was cancelled on the way and one after its foundation was laid.");
+        var work = worked ? ", and a worker was sent to work at it" : string.Empty;
+        GD.Print($"Smoke test, construction: a {_structure.Id} built itself by tick {tick} of the part{work}; one order was cancelled on the way and one after its foundation was laid.");
     }
 
     private static int OwnOrders(SmokeOrders orders)

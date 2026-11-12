@@ -54,6 +54,21 @@ public partial class StructureLayer : WorldLayer
     /// </summary>
     public float? DrawnBuilt(EntityId entity) => _unfinished.TryGetValue(entity, out var look) ? look.Shown : null;
 
+    /// <summary>
+    /// Adds every structure that is drawn unfinished to a list, for what is drawn over one, as
+    /// the bar of its progress: nothing then shows a foundation this layer does not.
+    /// </summary>
+    public void CollectUnfinished(List<UnfinishedStructure> into)
+    {
+        foreach (var (entity, look) in _unfinished)
+        {
+            if (_structures.TryGetValue(entity, out var node))
+            {
+                into.Add(new UnfinishedStructure(entity, node.Body.Position, look.Height, look.Shown));
+            }
+        }
+    }
+
     protected override void Attach()
     {
         ReadAll();
@@ -232,3 +247,10 @@ public partial class StructureLayer : WorldLayer
 
     private readonly record struct StructureNode(MeshInstance3D Body, MeshInstance3D Outline);
 }
+
+/// <summary>A structure the <see cref="StructureLayer"/> draws unfinished.</summary>
+/// <param name="Entity">The structure.</param>
+/// <param name="Middle">The middle of its footprint, on the ground.</param>
+/// <param name="Height">How tall its shape is, in tiles.</param>
+/// <param name="Built">How much of it is drawn as built, from 0 to 1.</param>
+public readonly record struct UnfinishedStructure(EntityId Entity, Vector3 Middle, float Height, float Built);

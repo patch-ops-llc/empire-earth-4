@@ -1,7 +1,6 @@
 using Godot;
 using Sim.Construction;
 using Sim.Data;
-using Sim.Setup;
 
 namespace Game;
 
@@ -26,18 +25,17 @@ public readonly record struct Placement(int X, int Y, BuildProblem Problem, bool
     /// The site whose footprint has the point of the ground under the pointer at its middle, as
     /// near as whole tiles allow.
     /// </summary>
-    public static Placement At(Match match, int player, StructureDef structure, Vector2 ground)
+    public static Placement At(BuildChecks checks, StructureDef structure, Vector2 ground)
     {
         var x = Mathf.RoundToInt(ground.X - (structure.Footprint / 2f));
         var y = Mathf.RoundToInt(ground.Y - (structure.Footprint / 2f));
-        return Of(match, player, structure, x, y);
+        return Of(checks, structure, x, y);
     }
 
     /// <summary>The site with its lowest tile at (x, y).</summary>
-    public static Placement Of(Match match, int player, StructureDef structure, int x, int y)
+    public static Placement Of(BuildChecks checks, StructureDef structure, int x, int y)
     {
-        var rules = match.Construction;
-        var problem = rules.CheckSite(player, structure, x, y);
-        return new Placement(x, y, problem, problem == BuildProblem.None && rules.IsTooCloseToEnemyTerritory(player, structure, x, y));
+        var problem = checks.Site(structure, x, y);
+        return new Placement(x, y, problem, problem == BuildProblem.None && checks.NearEnemyTerritory(structure, x, y));
     }
 }

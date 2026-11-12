@@ -65,6 +65,9 @@ public sealed class FoundationLook
         _buildTicks = Math.Max(structure.BuildTicks, 1);
     }
 
+    /// <summary>How tall the structure's shape is, in tiles.</summary>
+    public float Height => _height;
+
     /// <summary>How much of the structure is drawn as built, from 0 to 1.</summary>
     public float Shown { get; private set; }
 

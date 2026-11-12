@@ -16,9 +16,8 @@ namespace Game;
 /// (design 5.4): a warning, since the enemy's structure may be gone by then.
 /// </para>
 /// <para>
-/// The layer judges nothing. The build menu says what to show and where, with what the
-/// construction rules said of the site, and asks the rules about each tile through
-/// <see cref="Sim.Construction.ConstructionRules.CanBuildOnTile"/>.
+/// The layer judges nothing. The build menu says what to show and where, with what
+/// <see cref="BuildChecks"/> said of the site, and the layer asks the same about each tile.
 /// </para>
 /// </remarks>
 public partial class PlacementPreview : WorldLayer
@@ -122,12 +121,12 @@ public partial class PlacementPreview : WorldLayer
 
     private void MarkTiles(StructureDef structure, Color good)
     {
-        var rules = View.Match.Construction;
+        var checks = BuildChecks.For(View);
         for (var y = _site.Y; y < _site.Y + structure.Footprint; y++)
         {
             for (var x = _site.X; x < _site.X + structure.Footprint; x++)
             {
-                var free = rules.CanBuildOnTile(View.Player, structure, x, y);
+                var free = checks.Tile(structure, x, y);
                 BlockedTiles += free ? 0 : 1;
                 _tiles.Add(
                     new Transform3D(Basis.Identity, new Vector3(x + 0.5f, TileLift, y + 0.5f)),

@@ -34,24 +34,24 @@ public static class BuildWords
     /// What the second line of a menu entry says: the price while the structure can be ordered or
     /// only lacks resources, and otherwise what is in the way.
     /// </summary>
-    public static string EntryLine(Match match, int player, StructureDef structure, BuildProblem problem) => problem switch
+    public static string EntryLine(BuildChecks checks, StructureDef structure, BuildProblem problem) => problem switch
     {
-        BuildProblem.Locked => Needs(match.Data, structure),
+        BuildProblem.Locked => Needs(checks.Match.Data, structure),
         BuildProblem.LimitReached => string.Create(
             CultureInfo.InvariantCulture,
-            $"Limit {match.Construction.CountOf(player, structure.Index)} of {structure.MaxPerPlayer ?? 0}"),
+            $"Limit {checks.CountOf(structure)} of {structure.MaxPerPlayer ?? 0}"),
         _ => ShortPrice(structure),
     };
 
     /// <summary>Why the menu does not offer a structure now, as a sentence, or null when it does.</summary>
-    public static string? WhyNot(Match match, int player, StructureDef structure, BuildProblem problem) => problem switch
+    public static string? WhyNot(BuildChecks checks, StructureDef structure, BuildProblem problem) => problem switch
     {
         BuildProblem.None => null,
-        BuildProblem.Locked => $"Locked: {Needs(match.Data, structure).ToLowerInvariant()}.",
+        BuildProblem.Locked => $"Locked: {Needs(checks.Match.Data, structure).ToLowerInvariant()}.",
         BuildProblem.LimitReached => string.Create(
             CultureInfo.InvariantCulture,
-            $"You have {match.Construction.CountOf(player, structure.Index)} of the {structure.MaxPerPlayer ?? 0} you may have, counting those under way."),
-        BuildProblem.CannotAfford => $"You lack {Lacking(match, player, structure)}.",
+            $"You have {checks.CountOf(structure)} of the {structure.MaxPerPlayer ?? 0} you may have, counting those under way."),
+        BuildProblem.CannotAfford => $"You lack {Lacking(checks.Match, checks.Player, structure)}.",
         _ => "It cannot be built.",
     };
 

@@ -7,8 +7,14 @@ namespace Game;
 /// camera and is never hidden behind a structure, a unit or a tree.
 /// </summary>
 /// <remarks>
+/// <para>
+/// A bar is drawn over what the structure layer draws unfinished and shows what that layer
+/// shows, so that the two never disagree, and a view that hides a structure hides its bar.
+/// </para>
+/// <para>
 /// The bar is blue, so that it is not read as hit points, which are green, yellow and red: a
 /// foundation has all its hit points from the moment it is laid (design 2.5).
+/// </para>
 /// </remarks>
 public partial class FoundationBars : WorldLayer
 {
@@ -25,7 +31,12 @@ public partial class FoundationBars : WorldLayer
     private static readonly Color Back = new(0.05f, 0.05f, 0.06f);
     private static readonly Color Built = new(0.42f, 0.74f, 1f);
 
+    private readonly StructureLayer _structures;
+    private readonly List<UnfinishedStructure> _unfinished = [];
     private InstancedShapes _quads = null!;
+
+    /// <summary>Makes the bars over the structures this layer draws unfinished.</summary>
+    public FoundationBars(StructureLayer structures) => _structures = structures;
 
     /// <summary>The number of bars drawn in the last frame.</summary>
     public int BarCount { get; private set; }
@@ -49,30 +60,18 @@ public partial class FoundationBars : WorldLayer
     {
         _quads.Begin();
         BarCount = 0;
+        _unfinished.Clear();
+        _structures.CollectUnfinished(_unfinished);
         if (GetViewport().GetCamera3D() is { } camera)
         {
-            var match = View.Match;
             var basis = camera.GlobalBasis;
-            var foundations = match.Foundations;
-            for (var i = 0; i < foundations.Count; i++)
+            foreach (var structure in _unfinished)
             {
-                var entity = foundations.EntityAt(i);
-                if (!match.World.Entities.IsAlive(entity)
-                    || !match.Structures.TryGet(entity, out var placed)
-                    || match.Data.StructureOf(placed.Type) is not { } structure)
-                {
-                    continue;
-                }
-
-                var fraction = Mathf.Clamp(foundations.ValueAt(i).Built / (float)Math.Max(structure.BuildTicks, 1), 0f, 1f);
-                var middle = new Vector3(
-                    placed.X + (placed.Size / 2f),
-                    StructureShapes.HeightOf(structure) + Lift,
-                    placed.Y + (placed.Size / 2f));
+                var middle = structure.Middle + (Vector3.Up * (structure.Height + Lift));
                 AddQuad(basis, middle, -Edge, Width + Edge, Height + (2f * Edge), Back);
-                if (fraction > 0f)
+                if (structure.Built > 0f)
                 {
-                    AddQuad(basis, middle, 0f, Width * fraction, Height, Built);
+                    AddQuad(basis, middle, 0f, Width * Mathf.Min(structure.Built, 1f), Height, Built);
                 }
 
                 BarCount++;
