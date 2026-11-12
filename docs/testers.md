@@ -1,6 +1,6 @@
 # Running a test build
 
-This is an early build of a hobby real-time strategy prototype, and the first one two people can play together. Each player has six workers on a map with forest and a ridge of cliffs, and can select them and send them round it. There is nothing to build and nobody to fight yet. Its job for now is to show that the game starts on your machine, that selecting units and moving them works, and that two machines can share one match.
+This is an early build of a hobby real-time strategy prototype, and the first one two people can play together. Each player has six workers on a map with forest and a ridge of cliffs, and can select them and send them round it. There is nothing to build yet, and no match can train a fighting unit, so for now a development aid makes them from nothing: see Trying a fight below. Its job for now is to show that the game starts on your machine, that selecting units, moving them and fighting with them works, and that two machines can share one match.
 
 The builds are not signed, because signing costs money and this is a hobby project. Windows and macOS both warn about that the first time you start the game. The steps below get past the warning.
 
@@ -45,7 +45,7 @@ The game opens on a menu with three choices.
 - **Host a match** opens the match for one other player and waits. See the next section.
 - **Join** joins a match someone else hosts. Type their address into the box first.
 
-During a match, the bar across the top of the window says which player you are, and its button, Leave the match, takes you back to the menu. While units are selected, a panel at the bottom of the window says how many.
+During a match, the bar across the top of the window shows on its left what you have: Materials, Energy and supply, then your epoch and what is in research. On its right it says which player you are, and its button, Leave, takes you back to the menu. In a wide window it also says how the match is played: alone, hosted or joined. While units are selected, a panel at the bottom of the window says how many.
 
 ## Playing with someone else
 
@@ -81,9 +81,30 @@ If joining fails, the menu says why in orange:
 | Select several | Hold the left button and drag a box round them |
 | Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is already in |
 | Clear the selection | Click the ground |
+| See what another player's unit is | Click it. A pale ring marks it and the panel at the bottom describes it. It cannot be given orders |
+| Send the selected workers to work at a deposit | Right-click the deposit |
 | Send the selected units somewhere | Right-click the ground. On a trackpad that is a click with two fingers, unless you have set it otherwise |
+| Open or close the research panel | R, or the Research button in the bar at the top. Escape closes it too |
+| Start a research | In the research panel, click a bright cell |
+| Cancel a research | In the research panel, click Cancel beside its progress bar |
 | Show or hide the readout in the corner | F3 |
+| Attack a unit of the other player | Right-click it |
+| Go somewhere and fight whatever is met on the way | Hold Ctrl and right-click the place |
+| Stop | X, or the Stop button in the panel at the bottom |
+| Development aid: make units where the pointer is | G for yours. Alone, H for the other player's. See Trying a fight |
 | Quit | Close the window |
+
+## Resources and workers
+
+The brown blocks on the map are deposits. Select workers and right-click a deposit, and they walk to it, stand beside it and earn Materials for you. A yellow ring closes round the deposit you clicked.
+
+- Each worker at a deposit earns 45 Materials a minute, paid a little every second from one second after it arrives. Your six workers at one deposit earn 4.5 a second.
+- A deposit has room for eight workers, so all six of yours fit at one.
+- A deposit pays only inside your territory, which for now is the ground round your start: the two deposits nearest your workers. Workers sent to any other deposit stand there and earn nothing, and a line under the top bar says so. Nothing can claim more territory yet.
+- A worker stops earning when you send it somewhere else. Send it back to a deposit and it starts again.
+- Nobody can walk through a deposit.
+- Materials and Energy are shown as whole numbers. Supply is what you use out of what you may use: each worker uses 1.
+- Nothing earns Energy yet. Research spends both: see Research below.
 
 ## What you will see
 
@@ -94,8 +115,36 @@ If joining fails, the menu says why in orange:
 - Units sent to the same place end up standing inside each other, on one point. They do not make room for each other yet.
 - When you play alone, the other player's workers never move. Nothing controls them.
 - In a shared match, both players see the same workers in the same places. An order takes a moment longer to start than it does alone, because it travels to the host first.
-- If the other player leaves or closes the game, the bar at the top says so and your match goes on without them. If the host leaves, the match ends for both.
+- If the other player leaves or closes the game, a line under the top bar says why, the bar says from then on that they are out, and your match goes on without them. If the host leaves, the match ends for both.
 - Each player has a Capitol where they start, on the empty square that their workers stand around. It is not drawn yet, but it is there: nobody can stand on it, and units walk round it. Nothing can be built yet.
+
+## What your units are
+
+Select units and the panel at the bottom of the window says what they are.
+
+- **One unit** is shown in detail: its name, its line and epoch, at the right its hit points as a bar and as numbers, and a card for each thing your research changes. A card names the track behind it in the track's color, the tier the unit fights with, and how far that tier is from the unit's own epoch: `Firepower 2 +1` is one tier ahead. Damage is given for a second of fighting, speed in tiles a second. Under the cards are its range or reach, how often it strikes and how far it sees.
+- **Accents** are listed under that with what each does. A track one tier ahead of a unit's epoch gives the unit that track's accent at level I, two tiers ahead at level II. A unit carries two at most, from its two tracks furthest ahead, and the panel says so when a third track is ahead.
+- **Several units** are summed up, one row for each kind: how many, their hit points together, the Firepower (FP), Protection (PR) and Mobility (MO) tiers they fight with, and their accents. Point at an accent to read what it does.
+- **A worker** shows its hit points, what it is doing, its speed and sight. A worker has no tiers and no accents.
+- **Another player's unit**, when you click it, shows its hit points, its Firepower, Protection and Mobility tiers and its accents. Its price and supply are the owner's to know.
+- Units with accents carry small square badges over their heads, in the color of the track, with one white mark for level I and two for level II. Every player's units show them. They sit just over the place of a unit's hit point bar.
+- When a player's epoch rises, a banner under the top bar says which epoch they reached. Your own is larger and says how high your tracks may now go.
+- Only workers start a match. Fighting units, which have the cards, tiers, accents and badges, come from the development aid for now: see Trying a fight.
+- A unit made before a Protection or Mobility research keeps the hit points and speed it was made with for now, though its card already shows the new tier. Damage, range and accents follow the research at once.
+- No match can raise an epoch yet: it takes three tracks at a tier, and the Energy you start with pays for one research.
+
+## Research
+
+Press R, or click Research in the bar at the top. The panel shows your six tracks as rows and their nine tiers as columns. The match goes on behind it.
+
+- A filled cell is a tier you have. The bright cell after it is the next tier, with its price: M is Materials and E is Energy. Click it to start the research.
+- Point at a row and the right side says what its next tier costs, how long it takes, which units it unlocks and which accents it gives or takes from the units you can build.
+- A cell that cannot be started says why: too expensive, with what you lack in orange; slot busy; or out of reach, because no track may be more than two tiers above your epoch.
+- While a research runs, its cell fills up, and the top of the panel shows a progress bar with the time left and a Cancel button. Cancelling gives the whole price back. The bar at the top of the window shows the same progress when the panel is closed: the track and its tier, a bar and the time left.
+- When a research finishes, a line under the top bar says so and the track's row has one more filled cell.
+- You have one research slot, so one research runs at a time.
+- You start with 400 Materials and 100 Energy. Workers at deposits earn more Materials, but nothing earns Energy yet, so a match still has room for one research: a tier 2 costs 100 of each. After it you have no Energy, and every next tier shows as too expensive however many Materials you have.
+- Tiers 5 to 9 are closed. A match stops at epoch 4 for now.
 
 ## What to know about multiplayer
 
@@ -105,9 +154,28 @@ Every player's machine runs the whole game and they exchange only commands. That
 - A player who drops out cannot rejoin the match.
 - A slow machine or connection on the host's side slows the match for everyone.
 
-This build also has a development switch on. No match can train a fighting unit yet, so the game accepts an order that makes units from nothing, for either player, to try out fights. Nothing in the game sends that order yet. It is switched off again once units can be trained.
+This build also has a development switch on. No match can train a fighting unit yet, so the game accepts an order that makes units from nothing, to try out fights. The development aid described under Trying a fight sends it. It is switched off again once units can be trained.
 
 The two games check each other all the time. If they ever disagree about the state of the match, both stop and say so. That is a fault in the game, and its files are what finds it: see the next section.
+
+## Trying a fight
+
+No match can train a fighting unit yet. Until one can, this build has a development aid that makes them from nothing, free of charge. It is not part of the game and goes away once units can be trained. Its panel has an orange border and sits at the left edge of the window.
+
+1. In the panel, choose a unit and how many to make at a time. There are four lines of units, each in four epochs. Line infantry shoots. Guards fight hand to hand. Cavalry fights hand to hand and is larger. Artillery shoots far and cannot shoot at what stands close to it. Its shells do not yet hit what stands round the target.
+2. Point at open ground and press G. Your units appear there.
+3. Alone, point somewhere else and press H. Units of the other player appear there, and nothing but their own reflexes controls them. In a shared match H makes nothing: each player makes their own units with G.
+
+What you will see:
+
+- All units still share one stand-in shape, so each fighting unit carries a pale mark on top that says how it fights: a cross for hand to hand, a ball for shooting, a ring for artillery. Cavalry's cross is larger. Workers carry no mark.
+- Units fight on their own when an enemy comes near, and go back to where they stood afterwards.
+- A right-click on an enemy leaves a red ring, and the selected units go after that unit. A right-click with Ctrl held leaves an orange ring, and the units go there and fight what they meet. A plain right-click on the ground moves them, and on that walk they do not fight, even when attacked.
+- A unit that has lost hit points has a bar above it: green, yellow below half and red below a quarter. The pale part of a bar is what the unit has just lost. A selected unit shows its bar even when unhurt, and the panel at the bottom gives the number when one unit is selected.
+- A shot is a pale streak in its owner's color, and a shell of artillery is thicker. A unit that is hit flashes white. A shot whose target died or got away before it arrived ends in a grey puff.
+- A unit that dies sinks into the ground and leaves a ring in its owner's color that spreads and fades.
+- Workers can be attacked and do not fight back.
+- If an order cannot be carried out, a line of text on screen says why.
 
 ## The files of a match
 

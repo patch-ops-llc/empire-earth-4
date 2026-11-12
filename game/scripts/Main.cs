@@ -214,7 +214,7 @@ public partial class Main : Node3D
         // The smoke test plays its own script, so it takes no input.
         _camera.ProcessMode = ProcessModeEnum.Disabled;
         _units.ProcessMode = ProcessModeEnum.Disabled;
-        _smokeTest = new SmokeTest(_smokeRun.Match, _smokeRun.Session);
+        _smokeTest = new SmokeTest(_smokeRun.Match, _smokeRun.Session, _view!);
     }
 
     private void RunSmokeTest(SmokeLog log)
