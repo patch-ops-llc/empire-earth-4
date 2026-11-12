@@ -10,7 +10,7 @@
   "tiers": [
     { "tier": 2, "cost": { "materials": 100, "energy": 100 }, "seconds": 45 },
     { "tier": 3, "cost": { "materials": 150, "energy": 200 }, "seconds": 60 },
-    { "tier": 4, "cost": { "materials": 225, "energy": 350 }, "seconds": 75 },
+    { "tier": 4, "cost": { "materials": 225, "energy": 350 }, "seconds": 105 },
     { "tier": 5, "cost": { "materials": 350, "energy": 550 }, "seconds": 90 },
     { "tier": 6, "cost": { "materials": 500, "energy": 850 }, "seconds": 105 },
     { "tier": 7, "cost": { "materials": 750, "energy": 1300 }, "seconds": 120 },
