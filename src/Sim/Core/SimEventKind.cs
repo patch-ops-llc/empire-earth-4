@@ -32,7 +32,9 @@ public enum SimEventKind
     /// <see cref="SimEvent.Player"/> is the owner, for whom alone the event is meant,
     /// <see cref="SimEvent.Entity"/> the worker that had the order,
     /// <see cref="SimEvent.Position"/> the center of the site, and <see cref="SimEvent.Amount"/>
-    /// why it ended, as a <see cref="Construction.BuildProblem"/>.
+    /// why it ended, as a <see cref="Construction.BuildProblem"/>. A wall order that ends
+    /// before its last tile is reported the same way, once: every tile not yet laid was given
+    /// back, and the position is the center of the tile that was next.
     /// </summary>
     BuildOrderEnded,
 
@@ -126,4 +128,13 @@ public enum SimEventKind
     /// one that its owner cancelled while it was building itself is not.
     /// </summary>
     StructureRemoved,
+
+    /// <summary>
+    /// A tile of a wall order could not be laid when its worker came to it, and its price was
+    /// given back. <see cref="SimEvent.Player"/> is the owner, for whom alone the event is meant,
+    /// <see cref="SimEvent.Entity"/> the worker that has the order,
+    /// <see cref="SimEvent.Position"/> the center of the tile, and <see cref="SimEvent.Amount"/>
+    /// why, as a <see cref="Construction.BuildProblem"/>. The order goes on with its next tile.
+    /// </summary>
+    WallTileSkipped,
 }

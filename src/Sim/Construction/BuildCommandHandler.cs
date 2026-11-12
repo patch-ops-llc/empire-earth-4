@@ -15,8 +15,8 @@ namespace Sim.Construction;
 /// The structure is the command's <see cref="Command.ContentId"/>, its index in the roster. The
 /// tile that holds the command's target point is the lowest tile of the footprint: the one with
 /// the lowest x and y. The command lists workers, and one of them takes the order: the nearest
-/// to the site of those that have no build order yet, or, when all have one, the nearest of
-/// them, whose order this one replaces. Distance is measured in a straight line to the nearest
+/// to the site of those that have no build order and no wall order yet, or, when all have one,
+/// the nearest of them, whose order this one replaces. Distance is measured in a straight line to the nearest
 /// edge of the footprint, and of two equally near the one listed first goes.
 /// </para>
 /// <para>
@@ -110,19 +110,16 @@ public sealed class BuildCommandHandler : ICommandHandler
             return BuildProblem.LimitReached;
         }
 
-        // An order the worker already has ends when it takes this one, and gives its price back.
-        var replaces = _rules.Orders.TryGet(worker, out var old);
+        // An order the worker already has ends when it takes this one, and gives back what it holds.
+        var held = _rules.HeldBy(worker);
         var stockpiles = _rules.Stockpiles;
-        if (stockpiles.Materials(player) + (old.Materials * Stockpiles.PerResource) < structure.Materials * Stockpiles.PerResource
-            || stockpiles.Energy(player) + (old.Energy * Stockpiles.PerResource) < structure.Energy * Stockpiles.PerResource)
+        if (stockpiles.Materials(player) + (held.Materials * Stockpiles.PerResource) < structure.Materials * Stockpiles.PerResource
+            || stockpiles.Energy(player) + (held.Energy * Stockpiles.PerResource) < structure.Energy * Stockpiles.PerResource)
         {
             return BuildProblem.CannotAfford;
         }
 
-        if (replaces)
-        {
-            _rules.EndOrder(worker, BuildProblem.OtherOrder);
-        }
+        _rules.EndAnyOrder(worker, BuildProblem.OtherOrder);
 
         if (!stockpiles.TryPay(player, structure.Materials, structure.Energy))
         {
@@ -152,7 +149,7 @@ public sealed class BuildCommandHandler : ICommandHandler
                 continue;
             }
 
-            var isFree = !_rules.Orders.Contains(entity);
+            var isFree = !_rules.HasOrder(entity);
             var distance = site.DistanceSquaredRawTo(body.Position);
             if (picked == EntityId.None || (isFree && !pickedIsFree) || (isFree == pickedIsFree && distance < nearest))
             {

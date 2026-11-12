@@ -7,6 +7,7 @@ using Sim.Map;
 using Sim.Movement;
 using Sim.Research;
 using Sim.Structures;
+using Sim.Walls;
 
 namespace Sim.Setup;
 
@@ -52,6 +53,7 @@ public static class MatchSetup
         var structures = world.AddStore(new ComponentStore<PlacedStructure>(PlacedStructure.StoreName));
         var territories = world.AddStore(new ComponentStore<Territory>(Territory.StoreName));
         var turrets = world.AddStore(new ComponentStore<Turret>(Turret.StoreName));
+        var wallPlans = world.AddStore(new ComponentStore<WallPlan>(WallPlan.StoreName));
         var workers = world.AddStore(new ComponentStore<Worker>(Worker.StoreName));
         var workSites = world.AddStore(new ComponentStore<WorkSite>(WorkSite.StoreName));
 
@@ -84,15 +86,19 @@ public static class MatchSetup
 
         // A worker walks to the site of its build order by the move order too, and any other
         // order it is given ends the build order: the handlers of those orders are wrapped once
-        // more. An attack order is not, because a worker never takes one.
+        // more. An attack order is not, because a worker never takes one. A wall order is a
+        // worker's order in place of a build order, and ends as one does.
         var structureFactory = new StructureFactory(
             data, world, bodies, health, structures, territories, turrets, workSites, structureTiles, research, simulation.Events, players.Count);
         var construction = new ConstructionRules(
             data, world, grid, bodies, buildOrders, combatants, foundations, movers, structures, territories, workers,
             stockpiles, research, work, structureFactory, spatialIndex, move, simulation.Events, players.Count);
+        var walls = new WallOrders(data, construction, wallPlans);
+        construction.WallOrders = walls;
         simulation.SetCommandHandler(CommandType.Attack, orders);
         simulation.SetCommandHandler(CommandType.AttackMove, new OtherOrderHandler(walkOrders, construction));
         simulation.SetCommandHandler(CommandType.Build, new BuildCommandHandler(construction));
+        simulation.SetCommandHandler(CommandType.BuildWall, new BuildWallCommandHandler(walls, construction));
         simulation.SetCommandHandler(CommandType.CancelBuild, new CancelBuildCommandHandler(construction));
         simulation.SetCommandHandler(CommandType.CancelResearch, new CancelResearchHandler(research));
         simulation.SetCommandHandler(
@@ -123,6 +129,8 @@ public static class MatchSetup
         // lays its foundation in the tick it arrives, on the tiles as they are in this tick, and
         // the order of a worker killed in this tick ends in it. It comes before income and
         // research, which see what a structure finished in this tick gives.
+        // The wall orders come right after construction, for the same reasons: a wall tile is a
+        // foundation that its worker lays as it arrives.
         // Income comes after movement, so that a worker that reaches its place in this tick has
         // arrived in this tick; after the deaths, so that a worker killed in this tick earns
         // nothing in it and its place is given out in it; and before research, so that a tier
@@ -139,6 +147,7 @@ public static class MatchSetup
         simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
         simulation.AddSystem(new StructureSystem(data, bodies, structures, foundations, structureTiles, research, simulation.Events));
         simulation.AddSystem(new ConstructionSystem(construction, data));
+        simulation.AddSystem(new WallSystem(walls, construction));
         simulation.AddSystem(new IncomeSystem(data, grid, bodies, movers, workers, workSites, territories, stockpiles, work, research));
         simulation.AddSystem(new ResearchSystem(research));
 
@@ -169,6 +178,8 @@ public static class MatchSetup
             Supply = supply,
             Territories = territories,
             Turrets = turrets,
+            WallPlans = wallPlans,
+            Walls = walls,
             Work = work,
             Workers = workers,
             WorkSites = workSites,

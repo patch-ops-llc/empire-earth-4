@@ -8,6 +8,7 @@ using Sim.Movement;
 using Sim.Numerics;
 using Sim.Research;
 using Sim.Structures;
+using Sim.Walls;
 
 namespace Sim.Setup;
 
@@ -105,6 +106,15 @@ public sealed class Match
 
     /// <summary>The attack of each finished structure that has one: the Towers.</summary>
     public required ComponentStore<Turret> Turrets { get; init; }
+
+    /// <summary>The tiles of the wall orders that are paid for and not yet laid, each an entity of its own.</summary>
+    public required ComponentStore<WallPlan> WallPlans { get; init; }
+
+    /// <summary>
+    /// The wall orders: which tiles of a run can be laid, and so what a wall costs before it is
+    /// ordered. Not state: see <see cref="WallOrders"/>.
+    /// </summary>
+    public required WallOrders Walls { get; init; }
 
     /// <summary>Assigns workers to work sites. Not state: see <see cref="WorkAssignments"/>.</summary>
     public required WorkAssignments Work { get; init; }
