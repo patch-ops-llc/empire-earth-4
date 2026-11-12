@@ -42,6 +42,8 @@ public partial class MatchMenu : CanvasLayer
     private Label _waitingTitle = null!;
     private Label _waitingStatus = null!;
     private Label _endedText = null!;
+    private Button _showFileButton = null!;
+    private string? _endedFile;
     private Button _startButton = null!;
     private LineEdit _hostPort = null!;
     private LineEdit _joinAddress = null!;
@@ -270,18 +272,19 @@ public partial class MatchMenu : CanvasLayer
         var text = end?.Reason switch
         {
             SessionEndReason.HostEnded => "The host ended the match.",
-            SessionEndReason.Desync => string.Create(CultureInfo.InvariantCulture,
-                $"The two games no longer agree, so the match was stopped at tick {tick}. This is a fault in the game, not something you did."),
+            SessionEndReason.Desync => DesyncReport.WhatHappened,
             SessionEndReason.ConnectionLost => "The connection to the host was lost.",
             SessionEndReason.FellBehind => "This machine fell too far behind and was taken out of the match.",
             _ => $"The match stopped: {end?.Reason}.",
         };
 
+        _endedFile = null;
         if (run.Files is { } files)
         {
-            if (files.SnapshotPath is not null)
+            if (end?.Reason == SessionEndReason.Desync)
             {
-                text += $"\n\nTo find the fault, both players' files are needed. Yours are:\n{files.ReplayPath}\n{files.SnapshotPath}";
+                text += $"\n\n{DesyncReport.Words(files)}";
+                _endedFile = files.BundlePath;
             }
             else if (files.ReplayPath is not null)
             {
@@ -294,8 +297,10 @@ public partial class MatchMenu : CanvasLayer
             }
         }
 
-        GD.Print(text);
+        // The log has the tick as well, which is for whoever reads the log and not for the player.
+        GD.Print(string.Create(CultureInfo.InvariantCulture, $"The match stopped at tick {tick}. {text}"));
         _endedText.Text = text;
+        _showFileButton.Visible = _endedFile is not null;
         ShowPage(Page.Ended);
     }
 
@@ -485,6 +490,12 @@ public partial class MatchMenu : CanvasLayer
         page.AddChild(UiStyle.Title("The match is over"));
         _endedText = UiStyle.Text(string.Empty);
         page.AddChild(_endedText);
+
+        // The folder of the file to send is one a player never opens, so the game opens it for them.
+        _showFileButton = UiStyle.PushButton("Show the file in its folder");
+        _showFileButton.Pressed += () => OS.ShellShowInFileManager(_endedFile ?? MatchFiles.Folder);
+        _showFileButton.Visible = false;
+        page.AddChild(_showFileButton);
         var back = UiStyle.PushButton("Back to the menu");
         back.Pressed += () => BackToStart(null);
         page.AddChild(back);

@@ -18,10 +18,20 @@ namespace Game;
 /// to walk to a point near the middle of the map, through the session as a player's orders go.
 /// When the match has run the number of ticks asked for, the host ends it, and every game runs to
 /// the same last tick.
+/// <para>
+/// With <see cref="StartRequest.NetTestDesyncArgument"/> as well, the test is of a desync made on
+/// purpose. The game that joins moves one of its own units by the smallest step there is, on its
+/// own machine only, as a fault in the simulation would. Both games must then stop because they
+/// no longer agree, long before the ticks asked for have run, and each must have written its
+/// desync bundle. Each prints what the end screen says about the file and one line that starts
+/// with <see cref="DesyncMarker"/> and names the bundle.
+/// </para>
 /// </remarks>
 public sealed class NetTest
 {
     public const string Marker = "NET_TEST_OK";
+
+    public const string DesyncMarker = "NET_TEST_DESYNC";
 
     // Orders are given once the match has run a second, so that they travel while ticks do.
     private const int OrderAtTick = 20;
@@ -30,10 +40,18 @@ public sealed class NetTest
     private const double TimeoutSeconds = 120.0;
 
     private readonly int _ticks;
+    private readonly int _desyncTick;
     private readonly ulong _startedAt = Time.GetTicksMsec();
     private bool _ordered;
+    private bool _faultMade;
 
-    public NetTest(int ticks) => _ticks = ticks;
+    /// <param name="ticks">The host ends the match when it has run this many ticks.</param>
+    /// <param name="desyncTick">Above 0, the game that joins puts a fault into its state once it has run this many ticks.</param>
+    public NetTest(int ticks, int desyncTick = 0)
+    {
+        _ticks = ticks;
+        _desyncTick = desyncTick;
+    }
 
     /// <summary>
     /// Call once a frame, after the match has advanced. Returns the code to exit with once the
@@ -71,6 +89,11 @@ public sealed class NetTest
                 _ordered = Order(match, client);
             }
 
+            if (_desyncTick > 0 && !_faultMade && run is JoinRun && match.World.Tick >= _desyncTick)
+            {
+                _faultMade = MakeFault(match, client);
+            }
+
             if (run is HostRun && match.World.Tick >= _ticks)
             {
                 // Closing ends the match for everyone and runs this game to its last tick.
@@ -87,6 +110,11 @@ public sealed class NetTest
         }
 
         var end = client.EndInfo!;
+        if (_desyncTick > 0)
+        {
+            return ReportDesync(run, match, end, menu);
+        }
+
         if (end.Reason != SessionEndReason.HostEnded)
         {
             GD.PrintErr($"Net test: the match stopped at tick {match.World.Tick}: {end.Reason}. {(run as JoinRun)?.Player.Refusal}");
@@ -118,6 +146,45 @@ public sealed class NetTest
             $"tick={match.World.Tick} entities={match.Bodies.Count} dropped={match.Simulation.DroppedCommandCount} " +
             $"content_hash=sha256:{match.Data.ContentHash} state_hash={stateHash} replay={files.ReplayPath}"));
         return 0;
+    }
+
+    private static int ReportDesync(MatchRun run, Match match, SessionEndInfo end, MatchMenu menu)
+    {
+        var files = run.Files;
+        menu.CloseRun();
+        if (end.Reason != SessionEndReason.Desync)
+        {
+            GD.PrintErr($"Net test: the match stopped at tick {match.World.Tick} for another reason than the desync made on purpose: {end.Reason}.");
+            return 1;
+        }
+
+        if (files is not { BundlePath: not null, Problem: null })
+        {
+            GD.PrintErr($"Net test: the desync bundle was not written. {files?.Problem}");
+            return 1;
+        }
+
+        GD.Print(DesyncReport.Message(files));
+        GD.Print(string.Create(CultureInfo.InvariantCulture,
+            $"{DesyncMarker} role={(run is HostRun ? "host" : "guest")} player={run.Client.Player} version={GameInfo.Version} " +
+            $"tick={match.World.Tick} desync_tick={end.DesyncTick} bundle={files.BundlePath}"));
+        return 0;
+    }
+
+    // One unit of this player is, on this machine only, the smallest step from where it should be.
+    private static bool MakeFault(Match match, ClientSession client)
+    {
+        for (var i = 0; i < match.Bodies.Count; i++)
+        {
+            ref var body = ref match.Bodies.ValueAt(i);
+            if (body.Owner == client.Player)
+            {
+                body.Position += new FixedVector2(Fixed.Epsilon, Fixed.Zero);
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Every unit of this player walks to a point beside the middle of the map, a different one

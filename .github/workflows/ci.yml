@@ -120,3 +120,59 @@ jobs:
             exit 1
           fi
           dotnet run --no-build --project src/Tools -- replay verify "$files/host" "$files/guest" --data game/data
+
+      # The same two copies again, and this time the joining game puts a fault into its own state
+      # on purpose: one unit is the smallest step from where it should be. Both games must stop
+      # because they no longer agree, say so in the words a player sees, and each write its desync
+      # bundle and name it. The desync-diff tool, given the two bundles, must then find the store
+      # the fault was put in, say which game did not repeat its own run, and name the unit and
+      # the field. This is the only test of the desync files as the game wires them.
+      - name: Run a desync made on purpose between two copies of the game
+        shell: bash
+        run: |
+          files="$RUNNER_TEMP/net-desync"
+          rm -rf "$files"
+          mkdir -p "$files/host" "$files/guest"
+          godot --headless --path game -- --host 24643 --net-test 400 --net-test-desync 30 --match-files "$files/host" > "$files/host.log" 2>&1 &
+          host=$!
+          for _ in $(seq 1 240); do
+            if grep -q '^Hosting on port' "$files/host.log" || ! kill -0 "$host" 2>/dev/null; then
+              break
+            fi
+            sleep 0.25
+          done
+          godot --headless --path game -- --join 127.0.0.1:24643 --net-test 400 --net-test-desync 30 --match-files "$files/guest" > "$files/guest.log" 2>&1 || true
+          wait "$host" || true
+          cat "$files/host.log" "$files/guest.log"
+          host_bundle="$(sed -n 's/^NET_TEST_DESYNC role=host .* bundle=//p' "$files/host.log")"
+          guest_bundle="$(sed -n 's/^NET_TEST_DESYNC role=guest .* bundle=//p' "$files/guest.log")"
+          if [ ! -f "$host_bundle" ] || [ ! -f "$guest_bundle" ]; then
+            echo "::error::The two games did not both stop on the desync and write a bundle."
+            exit 1
+          fi
+          for side in host guest; do
+            bundle_name="${side}_bundle"
+            if ! grep -q "^The match was stopped because the players' games no longer agreed" "$files/$side.log" || ! grep -qxF "${!bundle_name}" "$files/$side.log"; then
+              echo "::error::The $side's game did not say in words what happened, or did not name its file."
+              exit 1
+            fi
+          done
+          code=0
+          dotnet run --no-build --project src/Tools -- desync-diff "$host_bundle" "$guest_bundle" --data game/data > "$files/report.txt" || code=$?
+          cat "$files/report.txt"
+          if [ "$code" != 1 ]; then
+            echo "::error::desync-diff exited with $code. It exits with 1 when it has compared two bundles that differ."
+            exit 1
+          fi
+          for expected in \
+            '^First tick that differs: [0-9]+\.' \
+            '^First store that differs: bodies\. In that tick 1 of the [0-9]+ parts of the state differ: bodies\.$' \
+            "^A's machine ran ticks [0-9]+ to [0-9]+ a second time from the agreed state and got the same states: it repeats itself\.$" \
+            "^B's machine ran the match a second time .* in: bodies\. It does not repeat itself\.$" \
+            '^This machine agrees with A\.$' \
+            '^  bodies entity [0-9]+ +Position\.X: '; do
+            if ! grep -Eq "$expected" "$files/report.txt"; then
+              echo "::error::The report of desync-diff has no line like: $expected"
+              exit 1
+            fi
+          done
