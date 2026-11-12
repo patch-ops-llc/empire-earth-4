@@ -5,8 +5,9 @@ namespace Game;
 /// <summary>
 /// Pause and speed (design: they are the host's). On the machine that sets the pace, the one
 /// that hosts the match or plays it alone, a row of buttons under the top bar at the right
-/// pauses the match and sets its speed. On every machine a banner says while the match is
-/// paused, and a line says when its speed changes.
+/// pauses the match and sets its speed. The row keeps its place whatever the message line
+/// shows. On every machine a banner says while the match is paused, and a line says when its
+/// speed changes.
 /// </summary>
 /// <remarks>
 /// It changes nothing in the match: the pace is the time between two ticks, which the host's
@@ -88,12 +89,18 @@ public partial class PaceControl : InterfacePart
         Refresh();
     }
 
+    /// <summary>Where the row of buttons stands, in the interface's units.</summary>
+    public Rect2 ButtonsPlace => _box.GetGlobalRect();
+
     public override void EveryFrame(double delta)
     {
-        // Under the message line, so that neither covers the other.
-        var top = Frame.MessagesEnd + Margin;
-        _box.Position = new Vector2(_box.GetViewportRect().Size.X - _box.Size.X - Margin, top);
-        _banner.Position = new Vector2((_banner.GetViewportRect().Size.X - _banner.Size.X) / 2f, top);
+        // The buttons keep one place, under the room of one message: a row that followed the
+        // message line moved when a message came or went, as one does when a pause ends, and a
+        // click aimed at a button then fell on the map behind it. The banner takes no click and
+        // stays under the messages, however many there are.
+        var buttons = Frame.FirstMessageEnd + Margin;
+        _box.Position = new Vector2(_box.GetViewportRect().Size.X - _box.Size.X - Margin, buttons);
+        _banner.Position = new Vector2((_banner.GetViewportRect().Size.X - _banner.Size.X) / 2f, Math.Max(buttons, Frame.MessagesEnd + Margin));
     }
 
     public override void _UnhandledInput(InputEvent @event)

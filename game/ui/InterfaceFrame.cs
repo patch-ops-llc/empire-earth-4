@@ -188,6 +188,14 @@ public partial class InterfaceFrame : CanvasLayer
     public float MessagesEnd => _messageLines.GetGlobalRect().End.Y;
 
     /// <summary>
+    /// How far down the window the message line reaches while it shows one message of one line,
+    /// whatever it shows now. Something a part shows under the bar that the player clicks stands
+    /// here and not at <see cref="MessagesEnd"/>, so that it does not move under the pointer
+    /// when a message comes or goes.
+    /// </summary>
+    public float FirstMessageEnd => _messageLines.GetGlobalRect().Position.Y + _messageRoom.GetCombinedMinimumSize().Y;
+
+    /// <summary>
     /// Where the bottom panel begins now, in the interface's units: the lower edge of the window
     /// while the panel is not shown. Something a part shows over the world above the bottom panel
     /// ends here, so that neither covers the other.

@@ -5,7 +5,7 @@ namespace Game;
 /// <summary>
 /// The smoke test's match flow: the match is paused, let go on and run at another speed for no
 /// time at all, and the part checks that the local player's side of the session and the view
-/// follow. The end screen is asked what it says of standings the part makes up, because the
+/// follow, and that the buttons keep their place when the lines that say so are shown. The end screen is asked what it says of standings the part makes up, because the
 /// smoke test's match must go on to its end with every player in it.
 /// </summary>
 /// <remarks>
@@ -15,7 +15,14 @@ namespace Game;
 /// </remarks>
 public sealed class MatchFlowSmoke : SmokePart
 {
-    private const int Length = 20;
+    // The pace is changed two frames into the part, when the buttons have been given their
+    // place, and they are looked at three frames later, when the lines that say so have theirs.
+    private const int Start = 40;
+    private const int LookAt = Start + 60;
+    private const int Length = LookAt + 10;
+
+    private Godot.Rect2 _buttons;
+    private float _messagesEnd;
 
     public override string Name => "Match flow";
 
@@ -23,20 +30,27 @@ public sealed class MatchFlowSmoke : SmokePart
 
     public override void GiveOrders(int tick, SmokeOrders orders)
     {
-        if (tick != 0)
+        var view = orders.View;
+        var pace = view.Interface.Parts.OfType<PaceControl>().FirstOrDefault();
+        var screen = view.Interface.Parts.OfType<EndScreen>().FirstOrDefault();
+        if (tick == LookAt && pace is not null)
+        {
+            CheckButtonsStayed(orders, pace);
+        }
+
+        if (tick != Start)
         {
             return;
         }
 
-        var view = orders.View;
-        var pace = view.Interface.Parts.OfType<PaceControl>().FirstOrDefault();
-        var screen = view.Interface.Parts.OfType<EndScreen>().FirstOrDefault();
         if (pace is null || screen is null)
         {
             orders.Fail("the view has no pace control or no end screen.");
             return;
         }
 
+        _buttons = pace.ButtonsPlace;
+        _messagesEnd = view.Interface.MessagesEnd;
         CheckPace(orders, pace);
         CheckScreen(orders, screen);
         CheckWords(orders);
@@ -93,6 +107,23 @@ public sealed class MatchFlowSmoke : SmokePart
         if (orders.Match.World.Tick != tick)
         {
             orders.Fail("a tick ran while the pace was changed in no time.");
+        }
+    }
+
+    // The pause that ended and the speeds that were set each wrote a line, so the message line
+    // is longer than it was. The buttons stand where they stood: a row that moves with the
+    // message line lets a click aimed at a button fall on the map.
+    private void CheckButtonsStayed(SmokeOrders orders, PaceControl pace)
+    {
+        var frame = orders.View.Interface;
+        if (frame.MessagesEnd <= _messagesEnd)
+        {
+            orders.Fail($"the message line ended at {_messagesEnd} before the pace was changed and ends at {frame.MessagesEnd} after, so nothing was asked of the buttons.");
+        }
+
+        if (!pace.ButtonsPlace.IsEqualApprox(_buttons))
+        {
+            orders.Fail($"the pause and speed buttons stood at {_buttons} and stand at {pace.ButtonsPlace} now that the message line shows more.");
         }
     }
 
