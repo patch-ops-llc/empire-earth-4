@@ -11,7 +11,8 @@ namespace Game;
 /// A part reads the match and never changes it: what it does to the match leaves as a command
 /// through <c>View.Client</c>, alone and over the network alike. It is added with
 /// <see cref="InterfaceFrame.AddPart"/> and becomes a child of the frame. It may handle input of
-/// its own in <c>_UnhandledInput</c>, through actions of the input map.
+/// its own in <c>_UnhandledInput</c>, through actions of the input map. While a full-screen panel
+/// is open the frame does not let it: the keys are the panel's then.
 /// </remarks>
 public abstract partial class InterfacePart : Node
 {

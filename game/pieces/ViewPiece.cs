@@ -20,10 +20,12 @@ namespace Game;
 /// <item>A <see cref="PointerPicker"/>, for a kind of thing the pointer can be on: <c>view.UnderPointer.AddPicker</c>.</item>
 /// <item>An <see cref="OrderRow"/>, for an order given by a click: <c>view.Orders.Add</c>.</item>
 /// </list>
-/// A piece shares four files with the others, and adds to each under the line that names it:
-/// <c>ViewPieces.cs</c>, the list in <c>SmokeTest.cs</c> for the orders it adds to the smoke test,
-/// the input map in <c>project.godot</c> for every key or button it reads, and the controls in
-/// <c>docs/testers.md</c>.
+/// A piece holds nothing of a match itself. The list of pieces is made once, and
+/// <see cref="AddTo"/> is called for every match the game shows, with a new view each time.
+/// A piece shares three files under <c>game/</c> with the others, and adds to each directly
+/// under the comment line that names it: <c>ViewPieces.cs</c>, the list in <c>SmokeTest.cs</c>
+/// for the orders it adds to the smoke test, and the input map in <c>project.godot</c> for every
+/// key or button it reads. It also says what a tester now sees in <c>docs/testers.md</c>.
 /// </remarks>
 public abstract class ViewPiece
 {

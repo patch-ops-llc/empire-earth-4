@@ -42,7 +42,7 @@ public partial class InterfaceFrame : CanvasLayer
     private readonly List<FramePanel> _panels = [];
     private readonly List<(Label Label, double Left)> _messages = [];
 
-    private MatchView _view = null!;
+    private MatchView? _view;
     private PanelContainer _bottom = null!;
     private HBoxContainer _commandArea = null!;
     private HBoxContainer _panelButtons = null!;
@@ -89,7 +89,7 @@ public partial class InterfaceFrame : CanvasLayer
 
         AddChild(part);
         _parts.Add(part);
-        part.Begin(_view);
+        part.Begin(_view ?? throw new InvalidOperationException("A part is added once the frame has a match."));
     }
 
     /// <summary>Adds a command for the selection: a button in the bottom panel, shown while the command applies.</summary>
@@ -133,6 +133,7 @@ public partial class InterfaceFrame : CanvasLayer
             panel.Content.Visible = false;
             OpenPanel = null;
             _panelPlace.Visible = false;
+            GivePartsTheKeys(true);
         }
     }
 
@@ -176,7 +177,7 @@ public partial class InterfaceFrame : CanvasLayer
 
     public override void _Process(double delta)
     {
-        if (_view is null)
+        if (_view is not { } view)
         {
             return;
         }
@@ -191,7 +192,7 @@ public partial class InterfaceFrame : CanvasLayer
             _commandsStale = false;
             foreach (var (command, button) in _commands)
             {
-                button.Visible = command.Applies(_view);
+                button.Visible = command.Applies(view);
             }
         }
 
@@ -201,7 +202,7 @@ public partial class InterfaceFrame : CanvasLayer
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (_view is null)
+        if (_view is not { } view)
         {
             return;
         }
@@ -229,7 +230,7 @@ public partial class InterfaceFrame : CanvasLayer
 
         foreach (var (command, _) in _commands)
         {
-            if (command.Action is { } action && @event.IsActionPressed(action) && command.Applies(_view))
+            if (command.Action is { } action && @event.IsActionPressed(action) && command.Applies(view))
             {
                 Run(command);
                 GetViewport().SetInputAsHandled();
@@ -251,12 +252,27 @@ public partial class InterfaceFrame : CanvasLayer
         panel.RaiseOpened();
         panel.Content.Visible = true;
         _panelPlace.Visible = true;
+        GivePartsTheKeys(false);
     }
 
     private void Run(SelectionCommand command)
     {
-        command.Run(_view);
-        _commandsStale = true;
+        if (_view is { } view)
+        {
+            command.Run(view);
+            _commandsStale = true;
+        }
+    }
+
+    // While a full-screen panel is open, a key is the panel's and not the world's. The parts are
+    // not asked about it: the controls of the panel take what is theirs before any part would.
+    private void GivePartsTheKeys(bool theirs)
+    {
+        foreach (var part in _parts)
+        {
+            part.SetProcessUnhandledInput(theirs);
+            part.SetProcessUnhandledKeyInput(theirs);
+        }
     }
 
     private void FadeMessages(double delta)
