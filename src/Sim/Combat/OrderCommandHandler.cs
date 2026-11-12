@@ -18,11 +18,13 @@ namespace Sim.Combat;
 /// For a unit that is not of a chassis, a worker, an attack-move is a move order.
 /// </para>
 /// <para>
-/// <b>Attack</b> names one entity. The command is valid when its player is in the match, the entity
-/// is alive, belongs to another player, can be damaged and is seen by the player when the command
-/// runs (design 5.3), and at least one listed unit can take
-/// the order: alive, owned by the player, of a chassis, and of a line that can hit the target. The
-/// others are skipped, workers among them, and keep the order they had.
+/// <b>Attack</b> names one entity, a unit or a structure. The command is valid when its player is
+/// in the match, the entity belongs to another player, can be damaged and is known to the player
+/// when the command runs (design 5.3): a unit that is alive and that the player sees, or a
+/// structure the player sees or remembers. At least one listed unit must be able to take the
+/// order: alive, owned by the player, of a chassis, and of a line that can hit the target. The
+/// others are skipped, workers among them, and keep the order they had. Any structure can be
+/// named, a wall too, and every line can hit one.
 /// </para>
 /// <para>
 /// <b>Stop</b> is valid when at least one listed entity is alive, owned by the player and either
@@ -140,14 +142,19 @@ public sealed class OrderCommandHandler : ICommandHandler
 
     private bool Attack(World world, in Command command)
     {
-        if (command.Player < 0
-            || command.Player >= _playerCount
-            || !_targeting.IsEnemy(world, command.Player, command.TargetEntity, out var target))
+        if (command.Player < 0 || command.Player >= _playerCount)
         {
             return false;
         }
 
-        var targetLine = _targeting.LineOf(command.TargetEntity);
+        if (!_targeting.IsKnownEnemy(world, command.Player, command.TargetEntity, out var target))
+        {
+            return _targeting.IsRememberedGone(world, command.Player, command.TargetEntity, out var remembered)
+                && GoToLook(world, in command, remembered);
+        }
+
+        var mark = _targeting.MarkOf(command.TargetEntity, in target);
+        var targetLine = mark.Line;
         var taken = false;
         foreach (var entity in command.Entities)
         {
@@ -177,14 +184,56 @@ public sealed class OrderCommandHandler : ICommandHandler
                 continue;
             }
 
-            if (_targeting.Reaches(profile, body.Position, target.Position, targetLine)
-                || Targeting.IsTooClose(profile, body.Position, target.Position))
+            if (_targeting.Reaches(profile, body.Position, in mark)
+                || Targeting.IsTooClose(profile, body.Position, mark.NearestTo(body.Position)))
             {
                 _movers.ValueAt(mover).Stop();
+            }
+            else if (mark.IsStructure)
+            {
+                _approach.WalkToStructure(ref _movers.ValueAt(mover), body.Position, mark.Tiles);
             }
             else
             {
                 _approach.WalkTo(ref _movers.ValueAt(mover), body.Position, target.Position);
+            }
+        }
+
+        return taken;
+    }
+
+    /// <summary>
+    /// An attack order on a structure that is gone and that the player still remembers. Refusing it
+    /// would tell the player what it cannot know, so the order is taken: every listed unit that
+    /// can attack walks to where the structure is remembered, as on a move order, and is idle
+    /// there. By then its owner sees the tiles, and the memory ends.
+    /// </summary>
+    private bool GoToLook(World world, in Command command, TileSquare remembered)
+    {
+        var taken = false;
+        foreach (var entity in command.Entities)
+        {
+            var index = _combatants.IndexOf(entity);
+            if (index < 0 || !IsOwn(world, entity, command.Player, out var body))
+            {
+                continue;
+            }
+
+            taken = true;
+            ref var unit = ref _combatants.ValueAt(index);
+            AttackSystem.BecomeIdle(ref unit, body.Position);
+            var mover = _movers.IndexOf(entity);
+            if (mover < 0)
+            {
+                continue;
+            }
+
+            ref var walk = ref _movers.ValueAt(mover);
+            _approach.WalkTo(ref walk, body.Position, remembered.Center);
+            if (walk.State != MoveState.Idle)
+            {
+                unit.Order = UnitOrder.Move;
+                unit.Anchor = walk.Destination;
             }
         }
 
