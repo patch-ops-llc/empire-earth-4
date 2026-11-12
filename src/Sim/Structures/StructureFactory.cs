@@ -34,6 +34,9 @@ public sealed class StructureFactory
     private readonly SimEventList _events;
     private readonly int _playerCount;
 
+    /// <summary>The attacks of finished structures that have one: the Towers. A match sets it.</summary>
+    public ComponentStore<Turret>? Turrets { get; init; }
+
     public StructureFactory(
         GameData data,
         World world,
@@ -155,6 +158,12 @@ public sealed class StructureFactory
             _workSites.Add(
                 entity,
                 new WorkSite { Kind = WorkSiteKind.Generator, Owner = body.Owner, X = structure.X, Y = structure.Y, Size = structure.Size });
+        }
+
+        if (def.Attack is not null)
+        {
+            // A Tower's attack comes with completion (design 2.5): ready, and with no target yet.
+            Turrets?.Add(entity, default);
         }
 
         _production.Open(entity);

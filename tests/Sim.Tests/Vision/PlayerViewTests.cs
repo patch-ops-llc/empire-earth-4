@@ -537,14 +537,14 @@ public class PlayerViewTests
 
         Assert.False(match.IsAlive(victim));
 
-        // The player whose worker it was: the refusal, the hits and the death, and not that anything was fired.
-        Assert.Equal([SimEventKind.Death, SimEventKind.OrderRefused, SimEventKind.ShotHit], KindsOf(0));
+        // The player whose worker it was: the refusal, the blasts, the hits and the death, and not that anything was fired.
+        Assert.Equal([SimEventKind.Blast, SimEventKind.Death, SimEventKind.OrderRefused, SimEventKind.ShotHit], KindsOf(0));
 
         // The Ballista's owner: its shots, its hits, and the death, on a tile the Ballista sees.
-        Assert.Equal([SimEventKind.Death, SimEventKind.ShotFired, SimEventKind.ShotHit], KindsOf(1));
+        Assert.Equal([SimEventKind.Blast, SimEventKind.Death, SimEventKind.ShotFired, SimEventKind.ShotHit], KindsOf(1));
 
         // The onlooker: all of the fight, and not the order that was refused.
-        Assert.Equal([SimEventKind.Death, SimEventKind.ShotFired, SimEventKind.ShotHit], KindsOf(2));
+        Assert.Equal([SimEventKind.Blast, SimEventKind.Death, SimEventKind.ShotFired, SimEventKind.ShotHit], KindsOf(2));
         Assert.Empty(known[3]);
 
         Assert.Equal(1, Count(0, SimEventKind.OrderRefused));
@@ -588,10 +588,15 @@ public class PlayerViewTests
     {
         SimEventKind[] seenWhereItHappens =
         [
-            SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost,
+            SimEventKind.Blast, SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost,
             SimEventKind.StructurePlaced, SimEventKind.StructureFinished, SimEventKind.StructureRemoved,
         ];
-        SimEventKind[] knownToItsPlayerAlone = [SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded];
+        SimEventKind[] knownToItsPlayerAlone =
+        [
+            SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded,
+            SimEventKind.RallyPointSet, SimEventKind.TrainCancelled, SimEventKind.TrainOrdered, SimEventKind.TrainRefunded,
+            SimEventKind.TrainRefused, SimEventKind.UnitTrained,
+        ];
 
         foreach (var kind in Enum.GetValues<SimEventKind>())
         {

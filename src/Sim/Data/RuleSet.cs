@@ -19,6 +19,7 @@ public sealed record RuleSet(
     MatchRules Match,
     StartRules Start,
     MapRules Map,
+    CombatConstants Combat,
     DebugRules Debug,
     VisionRules Vision);
 
@@ -46,12 +47,30 @@ public sealed record MatchRules(int StartEpoch, int EpochCap);
 public sealed record StartRules(int Workers, int Materials, int Energy);
 
 /// <summary>
+/// Design 2.4 and 2.5: the numbers of combat that belong to no line and no structure. Distances
+/// are in tiles.
+/// </summary>
+/// <param name="LookIntervalTicks">A unit or a Tower without a target looks for one every this many ticks.</param>
+/// <param name="UnitReachMargin">Melee reach against a unit is the spacing between the two units plus this.</param>
+/// <param name="StructureReach">Melee reach against a structure, from the attacker's center to the nearest edge of the footprint.</param>
+/// <param name="Fortification">
+/// The fortification rule: what multiplies the damage a structure takes from an attacker whose
+/// effective Firepower is below the Protection tier of the structure's owner.
+/// </param>
+public sealed record CombatConstants(
+    int LookIntervalTicks,
+    DataNumber UnitReachMargin,
+    DataNumber StructureReach,
+    DataNumber Fortification);
+
+/// <summary>
 /// Switches for development, which the design does not have. Both players of a match have the
 /// same data, so they have the same switches, and a switch is part of the content hash.
 /// </summary>
 /// <param name="Spawn">
 /// Whether a match carries out <see cref="Core.CommandType.DebugSpawn"/>, which makes units from
-/// nothing. With it off the command is dropped like any command without a handler.
+/// nothing, and <see cref="Core.CommandType.DebugPlace"/>, which lays a finished structure the same
+/// way. With it off each is dropped like any command without a handler.
 /// </param>
 public sealed record DebugRules(bool Spawn);
 

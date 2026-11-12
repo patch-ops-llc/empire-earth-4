@@ -209,11 +209,12 @@ public class FinishedStructureTests
     }
 
     /// <summary>
-    /// Until units can attack structures by the rules design 2.5 gives for it, a structure is
-    /// nobody's enemy: it is not picked as a target, and an order to attack it is refused.
+    /// A structure is an enemy like a unit (design 2.5): an order to attack one is carried out. A
+    /// structure that does not attack is picked by no unit that stands idle (design 2.4). The rest
+    /// of structures in combat is in the tests of <c>Sim.Tests.Combat</c>.
     /// </summary>
     [Fact]
-    public void NoUnitPicksAStructureAndAnOrderToAttackOneIsRefused()
+    public void NoIdleUnitPicksACapitolAndAnOrderToAttackOneIsCarriedOut()
     {
         var match = CombatMatches.Create(TestMaps.Open(24, 24));
         var capitol = match.PlaceStructure(1, "capitol", 10, 10);
@@ -227,10 +228,12 @@ public class FinishedStructureTests
         match.OrderAttack(0, capitol, archer, guard);
         match.Simulation.Tick();
 
-        Assert.Single(match.EventsOf(SimEventKind.OrderRefused));
-        Assert.Equal(1, match.Simulation.DroppedCommandCount);
-        match.Simulation.Run(60);
-        Assert.Equal(2_000_000, match.Health.Get(capitol).HitPoints);
+        Assert.Empty(match.EventsOf(SimEventKind.OrderRefused));
+        Assert.Equal(0, match.Simulation.DroppedCommandCount);
+        Assert.Single(match.EventsOf(SimEventKind.ShotFired));
+        Assert.Equal(2_000_000 - 8_000, match.Health.Get(capitol).HitPoints);
+        Assert.True(match.Targeting().IsEnemy(match.World, 0, capitol, out _));
+        Assert.False(match.Targeting().IsEnemy(match.World, 1, capitol, out _));
         Assert.False(match.Targeting().IsEnemy(match.World, 0, guard, out _));
     }
 }

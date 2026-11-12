@@ -504,7 +504,7 @@ public sealed class PlayerView
     /// kind is known only to the player it names.
     /// </summary>
     public static bool IsSeenWhereItHappens(SimEventKind kind) =>
-        kind is SimEventKind.Death or SimEventKind.MeleeHit or SimEventKind.ShotFired or SimEventKind.ShotHit or SimEventKind.ShotLost
+        kind is SimEventKind.Blast or SimEventKind.Death or SimEventKind.MeleeHit or SimEventKind.ShotFired or SimEventKind.ShotHit or SimEventKind.ShotLost
         || IsOfAStructure(kind);
 
     /// <summary>The kinds of event that happen to a structure, which is seen by any tile of its footprint.</summary>

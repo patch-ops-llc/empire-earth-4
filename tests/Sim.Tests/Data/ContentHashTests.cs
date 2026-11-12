@@ -24,7 +24,10 @@ public class ContentHashTests
     [Fact]
     public void TheHashOfTheSampleDataIsPinned()
     {
-        Assert.Equal("c2a50c454fb3d4f1377c43147b6193974a9d5a85488ce1b3a89493ccbbd6a83c", SampleHash);
+        // On the test build of the open pull requests the sample data has the blocks of both the
+        // fog of war (#50) and structures in combat (#58). This value is what the build works out;
+        // it was not checked with a separate implementation, which the second of the two to land does.
+        Assert.Equal("a78a7ed8d7bf3f7eba5cbb533bd1b0883d23849ca3dba88531a1f66a2dc993a7", SampleHash);
     }
 
     [Fact]

@@ -77,6 +77,14 @@ internal static class RulesReader
 
         var mapRules = ReadMapRules(file.Required("map"));
 
+        var combat = file.Required("combat").Object();
+        var combatConstants = new CombatConstants(
+            combat.Required("look_interval_ticks").Integer(1, 1_000),
+            combat.Required("unit_reach_margin").Number(DataRules.Zero, DataRules.MaxDistance),
+            combat.Required("structure_reach").Number(DataRules.Zero, DataRules.MaxDistance, aboveMin: true),
+            combat.Required("fortification").Share());
+        combat.End();
+
         var vision = file.Required("vision").Object();
         var visionRules = new VisionRules(vision.Required("refresh_ticks").Integer(1, 1_000));
         vision.End();
@@ -100,6 +108,7 @@ internal static class RulesReader
             new MatchRules(startEpoch, epochCap),
             startRules,
             mapRules,
+            combatConstants,
             debugRules,
             visionRules);
     }
