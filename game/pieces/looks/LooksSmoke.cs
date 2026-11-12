@@ -309,9 +309,9 @@ public sealed class LooksSmoke : SmokePart
                 return;
             }
 
-            if (!ReferenceEquals(material, looks.MaterialOf(body.Owner))
-                || material is not ShaderMaterial paint
-                || !ChassisLooks.OwnerOf(paint).IsEqualApprox(PlayerColors.Of(body.Owner)))
+            // A unit that was just hit is pale for a moment, in its owner's other material.
+            if ((!ReferenceEquals(material, looks.MaterialOf(body.Owner)) && !ReferenceEquals(material, looks.FlashMaterialOf(body.Owner)))
+                || !PaintsFor(looks, looks.MaterialOf(body.Owner), body.Owner))
             {
                 orders.Fail($"the {look.Chassis.Id} {entity} of player {body.Owner} is not drawn in its owner's color.");
                 return;
@@ -416,6 +416,13 @@ public sealed class LooksSmoke : SmokePart
                 $"the {_visitorChassis!.Id} of player {OtherSeat(orders)}, sent toward the local player's units at tick {_visitorUnseenAt} of the part, had not come into sight at tick {Length - 1}. " +
                 "If units are slower or see less far in the data now, this part needs more ticks.");
         }
+        else if (orders.View.World.GetChildren().OfType<CombatEffects>().FirstOrDefault() is { } effects
+            && ((effects.HitsShown > 0 && looks.FlashesShown == 0) || (effects.DeathsShown > 0 && looks.FallsShown == 0)))
+        {
+            orders.Fail(
+                $"the match has shown {effects.HitsShown} hits and {effects.DeathsShown} deaths so far, and only {looks.FlashesShown} units flashed in their own look and {looks.FallsShown} left it behind. " +
+                "Every fighting unit has a look, so the combat effects did not ask the layer of looks.");
+        }
         else if (marks > _unlooked)
         {
             orders.Fail($"{marks} units carried the mark of the stand-in shape in the last frame, and only {_unlooked} fighting units that are drawn have no look.");
@@ -425,8 +432,26 @@ public sealed class LooksSmoke : SmokePart
             GD.Print(
                 $"Smoke test, chassis looks: {looks.Looks.Looks.Count} looks; one unit of each was made for the local player and drawn in its look. " +
                 $"The other seat's {_visitorChassis!.Id} was not drawn while out of sight, and wore its look in its owner's color from the tick it was first drawn, tick {_visitorSeenAt}. " +
+                $"So far {looks.FlashesShown} hits made a unit flash in its own look and {looks.FallsShown} deaths left it to sink. " +
                 $"At most {_mostDressed} units wore a look at once; {_standIns} drawn units keep the stand-in shape, {_unlooked} of them fighting units, and {marks} carry its mark. {_closest}");
         }
+    }
+
+    // Whether a material paints every tone as it is for a seat: the owner's tones in that
+    // seat's color, the others in their own.
+    private static bool PaintsFor(ChassisLooks looks, ShaderMaterial material, int player)
+    {
+        foreach (var tone in looks.Looks.Tones)
+        {
+            var wanted = tone.For(PlayerColors.Of(player));
+            var painted = ChassisLooks.PaintOf(material, tone);
+            if (Math.Abs(painted.R - wanted.R) > 0.002f || Math.Abs(painted.G - wanted.G) > 0.002f || Math.Abs(painted.B - wanted.B) > 0.002f)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static int OtherSeat(SmokeOrders orders) => orders.Player == 0 ? 1 : 0;

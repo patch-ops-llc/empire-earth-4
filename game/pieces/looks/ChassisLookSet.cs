@@ -48,15 +48,19 @@ public sealed class ChassisLookSet
     private static readonly string[] PartKeys = ["shape", "size", "at", "tone", "turn", "spin", "sides", "top", "mirror"];
 
     private static GameData? _loadedFor;
-    private static ChassisLookSet _loaded = new([]);
+    private static ChassisLookSet _loaded = new([], []);
 
     private readonly ChassisLook?[] _byChassis;
 
-    private ChassisLookSet(ChassisLook?[] byChassis)
+    private ChassisLookSet(ChassisLook?[] byChassis, IReadOnlyList<LookTone> tones)
     {
         _byChassis = byChassis;
         Looks = [.. byChassis.OfType<ChassisLook>()];
+        Tones = tones;
     }
+
+    /// <summary>The tones the looks are painted in, each at the place of its <see cref="LookTone.Index"/>.</summary>
+    public IReadOnlyList<LookTone> Tones { get; }
 
     /// <summary>The looks, in the order of the data's chassis.</summary>
     public IReadOnlyList<ChassisLook> Looks { get; }
@@ -83,7 +87,7 @@ public sealed class ChassisLookSet
         catch (Exception failed) when (failed is InvalidDataException or IOException or JsonException)
         {
             GD.PushError($"The looks of the chassis could not be read, so every unit keeps the stand-in shape. {failed.Message}");
-            _loaded = new ChassisLookSet(new ChassisLook?[data.Chassis.Count]);
+            _loaded = new ChassisLookSet(new ChassisLook?[data.Chassis.Count], []);
         }
 
         _loadedFor = data;
@@ -101,7 +105,7 @@ public sealed class ChassisLookSet
         var tones = new Dictionary<string, LookTone>(StringComparer.Ordinal);
         foreach (var tone in ObjectAt(root, "tones", LooksFile).EnumerateObject())
         {
-            tones.Add(tone.Name, ReadTone(tone.Name, tone.Value));
+            tones.Add(tone.Name, ReadTone(tone.Name, tones.Count, tone.Value));
         }
 
         var chassisByName = data.Chassis.ToDictionary(chassis => chassis.Id, StringComparer.Ordinal);
@@ -128,7 +132,7 @@ public sealed class ChassisLookSet
             looks[chassis.Index] = new ChassisLook(chassis, path, shape);
         }
 
-        return new ChassisLookSet(looks);
+        return new ChassisLookSet(looks, [.. tones.Values.OrderBy(tone => tone.Index)]);
     }
 
     private static string ReadFile(string path)
@@ -150,7 +154,7 @@ public sealed class ChassisLookSet
         }
     }
 
-    private static LookTone ReadTone(string name, JsonElement value)
+    private static LookTone ReadTone(string name, int index, JsonElement value)
     {
         var where = $"{LooksFile}, tone '{name}'";
         if (value.ValueKind == JsonValueKind.Object)
@@ -158,7 +162,7 @@ public sealed class ChassisLookSet
             RequireKeys(value, ["owner"], where);
             var share = Number(value, "owner", where);
             return share is > 0f and <= 1f
-                ? new LookTone(name, Owner: true, share, Colors.White)
+                ? new LookTone(name, index, Owner: true, share, Colors.White)
                 : throw new InvalidDataException($"{where}: the owner's share is {share.ToString(CultureInfo.InvariantCulture)} and must be above 0 and at most 1.");
         }
 
@@ -167,7 +171,7 @@ public sealed class ChassisLookSet
             && text[0] == '#'
             && int.TryParse(text.AsSpan(1), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var rgb))
         {
-            return new LookTone(name, Owner: false, 1f, new Color(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f));
+            return new LookTone(name, index, Owner: false, 1f, new Color(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f));
         }
 
         throw new InvalidDataException($"{where}: a tone is a color as \"#rrggbb\" or {{ \"owner\": share }}.");

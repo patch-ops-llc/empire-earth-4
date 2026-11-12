@@ -115,9 +115,9 @@ public sealed class LookShape
     }
 
     /// <summary>
-    /// The shape as a mesh of one surface and no material. Each corner carries its tone as a
-    /// color: for a part in the owner's color the share of that color in red, green and blue
-    /// with an alpha of 0, and for any other part its own color with an alpha of 1.
+    /// The shape as a mesh of one surface and no material. Each corner carries the number of
+    /// its tone (<see cref="LookTone.Index"/>) as its first texture coordinate, and the shader
+    /// of the looks has the colors by that number.
     /// </summary>
     public ArrayMesh ToMesh()
     {
@@ -125,18 +125,20 @@ public sealed class LookShape
         tool.Begin(Mesh.PrimitiveType.Triangles);
         foreach (var triangle in _triangles)
         {
-            tool.SetNormal(triangle.Normal);
-            tool.SetColor(triangle.Tone.AsVertexColor());
-            tool.AddVertex(triangle.A);
-            tool.SetNormal(triangle.Normal);
-            tool.SetColor(triangle.Tone.AsVertexColor());
-            tool.AddVertex(triangle.B);
-            tool.SetNormal(triangle.Normal);
-            tool.SetColor(triangle.Tone.AsVertexColor());
-            tool.AddVertex(triangle.C);
+            var tone = new Vector2(triangle.Tone.Index, 0f);
+            AddCorner(tool, triangle.A, triangle.Normal, tone);
+            AddCorner(tool, triangle.B, triangle.Normal, tone);
+            AddCorner(tool, triangle.C, triangle.Normal, tone);
         }
 
         return tool.Commit();
+    }
+
+    private static void AddCorner(SurfaceTool tool, Vector3 corner, Vector3 normal, Vector2 tone)
+    {
+        tool.SetNormal(normal);
+        tool.SetUV(tone);
+        tool.AddVertex(corner);
     }
 
     // The corner of a side on a circle of radius 1 that lies in X and Z. The spin, in radians,
@@ -193,14 +195,29 @@ public readonly record struct LookTriangle(Vector3 A, Vector3 B, Vector3 C, Vect
 /// The tones have names in <c>game/view-data/chassis-looks.jsonc</c>.
 /// </summary>
 /// <param name="Name">The name the shape files use.</param>
+/// <param name="Index">The number of the tone among the tones of the looks file, from 0.</param>
 /// <param name="Owner">True for a tone that is a share of the owner's color.</param>
-/// <param name="Share">For an owner's tone, how much of the owner's color it keeps: 1 is the color itself, less is darker.</param>
+/// <param name="Share">For an owner's tone, how much of the owner's light it keeps: 1 is the color itself, less is darker.</param>
 /// <param name="Color">For any other tone, its color.</param>
-public sealed record LookTone(string Name, bool Owner, float Share, Color Color)
+public sealed record LookTone(string Name, int Index, bool Owner, float Share, Color Color)
 {
-    /// <summary>The tone as the shader of the looks reads it from a corner of the mesh.</summary>
-    public Color AsVertexColor() => Owner ? new Color(Share, Share, Share, 0f) : new Color(Color.R, Color.G, Color.B, 1f);
+    /// <summary>
+    /// The tone as it is drawn for an owner of a color, before light. A share of the owner's
+    /// color is taken of its light, not of its numbers, so that half is half as bright.
+    /// </summary>
+    public Color For(Color owner) => Owner ? Scaled(owner, Share, 0f) : Color;
 
-    /// <summary>The tone as it is drawn for an owner of a color, before light.</summary>
-    public Color For(Color owner) => Owner ? new Color(owner.R * Share, owner.G * Share, owner.B * Share) : Color;
+    /// <summary>
+    /// A color with a share of its light kept, and then a share of white light mixed in. The
+    /// color is given and returned as the interface has it.
+    /// </summary>
+    public static Color Scaled(Color color, float kept, float white)
+    {
+        var light = color.SrgbToLinear();
+        var mixed = new Color(
+            Mathf.Lerp(light.R * kept, 1f, white),
+            Mathf.Lerp(light.G * kept, 1f, white),
+            Mathf.Lerp(light.B * kept, 1f, white));
+        return mixed.LinearToSrgb();
+    }
 }

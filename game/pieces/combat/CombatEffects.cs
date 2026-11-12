@@ -17,6 +17,9 @@ namespace Game;
 /// <item>A shot that is lost, because its target died first: a grey puff where the shot was.</item>
 /// <item>A death: the unit's shape sinks into the ground and fades, inside a ring in its owner's color that spreads.</item>
 /// </list>
+/// A unit that has a look of its own flashes and sinks in that look, which the layer of looks
+/// draws (<see cref="ChassisLooks.Flash"/>, <see cref="ChassisLooks.Fall"/>). The stand-in's
+/// flash and sinking shape here are for every other unit.
 /// An effect is drawn from what its event says, since the entities an event names may be gone by
 /// the time it is read. Effects are for the eye only: nothing reads them, and a match runs the
 /// same with or without them.
@@ -31,7 +34,15 @@ public partial class CombatEffects : WorldLayer
     private static readonly Color PuffColor = new(0.7f, 0.7f, 0.72f);
     private static readonly Color StreakColor = new(1f, 1f, 1f);
 
+    // How long a unit that was hit stays pale, and how long the shape of a dead unit takes to sink.
+    private const double FlashSeconds = 0.14;
+    private const double FallenSeconds = 1.1;
+
     private readonly List<Effect> _effects = [];
+
+    // The layer of looks, which a later piece adds, so it is looked for when first needed.
+    private ChassisLooks? _looks;
+    private bool _lookedForLooks;
 
     // The way each unit that can be damaged faced after the last tick, for the shape it leaves when it dies.
     private readonly Dictionary<EntityId, float> _headings = [];
@@ -50,6 +61,20 @@ public partial class CombatEffects : WorldLayer
 
     /// <summary>The number of effects alive now.</summary>
     public int EffectCount => _effects.Count;
+
+    private ChassisLooks? Looks
+    {
+        get
+        {
+            if (!_lookedForLooks)
+            {
+                _lookedForLooks = true;
+                _looks = View.World.GetChildren().OfType<ChassisLooks>().FirstOrDefault();
+            }
+
+            return _looks;
+        }
+    }
 
     protected override void Attach()
     {
@@ -83,7 +108,7 @@ public partial class CombatEffects : WorldLayer
                     }
 
                     Add(new Effect(EffectKind.Spark, place, 0.25));
-                    Add(new Effect(EffectKind.Flash, place, 0.14) { Follows = happened.Entity });
+                    Flash(happened.Entity, place);
                     break;
 
                 case SimEventKind.ShotFired:
@@ -93,7 +118,7 @@ public partial class CombatEffects : WorldLayer
                 case SimEventKind.ShotHit:
                     HitsShown++;
                     Add(new Effect(EffectKind.Spark, place, 0.25));
-                    Add(new Effect(EffectKind.Flash, place, 0.14) { Follows = happened.Entity });
+                    Flash(happened.Entity, place);
                     break;
 
                 case SimEventKind.ShotLost:
@@ -104,7 +129,11 @@ public partial class CombatEffects : WorldLayer
                     DeathsShown++;
                     var color = PlayerColors.Of(happened.Player);
                     var heading = _headings.GetValueOrDefault(happened.Entity);
-                    Add(new Effect(EffectKind.Fallen, place, 1.1) { Color = color, Heading = heading });
+                    if (!(Looks?.Fall(happened.Entity, happened.Player, place, heading, FallenSeconds) ?? false))
+                    {
+                        Add(new Effect(EffectKind.Fallen, place, FallenSeconds) { Color = color, Heading = heading });
+                    }
+
                     Add(new Effect(EffectKind.Ring, place, 0.7) { Color = color });
                     break;
 
@@ -140,6 +169,15 @@ public partial class CombatEffects : WorldLayer
         _bodies.End();
         _streaks.End();
         _balls.End();
+    }
+
+    // A unit that was hit flashes: in its own look if it has one, else as the stand-in shape.
+    private void Flash(EntityId entity, Vector3 place)
+    {
+        if (!(Looks?.Flash(entity, FlashSeconds) ?? false))
+        {
+            Add(new Effect(EffectKind.Flash, place, FlashSeconds) { Follows = entity });
+        }
     }
 
     private void Add(Effect effect)
