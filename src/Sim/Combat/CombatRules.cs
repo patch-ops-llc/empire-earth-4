@@ -295,10 +295,14 @@ public sealed class CombatRules
     /// times the hit point factor of the rule set for each Protection tier of its owner above it
     /// (design 4.1).
     /// </summary>
-    public Health WorkerHealth(int player)
+    public Health WorkerHealth(int player) => Health.Full(WorkerHitPoints(_techOf(player)));
+
+    /// <summary>The maximum hit points, in thousandths, of a worker whose owner has this tech.</summary>
+    public long WorkerHitPoints(PlayerTech tech)
     {
-        var protection = _techOf(player).Tiers[_data.TrackRoles.Protection];
-        return Health.Full(HitPointRules.AtProtectionTier(_data, _data.Resources.Worker.HitPoints.ToFraction(), protection));
+        ArgumentNullException.ThrowIfNull(tech);
+        var protection = tech.Tiers[_data.TrackRoles.Protection];
+        return HitPointRules.AtProtectionTier(_data, _data.Resources.Worker.HitPoints.ToFraction(), protection);
     }
 
     private Fixed Reach(Fraction spacing) => (spacing + UnitReachMargin).ToFixed();

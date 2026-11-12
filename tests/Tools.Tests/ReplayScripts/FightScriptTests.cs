@@ -81,13 +81,6 @@ public class FightScriptTests
         var match = ReplayRuns.Start(replay);
         var due = replay.Commands.ToLookup(entry => entry.Tick, entry => entry.Command);
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        match.Research.Reported += reported =>
-        {
-            if (reported.Kind == ResearchEventKind.Finished && HasFightingUnits(match, reported.Player))
-            {
-                seen.Add("a tier raised for a player with fighting units");
-            }
-        };
         var workers = new Dictionary<EntityId, WorkerState>();
         for (var tick = 0; tick < replay.TickCount; tick++)
         {
@@ -99,6 +92,14 @@ public class FightScriptTests
             }
 
             match.Simulation.Tick();
+            foreach (var reported in match.Simulation.Events)
+            {
+                if (reported.Kind == SimEventKind.ResearchFinished && HasFightingUnits(match, reported.Player))
+                {
+                    seen.Add("a tier raised for a player with fighting units");
+                }
+            }
+
             seen.UnionWith(WhatTheTickDid(match, workers));
         }
 

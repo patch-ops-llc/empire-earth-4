@@ -21,6 +21,7 @@ public enum CommandType
     CancelResearch = 2,
     CancelTrain = 12,
     DebugPlace = 16,
+    DebugSetTier = 17,
     DebugSpawn = 8,
     Gather = 7,
     Move = 1,
