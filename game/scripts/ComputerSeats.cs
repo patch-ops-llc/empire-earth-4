@@ -86,6 +86,9 @@ public sealed class ComputerSeats
 
             _commands.Clear();
             player.Think(_commands);
+
+            // In the order of the list, which the host keeps: a round's gather orders come
+            // before its build orders, and the simulation runs them in that order.
             foreach (var command in _commands)
             {
                 if (_host.Submit(command))

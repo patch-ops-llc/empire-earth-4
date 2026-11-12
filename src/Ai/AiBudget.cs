@@ -37,9 +37,14 @@ internal sealed class AiBudget
     /// <summary>The Energy of the round's purchases, bought or still wanted, that the stockpile did not cover at its start.</summary>
     public long MissingEnergy => Math.Max(0, _wantedEnergy - _stockEnergy);
 
-    /// <summary>True when what is left, less what is held back, covers a price.</summary>
+    /// <summary>
+    /// True when what is left, less what is held back, covers a price. A resource the price has
+    /// none of is not asked about: Energy held back for a research does not keep Materials from a
+    /// worker or a Generator, which are what earn that Energy.
+    /// </summary>
     public bool Covers(int materials, int energy) =>
-        materials <= _materials - _heldMaterials && energy <= _energy - _heldEnergy;
+        (materials <= 0 || materials <= _materials - _heldMaterials)
+        && (energy <= 0 || energy <= _energy - _heldEnergy);
 
     /// <summary>True when what is left covers a price, held back or not: what the simulation will find.</summary>
     public bool StockCovers(int materials, int energy) => materials <= _materials && energy <= _energy;
