@@ -205,11 +205,15 @@ public sealed class EpochAnnouncementSmoke : SmokePart
             orders.Fail($"with the epoch banners shown, {problem}");
         }
 
+        // The frame's look is at the banners too: each is one of its boxes.
         var boxes = frame.Boxes();
-        var among = boxes.Count(box => box.Name.Contains("EpochBanner", StringComparison.Ordinal));
-        if (among < _raised.Count)
+        foreach (var banner in shown.Skip(shown.Count - _raised.Count))
         {
-            orders.Fail($"{_raised.Count} banners are shown and {among} are among the boxes the frame looks at: {string.Join(", ", boxes.Select(box => box.Name))}");
+            var place = banner.GetGlobalRect();
+            if (!boxes.Any(box => box.Rect.IsEqualApprox(place)))
+            {
+                orders.Fail($"a banner at {place} is not among the boxes the frame looks at: {string.Join(", ", boxes.Select(box => $"{box.Name} {box.Rect}"))}");
+            }
         }
     }
 }

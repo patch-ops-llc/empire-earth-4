@@ -30,14 +30,17 @@ namespace Game;
 /// is open the pointer and the keys are its own: the camera, selection and orders rest.
 /// </item>
 /// <item>
-/// <b>The rows under the top bar</b>, at its left: <see cref="RowsUnderBar"/> for a row of a
-/// part's own that is always at hand, as the row of the control groups is.
+/// <b>The rows under the top bar</b>: <see cref="RowsUnderBar"/> at its left for a row of a
+/// part's own that is always at hand, as the row of the control groups is, and
+/// <see cref="RowsUnderBarAtRight"/> at its right for one that is about the match.
 /// </item>
 /// <item>
 /// <b>The message line</b>, under the rows, in the middle: <see cref="Say"/> shows a sentence to
 /// the player for a while. A sentence wider than the middle of the window is written on more
 /// lines. Nothing of the frame lies under the line: a full-screen panel begins below it, with
 /// room kept for one message, so that the panel moves only when two are shown at once.
+/// <see cref="UnderMessages"/> is the place right under the line for what a part announces for
+/// a while, as a new epoch is.
 /// </item>
 /// <item>
 /// <b>The development aids</b>, in a column at either edge of the window:
@@ -55,8 +58,8 @@ namespace Game;
 /// wide as its column and as high as it needs. When the aids of a column need more height than
 /// the column has, the column scrolls, and a click on an aid's title folds it away to make
 /// room. What the game shows in the middle under the top bar, as the messages are, stays
-/// between the columns (<see cref="MiddleWidth"/>) and ends above the bottom panel, the
-/// messages by giving up their oldest (<see cref="MiddleEnd"/>).
+/// between the columns (<see cref="MiddleWidth"/>) and ends above the bottom panel
+/// (<see cref="MiddleEnd"/>), the messages by giving up their oldest.
 /// </para>
 /// <para>
 /// A part that shows a control of its own over the world, outside the places above, names it
@@ -134,6 +137,22 @@ public partial class InterfaceFrame : CanvasLayer
     /// message is never written over one. They are not shown while a full-screen panel is open.
     /// </summary>
     public VBoxContainer RowsUnderBar { get; private set; } = null!;
+
+    /// <summary>
+    /// The rows under the top bar at its right, beside <see cref="RowsUnderBar"/> and with the
+    /// same rules: for a row that is about the match and not about the player's units, as the
+    /// host's pause and speed are. A row here keeps its place whatever the message line shows.
+    /// </summary>
+    public VBoxContainer RowsUnderBarAtRight { get; private set; } = null!;
+
+    /// <summary>
+    /// The place under the messages, in the middle of the window, for what a part announces for
+    /// a while, as a new epoch is: one announcement under another, each in the middle. It takes
+    /// no click and is drawn over a full-screen panel. What is added is no wider than
+    /// <see cref="MiddleWidth"/>. The messages leave it the height it needs above the bottom
+    /// panel, by giving up their oldest.
+    /// </summary>
+    public VBoxContainer UnderMessages { get; private set; } = null!;
 
     /// <summary>
     /// The column of the development aids, at the left edge. They are not part of the game, and
@@ -323,13 +342,6 @@ public partial class InterfaceFrame : CanvasLayer
         }
     }
 
-    /// <summary>
-    /// The height a part needs under the messages for what it shows there, as the epoch banners
-    /// are: zero while it shows nothing. The messages leave that much room above the bottom
-    /// panel, by giving up their oldest. The part sets it every frame it shows something.
-    /// </summary>
-    public float RoomUnderMessages { get; set; }
-
     /// <summary>Takes every sentence off the message line at once, as the end of a match does.</summary>
     public void DropMessages()
     {
@@ -441,7 +453,8 @@ public partial class InterfaceFrame : CanvasLayer
         SelectionArea.Visible = !detailed;
         _bottom.Visible = !IsPanelOpen && (detailed || HasVisibleChild(SelectionArea) || HasVisibleChild(_commandArea));
         PlaceBottomPanel();
-        _rowsPlace.Visible = !IsPanelOpen && RowsUnderBar.GetCombinedMinimumSize().Y > 0f;
+        _rowsPlace.Visible = !IsPanelOpen
+            && (RowsUnderBar.GetCombinedMinimumSize().Y > 0f || RowsUnderBarAtRight.GetCombinedMinimumSize().Y > 0f);
 
         foreach (var part in _parts)
         {
@@ -556,7 +569,9 @@ public partial class InterfaceFrame : CanvasLayer
 
         // The messages end above what the game shows under them, with the room a part has asked
         // for in between. The oldest go first, and the newest stays whatever its height.
-        var end = MiddleEnd - RoomUnderMessages;
+        var announced = HasVisibleChild(UnderMessages) ? EdgeGap + UnderMessages.GetCombinedMinimumSize().Y : 0f;
+        var end = MiddleEnd - announced;
+        UnderMessages.OffsetTop = MessagesEnd + EdgeGap;
         while (_messages.Count > 1 && _messageLines.GlobalPosition.Y + _messageLines.GetCombinedMinimumSize().Y > end)
         {
             Drop(_messages[0].Label);
@@ -831,6 +846,14 @@ public partial class InterfaceFrame : CanvasLayer
         (_aidsColumn, DevelopmentAids) = BuildDevelopmentColumn(root, "DevelopmentAids");
         (_readoutsColumn, DevelopmentReadouts) = BuildDevelopmentColumn(root, "DevelopmentReadouts");
         BuildUnderBar(root);
+
+        // Over the full-screen panel, which is where the player is likely to be when a research
+        // raises the epoch.
+        UnderMessages = UiStyle.Column(6);
+        UnderMessages.Name = "UnderMessages";
+        UnderMessages.MouseFilter = Control.MouseFilterEnum.Ignore;
+        root.AddChild(UnderMessages);
+        UnderMessages.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopWide);
         BuildTopBar(root);
     }
 
@@ -925,10 +948,19 @@ public partial class InterfaceFrame : CanvasLayer
         rowsPlace.AddThemeConstantOverride("margin_right", RowsLeft);
         column.AddChild(rowsPlace);
         _rowsPlace = rowsPlace;
+        var rows = UiStyle.Row(12);
+        rows.MouseFilter = Control.MouseFilterEnum.Ignore;
+        rowsPlace.AddChild(rows);
         RowsUnderBar = UiStyle.Column(4);
         RowsUnderBar.Name = "RowsUnderBar";
         RowsUnderBar.MouseFilter = Control.MouseFilterEnum.Ignore;
-        rowsPlace.AddChild(RowsUnderBar);
+        RowsUnderBar.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        rows.AddChild(RowsUnderBar);
+        RowsUnderBarAtRight = UiStyle.Column(4);
+        RowsUnderBarAtRight.Name = "RowsUnderBarAtRight";
+        RowsUnderBarAtRight.MouseFilter = Control.MouseFilterEnum.Ignore;
+        RowsUnderBarAtRight.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
+        rows.AddChild(RowsUnderBarAtRight);
 
         var messagePlace = new MarginContainer { Name = "MessagePlace", MouseFilter = Control.MouseFilterEnum.Ignore };
         messagePlace.AddThemeConstantOverride("margin_top", MessageTop);

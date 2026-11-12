@@ -10,25 +10,22 @@ namespace Game;
 /// <remarks>
 /// It finds a new epoch by comparing each player's epoch with that of the tick before, so it
 /// works the same alone, hosting and joined, and needs nothing from the simulation but the tiers.
-/// The banner is drawn over a full-screen panel, because the research panel is where the player
-/// is likely to be when a research raises the epoch. It takes no click. It stands in the middle
-/// of the window, under the messages, and is no wider than the development aids at the edges
-/// leave free (<see cref="InterfaceFrame.MiddleWidth"/>): a banner that is wider on one line is
-/// written on more. The messages give up their oldest when the banners would otherwise reach
-/// the bottom panel (<see cref="InterfaceFrame.RoomUnderMessages"/>).
+/// The banner stands in the frame's place for announcements
+/// (<see cref="InterfaceFrame.UnderMessages"/>): in the middle of the window, under the
+/// messages, over a full-screen panel, because the research panel is where the player is likely
+/// to be when a research raises the epoch, and above the bottom panel. It takes no click. It is
+/// no wider than the development aids at the edges leave free
+/// (<see cref="InterfaceFrame.MiddleWidth"/>): a banner that is wider on one line is written on
+/// more.
 /// </remarks>
 public partial class EpochAnnouncement : InterfacePart
 {
     private const double ShownSeconds = 8.0;
     private const double FadeSeconds = 1.5;
 
-    // Between the message line, which a research that finishes writes to in the same tick, and the banner.
-    private const float Gap = 8f;
-
     private readonly List<(PanelContainer Banner, double Left, float Width)> _banners = [];
     private int[] _epochs = [];
     private VBoxContainer _place = null!;
-    private float _top;
 
     /// <summary>The number of announcements made since the match was shown.</summary>
     public int Count { get; private set; }
@@ -45,11 +42,7 @@ public partial class EpochAnnouncement : InterfacePart
             _epochs[player] = match.Research.Tech(player).Epoch;
         }
 
-        _place = UiStyle.Column(6);
-        _place.Name = "EpochBanners";
-        _place.MouseFilter = Control.MouseFilterEnum.Ignore;
-        AddChild(_place);
-        _place.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopWide);
+        _place = Frame.UnderMessages;
     }
 
     public override void AfterTick()
@@ -71,22 +64,8 @@ public partial class EpochAnnouncement : InterfacePart
     {
         if (_banners.Count == 0)
         {
-            if (_top > 0f)
-            {
-                Frame.RoomUnderMessages = 0f;
-            }
-
-            _top = 0f;
             return;
         }
-
-        // Under the messages, however many there are. It moves down for a new message and does
-        // not jump back up when one goes away, unless it has to: the messages leave the banners
-        // their room above the bottom panel, and the banners move up into it.
-        var height = _place.GetCombinedMinimumSize().Y;
-        Frame.RoomUnderMessages = Gap + height;
-        _top = Math.Max(Frame.MessagesEnd + Gap, Math.Min(_top, Frame.MiddleEnd - height));
-        _place.OffsetTop = _top;
 
         var middle = Frame.MiddleWidth;
         for (var i = _banners.Count - 1; i >= 0; i--)
@@ -155,12 +134,6 @@ public partial class EpochAnnouncement : InterfacePart
         var under = InspectionUi.Text(sentence, own ? ResearchColors.Ink : ResearchColors.Faint, own ? 14 : 13);
         under.HorizontalAlignment = HorizontalAlignment.Center;
         lines.AddChild(under);
-
-        if (_banners.Count == 0)
-        {
-            _top = Frame.MessagesEnd + Gap;
-            _place.OffsetTop = _top;
-        }
 
         _place.AddChild(banner);
         var width = banner.GetCombinedMinimumSize().X;

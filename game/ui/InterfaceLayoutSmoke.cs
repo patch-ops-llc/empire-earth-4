@@ -23,8 +23,8 @@ namespace Game;
 /// the summary are as wide as the panel may be (<see cref="InspectionPart.WidestShown"/>),
 /// which the inspection's own part holds every chassis to. The development aids and readouts
 /// are shown throughout, as they are for a tester, with one aid more that is taller than the
-/// window. The part gives no order and leaves the selection, the groups and the message line
-/// empty.
+/// window, and a row stands at the right under the top bar. The part gives no order and
+/// leaves the selection, the groups and the message line empty.
 /// </para>
 /// <para>
 /// The smoke test plays 20 ticks in a frame, and what is shown takes its place over the frames
@@ -46,6 +46,7 @@ public sealed class InterfaceLayoutSmoke : SmokePart
     private readonly List<EntityId> _workers = [];
     private bool _held;
     private Control? _aid;
+    private Control? _row;
 
     public override string Name => "Interface layout";
 
@@ -64,6 +65,7 @@ public sealed class InterfaceLayoutSmoke : SmokePart
                 FindUnits(orders);
                 FillGroups(frame);
                 AddTallAid(frame);
+                AddRowAtRight(frame);
 
                 // As many as the line holds: it has to give some up to stay above the panel.
                 for (var i = 0; i < 5; i++)
@@ -118,6 +120,8 @@ public sealed class InterfaceLayoutSmoke : SmokePart
                 frame.DropMessages();
                 _aid?.QueueFree();
                 _aid = null;
+                _row?.QueueFree();
+                _row = null;
                 break;
         }
     }
@@ -160,6 +164,15 @@ public sealed class InterfaceLayoutSmoke : SmokePart
         }
 
         _aid = lines.GetParent().GetParent<Control>();
+    }
+
+    // A row at the right under the top bar, as wide as the host's pause and speed buttons are,
+    // so that the two ends of the rows are shown at once.
+    private void AddRowAtRight(InterfaceFrame frame)
+    {
+        _row = UiStyle.FrameButton("Smoke test: a row at the right");
+        _row.CustomMinimumSize = new Vector2(340f, 0f);
+        frame.RowsUnderBarAtRight.AddChild(_row);
     }
 
     private void FindUnits(SmokeOrders orders)
@@ -224,6 +237,8 @@ public sealed class InterfaceLayoutSmoke : SmokePart
         {
             needed.Add("/RowsUnderBar/");
         }
+
+        needed.Add("/RowsUnderBarAtRight/");
 
         if (frame.DevelopmentAids.GetChildCount() > 0)
         {
