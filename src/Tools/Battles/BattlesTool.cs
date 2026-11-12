@@ -22,18 +22,20 @@ public sealed class BattlesTool : ITool
     private const string Usage =
         """
         Usage:
-          battles [--data <folder>] [--battle <number>]... [--seconds <number>]
+          battles [--data <folder>] [--battle <number>]... [--seconds <number>] [--chokepoint <tiles>]
 
         --data     The data folder, default game/data. The armies fight with its numbers.
         --battle   Fight only the battle with this number, 1 to 4. May be given more than once.
         --seconds  Stop a fight that has no winner after this much game time, default 600.
+        --chokepoint  The width of the chokepoint of battle 3, and of the blocks in it, 4 to 8,
+                   default the design's 6. For tuning the test, not a result against the design.
         """;
 
     public string Name => "battles";
 
     public string Summary =>
         "Fight the four acceptance battles of the design headless, both ways round, and report winner, army value kept and whether each target was met. "
-        + $"Arguments: [--data <folder>, default {DefaultFolder}] [--battle <number>]... [--seconds <number>].";
+        + $"Arguments: [--data <folder>, default {DefaultFolder}] [--battle <number>]... [--seconds <number>] [--chokepoint <tiles>, default 6].";
 
     public int Run(IReadOnlyList<string> arguments, TextWriter output, TextWriter errors)
     {
@@ -44,6 +46,7 @@ public sealed class BattlesTool : ITool
         var folder = DefaultFolder;
         var mostTicks = Battle.DefaultMostTicks;
         var wanted = new List<int>();
+        var chokepoint = AcceptanceBattles.ChokepointWidth;
         for (var i = 0; i < arguments.Count; i++)
         {
             switch (arguments[i])
@@ -61,6 +64,12 @@ public sealed class BattlesTool : ITool
                     && int.TryParse(arguments[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var seconds)
                     && seconds is >= 1 and <= 24 * 60 * 60:
                     mostTicks = seconds * Sim.SimInfo.TicksPerSecond;
+                    i++;
+                    break;
+                case "--chokepoint" when i + 1 < arguments.Count
+                    && int.TryParse(arguments[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out var tiles)
+                    && tiles is >= AcceptanceBattles.NarrowestChokepoint and <= AcceptanceBattles.WidestChokepoint:
+                    chokepoint = tiles;
                     i++;
                     break;
                 default:
@@ -83,7 +92,7 @@ public sealed class BattlesTool : ITool
             return ExitCodes.Failed;
         }
 
-        var battles = AcceptanceBattles.All.Where(battle => wanted.Count == 0 || wanted.Contains(battle.Number)).ToList();
+        var battles = AcceptanceBattles.WithChokepoint(chokepoint).Where(battle => wanted.Count == 0 || wanted.Contains(battle.Number)).ToList();
         foreach (var battle in battles)
         {
             if (Battle.Problem(loaded.Data, battle) is { } problem)
@@ -95,7 +104,8 @@ public sealed class BattlesTool : ITool
 
         output.WriteLine(
             $"battles: the acceptance battles of design 3.1 with the data in {folder}. Each is fought twice: with the mass army in the west as the "
-            + "first player, then in the east as the second. A target is met only when both fights meet it. A missed target is reported and fails nothing.");
+            + "first player, then in the east as the second. A target is met only when both fights meet it. A missed target is reported and fails nothing."
+            + (chokepoint == AcceptanceBattles.ChokepointWidth ? "" : $" The chokepoint of battle 3 is {chokepoint} tiles wide, not the design's {AcceptanceBattles.ChokepointWidth}."));
 
         var reports = new List<BattleReport>();
         foreach (var battle in battles)

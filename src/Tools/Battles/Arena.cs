@@ -21,7 +21,8 @@ namespace Tools.Battles;
 /// corridor <see cref="AcceptanceBattles.ChokepointWidth"/> tiles wide between two bands of
 /// cliff, which runs the whole length of the map: both blocks stand in it, 6 wide, so that no
 /// more than the ranks within range ever fight. That is the reading of "chokepoint 6 tiles wide"
-/// that the design's rough model used.
+/// that the design's rough model used. The width can be set, for tuning the test (design 3.1: for
+/// test 3, adjust the range of Line infantry first, then the width of the test chokepoint).
 /// </para>
 /// </remarks>
 public static class Arena
@@ -39,8 +40,10 @@ public static class Arena
     /// <summary>The rows of cliff on each side of the corridor.</summary>
     public const int CliffRows = 2;
 
-    public static MapDef Create(ArenaKind kind)
+    /// <param name="chokepointWidth">The width of the corridor, in tiles. The open field does not use it.</param>
+    public static MapDef Create(ArenaKind kind, int chokepointWidth = AcceptanceBattles.ChokepointWidth)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(chokepointWidth, 1);
         if (kind == ArenaKind.OpenField)
         {
             return new MapDef(
@@ -54,7 +57,7 @@ public static class Arena
                 [new MapMarker(MarkerKind.OpenField, new TileRect(0, 0, Length, OpenHeight), MapAxis.Y)]);
         }
 
-        var height = AcceptanceBattles.ChokepointWidth + (2 * CliffRows);
+        var height = chokepointWidth + (2 * CliffRows);
         var tiles = new TerrainKind[Length * height];
         for (var y = 0; y < height; y++)
         {
@@ -77,7 +80,7 @@ public static class Arena
             tiles,
             [],
             [],
-            [new MapMarker(MarkerKind.Chokepoint, new TileRect(0, CliffRows, Length, AcceptanceBattles.ChokepointWidth), MapAxis.Y)]);
+            [new MapMarker(MarkerKind.Chokepoint, new TileRect(0, CliffRows, Length, chokepointWidth), MapAxis.Y)]);
     }
 
     /// <summary>

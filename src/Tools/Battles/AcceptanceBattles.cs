@@ -90,6 +90,12 @@ public static class AcceptanceBattles
     /// <summary>The width of the chokepoint, in tiles, and of a block in it, in units.</summary>
     public const int ChokepointWidth = 6;
 
+    /// <summary>The narrowest and the widest chokepoint the test can be fought in: what the design allows a map (section 5.3).</summary>
+    public const int NarrowestChokepoint = 4;
+
+    /// <inheritdoc cref="NarrowestChokepoint"/>
+    public const int WidestChokepoint = 8;
+
     private const string Auxiliary = "auxiliary";
     private const string Grenadier = "grenadier";
     private const string Onager = "onager";
@@ -139,6 +145,23 @@ public static class AcceptanceBattles
             new Target(null, null, 35, "either side may win, and keeps at most 35%"),
             "close: elite wins and keeps about 28%"),
     ];
+
+    /// <summary>
+    /// The four battles with the chokepoint of battle 3 another width than the design's 6: the
+    /// corridor and both blocks in it are that many tiles and units wide. For tuning the test,
+    /// which the design names as the second thing to adjust when its target is missed.
+    /// </summary>
+    public static IReadOnlyList<BattleDef> WithChokepoint(int width)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(width, NarrowestChokepoint);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(width, WidestChokepoint);
+        return
+        [
+            .. All.Select(battle => battle.Arena == ArenaKind.Chokepoint
+                ? battle with { Name = $"Equal resources, chokepoint {width} tiles wide", BlockWidth = width }
+                : battle),
+        ];
+    }
 
     private static ArmyDef Mass(int auxiliaries) => new(MassTiers, new ArmyPart(Auxiliary, auxiliaries));
 

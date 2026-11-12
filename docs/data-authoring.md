@@ -70,6 +70,7 @@ A missed target is not an error: the targets are what the numbers are tuned towa
 | --- | --- |
 | `--battle <number>` | Fight only this battle. May be given more than once. |
 | `--seconds <number>` | The longest a fight may take, in seconds of game time. The default is 600. A fight that runs out of time has no winner and meets no target. |
+| `--chokepoint <tiles>` | The width of the chokepoint of battle 3, and of the blocks in it, 4 to 8. The default is the design's 6. For tuning the test itself, which the design names as the second thing to adjust when battle 3 misses its target, after the range of Line infantry; a result at another width is not a result against the design. |
 | `--data <folder>` | Read another data folder. The default is `game/data`. |
 
 To see what an edit does to the battles, run it before and after and compare the two reports.
