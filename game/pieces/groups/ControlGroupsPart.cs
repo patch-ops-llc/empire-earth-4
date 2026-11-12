@@ -58,6 +58,10 @@ public partial class ControlGroupsPart : InterfacePart
         _strip.Begin(KeyOf(IdleWorkerAction));
         _strip.GroupPressed += PressGroup;
         _strip.IdlePressed += NextIdleWorker;
+
+        // The message line stands beside the row, in the middle of the window. A long message
+        // reaches over a long row, and is then drawn over it: it goes away by itself.
+        _strip.ZIndex = -1;
         AddChild(_strip);
 
         _groups.Changed += () => _stale = true;
@@ -207,7 +211,7 @@ public partial class ControlGroupsPart : InterfacePart
         }
 
         LookAt([next]);
-        Report($"Idle worker {next} of {_idle.Count}. Selected {View.Selection.Count}: {string.Join(' ', View.Selection.Entities)}");
+        Report($"Idle worker {next}, one of {_idle.Count}. Selected {View.Selection.Count}: {string.Join(' ', View.Selection.Entities)}");
     }
 
     // Looks at the one of these units that is nearest their middle, so that there is always a
