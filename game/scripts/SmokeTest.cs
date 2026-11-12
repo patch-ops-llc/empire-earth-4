@@ -90,6 +90,12 @@ public sealed class SmokeTest
         new StructuresSmoke(),
         new BuildSmoke(),
 
+        // 15v, second half. Production: a worker trained to a rally point.
+        new ProductionSmoke(),
+
+        // Structure looks, of M20: tier looks and banners against the match.
+        new LooksSmoke(),
+
         // 17v. Fog of war: a unit out of sight, found and attacked; a structure seen and remembered.
         new FogSmoke(),
         new StructuresInFogSmoke(),

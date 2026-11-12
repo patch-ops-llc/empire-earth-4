@@ -57,6 +57,9 @@ public partial class MinimapPart : InterfacePart
 
     public override void EveryFrame(double delta) => _box.Visible = !Frame.IsPanelOpen;
 
+    /// <summary>The territories as the minimap shows them.</summary>
+    public MinimapTerritory Territory => _picture.Territory;
+
     private void TakeRimPress(InputEvent input)
     {
         if (input.IsActionPressed(SelectAction) || input.IsActionPressed(OrderAction) || input.IsActionPressed(MinimapPicture.LookAction))
