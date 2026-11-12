@@ -184,7 +184,7 @@ public sealed class Match
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(player, Players.Count);
         ArgumentOutOfRangeException.ThrowIfNegative(speedPerTick.Raw, nameof(speedPerTick));
         ArgumentOutOfRangeException.ThrowIfNegative(spacing.Raw, nameof(spacing));
-        if (!Grid.IsPassable(position))
+        if (!Grid.For(player).IsPassable(position))
         {
             throw new ArgumentException($"A unit cannot stand at {position}.", nameof(position));
         }

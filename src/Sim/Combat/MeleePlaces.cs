@@ -163,7 +163,7 @@ public sealed class MeleePlaces
         var seeker = new Seeker(
             profile,
             position,
-            _grid.RegionOf(position),
+            _grid.For(body.Owner).RegionOf(position),
             order,
             post,
             mark,
@@ -492,11 +492,13 @@ public sealed class MeleePlaces
 
     private bool IsFree(in Seeker seeker, FixedVector2 point)
     {
+        // The ground as the seeker's owner walks it: a finished gate is open to its owner alone.
+        var grid = _grid.For(seeker.Profile.Player);
         // Somewhere the unit can walk to and stand, as a walk that ends there would leave it.
         var mark = seeker.Mark;
-        if (_grid.RegionOf(point) != seeker.Region
+        if (grid.RegionOf(point) != seeker.Region
             || seeker.Region == 0
-            || _grid.KeepClear(point, Mover.StandOff) != point
+            || grid.KeepClear(point, Mover.StandOff) != point
             || !_targeting.Reaches(seeker.Profile, point, in mark))
         {
             return false;
@@ -517,7 +519,7 @@ public sealed class MeleePlaces
         // the blocked ground it is.
         if (seeker.Direct
             && (mark.IsStructure
-                ? !_grid.IsCorridorClear(seeker.Position, point, Mover.Clearance)
+                ? !grid.IsCorridorClear(seeker.Position, point, Mover.Clearance)
                 : !SpacingRule.AllowsStep(seeker.Position, point, mark.Center, seeker.TargetSpacing)))
         {
             return false;
@@ -527,7 +529,7 @@ public sealed class MeleePlaces
         return seeker.Order != UnitOrder.Idle
             || point == seeker.Position
             || (FixedVector2.DistanceSquaredRaw(seeker.Post, point) <= seeker.Profile.AcquisitionSquared
-                && _grid.IsCorridorClear(seeker.Position, point, Mover.Clearance));
+                && grid.IsCorridorClear(seeker.Position, point, Mover.Clearance));
     }
 
     /// <summary>A point no place may be closer to than the spacing between the seeker and the unit that has it.</summary>

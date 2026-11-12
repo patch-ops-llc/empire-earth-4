@@ -76,7 +76,7 @@ public class DebugPlaceTests
         { -1, StructureIndex(Tower), "3.5", "8.5" },
         { 2, StructureIndex(Tower), "3.5", "8.5" },
         { 0, -1, "3.5", "8.5" },
-        { 0, SiegeMatches.Data.Rules.Structures.Count, "3.5", "8.5" },
+        { 0, SiegeMatches.Data.StructureKinds, "3.5", "8.5" },
         { 0, SiegeMatches.Data.Rules.Structures.ToList().IndexOf("airfield"), "3.5", "8.5" },
         { 0, StructureIndex(Tower), "12.5", "2.5" },
         { 0, StructureIndex(Tower), "11.5", "2.5" },

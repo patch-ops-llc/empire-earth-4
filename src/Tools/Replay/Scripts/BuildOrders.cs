@@ -67,7 +67,8 @@ internal sealed class BuildOrders : OrderScript
         }
         else if (kind < 42)
         {
-            // Any structure of the roster anywhere on the map, and now and then one that is not in it.
+            // Any structure of the roster anywhere on the map, and now and then the number after its
+            // last: the gate's (18b) in data that has a wall, and no structure's otherwise.
             PickSome(_random);
             commands.Add(Build(player, Picked, _random.NextInt(roster.Count + 1), AnyPoint(_random)));
         }

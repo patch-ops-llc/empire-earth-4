@@ -18,7 +18,8 @@ public sealed class PlayerTech
         Fraction incomeMultiplier,
         IReadOnlyList<ResearchOffer> research,
         IReadOnlyList<ChassisBlueprint> blueprints,
-        IReadOnlyList<StructureBlueprint> structures)
+        IReadOnlyList<StructureBlueprint> structures,
+        StructureBlueprint? gate)
     {
         Tiers = tiers;
         Epoch = epoch;
@@ -28,6 +29,7 @@ public sealed class PlayerTech
         Research = research;
         Blueprints = blueprints;
         Structures = structures;
+        Gate = gate;
     }
 
     /// <summary>The tiers this was resolved from, one per track.</summary>
@@ -59,8 +61,15 @@ public sealed class PlayerTech
     public IReadOnlyList<StructureBlueprint> Structures { get; }
 
     /// <summary>
+    /// The blueprint of the gate, <see cref="GameData.Gate"/>, or null when the data has no wall.
+    /// It is the wall's with the gate's price and build time, and no entry of <see cref="Structures"/>.
+    /// </summary>
+    public StructureBlueprint? Gate { get; }
+
+    /// <summary>
     /// The blueprint of the structure with this roster index, as in <see cref="StructureDef.Index"/>,
-    /// or null for a structure of the roster that has no data file yet.
+    /// or null for a structure of the roster that has no data file yet. The number after the
+    /// roster's last is the <see cref="Gate"/>'s.
     /// </summary>
     public StructureBlueprint? StructureOf(int structure)
     {
@@ -72,6 +81,6 @@ public sealed class PlayerTech
             }
         }
 
-        return null;
+        return Gate is { } gate && gate.Structure.Index == structure ? gate : null;
     }
 }

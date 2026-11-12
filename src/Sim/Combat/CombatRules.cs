@@ -112,7 +112,13 @@ public sealed class CombatRules
             }
         }
 
-        _structurePicks = new StructurePick[data.Rules.Structures.Count];
+        // Walls and gates are never picked (design section 3, row 17).
+        _structurePicks = new StructurePick[data.StructureKinds];
+        if (data.Gate is { } gate)
+        {
+            _structurePicks[gate.Index] = StructurePick.Never;
+        }
+
         var largestFootprint = 0;
         foreach (var structure in data.Structures)
         {
@@ -318,7 +324,7 @@ public sealed class CombatRules
         var armor = new ArmorProfile[tech.Blueprints.Count];
         for (var i = 0; i < profiles.Length; i++)
         {
-            profiles[i] = ProfileFor(tech.Blueprints[i]);
+            profiles[i] = ProfileFor(player, tech.Blueprints[i]);
             armor[i] = ArmorFor(tech.Blueprints[i]);
         }
 
@@ -365,7 +371,7 @@ public sealed class CombatRules
         Plating = blueprint.Perks.Plating is { } plating ? plating.Multiplier.ToFraction() : Fraction.One,
     };
 
-    private AttackProfile ProfileFor(ChassisBlueprint blueprint)
+    private AttackProfile ProfileFor(int player, ChassisBlueprint blueprint)
     {
         var attack = blueprint.Attack;
         var line = blueprint.Line.Index;
@@ -390,6 +396,7 @@ public sealed class CombatRules
         var acquisition = Fixed.Max(sight, range);
         return new AttackProfile
         {
+            Player = player,
             Line = line,
             Melee = melee,
             Damage = blueprint.DamagePerHit,
@@ -418,6 +425,13 @@ public sealed class AttackProfile
     internal AttackProfile()
     {
     }
+
+    /// <summary>
+    /// The player whose units attack with this. A melee hit crosses no tile the attacker cannot
+    /// walk on (design section 3, row 4), and which tiles those are depends on whose the unit
+    /// is: a finished gate is open to its owner alone.
+    /// </summary>
+    public required int Player { get; init; }
 
     /// <summary>The roster index of the chassis's line.</summary>
     public required int Line { get; init; }

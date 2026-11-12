@@ -60,12 +60,16 @@ public sealed class MoveCommandHandler : ICommandHandler
     private readonly List<SharedStart> _starts = [];
     private readonly List<(int Mover, FixedVector2 Place)> _places = [];
 
+    // The grid of the player whose order is being carried out. Scratch, like the lists above.
+    private MapGrid _walked;
+
     public MoveCommandHandler(MapGrid grid, ComponentStore<Body> bodies, ComponentStore<Mover> movers, int playerCount)
     {
         ArgumentNullException.ThrowIfNull(grid);
         ArgumentNullException.ThrowIfNull(bodies);
         ArgumentNullException.ThrowIfNull(movers);
         _grid = grid;
+        _walked = grid;
         _bodies = bodies;
         _movers = movers;
         _playerCount = playerCount;
@@ -80,6 +84,9 @@ public sealed class MoveCommandHandler : ICommandHandler
         {
             return false;
         }
+
+        // The order is worked out on the ground as the player's units walk it.
+        _walked = _grid.For(command.Player);
 
         // First who takes the order and the box that holds them, then where each of them goes.
         _areas.Clear();
@@ -104,7 +111,7 @@ public sealed class MoveCommandHandler : ICommandHandler
             }
 
             var position = body.Position;
-            var region = _grid.RegionOf(position);
+            var region = _walked.RegionOf(position);
             if (region == 0)
             {
                 continue;
@@ -133,11 +140,11 @@ public sealed class MoveCommandHandler : ICommandHandler
             _places.Add((member.Mover, offset == FixedVector2.Zero ? target : OnMap(target + offset)));
 
             ref var mover = ref _movers.ValueAt(member.Mover);
-            if (TileOf(position) == TileOf(destination) || _grid.IsCorridorClear(position, destination, Mover.Clearance))
+            if (TileOf(position) == TileOf(destination) || _walked.IsCorridorClear(position, destination, Mover.Clearance))
             {
                 mover.WalkStraightTo(destination);
             }
-            else if (destination == area.Destination || _grid.IsCorridorClear(CenterOf(area.Tile), destination, Mover.Clearance))
+            else if (destination == area.Destination || _walked.IsCorridorClear(CenterOf(area.Tile), destination, Mover.Clearance))
             {
                 mover.WalkRouteTo(destination, StartFor(area.Region, TileOf(position), position), area.Tile, offset);
             }
@@ -209,13 +216,13 @@ public sealed class MoveCommandHandler : ICommandHandler
     /// </summary>
     private FixedVector2 Reachable(int region, FixedVector2 point, FixedVector2 firstPosition)
     {
-        if (_grid.RegionOf(point) == region)
+        if (_walked.RegionOf(point) == region)
         {
-            return _grid.KeepClear(point, Mover.StandOff);
+            return _walked.KeepClear(point, Mover.StandOff);
         }
 
         // Every region has a tile, so this finds one.
-        _grid.TryFindNearestTile(point, region, firstPosition, out var tileX, out var tileY);
+        _walked.TryFindNearestTile(point, region, firstPosition, out var tileX, out var tileY);
         return MapGrid.TileCenter(tileX, tileY);
     }
 
@@ -231,7 +238,7 @@ public sealed class MoveCommandHandler : ICommandHandler
             }
 
             shared++;
-            if (start.Tile == ownTile || _grid.IsCorridorClear(position, CenterOf(start.Tile), Mover.Clearance))
+            if (start.Tile == ownTile || _walked.IsCorridorClear(position, CenterOf(start.Tile), Mover.Clearance))
             {
                 return start.Tile;
             }

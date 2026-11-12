@@ -12,6 +12,11 @@ namespace Sim.Movement;
 /// function of the grid and its two ends, so a route that is missing is found again and is the same
 /// route. That is why the cache can be emptied at any moment, and why a world restored from a
 /// snapshot needs nothing from it. It is only ever asked for one route by its ends, never walked.
+/// <para>
+/// A finished gate is open to its owner alone, so a route is a route on one player's grid
+/// (<see cref="MapGrid.For"/>) and is kept under that grid with its two ends. Players with no
+/// gate to walk through walk the grid everyone shares, and share its routes.
+/// </para>
 /// </remarks>
 public sealed class RouteCache
 {
@@ -41,17 +46,25 @@ public sealed class RouteCache
     public long SearchCount { get; private set; }
 
     /// <summary>
-    /// The route between two tiles, each given as <c>y * width + x</c>. The tiles must be in the
-    /// same region.
+    /// The route between two tiles on the grid everyone shares, each given as
+    /// <c>y * width + x</c>. The tiles must be in the same region.
     /// </summary>
-    public Route Get(int startTile, int goalTile)
+    public Route Get(int startTile, int goalTile) => Get(Grid, startTile, goalTile);
+
+    /// <summary>
+    /// The route between two tiles for the units of a player. The tiles must be in the same
+    /// region of the player's grid.
+    /// </summary>
+    public Route Get(int player, int startTile, int goalTile) => Get(Grid.For(player), startTile, goalTile);
+
+    private Route Get(MapGrid grid, int startTile, int goalTile)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(startTile);
         ArgumentOutOfRangeException.ThrowIfNegative(goalTile);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(startTile, _tileCount);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(goalTile, _tileCount);
 
-        var key = ((long)startTile * _tileCount) + goalTile;
+        var key = (((grid.View * (long)_tileCount) + startTile) * _tileCount) + goalTile;
         if (_recent.TryGetValue(key, out var route))
         {
             return route;
@@ -59,8 +72,8 @@ public sealed class RouteCache
 
         if (!_older.TryGetValue(key, out route))
         {
-            var width = Grid.Width;
-            var tiles = _finder.Find(startTile % width, startTile / width, goalTile % width, goalTile / width, out var expansions);
+            var width = grid.Width;
+            var tiles = _finder.Find(grid, startTile % width, startTile / width, goalTile % width, goalTile / width, out var expansions);
             route = new Route(tiles, expansions);
             SearchCount++;
         }

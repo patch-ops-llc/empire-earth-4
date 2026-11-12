@@ -127,7 +127,9 @@ public sealed class SeparationSystem : ISystem
             ref var mover = ref _movers.ValueAt(i);
             ref var body = ref _bodies.ValueAt(_blocking.BodyIndexOf(i));
             var standing = mover.State == MoveState.Idle;
-            var next = standing ? StepStanding(i, widest, body.Position, step) : StepWalking(mover, body.Position, step);
+            // A unit steps over the ground as its owner walks it, which has the owner's finished gates open.
+            var grid = _grid.For(body.Owner);
+            var next = standing ? StepStanding(grid, i, widest, body.Position, step) : StepWalking(grid, mover, body.Owner, body.Position, step);
             if (!_blocking.Allows(i, mover.Spacing, body.Position, next, out var blocker))
             {
                 // An enemy is in the way of the step. A standing unit takes the part of the step
@@ -137,7 +139,7 @@ public sealed class SeparationSystem : ISystem
                     continue;
                 }
 
-                next = StepStanding(i, widest, body.Position, Beside(step, body.Position, blocker.Position));
+                next = StepStanding(grid, i, widest, body.Position, Beside(step, body.Position, blocker.Position));
                 if (!_blocking.Allows(i, mover.Spacing, body.Position, next, out _))
                 {
                     continue;
@@ -297,9 +299,9 @@ public sealed class SeparationSystem : ISystem
         return first.Value == low ? direction : -direction;
     }
 
-    private FixedVector2 StepStanding(int unit, Fixed widest, FixedVector2 position, Step step)
+    private FixedVector2 StepStanding(MapGrid grid, int unit, Fixed widest, FixedVector2 position, Step step)
     {
-        var next = Stand(position, step);
+        var next = Stand(grid, position, step);
         if (next != position)
         {
             return next;
@@ -309,7 +311,7 @@ public sealed class SeparationSystem : ISystem
         // quarter turn, so that two units pressed against a wall one behind the other still part.
         // It takes that step only if it leads no nearer to any unit it is too close to: a unit
         // pressed against the ground from two sides stays where it is and rests.
-        next = Stand(position, new Step(-step.Y, step.X));
+        next = Stand(grid, position, new Step(-step.Y, step.X));
         return next != position && LeadsNoNearer(unit, widest, position, next) ? next : position;
     }
 
@@ -341,22 +343,22 @@ public sealed class SeparationSystem : ISystem
         return true;
     }
 
-    private FixedVector2 Stand(FixedVector2 position, Step step)
+    private static FixedVector2 Stand(MapGrid grid, FixedVector2 position, Step step)
     {
         var x = Fixed.FromRaw(step.X);
         var y = Fixed.FromRaw(step.Y);
         var next = position + new FixedVector2(x, y);
-        if (!_grid.IsSegmentClear(position, next))
+        if (!grid.IsSegmentClear(position, next))
         {
             // Along the blocked ground, by the part of the step that is free, the longer part first.
             var alongX = position + new FixedVector2(x, Fixed.Zero);
             var alongY = position + new FixedVector2(Fixed.Zero, y);
             var (first, second) = Math.Abs(step.X) >= Math.Abs(step.Y) ? (alongX, alongY) : (alongY, alongX);
-            if (first != position && _grid.IsSegmentClear(position, first))
+            if (first != position && grid.IsSegmentClear(position, first))
             {
                 next = first;
             }
-            else if (second != position && _grid.IsSegmentClear(position, second))
+            else if (second != position && grid.IsSegmentClear(position, second))
             {
                 next = second;
             }
@@ -366,15 +368,15 @@ public sealed class SeparationSystem : ISystem
             }
         }
 
-        return _grid.KeepClear(next, Mover.StandOff);
+        return grid.KeepClear(next, Mover.StandOff);
     }
 
-    private FixedVector2 StepWalking(in Mover mover, FixedVector2 position, Step step)
+    private FixedVector2 StepWalking(MapGrid grid, in Mover mover, int owner, FixedVector2 position, Step step)
     {
         var next = position + new FixedVector2(Fixed.FromRaw(step.X), Fixed.FromRaw(step.Y));
-        return _grid.IsSegmentClear(position, next)
-            && _grid.KeepClear(next, Mover.Clearance) == next
-            && _grid.IsCorridorClear(next, MovementSystem.AimOf(mover, _routes), Mover.Clearance)
+        return grid.IsSegmentClear(position, next)
+            && grid.KeepClear(next, Mover.Clearance) == next
+            && grid.IsCorridorClear(next, MovementSystem.AimOf(mover, owner, _routes), Mover.Clearance)
             ? next
             : position;
     }

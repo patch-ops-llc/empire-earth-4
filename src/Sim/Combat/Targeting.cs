@@ -187,10 +187,13 @@ public sealed class Targeting
     /// reach with a clear straight line between the two centers.
     /// </summary>
     /// <remarks>
-    /// The line of a melee hit must cross no tile a unit cannot walk on, and a line through the
-    /// exact corner where four tiles meet needs all four, which is what
-    /// <see cref="MapGrid.IsSegmentClear"/> tests. The tiles the two stand in are passable, so
-    /// counting them changes nothing. Shots are not blocked by anything.
+    /// The line of a melee hit must cross no tile the attacker cannot walk on, not counting the
+    /// tiles the two stand in (design section 3, row 4), and a line through the exact corner where
+    /// four tiles meet needs all four, which is what <see cref="MapGrid.IsSegmentClearBetween"/>
+    /// tests on the grid of the attacker's owner. The tile a unit stands in is one that unit can
+    /// walk on, and it is one the other cannot when the unit stands in a gate of its own player:
+    /// the two hit each other across the gate's edge, and a hit crosses the attacker's own gates
+    /// and no one else's. Shots are not blocked by anything.
     /// </remarks>
     public bool Reaches(AttackProfile profile, FixedVector2 from, FixedVector2 target, int targetLine)
     {
@@ -198,7 +201,7 @@ public sealed class Targeting
         var distance = FixedVector2.DistanceSquaredRaw(from, target);
         if (profile.Melee)
         {
-            return distance <= _rules.ReachSquared(profile.Line, targetLine) && _grid.IsSegmentClear(from, target);
+            return distance <= _rules.ReachSquared(profile.Line, targetLine) && _grid.For(profile.Player).IsSegmentClearBetween(from, target);
         }
 
         return distance <= profile.RangeSquared && distance >= profile.MinRangeSquared;
@@ -256,7 +259,7 @@ public sealed class Targeting
             }
         }
 
-        return stand != position && _grid.IsCorridorClear(position, stand, Mover.Clearance);
+        return stand != position && _grid.For(profile.Player).IsCorridorClear(position, stand, Mover.Clearance);
     }
 
     /// <summary><see cref="TryFindStand(AttackProfile, FixedVector2, FixedVector2, in Mark, out FixedVector2)"/> for a unit as the target, at a point.</summary>
@@ -276,8 +279,8 @@ public sealed class Targeting
         }
 
         return stand != position
-            && _grid.IsCorridorClear(position, stand, Mover.Clearance)
-            && (!profile.Melee || _grid.IsSegmentClear(stand, target));
+            && _grid.For(profile.Player).IsCorridorClear(position, stand, Mover.Clearance)
+            && (!profile.Melee || _grid.For(profile.Player).IsSegmentClearBetween(stand, target));
     }
 
     /// <summary>
@@ -315,8 +318,10 @@ public sealed class Targeting
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(profile);
 
+        // The ground as the unit's owner walks it: a finished gate is open to its owner alone.
         var position = body.Position;
-        var region = _grid.RegionOf(position);
+        var grid = _grid.For(body.Owner);
+        var region = grid.RegionOf(position);
         var best = EntityId.None;
         var bestDistance = long.MaxValue;
         var bestStructure = EntityId.None;
@@ -352,7 +357,7 @@ public sealed class Targeting
                 continue;
             }
 
-            if (!_rules.CanHit(profile.Line, mark.Line) || (profile.Melee && !IsBesideRegion(in mark, region)))
+            if (!_rules.CanHit(profile.Line, mark.Line) || (profile.Melee && !IsBesideRegion(grid, in mark, region)))
             {
                 continue;
             }
@@ -430,11 +435,11 @@ public sealed class Targeting
     /// that region, or one of the tiles round a structure's footprint is ground of that region.
     /// From each of those tiles the footprint is within melee reach.
     /// </summary>
-    private bool IsBesideRegion(in Mark mark, int region)
+    private static bool IsBesideRegion(MapGrid grid, in Mark mark, int region)
     {
         if (!mark.IsStructure)
         {
-            return _grid.RegionOf(mark.Center) == region;
+            return grid.RegionOf(mark.Center) == region;
         }
 
         var tiles = mark.Tiles;
@@ -442,7 +447,7 @@ public sealed class Targeting
         {
             for (var x = tiles.X - 1; x <= tiles.X + tiles.Size; x++)
             {
-                if (!tiles.Covers(x, y) && _grid.RegionOf(x, y) == region)
+                if (!tiles.Covers(x, y) && grid.RegionOf(x, y) == region)
                 {
                     return true;
                 }

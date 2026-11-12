@@ -49,7 +49,8 @@ public static class TechResolver
             TechRules.IncomeMultiplier(data, ownTiers),
             research,
             blueprints,
-            structures);
+            structures,
+            data.Gate is { } gate ? StructureBlueprintResolver.Resolve(data, ownTiers, gate) : null);
     }
 
     /// <summary>

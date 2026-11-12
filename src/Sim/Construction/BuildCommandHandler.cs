@@ -177,7 +177,8 @@ public sealed class BuildCommandHandler : ICommandHandler
             return;
         }
 
-        var region = _rules.Grid.RegionOf(body.Position);
+        var grid = _rules.Grid.For(body.Owner);
+        var region = grid.RegionOf(body.Position);
         var found = false;
         var foundInRegion = false;
         long nearest = 0;
@@ -186,7 +187,7 @@ public sealed class BuildCommandHandler : ICommandHandler
         {
             for (var x = site.X; x < site.X + site.Size; x++)
             {
-                var inRegion = region != 0 && _rules.Grid.RegionOf(x, y) == region;
+                var inRegion = region != 0 && grid.RegionOf(x, y) == region;
                 var center = MapGrid.TileCenter(x, y);
                 var distance = FixedVector2.DistanceSquaredRaw(center, body.Position);
                 if (!found || (inRegion && !foundInRegion) || (inRegion == foundInRegion && distance < nearest))

@@ -88,8 +88,9 @@ public sealed class Breaching
     /// </summary>
     public bool IsCutOff(int player, FixedVector2 position, FixedVector2 place)
     {
-        var region = _grid.RegionOf(position);
-        if (region == 0 || !_grid.Contains(place) || _grid.RegionOf(place) == region)
+        var grid = _grid.For(player);
+        var region = grid.RegionOf(position);
+        if (region == 0 || !grid.Contains(place) || grid.RegionOf(place) == region)
         {
             return false;
         }
@@ -118,6 +119,7 @@ public sealed class Breaching
 
         var width = _grid.Width;
         var way = _finder.FindAcross(
+            _grid.For(player),
             position.X.FloorToInt(),
             position.Y.FloorToInt(),
             place.X.FloorToInt(),

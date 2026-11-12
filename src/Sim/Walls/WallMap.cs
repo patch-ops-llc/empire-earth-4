@@ -18,10 +18,12 @@ namespace Sim.Walls;
 /// the tiles of the <see cref="MapGrid"/>, and not state: <see cref="StructureTiles"/> has it
 /// rebuilt whenever it rebuilds the tiles, so the two always agree, and what a player knows is
 /// looked at again whenever the fog of war has been written. A wall tile counts from the moment
-/// it is laid, while it still builds itself.
+/// it is laid, while it still builds itself. A gate is a wall tile here: to its owner's enemies it
+/// is one, and to its owner it is a wall tile of its own, which the owner's units walk through
+/// once it is finished because the owner's <see cref="MapGrid.For"/> has it open.
 /// </para>
 /// <para>
-/// <b>The walls a player knows.</b> A wall tile of another player is a wall to a player only when
+/// <b>The walls a player knows.</b> A wall tile or gate of another player is a wall to a player only when
 /// the player sees it or remembers it (<see cref="MatchVision.KnowsStructure"/>): then its units
 /// may be sent to break it. A wall tile that stands and that the player has never seen is ground
 /// nobody can walk, as any structure the player has never seen is to the routes: it blocks, and
@@ -80,10 +82,15 @@ public sealed class WallMap : ITileFollower
         _bodies = bodies;
         _structures = structures;
         _vision = vision;
-        _isWall = new bool[data.Rules.Structures.Count];
+        _isWall = new bool[data.StructureKinds];
         foreach (var structure in data.Structures)
         {
             _isWall[structure.Index] = structure.Wall is not null;
+        }
+
+        if (data.Gate is { } gate)
+        {
+            _isWall[gate.Index] = true;
         }
 
         var tiles = grid.Width * grid.Height;
@@ -96,7 +103,10 @@ public sealed class WallMap : ITileFollower
         _lookedAt = new int[playerCount];
     }
 
-    /// <summary>True for a structure of the roster that is a wall tile to everyone.</summary>
+    /// <summary>
+    /// True for a kind of structure that is a wall tile: the wall, and the gate, which is one to
+    /// everyone but its owner.
+    /// </summary>
     public bool IsWall(int structure) => structure >= 0 && structure < _isWall.Length && _isWall[structure];
 
     /// <summary>
@@ -181,7 +191,9 @@ public sealed class WallMap : ITileFollower
             return;
         }
 
-        var width = _grid.Width;
+        // The ground as the player's units walk it: with the player's own finished gates open.
+        var grid = _grid.For(player);
+        var width = grid.Width;
         var enemyWalls = _enemyWalls[player] ??= new bool[_ownerAt.Length];
         var past = _past[player] ??= new int[_ownerAt.Length];
         var changed = !_fresh[player];
@@ -264,6 +276,6 @@ public sealed class WallMap : ITileFollower
 
         _fresh[player] = true;
 
-        bool CanCross(int tile) => enemyWalls[tile] || _grid.IsPassable(tile % width, tile / width);
+        bool CanCross(int tile) => enemyWalls[tile] || grid.IsPassable(tile % width, tile / width);
     }
 }

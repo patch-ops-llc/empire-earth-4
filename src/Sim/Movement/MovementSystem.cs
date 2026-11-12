@@ -91,11 +91,14 @@ public sealed class MovementSystem : ISystem
     /// <see cref="Mover.Spread"/>. The route's first tile is aimed for at its center, where the
     /// order made sure the mover can go.
     /// </summary>
-    public static FixedVector2 AimOf(in Mover mover, RouteCache routes)
+    /// <param name="mover">The mover.</param>
+    /// <param name="owner">The player it belongs to, on whose grid its route was found.</param>
+    /// <param name="routes">The routes of the match.</param>
+    public static FixedVector2 AimOf(in Mover mover, int owner, RouteCache routes)
     {
         ArgumentNullException.ThrowIfNull(routes);
         return mover.State == MoveState.Following
-            ? AimOf(mover, routes.Get(mover.RouteStart, mover.RouteGoal), routes.Grid.Width)
+            ? AimOf(mover, routes.Get(owner, mover.RouteStart, mover.RouteGoal), routes.Grid.Width)
             : mover.Destination;
     }
 
@@ -127,7 +130,7 @@ public sealed class MovementSystem : ISystem
 
             ref var body = ref _bodies.Get(entity);
             var turnToLook = (world.Tick + entity.Value) % LookInterval == 0;
-            body.Position = Walk(ref mover, i, body.Position, turnToLook);
+            body.Position = Walk(ref mover, i, body.Owner, body.Position, turnToLook);
         }
     }
 
@@ -140,17 +143,19 @@ public sealed class MovementSystem : ISystem
     private static FixedVector2 CenterOf(int tile, int width) => MapGrid.TileCenter(tile % width, tile / width);
 
     /// <summary>Carries out one tick of a mover's order and returns where it stands afterwards.</summary>
-    private FixedVector2 Walk(ref Mover mover, int unit, FixedVector2 position, bool turnToLook)
+    private FixedVector2 Walk(ref Mover mover, int unit, int owner, FixedVector2 position, bool turnToLook)
     {
+        // The ground as the mover's owner walks it, which has the owner's finished gates open.
+        var grid = _grid.For(owner);
         Route? route = null;
         if (mover.State == MoveState.Following)
         {
-            route = _routes.Get(mover.RouteStart, mover.RouteGoal);
+            route = _routes.Get(owner, mover.RouteStart, mover.RouteGoal);
 
             // A mover that stands on the point it aims for looks ahead below, as part of arriving.
-            if ((turnToLook || mover.RouteNode == 0) && position != AimOf(mover, route, _grid.Width))
+            if ((turnToLook || mover.RouteNode == 0) && position != AimOf(mover, route, grid.Width))
             {
-                LookAhead(ref mover, route, position);
+                LookAhead(grid, ref mover, route, position);
             }
         }
 
@@ -158,7 +163,7 @@ public sealed class MovementSystem : ISystem
         mover.Waiting = false;
         while (true)
         {
-            var target = mover.State == MoveState.Following ? AimOf(mover, route!, _grid.Width) : mover.Destination;
+            var target = mover.State == MoveState.Following ? AimOf(mover, route!, grid.Width) : mover.Destination;
             if (position == target)
             {
                 if (mover.State == MoveState.Moving)
@@ -167,7 +172,7 @@ public sealed class MovementSystem : ISystem
                     break;
                 }
 
-                Arrive(ref mover, route!, position);
+                Arrive(grid, ref mover, route!, position);
                 continue;
             }
 
@@ -177,7 +182,7 @@ public sealed class MovementSystem : ISystem
             }
 
             var next = FixedVector2.MoveTowards(position, target, left);
-            if (!_grid.IsPassable(next))
+            if (!grid.IsPassable(next))
             {
                 mover.Stop();
                 break;
@@ -186,7 +191,7 @@ public sealed class MovementSystem : ISystem
             if (!_blocking.Allows(unit, mover.Spacing, position, next, out var blocker))
             {
                 // An enemy is in the way. Whether the mover steers round or waits, its tick is spent.
-                if (TrySteerRound(unit, mover.Spacing, position, target, left, blocker, out next))
+                if (TrySteerRound(grid, unit, mover.Spacing, position, target, left, blocker, out next))
                 {
                     mover.Facing = (next - position).ToAngle();
                     position = next;
@@ -221,7 +226,7 @@ public sealed class MovementSystem : ISystem
     /// Finds a step round the enemy in a mover's way: along the circle around that enemy, first
     /// toward the side the mover's aim lies on. False when neither side has a step to take.
     /// </summary>
-    private bool TrySteerRound(int unit, Fixed spacing, FixedVector2 position, FixedVector2 target, Fixed reach, EnemyBlocking.Blocker blocker, out FixedVector2 next)
+    private bool TrySteerRound(MapGrid grid, int unit, Fixed spacing, FixedVector2 position, FixedVector2 target, Fixed reach, EnemyBlocking.Blocker blocker, out FixedVector2 next)
     {
         next = position;
         var fromEnemyX = (long)position.X.Raw - blocker.Position.X.Raw;
@@ -267,9 +272,9 @@ public sealed class MovementSystem : ISystem
             var point = FixedVector2.MoveTowards(position, blocker.Position + (turned * radius), reach);
             if (point != position
                 && FixedVector2.DistanceSquaredRaw(point, target) < before
-                && _grid.IsSegmentClear(position, point)
-                && _grid.KeepClear(point, Mover.Clearance) == point
-                && _grid.IsCorridorClear(point, target, Mover.Clearance)
+                && grid.IsSegmentClear(position, point)
+                && grid.KeepClear(point, Mover.Clearance) == point
+                && grid.IsCorridorClear(point, target, Mover.Clearance)
                 && _blocking.Allows(unit, spacing, position, point, out _))
             {
                 next = point;
@@ -284,11 +289,11 @@ public sealed class MovementSystem : ISystem
     /// Gives a mover that stands on the point it was aiming for its next aim. Every call takes the
     /// mover further along its route or makes its spread smaller, so a walk always goes on.
     /// </summary>
-    private void Arrive(ref Mover mover, Route route, FixedVector2 position)
+    private static void Arrive(MapGrid grid, ref Mover mover, Route route, FixedVector2 position)
     {
         if (mover.Spread != FixedVector2.Zero)
         {
-            if (!LookAhead(ref mover, route, position))
+            if (!LookAhead(grid, ref mover, route, position))
             {
                 // Nothing further is in sight from here with this spread. The aim moves toward the
                 // center of the same tile, along a line that was clear when this point was chosen.
@@ -304,7 +309,7 @@ public sealed class MovementSystem : ISystem
         if (mover.RouteNode + 1 < route.Tiles.Count)
         {
             mover.RouteNode++;
-            LookAhead(ref mover, route, position);
+            LookAhead(grid, ref mover, route, position);
         }
         else
         {
@@ -323,7 +328,7 @@ public sealed class MovementSystem : ISystem
     /// That takes few tries and finds a tile that is far along, not always the furthest; the next
     /// look goes on from there.
     /// </remarks>
-    private bool LookAhead(ref Mover mover, Route route, FixedVector2 position)
+    private static bool LookAhead(MapGrid grid, ref Mover mover, Route route, FixedVector2 position)
     {
         var aim = mover.RouteNode;
         var count = route.Tiles.Count;
@@ -331,7 +336,7 @@ public sealed class MovementSystem : ISystem
         {
             if (probe == count)
             {
-                if (_grid.IsCorridorClear(position, mover.Destination, Mover.Clearance))
+                if (grid.IsCorridorClear(position, mover.Destination, Mover.Clearance))
                 {
                     mover.WalkStraightTo(mover.Destination);
                     return true;
@@ -340,10 +345,10 @@ public sealed class MovementSystem : ISystem
                 continue;
             }
 
-            var center = CenterOf(route.Tiles[probe], _grid.Width);
+            var center = CenterOf(route.Tiles[probe], grid.Width);
             var point = center + mover.Spread;
-            if ((point == center || (_grid.KeepClear(point, Mover.Clearance) == point && _grid.IsCorridorClear(center, point, Mover.Clearance)))
-                && _grid.IsCorridorClear(position, point, Mover.Clearance))
+            if ((point == center || (grid.KeepClear(point, Mover.Clearance) == point && grid.IsCorridorClear(center, point, Mover.Clearance)))
+                && grid.IsCorridorClear(position, point, Mover.Clearance))
             {
                 mover.RouteNode = probe;
                 return true;

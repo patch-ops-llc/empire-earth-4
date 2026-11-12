@@ -138,6 +138,8 @@ public class BuildScriptTests
                 continue;
             }
 
+            // The number after the roster's last counts as no structure here although it is the
+            // gate's (18b): the script gives it for what the roster does not have.
             seen.Add(command.ContentId >= roster.Count || match.Construction.Buildable(command.ContentId) is null ? "an order to build something that is no structure"
                 : roster[command.ContentId] == "generator" ? "an order to build a Generator"
                 : roster[command.ContentId] == "outpost" ? "an order to build an Outpost"

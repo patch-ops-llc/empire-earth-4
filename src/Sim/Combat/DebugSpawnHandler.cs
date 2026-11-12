@@ -54,7 +54,7 @@ public sealed class DebugSpawnHandler : ICommandHandler
             || command.Player >= _match.Players.Count
             || command.ContentId < 0
             || command.ContentId >= _match.Data.Chassis.Count
-            || !_match.Grid.IsPassable(position))
+            || !_match.Grid.For(command.Player).IsPassable(position))
         {
             OrderCommandHandler.Refuse(_events, in command);
             return false;
