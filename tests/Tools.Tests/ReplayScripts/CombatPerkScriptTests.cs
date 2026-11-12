@@ -111,7 +111,7 @@ public class CombatPerkScriptTests
     /// change could break. It has three players: a gunner and an armored player with bases, who
     /// research, and a plain player without a base, whose units and Tower stay at Firepower 1.
     /// </summary>
-    [Fact(Skip = OpenJoins.CombatPerksMeetPlaces)]
+    [Fact]
     public void ItsGoldenReplayReachesTheRulesItGuards()
     {
         var replay = ReplayRuns.ReadGolden(GoldenReplay);
