@@ -133,6 +133,43 @@ internal sealed class AiFixture
         Sight.Refresh();
     }
 
+    /// <summary>Places workers for the player on open tiles of its territory, and reads the match again.</summary>
+    public void SpawnWorkers(int count)
+    {
+        var (homeX, homeY, radius) = Home;
+        for (var y = homeY - radius; y <= homeY + radius && count > 0; y++)
+        {
+            for (var x = homeX - radius; x <= homeX + radius && count > 0; x++)
+            {
+                if (Sight.HoldsTiles(x, y, 1) && IsOpenAround(x, y) && _spawned.Add((x, y)))
+                {
+                    Match.SpawnWorker(Player, MapGrid.TileCenter(x, y));
+                    count--;
+                }
+            }
+        }
+
+        Assert.Equal(0, count);
+        Sight.Refresh();
+
+        // Away from structures and deposits, so that no worker stands on a place of a site.
+        bool IsOpenAround(int x, int y)
+        {
+            for (var tileY = y - 2; tileY <= y + 2; tileY++)
+            {
+                for (var tileX = x - 2; tileX <= x + 2; tileX++)
+                {
+                    if (!Match.Grid.IsPassable(tileX, tileY))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+    }
+
     /// <summary>
     /// Has the match carry out the orders in <see cref="Commands"/> in one tick, as with a command
     /// delay of 1, then empties the list and reads the match again.

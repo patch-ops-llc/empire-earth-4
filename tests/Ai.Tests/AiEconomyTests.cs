@@ -258,6 +258,98 @@ public class AiEconomyTests
         Assert.Equal(6, fixture.Commands.Count);
     }
 
+    [Fact]
+    public void NoMoreWorkersAreSentToASiteInOneRoundThanItHasPlacesFree()
+    {
+        var fixture = new AiFixture();
+        var generators = new[] { fixture.Place("generator"), fixture.Place("generator") };
+        var places = fixture.Data.Resources.Energy.WorkersPerGenerator;
+        Assert.True(places < 6 && 2 * places >= 6);
+        var economy = new AiEconomy(fixture.Sight, AiFixture.Personality());
+
+        var budget = fixture.With(0, 0);
+        budget.Want(0, 100);
+        economy.AssignWorkers(budget, fixture.Commands);
+
+        // The nearer Generator is full after four, so the other two go to the second.
+        Assert.All(generators, generator => Assert.InRange(fixture.Commands.Count(command => command.TargetEntity == generator), 1, places));
+        fixture.Carry();
+        Assert.DoesNotContain(fixture.Sight.Workers, worker => worker.State is WorkerState.Idle or WorkerState.Waiting);
+    }
+
+    /// <summary>It wants more workers at Generators than they have places: that is no reason to leave the others at a depleted deposit.</summary>
+    [Fact]
+    public void WithEveryGeneratorFullAWorkerStillLeavesADepletedDeposit()
+    {
+        var fixture = new AiFixture();
+        fixture.Place("generator");
+        var economy = new AiEconomy(fixture.Sight, AiFixture.Personality());
+        economy.AssignWorkers(WantingEnergy(), fixture.Commands);
+        fixture.Carry();
+        var atDeposit = fixture.Sight.Workers.First(worker => fixture.SiteOf(worker.Site).Kind == WorkSiteKind.Deposit);
+        Deplete(fixture, atDeposit.Site);
+        fixture.Run(AiEconomy.RebalanceInterval);
+
+        economy.AssignWorkers(WantingEnergy(), fixture.Commands);
+
+        var order = Assert.Single(fixture.Commands);
+        var target = fixture.SiteOf(order.TargetEntity);
+        Assert.Equal(WorkSiteKind.Deposit, target.Kind);
+        Assert.False(target.IsDepleted);
+
+        AiBudget WantingEnergy()
+        {
+            var budget = fixture.With(0, 0);
+            budget.Want(0, 100);
+            return budget;
+        }
+    }
+
+    [Fact]
+    public void WorkersThatNoDepositHasAPlaceForGoToEnergy()
+    {
+        var fixture = new AiFixture();
+        var generators = new[] { fixture.Place("generator"), fixture.Place("generator") };
+        var depositPlaces = HeldDeposits(fixture).Sum(site => site.Places);
+        fixture.SpawnWorkers(depositPlaces + 3 - fixture.Sight.Workers.Count);
+        var economy = new AiEconomy(fixture.Sight, AiFixture.Personality());
+
+        // Everything that is missing is Materials.
+        var budget = fixture.With(0, 0);
+        budget.Want(100, 0);
+        economy.AssignWorkers(budget, fixture.Commands);
+
+        Assert.Equal(3, economy.EnergyWorkersWanted);
+        Assert.Equal(3, fixture.Commands.Count(command => generators.Contains(command.TargetEntity)));
+        Assert.Equal(depositPlaces + 3, fixture.Commands.Count);
+    }
+
+    [Fact]
+    public void AWorkerThatWaitsForAPlaceIsMovedBeforeOneThatHasOne()
+    {
+        var fixture = new AiFixture();
+        var generator = fixture.Place("generator");
+        var deposit = HeldDeposits(fixture)[0];
+        fixture.SpawnWorkers(deposit.Places + 1 - fixture.Sight.Workers.Count);
+
+        // One more worker than the deposit has places.
+        foreach (var worker in fixture.Sight.Workers)
+        {
+            fixture.Commands.Add(new Command(CommandType.Gather, AiFixture.Player, [worker.Entity], targetEntity: deposit.Entity));
+        }
+
+        fixture.Carry();
+        var waiting = fixture.Sight.Workers.Single(worker => worker.State == WorkerState.Waiting).Entity;
+
+        var budget = fixture.With(0, 0);
+        budget.Want(0, 100);
+        new AiEconomy(fixture.Sight, AiFixture.Personality()).AssignWorkers(budget, fixture.Commands);
+
+        var order = Assert.Single(fixture.Commands);
+        Assert.Equal(generator, order.TargetEntity);
+        Assert.Equal([waiting], order.Entities.ToArray());
+    }
+
     /// <summary>Moving costs the walk, so the division follows the purchases one worker at a time.</summary>
     [Fact]
     public void OneWorkerChangesResourceAtATime()

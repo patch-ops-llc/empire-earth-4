@@ -272,6 +272,48 @@ public class AiSitesTests
         Assert.True(claimed > 0);
     }
 
+    /// <summary>
+    /// With every site near the deposit taken from it, what is left is far out, where a
+    /// territory can miss a corner of the deposit. It takes one that holds it all, or none.
+    /// </summary>
+    [Fact]
+    public void AnOutpostIsNeverPutWhereItsTerritoryWouldMissATileOfTheDeposit()
+    {
+        var fixture = new AiFixture();
+        var outpost = AiFixture.Structure("outpost");
+        var radius = outpost.TerritoryRadius!.Value;
+        var (homeX, homeY, _) = fixture.Home;
+        var checkedDeposits = 0;
+
+        foreach (var deposit in fixture.Sight.Sites.Where(site => site.Kind == WorkSiteKind.Deposit && !site.IsHeld))
+        {
+            var construction = new AiConstruction(fixture.Sight);
+            var originX = deposit.X + (deposit.Size / 2) - (outpost.Footprint / 2);
+            var originY = deposit.Y + (deposit.Size / 2) - (outpost.Footprint / 2);
+            var near = radius - 2;
+            for (var offsetY = -near; offsetY <= near; offsetY++)
+            {
+                for (var offsetX = -near; offsetX <= near; offsetX++)
+                {
+                    construction.Sites.Refuse(outpost.Index, originX + offsetX, originY + offsetY, untilTick: 1000);
+                }
+            }
+
+            if (construction.TryFindSiteAt(deposit, outpost, homeX, homeY, out var x, out var y))
+            {
+                var territory = Territory.Around(AiFixture.Player, x, y, outpost.Footprint, radius);
+                Assert.True(territory.Contains(deposit.X, deposit.Y));
+                Assert.True(territory.Contains(deposit.X + deposit.Size - 1, deposit.Y));
+                Assert.True(territory.Contains(deposit.X, deposit.Y + deposit.Size - 1));
+                Assert.True(territory.Contains(deposit.X + deposit.Size - 1, deposit.Y + deposit.Size - 1));
+            }
+
+            checkedDeposits++;
+        }
+
+        Assert.True(checkedDeposits > 0);
+    }
+
     [Fact]
     public void NoOutpostGoesWhereItsTerritoryWouldReachIntoAnotherPlayers()
     {
