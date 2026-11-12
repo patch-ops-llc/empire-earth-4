@@ -53,6 +53,17 @@ public sealed class DataCheckTool : ITool
         output.WriteLine($"  research:     {data.Research.Count} tiers, from 2 to {data.TierCount}");
         output.WriteLine($"  accents:      {data.Accents.Count}");
         output.WriteLine($"  lines:        {data.Lines.Count}, with {data.Lines.Sum(line => line.Chassis.Count)} chassis");
+        output.WriteLine($"  structures:   {data.Structures.Count} of the {data.Rules.Structures.Count} in the roster");
+        if (data.Rules.Match.Lines is { } lines && data.Rules.Match.Structures is { } structures)
+        {
+            var chassis = data.Chassis.Count(chassis => lines.Contains(chassis.Line) && chassis.Epoch <= data.Rules.Match.EpochCap);
+            output.WriteLine($"  in a match:   {lines.Count} lines with {chassis} chassis up to epoch {data.Rules.Match.EpochCap}, and {structures.Count} structures, each with its file");
+        }
+        else
+        {
+            output.WriteLine("  in a match:   rules.jsonc does not list what a match is played with, so no file is required for it");
+        }
+
         output.WriteLine($"  maps:         {data.Maps.Count}");
         output.WriteLine($"  content hash: sha256:{data.ContentHash}");
         return ExitCodes.Ok;

@@ -195,6 +195,34 @@ public sealed class WorkAssignments
     }
 
     /// <summary>
+    /// Call it inside a tick, after a structure was laid on a square of tiles. Every worker whose
+    /// place, or the tile it waits on, is now under the structure takes a place anew at its
+    /// site, as a worker newly assigned does, in the order of the workers' IDs. A worker that can
+    /// no longer walk to any place of its site is left without an assignment.
+    /// </summary>
+    public void LeaveTiles(World world, TileSquare square)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+
+        for (var i = 0; i < _workers.Count; i++)
+        {
+            var worker = _workers.ValueAt(i);
+            var entity = _workers.EntityAt(i);
+            if (worker.State is WorkerState.Idle or WorkerState.Away
+                || !square.Covers(worker.Tile % _grid.Width, worker.Tile / _grid.Width)
+                || !world.Entities.IsAlive(entity))
+            {
+                continue;
+            }
+
+            if (!Assign(world, entity, worker.Site))
+            {
+                _workers.ValueAt(i) = default;
+            }
+        }
+    }
+
+    /// <summary>
     /// Gives free places to the waiting workers, in the order they began to wait.
     /// </summary>
     /// <param name="world">The world.</param>
