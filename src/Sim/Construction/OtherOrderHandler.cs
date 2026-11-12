@@ -5,7 +5,8 @@ namespace Sim.Construction;
 
 /// <summary>
 /// Wraps the handler of an order that a worker can be given in place of a build order: a worker
-/// that is given it loses its build order, and the price is given back in full (design 5.4).
+/// that is given it loses its build order, and the price is given back in full (design 5.4). A
+/// wall order ends the same way, and gives back every tile not yet laid (design 2.5).
 /// </summary>
 /// <remarks>
 /// A worker is given the order when the handler carries the command out and the command lists
@@ -40,7 +41,7 @@ public sealed class OtherOrderHandler : ICommandHandler
         foreach (var entity in command.Entities)
         {
             if (!world.Entities.IsAlive(entity)
-                || !_rules.Orders.Contains(entity)
+                || !_rules.HasOrder(entity)
                 || !_rules.Bodies.TryGet(entity, out var body)
                 || body.Owner != command.Player)
             {
@@ -53,7 +54,7 @@ public sealed class OtherOrderHandler : ICommandHandler
                 continue;
             }
 
-            _rules.EndOrder(entity, BuildProblem.OtherOrder);
+            _rules.EndAnyOrder(entity, BuildProblem.OtherOrder);
             if (worker.State == WorkerState.Away)
             {
                 _rules.Work.Release(entity);

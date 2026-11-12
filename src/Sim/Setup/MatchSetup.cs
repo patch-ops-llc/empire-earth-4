@@ -8,6 +8,7 @@ using Sim.Movement;
 using Sim.Research;
 using Sim.Structures;
 using Sim.Vision;
+using Sim.Walls;
 
 namespace Sim.Setup;
 
@@ -55,6 +56,7 @@ public static class MatchSetup
         var territories = world.AddStore(new ComponentStore<Territory>(Territory.StoreName));
         var turrets = world.AddStore(new ComponentStore<Turret>(Turret.StoreName));
         var visionGrid = world.AddStore(new VisionGrid(players.Count, map.Width, map.Height));
+        var wallPlans = world.AddStore(new ComponentStore<WallPlan>(WallPlan.StoreName));
         var workers = world.AddStore(new ComponentStore<Worker>(Worker.StoreName));
         var workSites = world.AddStore(new ComponentStore<WorkSite>(WorkSite.StoreName));
 
@@ -77,6 +79,8 @@ public static class MatchSetup
         var targeting = new Targeting(grid, bodies, combatants, health, spatialIndex, combat, vision) { Structures = structures };
         var approach = new Approach(grid);
         var fighters = new Fighters(data, combat, combatants, bodies, movers, spatialIndex);
+        var placeHolders = new PlaceHolders(workers);
+        var places = new MeleePlaces(grid, bodies, movers, combatants, spatialIndex, targeting, fighters, placeHolders);
 
         var simulation = new Simulation(world);
 
@@ -87,13 +91,21 @@ public static class MatchSetup
         var move = new MoveCommandHandler(grid, bodies, movers, players.Count);
         var structureTiles = new StructureTiles(grid, world.Entities, structures, routes, new Rerouting(grid, bodies, movers, move));
         research.AddTechChangeHandler(new StructureHealth(bodies, health, structures));
+
+        // The wall rule: where the walls stand follows the tiles, and the orders and the attacks
+        // of units share one judge of which wall is in a unit's way.
+        var wallMap = new WallMap(data, grid, world.Entities, bodies, structures, players.Count);
+        structureTiles.Follow(wallMap);
+        var breaching = new Breaching(grid, wallMap, data.Rules.WallCrossingCost);
+        var wallRule = new WallRule(grid, breaching, targeting, approach);
         var work = new WorkAssignments(data.Resources, grid, bodies, workers, workSites, move);
-        var orders = new OrderCommandHandler(move, grid, bodies, movers, combatants, targeting, approach, simulation.Events, players.Count);
+        var orders = new OrderCommandHandler(move, grid, bodies, movers, combatants, targeting, approach, simulation.Events, wallRule, players.Count);
         var walkOrders = new LeaveWorkHandler(orders, bodies, work);
 
         // A worker walks to the site of its build order by the move order too, and any other
         // order it is given ends the build order: the handlers of those orders are wrapped once
-        // more. An attack order is not, because a worker never takes one.
+        // more. An attack order is not, because a worker never takes one. A wall order is a
+        // worker's order in place of a build order, and ends as one does.
         var structureFactory = new StructureFactory(
             data, world, bodies, health, structures, territories, turrets, workSites, structureTiles, research, simulation.Events,
             players.Count);
@@ -103,9 +115,12 @@ public static class MatchSetup
         {
             Vision = vision,
         };
+        var walls = new WallOrders(data, construction, wallPlans);
+        construction.WallOrders = walls;
         simulation.SetCommandHandler(CommandType.Attack, orders);
         simulation.SetCommandHandler(CommandType.AttackMove, new OtherOrderHandler(walkOrders, construction));
         simulation.SetCommandHandler(CommandType.Build, new BuildCommandHandler(construction));
+        simulation.SetCommandHandler(CommandType.BuildWall, new BuildWallCommandHandler(walls, construction));
         simulation.SetCommandHandler(CommandType.CancelBuild, new CancelBuildCommandHandler(construction));
         simulation.SetCommandHandler(CommandType.CancelResearch, new CancelResearchHandler(research));
         simulation.SetCommandHandler(
@@ -138,6 +153,8 @@ public static class MatchSetup
         // lays its foundation in the tick it arrives, on the tiles as they are in this tick, and
         // the order of a worker killed in this tick ends in it. It comes before income and
         // research, which see what a structure finished in this tick gives.
+        // The wall orders come right after construction, for the same reasons: a wall tile is a
+        // foundation that its worker lays as it arrives.
         // Income comes after movement, so that a worker that reaches its place in this tick has
         // arrived in this tick; after the deaths, so that a worker killed in this tick earns
         // nothing in it and its place is given out in it; and before research, so that a tier
@@ -146,15 +163,16 @@ public static class MatchSetup
         // that a research cannot finish in the tick in which its building falls.
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
-        simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, new PlaceHolders(workers), fighters));
+        simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, placeHolders, fighters));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
         simulation.AddSystem(new VisionSystem(vision));
         simulation.AddSystem(new ShotSystem(bodies, shots, targeting, simulation.Events));
-        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, simulation.Events));
+        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, places, simulation.Events, wallRule));
         simulation.AddSystem(new TurretSystem(bodies, structures, turrets, shots, targeting, simulation.Events));
         simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
         simulation.AddSystem(new StructureSystem(data, bodies, structures, foundations, structureTiles, research, simulation.Events));
         simulation.AddSystem(new ConstructionSystem(construction, data));
+        simulation.AddSystem(new WallSystem(walls, construction));
         simulation.AddSystem(new IncomeSystem(data, grid, bodies, movers, workers, workSites, territories, stockpiles, work, research));
         simulation.AddSystem(new ResearchSystem(research));
 
@@ -167,6 +185,7 @@ public static class MatchSetup
             Simulation = simulation,
             Grid = grid,
             Bodies = bodies,
+            Breaching = breaching,
             BuildOrders = buildOrders,
             Combat = combat,
             Combatants = combatants,
@@ -186,6 +205,9 @@ public static class MatchSetup
             Territories = territories,
             Turrets = turrets,
             Vision = vision,
+            WallMap = wallMap,
+            WallPlans = wallPlans,
+            Walls = walls,
             Work = work,
             Workers = workers,
             WorkSites = workSites,

@@ -10,8 +10,9 @@ namespace Sim.Construction;
 /// <remarks>
 /// <para>
 /// The command lists what to cancel. A worker of the player that is carrying out a build order
-/// loses it, and the whole price is given back; the worker stops and goes back to the work site
-/// it was assigned to, if it had one. A structure of the player that is not finished is removed,
+/// loses it, and the whole price is given back; a worker that is carrying out a wall order
+/// loses that, and every tile not yet laid is given back. The worker stops and goes back to the
+/// work site it was assigned to, if it had one. A structure of the player that is not finished is removed,
 /// and 75% of the price paid is given back, each resource rounded half up; its tiles are free
 /// again from this tick. Everything else in the list is skipped: a finished structure cannot be
 /// removed by its owner (design 2.5, no demolition).
@@ -45,9 +46,9 @@ public sealed class CancelBuildCommandHandler : ICommandHandler
                     continue;
                 }
 
-                if (_rules.Orders.Contains(entity))
+                if (_rules.HasOrder(entity))
                 {
-                    _rules.EndOrder(entity, BuildProblem.Cancelled);
+                    _rules.EndAnyOrder(entity, BuildProblem.Cancelled);
                     _rules.Movers.Get(entity).Stop();
                     _rules.Work.Return(world, entity);
                     cancelled = true;

@@ -23,6 +23,8 @@ public sealed class StructureTiles
     private readonly RouteCache _routes;
     private readonly Rerouting _rerouting;
 
+    private readonly List<ITileFollower> _followers = [];
+
     // Scratch for one rebuild. Not state.
     private TileSquare[] _squares = [];
 
@@ -41,8 +43,8 @@ public sealed class StructureTiles
     }
 
     /// <summary>
-    /// Blocks exactly the tiles of the living structures, numbers the regions again and empties
-    /// the route cache. It changes nothing in the state: movers keep the routes their state names,
+    /// Blocks exactly the tiles of the living structures, numbers the regions again, empties
+    /// the route cache and tells the followers. It changes nothing in the state: movers keep the routes their state names,
     /// which the cache finds again on the same tiles.
     /// </summary>
     /// <returns>True when a tile changed.</returns>
@@ -64,7 +66,19 @@ public sealed class StructureTiles
 
         var changed = _grid.BlockOnly(_squares.AsSpan(0, count));
         _routes.Clear();
+        foreach (var follower in _followers)
+        {
+            follower.TilesRebuilt();
+        }
+
         return changed;
+    }
+
+    /// <summary>Has something else that is worked out from the structures rebuilt whenever the tiles are.</summary>
+    public void Follow(ITileFollower follower)
+    {
+        ArgumentNullException.ThrowIfNull(follower);
+        _followers.Add(follower);
     }
 
     /// <summary>

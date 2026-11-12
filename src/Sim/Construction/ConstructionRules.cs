@@ -135,6 +135,9 @@ public sealed class ConstructionRules
     /// <summary>The structures that are building themselves. A structure that is not here is finished.</summary>
     public ComponentStore<Foundation> Foundations { get; }
 
+    /// <summary>The wall orders, once the match has them. A worker has a build order or a wall order, never both.</summary>
+    public IWorkerOrders? WallOrders { get; set; }
+
     internal World World { get; }
 
     internal MapGrid Grid { get; }
@@ -413,6 +416,26 @@ public sealed class ConstructionRules
     /// </summary>
     internal bool IsGroundUnit(EntityId entity) => Movers.Contains(entity);
 
+    /// <summary>True when the worker is carrying out a build order or a wall order.</summary>
+    public bool HasOrder(EntityId worker) => Orders.Contains(worker) || (WallOrders?.Has(worker) ?? false);
+
+    /// <summary>What ending the worker's order now, build order or wall order, would give back. Nothing when it has none.</summary>
+    internal (int Materials, int Energy) HeldBy(EntityId worker) =>
+        Orders.TryGet(worker, out var order) ? (order.Materials, order.Energy) : WallOrders?.HeldBy(worker) ?? (0, 0);
+
+    /// <summary>Ends the order the worker has, build order or wall order, as <see cref="EndOrder"/> ends a build order.</summary>
+    internal void EndAnyOrder(EntityId worker, BuildProblem why)
+    {
+        if (Orders.Contains(worker))
+        {
+            EndOrder(worker, why);
+        }
+        else
+        {
+            WallOrders?.EndOrder(worker, why);
+        }
+    }
+
     /// <summary>
     /// Ends a build order before its foundation: the whole price goes back to the worker's owner
     /// and the owner is told why. The worker itself is left as it is; who ends the order says
@@ -425,6 +448,24 @@ public sealed class ConstructionRules
         Stockpiles.Add(owner, order.Materials, order.Energy);
         Orders.Remove(worker);
         Events.Add(SimEventKind.BuildOrderEnded, owner, worker, position: order.Tiles.Center, amount: (long)why);
+    }
+
+    /// <summary>
+    /// Lays the foundation of a structure with its lowest tile at (x, y), for the price that was
+    /// paid for it. The owner's units that stand on the footprint are moved off it first, the
+    /// structure blocks its tiles from this moment and builds itself from the next tick, and
+    /// workers of any player whose place at a work site is now under it take another.
+    /// </summary>
+    /// <remarks>Whoever calls this has checked the placement, and rebuilds the spatial index afterwards: units were moved and a structure added.</remarks>
+    internal EntityId LayFoundation(World world, int owner, StructureDef structure, int x, int y, int materials, int energy)
+    {
+        var site = new TileSquare(x, y, structure.Footprint);
+        MoveOwnUnitsOff(world, site, owner);
+
+        var entity = Factory.Lay(owner, structure, x, y);
+        Foundations.Add(entity, new Foundation { Materials = materials, Energy = energy });
+        Work.LeaveTiles(world, site);
+        return entity;
     }
 
     private bool IsOwnAndAlive(EntityId entity, int player) =>
@@ -446,5 +487,87 @@ public sealed class ConstructionRules
         }
 
         return false;
+    }
+
+    /// <summary>Moves the owner's ground units that stand on the site off it, before its tiles are blocked.</summary>
+    private void MoveOwnUnitsOff(World world, TileSquare site, int owner)
+    {
+        var movers = Movers;
+        for (var i = 0; i < movers.Count; i++)
+        {
+            var entity = movers.EntityAt(i);
+            var bodyIndex = Bodies.IndexOf(entity);
+            if (bodyIndex < 0 || !IsGroundUnit(entity) || !world.Entities.IsAlive(entity))
+            {
+                continue;
+            }
+
+            ref var body = ref Bodies.ValueAt(bodyIndex);
+            if (body.Owner != owner || !site.Covers(body.Position) || !TryFindTileOutside(site, body.Position, out var x, out var y))
+            {
+                continue;
+            }
+
+            body.Position = MapGrid.TileCenter(x, y);
+            var combatant = Combatants.IndexOf(entity);
+            if (combatant >= 0 && Combatants.ValueAt(combatant).Order == UnitOrder.Idle)
+            {
+                Combatants.ValueAt(combatant).Anchor = body.Position;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Finds the tile outside the site whose center is nearest a point on it: a tile of the
+    /// ground the point is in, or, when that ground has none outside the site, any tile a unit can
+    /// stand on. Ties go to the lower y and then the lower x.
+    /// </summary>
+    private bool TryFindTileOutside(TileSquare site, FixedVector2 point, out int tileX, out int tileY)
+    {
+        var region = Grid.RegionOf(point);
+        return (region != 0 && TryFindTileOutside(site, point, region, out tileX, out tileY))
+            || TryFindTileOutside(site, point, 0, out tileX, out tileY);
+    }
+
+    private bool TryFindTileOutside(TileSquare site, FixedVector2 point, int region, out int tileX, out int tileY)
+    {
+        var grid = Grid;
+        tileX = -1;
+        tileY = -1;
+        var best = long.MaxValue;
+        var rings = Math.Max(grid.Width, grid.Height);
+        for (var ring = 1; ring <= rings; ring++)
+        {
+            // The center of a tile in this ring is at least ring - 1/2 tiles from every point of the site.
+            long sure = ((2L * ring) - 1) * (Fixed.RawOne / 2);
+            if (best < sure * sure)
+            {
+                break;
+            }
+
+            var low = -ring;
+            var high = site.Size - 1 + ring;
+            for (var dy = low; dy <= high; dy++)
+            {
+                var onEdgeRow = dy == low || dy == high;
+                for (var dx = low; dx <= high; dx += onEdgeRow ? 1 : high - low)
+                {
+                    var x = site.X + dx;
+                    var y = site.Y + dy;
+                    if (!grid.IsPassable(x, y) || (region != 0 && grid.RegionOf(x, y) != region))
+                    {
+                        continue;
+                    }
+
+                    var distance = FixedVector2.DistanceSquaredRaw(MapGrid.TileCenter(x, y), point);
+                    if (distance < best || (distance == best && (y < tileY || (y == tileY && x < tileX))))
+                    {
+                        (best, tileX, tileY) = (distance, x, y);
+                    }
+                }
+            }
+        }
+
+        return tileX >= 0;
     }
 }
