@@ -100,6 +100,7 @@ The values the design says to tune first. Each block carries a comment naming it
 | `match.start_epoch`, `epoch_cap` | The tier all tracks start at and the tier none may pass. | 5.2 |
 | `start.workers`, `materials`, `energy` | What every player starts with, besides a Capitol. | 5.2 |
 | `map` | The map rules below. | 5.3, 5.4 |
+| `debug.spawn` | `true` or `false`: whether a match carries out the development spawn, a command that makes units of any chassis from nothing for the player who sends it. It is not in the design. It is on in `game/data/` until units can be trained in a match, and stays on in `tests/golden/data/`, whose replay with a fight needs it. Both players of a match have the same data, so they have the same switch. | |
 
 `map.start_territory` repeats the Capitol's footprint and territory radius, because the map checks still read them from here. They must be the `footprint` and `territory_radius` of `structures/capitol.jsonc` wherever that file exists, and `datacheck` says so when they are not.
 
@@ -271,7 +272,7 @@ The hash is the SHA-256, written as 64 lowercase hex digits, of a canonical text
 1. The line `content-hash-v1`, ended by a line feed.
 2. For each file, in ordinal order of its path: the path with `/` separators, a line feed, the file's canonical JSON and a line feed.
 
-Canonical JSON has no spaces or line breaks. Object keys are in ordinal order (by UTF-16 code unit) and the top-level `$schema` key is left out. Strings escape only `"` and `\` with a backslash and characters below U+0020 as `\u00xx` in lowercase hex; everything else is written as it is. Whole numbers are written in decimal without a sign unless negative.
+Canonical JSON has no spaces or line breaks. Object keys are in ordinal order (by UTF-16 code unit) and the top-level `$schema` key is left out. Strings escape only `"` and `\` with a backslash and characters below U+0020 as `\u00xx` in lowercase hex; everything else is written as it is. Whole numbers are written in decimal without a sign unless negative, and `true` and `false` as they are.
 
 A change to this form changes every hash, so it needs a new version line.
 
