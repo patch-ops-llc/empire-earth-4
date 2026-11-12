@@ -101,9 +101,9 @@ public class WallSnapshotTests
         }
 
         var walls = probe.WallHitPoints();
-        probe.Simulation.Run(150);
+        probe.Simulation.Run(100);
         Assert.All(group.Append(lone), unit => Assert.NotEqual(EntityId.None, probe.UnitOf(unit).WallInWay));
-        probe.Simulation.Run(1350);
+        probe.Simulation.Run(1400);
         Assert.False(probe.IsAlive(inside));
         Assert.InRange(probe.Damaged(walls).Count, 2, 8);
         Assert.All(group.Concat(shooters).Append(lone), unit => Assert.Equal(UnitOrder.Idle, probe.UnitOf(unit).Order));

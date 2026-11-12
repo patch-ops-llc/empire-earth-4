@@ -339,6 +339,88 @@ public class WallRuleTests
         });
     }
 
+    /// <summary>
+    /// The units at the wall in their way take places by it, as round any structure: on the face
+    /// they came to, since the tiles beside it are blocked and the far face is ground they cannot
+    /// reach. Those with a place attack; the rest stand behind them and wait, with the same tile
+    /// in their way, and attack no other tile.
+    /// </summary>
+    [Theory]
+    [InlineData(Hoplite, false, 2, 3)]
+    [InlineData(Hoplite, true, 2, 3)]
+    [InlineData(Knight, false, 1, 2)]
+    [InlineData(Knight, true, 1, 2)]
+    public void UnitsAtTheWallInTheirWayTakePlacesByItAndTheRestWait(string chassis, bool attackOrder, int fewest, int most)
+    {
+        var match = WithCamp(wallHitPoints: 4000);
+        var inside = match.SpawnWorker(1, "18.5", "12.5");
+        var units = new List<EntityId>();
+        foreach (var x in new[] { "5.5", "4" })
+        {
+            foreach (var y in new[] { "11", "12.5", "14" })
+            {
+                units.Add(match.Spawn(0, chassis, x, y));
+            }
+        }
+
+        match.RefreshDerivedState();
+        var walls = match.WallHitPoints();
+        if (attackOrder)
+        {
+            match.Simulation.Commands.Enqueue(match.World.Tick, CombatMatches.AttackCommand(0, inside, [.. units]));
+        }
+        else
+        {
+            match.OrderMove(0, Center(18, 12), [.. units]);
+        }
+
+        match.Run(500);
+        var attackers = new HashSet<EntityId>();
+        for (var tick = 0; tick < 200; tick++)
+        {
+            match.Run(1);
+            foreach (var hit in match.EventsOf(SimEventKind.MeleeHit))
+            {
+                attackers.Add(hit.Other);
+            }
+        }
+
+        var inWay = match.UnitOf(units[0]).WallInWay;
+        Assert.NotEqual(EntityId.None, inWay);
+        Assert.Equal([inWay], match.Damaged(walls));
+        Assert.InRange(attackers.Count, fewest, most);
+        Assert.All(units, unit =>
+        {
+            var state = match.UnitOf(unit);
+            Assert.Equal(inWay, state.WallInWay);
+            Assert.True(match.Stands(unit));
+            Assert.False(match.IsInside(unit, Low, High));
+
+            // Who has a place by the wall stands on it and attacks, and nobody else does.
+            var onPlace = state.PlaceFor == inWay && state.Place == match.Bodies.Get(unit).Position;
+            Assert.Equal(attackers.Contains(unit), onPlace);
+            Assert.True(state.PlaceFor == inWay || state.PlaceFor == EntityId.None);
+        });
+
+        // When the tile falls the places are given up and every unit goes on with its order.
+        match.WeakenWalls(20);
+        match.Run(600);
+        Assert.False(match.IsAlive(inWay));
+        Assert.All(units, unit =>
+        {
+            Assert.Equal(EntityId.None, match.UnitOf(unit).PlaceFor);
+            Assert.Equal(EntityId.None, match.UnitOf(unit).WallInWay);
+        });
+        if (attackOrder)
+        {
+            Assert.False(match.IsAlive(inside));
+        }
+        else
+        {
+            Assert.All(units, unit => Assert.True(match.IsInside(unit, Low, High)));
+        }
+    }
+
     [Fact]
     public void WhenTheWayOpensElsewhereTheUnitGoesThroughThere()
     {
