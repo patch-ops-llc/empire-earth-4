@@ -174,11 +174,17 @@ internal static class SnapshotAssert
     }
 
     /// <summary>
-    /// What a match works out from its state must be the same in both matches. Today that is the
-    /// spatial index: it must list the same entities for every square of two tiles on the map.
+    /// What a match works out from its state must be the same in both matches: the spatial index
+    /// must list the same entities for every square of two tiles on the map, and every player
+    /// must have the table of blueprints of their tiers.
     /// </summary>
     private static void AssertSameDerivedState(Match expected, Match actual, string what)
     {
+        for (var player = 0; player < expected.Players.Count; player++)
+        {
+            Research.TechAssert.Same(expected.Research.Tech(player), actual.Research.Tech(player));
+        }
+
         Assert.Equal(expected.SpatialIndex.Count, actual.SpatialIndex.Count);
         const int Side = 2;
         var expectedFound = new List<EntityId>();

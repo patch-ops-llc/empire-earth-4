@@ -76,6 +76,7 @@ Nothing reads a clock. The caller decides when a tick runs; there are `SimInfo.T
 | 1 | `RoutePlanningSystem` | Finds the routes that movers are waiting for, oldest mover first, until the searches of this tick have expanded `ExpansionsPerTick` (4,096) tiles. The rest wait for the next tick. | Before anyone moves, so that a unit ordered in this tick takes its first step in this tick. |
 | 2 | `MovementSystem` | Moves every mover one step. | |
 | 3 | `SpatialIndexSystem` | Rebuilds the spatial index from the positions as they are now. | Right after movement, so that every system after it sees where things stand. A system that moves bodies goes before it. |
+| 4 | `ResearchSystem` | Closes every research slot whose holder is no longer alive, with a refund, and takes every other research one tick further. A research that reaches its last tick raises its track. | Last, after everything that can destroy an entity, so that a research cannot finish in the tick its building falls. A system that destroys entities goes before it. A new tier is therefore in effect from the next tick on. |
 
 The order is a rule of the game: moving a system changes results, on every machine alike, and so changes every recorded hash. A pull request that adds a system adds a row here, says where the system goes and why, and updates the golden replays.
 
@@ -174,13 +175,13 @@ SnapshotAssert.RestoresAndContinues(BuildTheMatch, script, snapshotTick: 40, las
 
 - The run continued from the restored world has the state hash of the uninterrupted run after every tick. This catches a missing field that the rules read, and state kept outside the stores.
 - Every value in every `ComponentStore<T>` of the restored world equals, field for field, the value in the world the snapshot was taken from. This catches a missing field that no rule reads yet, such as the way a unit faces before anything turns to shoot. Nothing else would: the hash leaves the field out too.
-- For a match, the spatial index of the restored match lists the same entities as that of the match the snapshot was taken from, for every square of the map. This catches a restore that does not refresh derived data.
+- For a match, the spatial index of the restored match lists the same entities as that of the match the snapshot was taken from, for every square of the map, and every player has the same table of blueprints. This catches a restore that does not refresh derived data.
 
-Every system adds this test for a run in which its own stores change before and after the snapshot, with the snapshot taken in each state its values can be in. `MatchSnapshotTests` in the same folder does so for movement: units standing, waiting for a route, walking a route, walking straight and arrived.
+Every system adds this test for a run in which its own stores change before and after the snapshot, with the snapshot taken in each state its values can be in. `MatchSnapshotTests` in the same folder does so for movement: units standing, waiting for a route, walking a route, walking straight and arrived. `ResearchStateTests` does so for research: before any, with researches under way in three slots, after a cancel, before and after a slot is lost with its holder, and after researches finish.
 
 ## Derived data
 
-Some of what a match holds is worked out from the state and is not state: the spatial index and the route cache. Such data is not walked, so it is in neither the state hash nor a snapshot. That is safe only under one rule:
+Some of what a match holds is worked out from the state and is not state: the spatial index, the route cache and each player's table of blueprints (`MatchResearch.Tech`, which is what the tech resolver makes of the player's tiers; the tiers are state). Such data is not walked, so it is in neither the state hash nor a snapshot. That is safe only under one rule:
 
 **Derived data is a function of the state and of the match's fixed data, and of nothing else.** The same state gives the same answers, in the same order, whatever happened before.
 
@@ -280,7 +281,7 @@ dotnet run --project src/Tools -- replay verify tests/golden/replays --data test
 `determinism.yml` does the same on Linux, Windows, macOS on Apple silicon and macOS on Intel, as a Debug and as a Release build, and a last job fails unless all eight reports are the same. So the final hash of every golden replay must match the value stored in the file and must be the same on every system.
 
 - **The data is frozen.** `tests/golden/data/` is a copy of `game/data/` from when the replays were last updated, plus the map `switchback`, which was made for these tests: long routes whose searches use up the route budget of a tick. Balance changes in `game/data/` do not touch it, so they do not change the golden replays. The folder must satisfy the loader like any data folder; when the loader comes to need a new file or a new value, add it there in the same pull request, and update the replays if their hashes change.
-- **The matches are scripted.** `replay record` plays a match with orders from a seeded generator (`ScriptedOrders` in `src/Tools/Replay/`): groups and single units sent across the map, every unit ordered separately in one tick, short hops, targets on blocked ground and off the map, and commands the simulation must drop. Nobody needs to play a match to record one. A test in `ReplayToolTests` lists what the golden replays must reach between them, such as a unit that waits more than a tick for its route, and fails when they no longer do.
+- **The matches are scripted.** `replay record` plays a match with orders from a seeded generator (`ScriptedOrders` in `src/Tools/Replay/`): groups and single units sent across the map, every unit ordered separately in one tick, short hops, targets on blocked ground and off the map, research started and cancelled, and commands the simulation must drop. Nobody needs to play a match to record one. A test in `ReplayToolTests` lists what the golden replays must reach between them, such as a unit that waits more than a tick for its route, and fails when they no longer do.
 - **When a golden replay fails and the change was not meant to change the rules,** the change has broken determinism with earlier builds: fix the change. `verify` names the first tick whose hash differs, within one second of game time of the cause.
 - **When the change was meant to change the rules** (a system added or moved, a rule or a number in the frozen data changed, a field added to the state), update the stored hashes in the same pull request and say so in its description:
 
@@ -295,9 +296,10 @@ dotnet run --project src/Tools -- replay verify tests/golden/replays --data test
   replay record tests/golden/replays/ridge-skirmish.replay --data tests/golden/data --map ridge --starts 0,1 --seed 1 --orders 1 --ticks 3600
   replay record tests/golden/replays/switchback-crossing.replay --data tests/golden/data --map switchback --starts 1,0 --seed 2 --orders 3 --ticks 6000
   replay record tests/golden/replays/switchback-three-players.replay --data tests/golden/data --map switchback --starts 0,-,1 --seed 3 --orders 5 --ticks 2410
+  replay record tests/golden/replays/switchback-research.replay --data tests/golden/data --map switchback --starts 1,-,0 --seed 4 --orders 8 --ticks 4800
   ```
 
-  Recording again with the same arguments gives the same file only while `ScriptedOrders` and the rules are unchanged.
+  Recording again with the same arguments gives the same file only while `ScriptedOrders` and the rules are unchanged. The first three were recorded before `ScriptedOrders` gave research orders, so recording them again gives other matches; the fourth is the one with research in it.
 
 ## Adding a system
 
