@@ -157,7 +157,7 @@ public class MovementScriptTests
                 }
 
                 unitsWithAnOrderOfTheirOwn.Add(command.Entities[0]);
-                if (unitsWithAnOrderOfTheirOwn.Count == match.Bodies.Count)
+                if (unitsWithAnOrderOfTheirOwn.Count == match.Movers.Count)
                 {
                     seen.Add("an order for each unit of every player in one tick");
                 }
