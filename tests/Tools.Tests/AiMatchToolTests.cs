@@ -107,6 +107,27 @@ public class AiMatchToolTests
         Assert.Equal((-1, 0, 0, 1), (won.OutTick, won.UnitsLost, won.StructuresLost, won.Structures.Count));
     }
 
+    /// <summary>
+    /// Only a Capitol or an Outpost keeps a player in: another structure does not. The winner is
+    /// the player who is still in, whichever seat it has.
+    /// </summary>
+    [Fact]
+    public void AnotherStructureDoesNotKeepAPlayerInTheMatch()
+    {
+        var match = MatchSetup.Create(Data, Ridge, 1, [new PlayerSetup(0), new PlayerSetup(1)]);
+        var barracks = Data.Structures.Single(structure => structure.Id == "barracks");
+        var (x, y) = (Ridge.Starts[0].X + 6, Ridge.Starts[0].Y + 6);
+        Assert.True(match.StructureFactory.HasRoomFor(barracks, x, y));
+        match.StructureFactory.Finish(match.StructureFactory.Lay(0, barracks, x, y));
+        Raze(match, 0);
+
+        var result = HeadlessMatch.Play(match, [Data.PersonalityOf("swarm")!, Data.PersonalityOf("elite")!], FourMinutes);
+
+        Assert.Equal((MatchEnd.Conquest, 1, 1), (result.Ended, result.Winner, result.Ticks));
+        Assert.Equal([("barracks", 1)], result.Seats[0].Structures);
+        Assert.Equal([1, -1], result.Seats.Select(seat => seat.OutTick));
+    }
+
     /// <summary>Players who lose their last Capitol in the same tick go out together, and nobody has won.</summary>
     [Fact]
     public void PlayersWhoLoseTheirLastCapitolInOneTickGoOutTogether()

@@ -90,13 +90,56 @@ public class AiSeriesToolTests
         Assert.Equal(0, never.LoserBehindFromTick);
         Assert.Null(open.LoserBehindFromTick);
 
-        static SeatResult Seat(int player, int[] armyValues) => new(
-            player, "swarm", player, 2, [4000], [2, 2, 2, 2, 2, 2], 0, 40, 0, 0, 0, [], [], 0, 0, 0, 0, -1, -1, -1, [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], 0, 0, 0,
-            [.. armyValues.Select((value, index) => new SeatSample((index + 1) * SeatWatch.SampleEvery, 0, 0, value, 0, 40, 0, 0))]);
-
-        static HeadlessResult Result(int? winner, params SeatResult[] seats) =>
-            new(1000, winner is null ? MatchEnd.TimeLimit : MatchEnd.Conquest, winner, 2, -1, seats, 0, 0, 0, 0, 0, 0);
     }
+
+    /// <summary>What the summary and the file say of matches with a winner: who won from which seat and start, and how long the loser went on.</summary>
+    [Fact]
+    public void TheSummaryAndTheFileSayWhoWonFromWhere()
+    {
+        var elite = Seat(0, [100, 300, 400, 500], "elite") with { Start = 1, FirstAttackOrderTick = 600, ResearchMaterials = [0, 0, 0, 300, 0, 0], ResearchEnergy = [0, 0, 0, 100, 0, 0] };
+        var swarm = Seat(1, [100, 200, 199, 0], "swarm") with { Start = 0, OutTick = 1000, Workers = 4, TicksAtSupplyCap = 100, TicksAboveSupplyCap = 40, MostAboveSupplyCap = 3 };
+        SeriesMatch[] matches =
+        [
+            new(Ridge, 2, Result(winner: 0, elite, swarm)),
+            new(Ridge, 3, Result(winner: 1, swarm with { Player = 0 }, elite with { Player = 1 }) with { Ticks = 2000, FirstHitTick = 700 }),
+        ];
+        var summary = new StringWriter();
+        var file = new StringWriter { NewLine = "\n" };
+
+        SeriesReport.Write(summary, Data, matches);
+        SeriesReport.WriteCsv(file, Data, matches);
+
+        var lines = summary.ToString().Split(Environment.NewLine);
+        Assert.Contains("  by conquest, with a winner        2", lines);
+        Assert.Contains("  length of those that ended by conquest: 0:50 (0:50 to 1:40)", lines);
+        Assert.Contains("  first hit of a match: 0:35 (0:35 to 0:35)", lines);
+        Assert.Contains("  ridge  elite     swarm     1        1             0             0          0:50 (0:50 to 0:50)", lines);
+        Assert.Contains("  ridge  swarm     elite     1        0             1             0          1:40 (1:40 to 1:40)", lines);
+        Assert.Contains("  elite      2 of 2 (100%)", lines);
+        Assert.Contains("  swarm      0 of 2 (0%)", lines);
+        Assert.Contains("  ridge  player 0 1 of 2 (50%)  player 1 1 of 2 (50%)  start 0 0 of 2 (0%)  start 1 2 of 2 (100%)", lines);
+        Assert.Matches(@"^  elite        2      3:20 \(3:20 to 3:20\), 2 of 2  never    never    never +0:30 \(0:30 to 0:30\), 2 of 2$", lines.Single(line => line.StartsWith("  elite        2", StringComparison.Ordinal)));
+        Assert.Contains("  firepower      0 (0%)      0 (0%)", lines);
+        Assert.Contains("  manufacturing  400 (100%)  0 (0%)", lines);
+        Assert.Contains("  swarm  at the cap in 2 of 2 (100%) seats, for 0:05 (0:05 to 0:05)  above it in 2 of 2 (100%) seats, by at most 3, for 0:02 (0:02 to 0:02)", lines);
+        Assert.Contains("  from the last moment the loser had half the winner's army value to the end: 0:30 (0:30 to 1:20)", lines);
+        Assert.Contains("  workers the loser still had at the end: 4 (4 to 4)", lines);
+
+        var rows = file.ToString().Split('\n');
+        Assert.StartsWith("1,ridge,2,conquest,50,elite,,20,0,0,0000000000000000,0,1,elite,swarm,won,,200,,,,30,", rows[1], StringComparison.Ordinal);
+        Assert.StartsWith("1,ridge,2,conquest,50,elite,,20,0,0,0000000000000000,1,0,swarm,elite,lost,50,200,,,,,", rows[2], StringComparison.Ordinal);
+        Assert.StartsWith("2,ridge,3,conquest,100,elite,35,20,0,0,0000000000000000,0,0,swarm,elite,lost,50,", rows[3], StringComparison.Ordinal);
+        Assert.StartsWith("2,ridge,3,conquest,100,elite,35,20,0,0,0000000000000000,1,1,elite,swarm,won,,", rows[4], StringComparison.Ordinal);
+        Assert.Contains(",2,2,2,2,2,2,0,0,0,300,0,0,0,0,0,100,0,0,0,40,0,0,0,", rows[1], StringComparison.Ordinal);
+        Assert.EndsWith(",0,40,5,2,3,4,0,0,0,0,0,0", rows[2], StringComparison.Ordinal);
+    }
+
+    private static SeatResult Seat(int player, int[] armyValues, string personality = "swarm") => new(
+        player, personality, player, 2, [4000], [2, 2, 2, 2, 2, 2], 0, 40, 0, 0, 0, [], [], 0, 0, 0, 0, -1, -1, -1, [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], 0, 0, 0,
+        [.. armyValues.Select((value, index) => new SeatSample((index + 1) * SeatWatch.SampleEvery, 0, 0, value, 0, 40, 0, 0))]);
+
+    private static HeadlessResult Result(int? winner, params SeatResult[] seats) =>
+        new(1000, winner is null ? MatchEnd.TimeLimit : MatchEnd.Conquest, winner, 2, -1, seats, 0, 0, 0, 0, 0, 0);
 
     [Fact]
     public void TheSpreadIsTheMiddleTheLeastAndTheMost()
