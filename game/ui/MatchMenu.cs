@@ -11,9 +11,10 @@ namespace Game;
 
 /// <summary>
 /// The menu and the lobby: the page the game opens on, where a match is started alone, hosted or
-/// joined; the page that waits for the other player; the small panel shown during a match; and
-/// the page that says why a match ended. It creates the <see cref="MatchRun"/> and closes it.
-/// Whoever owns the frame advances <see cref="Run"/>.
+/// joined; the page that waits for the other player; and the page that says why a match ended.
+/// It creates the <see cref="MatchRun"/> and closes it. Whoever owns the frame advances
+/// <see cref="Run"/>. During a match the menu shows nothing: the interface round the match is
+/// the <see cref="InterfaceFrame"/>.
 /// </summary>
 /// <remarks>
 /// The seed and the start each player gets are drawn here, on the host, outside the simulation,
@@ -22,16 +23,11 @@ namespace Game;
 /// </remarks>
 public partial class MatchMenu : CanvasLayer
 {
-    // The names of the colors the world view gives the first seats.
-    private static readonly string[] SeatColors = ["blue", "red"];
-
     // What outlives the scene, which is loaded again whenever the game returns to the first page.
     private static string? s_notice;
     private static string s_lastAddress = string.Empty;
     private static string s_lastPort = GameInfo.DefaultPort.ToString(CultureInfo.InvariantCulture);
     private static bool s_requestUsed;
-
-    private readonly List<string> _events = [];
 
     private GameData _data = null!;
     private StartRequest _request = StartRequest.Menu;
@@ -42,12 +38,10 @@ public partial class MatchMenu : CanvasLayer
     private Control _startPage = null!;
     private Control _waitingPage = null!;
     private Control _endedPage = null!;
-    private Control _hud = null!;
     private Label _noticeLabel = null!;
     private Label _waitingTitle = null!;
     private Label _waitingStatus = null!;
     private Label _endedText = null!;
-    private Label _hudText = null!;
     private Button _startButton = null!;
     private LineEdit _hostPort = null!;
     private LineEdit _joinAddress = null!;
@@ -90,6 +84,9 @@ public partial class MatchMenu : CanvasLayer
             s_requestUsed = true;
             switch (_request.Kind)
             {
+                case StartKind.Alone:
+                    PlayAlone();
+                    break;
                 case StartKind.Host:
                     Host(_request.Port, localOnly: _request.NetTestTicks > 0);
                     break;
@@ -125,10 +122,6 @@ public partial class MatchMenu : CanvasLayer
             case Page.Playing when run.Client.Phase == SessionPhase.Stopped:
                 ShowEnded(run);
                 break;
-
-            case Page.Playing:
-                _hudText.Text = HudText(run);
-                break;
         }
     }
 
@@ -152,6 +145,14 @@ public partial class MatchMenu : CanvasLayer
         run?.Dispose();
     }
 
+    /// <summary>
+    /// Leaves the match, or the page that waits for one, and goes back to the first page. The
+    /// other players are told, and the replay is closed.
+    /// </summary>
+    public void LeaveMatch() => BackToStart(null);
+
+    // A match alone has no network in it: no port is opened and nothing is sent, so the system
+    // has nothing to ask the player about.
     private void PlayAlone()
     {
         var run = new LocalRun(Describe(), _data, localPlayer: 0);
@@ -192,7 +193,7 @@ public partial class MatchMenu : CanvasLayer
             return;
         }
 
-        _joinedAddress = string.Create(CultureInfo.InvariantCulture, $"{address}, port {port}");
+        _joinedAddress = run.HostAddress;
         Begin(run);
         _waitingTitle.Text = "Joining a match";
         _startButton.Visible = false;
@@ -203,8 +204,6 @@ public partial class MatchMenu : CanvasLayer
     private void Begin(MatchRun run)
     {
         Run = run;
-        _events.Clear();
-        run.Client.PlayerLeft += (player, reason) => _events.Add($"{PlayerName(player)} {HowLeft(reason)}.");
         run.Client.Started += () =>
         {
             var description = run.Description!;
@@ -321,25 +320,6 @@ public partial class MatchMenu : CanvasLayer
             : address + $"You are {PlayerName(client.Player).ToLowerInvariant()} on the map '{run.Match.Map.Id}'. Waiting for the host to start the match.";
     }
 
-    private string HudText(MatchRun run)
-    {
-        var seat = run.Client.Player;
-        var color = seat >= 0 && seat < SeatColors.Length ? $", {SeatColors[seat]}" : string.Empty;
-        var text = run switch
-        {
-            HostRun host => string.Create(CultureInfo.InvariantCulture, $"{PlayerName(seat)}{color}. Hosting on port {host.Port}."),
-            JoinRun => $"{PlayerName(seat)}{color}. Joined {_joinedAddress}.",
-            _ => $"{PlayerName(seat)}{color}. Playing alone.",
-        };
-
-        foreach (var line in _events)
-        {
-            text += "\n" + line;
-        }
-
-        return text;
-    }
-
     // Why a match that never started is over, as a sentence for the player.
     private string WhyNotJoined(MatchRun run)
     {
@@ -364,15 +344,7 @@ public partial class MatchMenu : CanvasLayer
         };
     }
 
-    private static string PlayerName(int seat) => string.Create(CultureInfo.InvariantCulture, $"Player {seat + 1}");
-
-    private static string HowLeft(SessionEndReason reason) => reason switch
-    {
-        SessionEndReason.Left => "left the match",
-        SessionEndReason.ConnectionLost => "lost the connection",
-        SessionEndReason.FellBehind => "fell too far behind and is out of the match",
-        _ => "is out of the match",
-    };
+    private static string PlayerName(int seat) => MatchPanel.PlayerName(seat);
 
     // The addresses another machine on the same network can reach this one at.
     private static string LocalAddresses()
@@ -406,7 +378,6 @@ public partial class MatchMenu : CanvasLayer
         _startPage.Visible = page == Page.Start;
         _waitingPage.Visible = page == Page.Waiting;
         _endedPage.Visible = page == Page.Ended;
-        _hud.Visible = page == Page.Playing;
     }
 
     private void Build()
@@ -421,7 +392,7 @@ public partial class MatchMenu : CanvasLayer
         _screen.AddChild(center);
 
         var pages = new PanelContainer { CustomMinimumSize = new Vector2(520f, 0f) };
-        pages.AddThemeStyleboxOverride("panel", PanelStyle(18f));
+        pages.AddThemeStyleboxOverride("panel", UiStyle.PanelStyle(18f));
         center.AddChild(pages);
 
         var stack = new VBoxContainer();
@@ -432,62 +403,46 @@ public partial class MatchMenu : CanvasLayer
         stack.AddChild(_startPage);
         stack.AddChild(_waitingPage);
         stack.AddChild(_endedPage);
-
-        var hud = new PanelContainer { Name = "MatchPanel" };
-        hud.AddThemeStyleboxOverride("panel", PanelStyle(8f));
-        var hudStack = Column(6);
-        _hudText = new Label { HorizontalAlignment = HorizontalAlignment.Right };
-        hudStack.AddChild(_hudText);
-        var leave = PushButton("Leave the match");
-        leave.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
-        leave.FocusMode = Control.FocusModeEnum.None;
-        leave.Pressed += () => BackToStart(null);
-        hudStack.AddChild(leave);
-        hud.AddChild(hudStack);
-        AddChild(hud);
-        hud.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopRight, Control.LayoutPresetMode.Minsize, 8);
-        hud.GrowHorizontal = Control.GrowDirection.Begin;
-        _hud = hud;
     }
 
     private VBoxContainer BuildStartPage()
     {
-        var page = Column(12);
-        page.AddChild(Title(ProjectSettings.GetSetting("application/config/name").AsString()));
-        page.AddChild(Text($"Version {GameInfo.Version}. Data {_data.ContentHash[..12]}."));
+        var page = UiStyle.Column(12);
+        page.AddChild(UiStyle.Title(ProjectSettings.GetSetting("application/config/name").AsString()));
+        page.AddChild(UiStyle.Text($"Version {GameInfo.Version}. Data {_data.ContentHash[..12]}."));
 
-        _noticeLabel = Text(string.Empty);
-        _noticeLabel.AddThemeColorOverride("font_color", new Color(1f, 0.72f, 0.45f));
+        _noticeLabel = UiStyle.Text(string.Empty);
+        _noticeLabel.AddThemeColorOverride("font_color", UiStyle.Warning);
         page.AddChild(_noticeLabel);
 
-        var alone = PushButton("Play alone");
+        var alone = UiStyle.PushButton("Play alone");
         alone.Pressed += PlayAlone;
         page.AddChild(alone);
         page.AddChild(new HSeparator());
 
-        page.AddChild(Text("Host a match for another player to join. The port is the number they need beside this machine's address."));
-        var hostRow = Row();
+        page.AddChild(UiStyle.Text("Host a match for another player to join. The port is the number they need beside this machine's address."));
+        var hostRow = UiStyle.Row();
         hostRow.AddChild(new Label { Text = "Port" });
-        _hostPort = Field(s_lastPort);
+        _hostPort = UiStyle.Field(s_lastPort);
         _hostPort.CustomMinimumSize = new Vector2(100f, 0f);
         _hostPort.MaxLength = 5;
         _hostPort.TextSubmitted += _ => OnHostPressed();
         hostRow.AddChild(_hostPort);
-        var host = PushButton("Host a match");
+        var host = UiStyle.PushButton("Host a match");
         host.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         host.Pressed += OnHostPressed;
         hostRow.AddChild(host);
         page.AddChild(hostRow);
         page.AddChild(new HSeparator());
 
-        page.AddChild(Text("Join a match another player hosts. Type the address their game shows."));
-        var joinRow = Row();
-        _joinAddress = Field(s_lastAddress);
+        page.AddChild(UiStyle.Text("Join a match another player hosts. Type the address their game shows."));
+        var joinRow = UiStyle.Row();
+        _joinAddress = UiStyle.Field(s_lastAddress);
         _joinAddress.PlaceholderText = $"192.168.1.20 or 192.168.1.20:{GameInfo.DefaultPort}";
         _joinAddress.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         _joinAddress.TextSubmitted += _ => OnJoinPressed();
         joinRow.AddChild(_joinAddress);
-        var join = PushButton("Join");
+        var join = UiStyle.PushButton("Join");
         join.Pressed += OnJoinPressed;
         joinRow.AddChild(join);
         page.AddChild(joinRow);
@@ -496,19 +451,19 @@ public partial class MatchMenu : CanvasLayer
 
     private VBoxContainer BuildWaitingPage()
     {
-        var page = Column(12);
-        _waitingTitle = Title(string.Empty);
+        var page = UiStyle.Column(12);
+        _waitingTitle = UiStyle.Title(string.Empty);
         page.AddChild(_waitingTitle);
-        _waitingStatus = Text(string.Empty);
+        _waitingStatus = UiStyle.Text(string.Empty);
         page.AddChild(_waitingStatus);
 
-        var row = Row();
-        _startButton = PushButton("Start the match");
+        var row = UiStyle.Row();
+        _startButton = UiStyle.PushButton("Start the match");
         _startButton.Disabled = true;
         _startButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         _startButton.Pressed += StartMatch;
         row.AddChild(_startButton);
-        var cancel = PushButton("Cancel");
+        var cancel = UiStyle.PushButton("Cancel");
         cancel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         cancel.Pressed += () => BackToStart(null);
         row.AddChild(cancel);
@@ -518,80 +473,13 @@ public partial class MatchMenu : CanvasLayer
 
     private VBoxContainer BuildEndedPage()
     {
-        var page = Column(12);
-        page.AddChild(Title("The match is over"));
-        _endedText = Text(string.Empty);
+        var page = UiStyle.Column(12);
+        page.AddChild(UiStyle.Title("The match is over"));
+        _endedText = UiStyle.Text(string.Empty);
         page.AddChild(_endedText);
-        var back = PushButton("Back to the menu");
+        var back = UiStyle.PushButton("Back to the menu");
         back.Pressed += () => BackToStart(null);
         page.AddChild(back);
         return page;
-    }
-
-    private static Button PushButton(string text)
-    {
-        var button = new Button { Text = text };
-        button.AddThemeStyleboxOverride("normal", BoxStyle(new Color(0.2f, 0.26f, 0.36f)));
-        button.AddThemeStyleboxOverride("hover", BoxStyle(new Color(0.27f, 0.35f, 0.48f)));
-        button.AddThemeStyleboxOverride("pressed", BoxStyle(new Color(0.15f, 0.2f, 0.28f)));
-        button.AddThemeStyleboxOverride("disabled", BoxStyle(new Color(0.16f, 0.17f, 0.2f)));
-        button.AddThemeStyleboxOverride("focus", new StyleBoxEmpty());
-        return button;
-    }
-
-    private static LineEdit Field(string text)
-    {
-        var field = new LineEdit { Text = text };
-        field.AddThemeStyleboxOverride("normal", BoxStyle(new Color(0.03f, 0.035f, 0.05f)));
-        field.AddThemeStyleboxOverride("focus", BoxStyle(new Color(0.03f, 0.035f, 0.05f), new Color(0.45f, 0.6f, 0.85f)));
-        return field;
-    }
-
-    private static StyleBoxFlat BoxStyle(Color color, Color? border = null)
-    {
-        var style = new StyleBoxFlat { BgColor = color, BorderColor = border ?? color.Lightened(0.15f) };
-        style.SetBorderWidthAll(1);
-        style.SetCornerRadiusAll(4);
-        style.ContentMarginLeft = 12f;
-        style.ContentMarginRight = 12f;
-        style.ContentMarginTop = 7f;
-        style.ContentMarginBottom = 7f;
-        return style;
-    }
-
-    private static VBoxContainer Column(int separation)
-    {
-        var column = new VBoxContainer();
-        column.AddThemeConstantOverride("separation", separation);
-        return column;
-    }
-
-    private static HBoxContainer Row()
-    {
-        var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 10);
-        return row;
-    }
-
-    private static Label Title(string text)
-    {
-        var label = new Label { Text = text };
-        label.AddThemeFontSizeOverride("font_size", 24);
-        return label;
-    }
-
-    private static Label Text(string text) => new()
-    {
-        Text = text,
-        AutowrapMode = TextServer.AutowrapMode.WordSmart,
-        CustomMinimumSize = new Vector2(480f, 0f),
-    };
-
-    private static StyleBoxFlat PanelStyle(float margin)
-    {
-        var style = new StyleBoxFlat { BgColor = new Color(0.09f, 0.1f, 0.13f, 0.94f) };
-        style.SetCornerRadiusAll(6);
-        style.SetContentMarginAll(margin);
-        return style;
     }
 }

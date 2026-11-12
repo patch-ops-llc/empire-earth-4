@@ -1,15 +1,17 @@
 using Godot;
 using Net;
 using Sim.Data;
+using Sim.Serialization;
 using Sim.Setup;
 
 namespace Game;
 
 /// <summary>
 /// Root of <c>scenes/main.tscn</c>, the scene the game starts in. It loads the game data and opens
-/// the menu, where a match is started alone, hosted or joined. Once there is a match it hands it,
-/// with the local player's side of the session, to the world view, the camera, the unit control
-/// and the overlay.
+/// the menu, where a match is started alone, hosted or joined. Once there is a match it builds the
+/// <see cref="MatchView"/> of it: the world view, the frame of the interface and the unit control
+/// are given the match, and every piece of the view adds itself. The smoke test's match is shown
+/// the same way.
 /// </summary>
 /// <remarks>
 /// Code under <c>game/</c> reads the match and never changes it. Only commands change the
@@ -40,11 +42,11 @@ public partial class Main : Node3D
     private const int SmokeTestTicksPerFrame = 20;
     private const int SmokeTestLastFrames = 3;
 
-    private LocalSession? _smokeSession;
+    private LocalRun? _smokeRun;
     private SmokeTest? _smokeTest;
     private MatchMenu? _menu;
     private NetTest? _netTest;
-    private Match? _match;
+    private MatchView? _view;
     private WorldView _world = null!;
     private RtsCamera _camera = null!;
     private UnitControl _units = null!;
@@ -104,8 +106,8 @@ public partial class Main : Node3D
             return;
         }
 
-        // While a page of the menu is up, the pointer and the keys are the menu's.
-        var playing = !_menu.IsOpen;
+        // While a page of the menu or a full-screen panel is up, the pointer and the keys are its own.
+        var playing = !_menu.IsOpen && _view is not { Interface.IsPanelOpen: true };
         _camera.ProcessMode = playing ? ProcessModeEnum.Inherit : ProcessModeEnum.Disabled;
         _units.ProcessMode = playing ? ProcessModeEnum.Inherit : ProcessModeEnum.Disabled;
 
@@ -127,9 +129,9 @@ public partial class Main : Node3D
         run.Advance(TimeSpan.FromSeconds(delta));
 
         // A guest has no match until the host has described it, which is before the first tick.
-        if (_match is null && run.Match is { } match)
+        if (_view is null && run.Match is { } match)
         {
-            Show(run, match);
+            Show(run, match, _menu!.LeaveMatch);
         }
 
         // The world view draws after this, in the same frame, this far between the last two ticks.
@@ -152,17 +154,7 @@ public partial class Main : Node3D
 
     // Hands a match to everything that draws it or gives orders in it. The view reads the match
     // again after every tick, before anything else hears of the tick.
-    private void Show(MatchRun run, Match match)
-    {
-        _match = match;
-        ShowMap(match, run.Client.Player);
-        run.Client.TickCompleted += _ => _world.AfterTick();
-
-        _units.Attach(match, run.Client, _world);
-        GetNode<DebugOverlay>("DebugOverlay").Selection = _units.Selection;
-    }
-
-    private void ShowMap(Match match, int localPlayer)
+    private void Show(MatchRun run, Match match, Action? leave)
     {
         var map = match.Map;
         var size = new Vector2(map.Width, map.Height);
@@ -174,7 +166,7 @@ public partial class Main : Node3D
 
         // The view opens on the player's own start: the middle of where the Capitol will stand.
         _camera.SetBounds(new Rect2(Vector2.Zero, size));
-        var setup = match.Players[localPlayer];
+        var setup = match.Players[run.Client.Player];
         if (setup.HasStart)
         {
             var start = map.Starts[setup.Start];
@@ -182,8 +174,15 @@ public partial class Main : Node3D
             _camera.CenterOn(new Vector2(start.X + (footprint / 2f), start.Y + (footprint / 2f)));
         }
 
-        _world.Attach(match);
-        GetNode<DebugOverlay>("DebugOverlay").Match = match;
+        // The frame comes after the world view and the unit control in the tree, so that its
+        // parts are called in a frame once the units have been placed.
+        var frame = new InterfaceFrame { Name = "Interface" };
+        AddChild(frame);
+        _view = MatchView.Open(run, match, _world, _camera, _units, frame, leave);
+
+        var overlay = GetNode<DebugOverlay>("DebugOverlay");
+        overlay.Match = match;
+        overlay.Selection = _view.Selection;
     }
 
     private void StartSmokeTest(GameData data)
@@ -199,16 +198,17 @@ public partial class Main : Node3D
         }
 
         GD.Print($"Match on '{map.Id}' with seed {SmokeTest.Seed}. Player {SmokeTestPlayer} has start {SmokeTest.LocalStart}. Data sha256:{data.ContentHash}.");
-        var match = MatchSetup.Create(data, map, SmokeTest.Seed, players);
-        _match = match;
-        ShowMap(match, SmokeTestPlayer);
+        var description = new MatchDescription(GameInfo.Version, data.ContentHash, map.Id, SmokeTest.Seed, players);
 
-        _smokeSession = new LocalSession(match.Simulation, PlayerCount, SmokeTestPlayer);
-        _smokeSession.Client.TickCompleted += _ => _world.AfterTick();
-        _smokeSession.Client.Stopped += end => GD.PrintErr($"The session stopped: {end.Reason}.");
+        // The match is shown as any match is, and it leaves no replay.
+        _smokeRun = new LocalRun(description, data, SmokeTestPlayer, keepFiles: false);
+        _smokeRun.Client.Stopped += end => GD.PrintErr($"The session stopped: {end.Reason}.");
+        Show(_smokeRun, _smokeRun.Match, leave: null);
 
         // The smoke test plays its own script, so it takes no input.
-        _smokeTest = new SmokeTest(match, _smokeSession);
+        _camera.ProcessMode = ProcessModeEnum.Disabled;
+        _units.ProcessMode = ProcessModeEnum.Disabled;
+        _smokeTest = new SmokeTest(_smokeRun.Match, _smokeRun.Session);
     }
 
     private void RunSmokeTest(SmokeTest smokeTest)
