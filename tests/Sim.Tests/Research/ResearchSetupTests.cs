@@ -82,14 +82,18 @@ public class ResearchSetupTests
         Assert.Equal((400, 100), match.Stock(1));
     }
 
+    /// <summary>
+    /// The stores research needs are in the world, under their names, and are the ones the match
+    /// hands out. Which other stores a match has is not this test's business.
+    /// </summary>
     [Fact]
-    public void TheMatchRegistersTheStoresTheHandlersAndTheSystem()
+    public void TheMatchRegistersTheStoresOfResearch()
     {
         var match = SampleMatch.Value;
 
-        Assert.Equal(["bodies", "movers", "research", "stockpiles"], match.World.Stores.Select(store => store.Name));
-        Assert.Same(match.Research.State, match.World.Stores[2]);
-        Assert.Same(match.Stockpiles, match.World.Stores[3]);
+        Assert.Same(match.Research.State, Assert.Single(match.World.Stores, store => store.Name == ResearchState.StoreName));
+        Assert.Same(match.Stockpiles, Assert.Single(match.World.Stores, store => store.Name == Stockpiles.StoreName));
+        Assert.Equal(("research", "stockpiles"), (ResearchState.StoreName, Stockpiles.StoreName));
         Assert.Equal((2, 3), ((int)CommandType.CancelResearch, (int)CommandType.StartResearch));
     }
 
