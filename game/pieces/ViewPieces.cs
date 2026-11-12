@@ -31,6 +31,9 @@ public static class ViewPieces
 
         // 17v. Fog of war.
 
+        // 24v. Minimap.
+        new MinimapPiece(),
+
         // Later pieces.
     ];
 }
