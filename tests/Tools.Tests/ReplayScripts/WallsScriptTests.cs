@@ -28,6 +28,7 @@ public class WallsScriptTests
         "a wall order refused: cannot be paid for",
         "a wall order cancelled",
         "a worker with a wall order sent elsewhere",
+        "a camp laid whole with the development placement",
         "a fighting unit made",
         "a move order to a place behind enemy walls",
         "an attack-move to a place behind enemy walls",
@@ -60,6 +61,12 @@ public class WallsScriptTests
         "a unit goes on when its wall is destroyed",
         "a unit goes on when the way has opened elsewhere",
         "a unit that broke in ends its order",
+
+        // Under the fog of war (design 5.3).
+        "an attack order refused",
+        "a wall in a unit's way that nobody of its side sees",
+        "a unit learns of a wall its player had never seen",
+        "a unit whose attack order ended goes on as on a move order with a wall in its way",
     ];
 
     /// <summary>
@@ -124,11 +131,14 @@ public class WallsScriptTests
     {
         private readonly HashSet<string> _seen = new(StringComparer.Ordinal);
         private readonly Dictionary<EntityId, EntityId> _wallInWay = [];
+        private readonly Dictionary<EntityId, Combatant> _unitBefore = [];
+        private readonly HashSet<EntityId> _lostTarget = [];
         private readonly HashSet<EntityId> _brokeIn = [];
         private readonly HashSet<EntityId> _withWallOrder = [];
         private readonly HashSet<EntityId> _walls = [];
         private readonly HashSet<EntityId> _cancelled = [];
         private readonly HashSet<EntityId> _ordered = [];
+        private bool _laidWhole;
         private readonly int _regionsAtStart = match.Grid.RegionCount;
 
         public HashSet<string> Run(Sim.Serialization.Replay replay, Func<Command, bool> ofThisScript)
@@ -160,9 +170,11 @@ public class WallsScriptTests
         private void TakeBefore()
         {
             _wallInWay.Clear();
+            _unitBefore.Clear();
             for (var i = 0; i < match.Combatants.Count; i++)
             {
                 _wallInWay[match.Combatants.EntityAt(i)] = match.Combatants.ValueAt(i).WallInWay;
+                _unitBefore[match.Combatants.EntityAt(i)] = match.Combatants.ValueAt(i);
             }
 
             _walls.Clear();
@@ -186,6 +198,12 @@ public class WallsScriptTests
         {
             _ordered.Clear();
             _cancelled.Clear();
+            _laidWhole = commands.Any(command => command.Type == CommandType.DebugPlace && IsWall(command.ContentId));
+            if (_laidWhole)
+            {
+                _seen.Add("a camp laid whole with the development placement");
+            }
+
             foreach (var command in commands)
             {
                 var entities = command.Entities.ToArray();
@@ -276,6 +294,11 @@ public class WallsScriptTests
             {
                 _seen.Add("a wall order taken");
             }
+
+            if (match.Simulation.Events.Any(reported => reported.Kind == SimEventKind.OrderRefused && reported.Amount == (long)CommandType.Attack))
+            {
+                _seen.Add("an attack order refused");
+            }
         }
 
         /// <summary>What the tick that has just run did with walls, from its events and from the state after it.</summary>
@@ -285,7 +308,7 @@ public class WallsScriptTests
             {
                 switch (reported.Kind)
                 {
-                    case SimEventKind.StructurePlaced when IsWall((int)reported.Amount):
+                    case SimEventKind.StructurePlaced when IsWall((int)reported.Amount) && !_laidWhole:
                         _seen.Add("a tile of wall laid");
                         break;
                     case SimEventKind.StructureFinished when IsWall(reported.Entity):
@@ -344,6 +367,41 @@ public class WallsScriptTests
                 }
 
                 var before = _wallInWay.GetValueOrDefault(entity);
+                var owner = match.Bodies.Get(entity).Owner;
+                var given = _ordered.Contains(entity);
+                if (_unitBefore.TryGetValue(entity, out var was) && !given)
+                {
+                    // Its goal is the place its order named, which it was not before: walls its
+                    // player has come to know of are what keeps it from there.
+                    if (was.Order == unit.Order
+                        && unit.Order is UnitOrder.Move or UnitOrder.AttackMove
+                        && was.Goal != unit.Goal
+                        && was.Ordered == unit.Ordered)
+                    {
+                        _seen.Add("a unit learns of a wall its player had never seen");
+                    }
+
+                    // Its target was lost from sight, or was a remembered structure that is gone.
+                    if (was.Order == UnitOrder.Attack && unit.Order == UnitOrder.Move)
+                    {
+                        _lostTarget.Add(entity);
+                    }
+                }
+
+                if (given || unit.Order != UnitOrder.Move)
+                {
+                    _lostTarget.Remove(entity);
+                }
+                else if (unit.WallInWay != EntityId.None && _lostTarget.Contains(entity))
+                {
+                    _seen.Add("a unit whose attack order ended goes on as on a move order with a wall in its way");
+                }
+
+                if (unit.WallInWay != EntityId.None && match.World.Entities.IsAlive(unit.WallInWay) && !match.Vision.Sees(owner, unit.WallInWay))
+                {
+                    _seen.Add("a wall in a unit's way that nobody of its side sees");
+                }
+
                 if (unit.WallInWay != EntityId.None)
                 {
                     _seen.Add(unit.Order switch
@@ -406,7 +464,8 @@ public class WallsScriptTests
 
         /// <summary>
         /// What must hold after every tick: no unit stands on a tile of wall, and the wall in a
-        /// unit's way, while it stands, is a wall of another player.
+        /// unit's way, while it stands, is a wall of another player that the unit's owner sees
+        /// or remembers.
         /// </summary>
         private void CheckWhatMustHold()
         {
@@ -434,6 +493,9 @@ public class WallsScriptTests
 
                 Assert.True(match.Structures.TryGet(wall, out var tile) && IsWall(tile.Type), $"Tick {match.World.Tick}: {entity} has {wall} in its way, which is no wall.");
                 Assert.NotEqual(match.Bodies.Get(entity).Owner, match.Bodies.Get(wall).Owner);
+                Assert.True(
+                    match.Vision.KnowsStructure(match.Bodies.Get(entity).Owner, wall),
+                    $"Tick {match.World.Tick}: {entity} has {wall} in its way, which its player has never seen.");
             }
         }
     }

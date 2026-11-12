@@ -1,3 +1,4 @@
+using Sim.Combat;
 using Sim.Core;
 using Sim.Data;
 using Sim.Economy;
@@ -17,7 +18,9 @@ namespace Tools.Replay.Scripts;
 /// starts. So the script puts an Outpost beside a chokepoint with the development placement, and
 /// makes the units that break in with the development spawn, as <see cref="SiegeOrders"/> does:
 /// it needs <c>debug.spawn</c> in the rules of the data. The walls themselves are ordered, paid
-/// for and laid by the players' workers.
+/// for and laid by the players' workers, but for a few camps that are laid whole with the
+/// development placement: a player's workers are few and are sent elsewhere before most of
+/// their camps are closed, and the units that break in need closed ground to break into.
 /// </para>
 /// <para>
 /// A camp is a ring whose tiles touch only at their corners: the tiles one, two or three steps
@@ -29,17 +32,31 @@ namespace Tools.Replay.Scripts;
 /// second wall in its way. It also makes units in the middle of a camp, the owner's or an
 /// enemy's, so that there is something behind the walls to attack and something to break out.
 /// </para>
+/// <para>
+/// The script orders for a player with what that player may know (design 5.3), since the wall
+/// rule and the attack order go by that: a place behind enemy walls is one behind walls the
+/// player sees or remembers, and an attack order names a unit the player sees or a structure it
+/// sees or remembers, one that is gone and still remembered among them. Half the time the
+/// place is behind walls the player has never seen instead, the middle of an enemy's camp first,
+/// which the units learn of on their way, and one attack order in three names anything of an
+/// enemy, seen or not. Most of the units are made by the walls of an enemy, where they see them;
+/// the rest by their own, far from what they are sent to. Now and then a unit that an enemy
+/// behind a wall has an attack order on is sent away, out of that enemy's sight.
+/// </para>
 /// </remarks>
 [OrderScript("walls")]
 internal sealed class WallingOrders : OrderScript
 {
-    private const int LongestPause = 50;
+    private const int LongestPause = 35;
 
     /// <summary>The Outposts a player has before the script stops placing more for it.</summary>
     private const int MostOutposts = 2;
 
     /// <summary>The fighting units a player has before the script stops making more for it.</summary>
-    private const int MostFighters = 10;
+    private const int MostFighters = 14;
+
+    /// <summary>The camps a player is given whole before the script stops laying more for it.</summary>
+    private const int MostCampsLaidWhole = 3;
 
     /// <summary>How many places the script tries before it settles for one that may not do.</summary>
     private const int PlacesTried = 16;
@@ -50,10 +67,15 @@ internal sealed class WallingOrders : OrderScript
     private readonly DeterministicRandom _random;
     private readonly List<MapMarker> _chokepoints = [];
     private readonly StructureDef? _outpost;
+    private readonly StructureDef? _wall;
+    private readonly int[] _campsLaidWhole;
     private readonly List<EntityId> _workers = [];
     private readonly List<EntityId> _fighters = [];
     private readonly List<EntityId> _found = [];
     private readonly List<EntityId> _enemyWalls = [];
+    private readonly List<EntityId> _unseenWalls = [];
+    private readonly List<EntityId> _othersWalls = [];
+    private readonly List<EntityId> _cutOff = [];
     private readonly List<EntityId> _walls = [];
     private readonly ((int X, int Y) Middle, int Radius)?[] _lastCamp;
     private int _nextTick;
@@ -64,6 +86,8 @@ internal sealed class WallingOrders : OrderScript
         _random = setup.Generator(Generator);
         _nextTick = 1 + _random.NextInt(10);
         _lastCamp = new ((int X, int Y) Middle, int Radius)?[Match.Players.Count];
+        _campsLaidWhole = new int[Match.Players.Count];
+        _wall = Match.Data.Structures.FirstOrDefault(structure => structure.Wall is not null);
         _chokepoints.AddRange(Match.Map.Markers.Where(marker => marker.Kind == MarkerKind.Chokepoint));
         _outpost = Match.Data.Structures.FirstOrDefault(
             structure => structure.TerritoryRadius is not null && structure.Index != Match.Data.StartStructure.Index);
@@ -80,11 +104,11 @@ internal sealed class WallingOrders : OrderScript
         var player = _random.NextInt(Match.Players.Count);
         var kind = _random.NextInt(100);
         Collect(player);
-        if (kind < 8)
+        if (kind < 7)
         {
             PlaceOutpost(player, commands);
         }
-        else if (kind < 26)
+        else if (kind < 23)
         {
             // A wall from one side of a chokepoint to the other, by some of the workers.
             if (_workers.Count > 0 && _chokepoints.Count > 0)
@@ -93,11 +117,11 @@ internal sealed class WallingOrders : OrderScript
                 commands.Add(Wall(player, SomeWorkers(), first, last));
             }
         }
-        else if (kind < 42)
+        else if (kind < 37)
         {
             Camp(player, commands);
         }
-        else if (kind < 54)
+        else if (kind < 47)
         {
             // A run in any direction from a tile of the player's territory, over whatever is there,
             // or from a tile that one of the player's wall orders has yet to lay: whichever worker
@@ -113,11 +137,11 @@ internal sealed class WallingOrders : OrderScript
                 commands.Add(Wall(player, SomeWorkers(), first, last));
             }
         }
-        else if (kind < 60)
+        else if (kind < 52)
         {
             Refused(player, commands);
         }
-        else if (kind < 68)
+        else if (kind < 60)
         {
             // Cancel: a worker's wall order, or a tile of wall that is building itself.
             CollectWorkersWithWallOrders();
@@ -131,7 +155,7 @@ internal sealed class WallingOrders : OrderScript
                 commands.Add(new Command(CommandType.CancelBuild, player, [_found[_random.NextInt(_found.Count)]]));
             }
         }
-        else if (kind < 74)
+        else if (kind < 66)
         {
             // A worker with a wall order is sent somewhere else, which ends the order.
             CollectWorkersWithWallOrders();
@@ -142,10 +166,10 @@ internal sealed class WallingOrders : OrderScript
                 commands.Add(new Command(type, player, [_found[_random.NextInt(_found.Count)]], point.X, point.Y));
             }
         }
-        else if (kind < 84)
+        else if (kind < 76)
         {
-            // One to three units of one chassis, within five tiles of a tile of wall, the player's
-            // own or an enemy's: outside the wall or inside it.
+            // One to three units of one chassis, within five tiles of a tile of wall, an enemy's
+            // two times in three and else any: outside the wall or inside it.
             // Or one unit in the middle of the last camp of a player, this one or another.
             var chassis = _random.NextInt(Match.Data.Chassis.Count);
             var count = 1 + _random.NextInt(3);
@@ -156,12 +180,17 @@ internal sealed class WallingOrders : OrderScript
             }
             else if (_walls.Count > 0)
             {
-                var near = Match.Bodies.Get(Any(_walls)).Position;
+                var beside = _othersWalls.Count > 0 && _random.NextInt(3) > 0 ? _othersWalls : _walls;
+                var near = Match.Bodies.Get(Any(beside)).Position;
                 for (var i = 0; i < count && _fighters.Count + i < MostFighters; i++)
                 {
                     commands.Add(new Command(CommandType.DebugSpawn, player, targetX: Near(near.X, 5), targetY: Near(near.Y, 5), contentId: chassis));
                 }
             }
+        }
+        else if (kind < 79)
+        {
+            CampLaidWhole(player, commands);
         }
         else if (_fighters.Count > 0)
         {
@@ -276,9 +305,49 @@ internal sealed class WallingOrders : OrderScript
         }
     }
 
+    /// <summary>
+    /// A camp two or three steps wide round a free tile of the player's territory, every tile of
+    /// it put there finished with the development placement. A tile that has no room is left out.
+    /// </summary>
+    private void CampLaidWhole(int player, List<Command> commands)
+    {
+        if (_wall is null
+            || _workers.Count == 0
+            || _campsLaidWhole[player] >= MostCampsLaidWhole
+            || !TryPickTileInTerritory(player, mustBeFree: true, out var middle))
+        {
+            return;
+        }
+
+        var radius = 2 + _random.NextInt(2);
+        _campsLaidWhole[player]++;
+        _lastCamp[player] = (middle, radius);
+        for (var dx = -radius; dx <= radius; dx++)
+        {
+            var dy = radius - Math.Abs(dx);
+            AddTile(middle.X + dx, middle.Y + dy);
+            if (dy != 0)
+            {
+                AddTile(middle.X + dx, middle.Y - dy);
+            }
+        }
+
+        void AddTile(int x, int y)
+        {
+            var point = MapGrid.TileCenter(x, y);
+            commands.Add(new Command(CommandType.DebugPlace, player, targetX: point.X, targetY: point.Y, contentId: _wall.Index));
+        }
+    }
+
     /// <summary>Wall orders that are refused: outside the map or the territory, by nobody who can take them, or from nobody.</summary>
     private void Refused(int player, List<Command> commands)
     {
+        // A player without units gives no orders.
+        if (Own.Count == 0)
+        {
+            return;
+        }
+
         var first = TileOf(AnyPoint(_random));
         var tiles = Match.Grid.Width * Match.Grid.Height;
         switch (_random.NextInt(4))
@@ -315,13 +384,20 @@ internal sealed class WallingOrders : OrderScript
     /// <summary>
     /// Sends some of the player's fighting units to a place that the walls of an enemy keep the
     /// first of them from, or at something of an enemy that those walls keep it from, if the
-    /// script finds one. A unit that has a wall in its way is mostly left to it.
+    /// script finds one. The walls are those the player knows of; now and then the place is one
+    /// that walls the player has never seen close off. A unit that has a wall in its way, or is
+    /// on its way to a place it cannot reach as far as its player knows, is mostly left to it.
     /// </summary>
     private void OrderFighters(int player, List<Command> commands)
     {
+        if (_random.NextInt(2) == 0 && TrySendAwayFromAttacker(player, commands))
+        {
+            return;
+        }
+
         var disturb = _random.NextInt(4) == 0;
         _found.Clear();
-        _found.AddRange(_fighters.Where(fighter => disturb || Match.Combatants.Get(fighter).WallInWay == EntityId.None));
+        _found.AddRange(_fighters.Where(fighter => disturb || !IsBusyWithWalls(Match.Combatants.Get(fighter))));
         if (_found.Count == 0)
         {
             return;
@@ -333,11 +409,30 @@ internal sealed class WallingOrders : OrderScript
         if (way < 6)
         {
             var place = AnyPoint(_random);
-            for (var i = 0; i < PlacesTried && _enemyWalls.Count > 0; i++)
+            var unseen = _unseenWalls.Count > 0 && (_enemyWalls.Count == 0 || _random.NextInt(2) == 0);
+            var walls = unseen ? _unseenWalls : _enemyWalls;
+            for (var i = 0; i < PlacesTried && walls.Count > 0; i++)
             {
-                var wall = Match.Bodies.Get(Any(_enemyWalls)).Position;
-                place = new FixedVector2(Near(wall.X, 3), Near(wall.Y, 3));
-                if (Match.Grid.Contains(place) && Match.Breaching.IsCutOff(player, from, place))
+                // The middle of a camp of another player comes first: ground that walls close off.
+                if (unseen && i < _lastCamp.Length && i != player && _lastCamp[i] is { } camp)
+                {
+                    place = MapGrid.TileCenter(camp.Middle.X, camp.Middle.Y);
+                }
+                else
+                {
+                    var wall = Match.Bodies.Get(Any(walls)).Position;
+                    place = new FixedVector2(Near(wall.X, 3), Near(wall.Y, 3));
+                }
+
+                if (!Match.Grid.Contains(place))
+                {
+                    continue;
+                }
+
+                // Behind walls the player knows the wall rule says so. Behind walls it has never
+                // seen, the place is ground the unit cannot reach, as far as its player knows.
+                var cutOff = Match.Breaching.IsCutOff(player, from, place);
+                if (unseen ? !cutOff && Match.Grid.IsPassable(place) && Match.Grid.RegionOf(place) != Match.Grid.RegionOf(from) : cutOff)
                 {
                     break;
                 }
@@ -347,14 +442,32 @@ internal sealed class WallingOrders : OrderScript
         }
         else if (way < 9)
         {
-            // Anything of an enemy that can be attacked, a wall as likely as anything else.
+            // Anything of an enemy that the player may name, a wall as likely as anything else:
+            // a unit it sees, a structure it sees or remembers. One time in three, anything of an
+            // enemy that can be attacked, which is refused when the player does not know of it.
+            var anything = _random.NextInt(3) == 0;
             _found.Clear();
             for (var i = 0; i < Match.Health.Count; i++)
             {
                 var entity = Match.Health.EntityAt(i);
-                if (Match.World.Entities.IsAlive(entity) && Match.Bodies.TryGet(entity, out var body) && body.Owner != player)
+                if (Match.World.Entities.IsAlive(entity)
+                    && Match.Bodies.TryGet(entity, out var body)
+                    && body.Owner != player
+                    && (anything
+                        || (Match.Structures.Contains(entity) ? Match.Vision.KnowsStructure(player, entity) : Match.Vision.Sees(player, in body))))
                 {
                     _found.Add(entity);
+                }
+            }
+
+            // A structure that is gone and that the player has not seen gone may be named too.
+            var memory = Match.Vision.Memory;
+            for (var i = 0; i < memory.Count(player); i++)
+            {
+                var remembered = memory.At(player, i).Entity;
+                if (!Match.World.Entities.IsAlive(remembered) && Match.Vision.Remembers(player, remembered, out _))
+                {
+                    _found.Add(remembered);
                 }
             }
 
@@ -363,16 +476,17 @@ internal sealed class WallingOrders : OrderScript
                 return;
             }
 
-            var target = Any(_found);
-            for (var i = 0; i < PlacesTried; i++)
+            // Three times in four, one that walls the player knows of keep the first unit from.
+            _cutOff.Clear();
+            foreach (var entity in _found)
             {
-                if (Match.Breaching.IsCutOff(player, from, Match.Bodies.Get(target).Position))
+                if (Match.Bodies.TryGet(entity, out var stands) && Match.Breaching.IsCutOff(player, from, stands.Position))
                 {
-                    break;
+                    _cutOff.Add(entity);
                 }
-
-                target = Any(_found);
             }
+
+            var target = _cutOff.Count > 0 && _random.NextInt(4) > 0 ? Any(_cutOff) : Any(_found);
 
             commands.Add(new Command(CommandType.Attack, player, sent, targetEntity: target));
         }
@@ -380,6 +494,42 @@ internal sealed class WallingOrders : OrderScript
         {
             commands.Add(new Command(CommandType.Stop, player, sent));
         }
+    }
+
+    /// <summary>True for a unit that breaks a wall, or walks to where it gets nearest to a place it cannot reach.</summary>
+    private static bool IsBusyWithWalls(Combatant unit) =>
+        unit.WallInWay != EntityId.None
+        || (unit.Order is UnitOrder.Move or UnitOrder.AttackMove && unit.Goal != unit.Ordered);
+
+    /// <summary>
+    /// Sends one of the player's fighting units across the map when a unit of an enemy has an
+    /// attack order on it and a wall in its way: the attacker loses sight of it behind the wall.
+    /// False when there is no such unit.
+    /// </summary>
+    private bool TrySendAwayFromAttacker(int player, List<Command> commands)
+    {
+        _found.Clear();
+        var units = Match.Combatants;
+        for (var i = 0; i < units.Count; i++)
+        {
+            var unit = units.ValueAt(i);
+            if (unit.Order == UnitOrder.Attack
+                && unit.WallInWay != EntityId.None
+                && _fighters.Contains(unit.Target)
+                && !_found.Contains(unit.Target))
+            {
+                _found.Add(unit.Target);
+            }
+        }
+
+        if (_found.Count == 0)
+        {
+            return false;
+        }
+
+        var point = AnyPoint(_random);
+        commands.Add(new Command(CommandType.Move, player, [Any(_found)], point.X, point.Y));
+        return true;
     }
 
     private Command Wall(int player, List<EntityId> workers, (int X, int Y) first, (int X, int Y) last)
@@ -489,7 +639,10 @@ internal sealed class WallingOrders : OrderScript
         return count;
     }
 
-    /// <summary>Sorts what there is for a player: its workers, its units that fight, every tile of wall, and those of the others.</summary>
+    /// <summary>
+    /// Sorts what there is for a player: its workers, its units that fight, every tile of wall,
+    /// those of the others that the player knows of, and those of the others it has never seen.
+    /// </summary>
     private void Collect(int player)
     {
         CollectUnitsOf(player);
@@ -509,6 +662,8 @@ internal sealed class WallingOrders : OrderScript
 
         _walls.Clear();
         _enemyWalls.Clear();
+        _unseenWalls.Clear();
+        _othersWalls.Clear();
         var structures = Match.Structures;
         for (var i = 0; i < structures.Count; i++)
         {
@@ -520,7 +675,8 @@ internal sealed class WallingOrders : OrderScript
                 _walls.Add(entity);
                 if (body.Owner != player)
                 {
-                    _enemyWalls.Add(entity);
+                    _othersWalls.Add(entity);
+                    (Match.Vision.KnowsStructure(player, entity) ? _enemyWalls : _unseenWalls).Add(entity);
                 }
             }
         }
