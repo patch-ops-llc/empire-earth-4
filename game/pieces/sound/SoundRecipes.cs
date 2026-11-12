@@ -115,8 +115,8 @@ public static class SoundRecipes
     private static Take ShotHit()
     {
         var take = new Take(0.2);
-        take.Tone(start: 0, length: 0.2, from: 210, to: 70, level: 1.0, rise: 0.002, fade: 0.05, [1.0, 0.3]);
-        take.Noise(start: 0, length: 0.05, level: 0.6, rise: 0.001, fade: 0.012, below: 2500, above: 300, seed: 23);
+        take.Tone(start: 0, length: 0.2, from: 260, to: 80, level: 1.0, rise: 0.002, fade: 0.05, [1.0, 0.45, 0.2]);
+        take.Noise(start: 0, length: 0.06, level: 0.9, rise: 0.001, fade: 0.014, below: 2500, above: 300, seed: 23);
         return take;
     }
 
@@ -139,17 +139,20 @@ public static class SoundRecipes
         return take;
     }
 
-    // A collapse: a crack of noise, a long low rumble under it, a tone that sinks below hearing,
-    // and three small bursts after it, as rubble that comes down late.
+    // A collapse: a crack of noise, a rumble under it that lasts, a tone that sinks, and three
+    // small bursts after it, as rubble that comes down late. The rumble is in two bands, because
+    // the small speakers of a laptop give back little below 150 hertz: the low band is the
+    // weight of it on speakers that can, the middle band is what every speaker plays.
     private static Take StructureLost()
     {
         var take = new Take(1.1);
-        take.Noise(start: 0, length: 1.1, level: 1.0, rise: 0.005, fade: 0.3, below: 420, above: 0, seed: 53);
-        take.Noise(start: 0, length: 0.25, level: 0.7, rise: 0.001, fade: 0.05, below: 3000, above: 400, seed: 59);
-        take.Tone(start: 0, length: 1.0, from: 95, to: 38, level: 0.9, rise: 0.005, fade: 0.28, [1.0, 0.4]);
-        take.Noise(start: 0.18, length: 0.06, level: 0.35, rise: 0.001, fade: 0.015, below: 1800, above: 300, seed: 61);
-        take.Noise(start: 0.33, length: 0.06, level: 0.3, rise: 0.001, fade: 0.015, below: 1800, above: 300, seed: 67);
-        take.Noise(start: 0.52, length: 0.06, level: 0.22, rise: 0.001, fade: 0.015, below: 1800, above: 300, seed: 71);
+        take.Noise(start: 0, length: 1.1, level: 0.6, rise: 0.005, fade: 0.3, below: 420, above: 0, seed: 53);
+        take.Noise(start: 0, length: 0.9, level: 0.9, rise: 0.005, fade: 0.22, below: 1400, above: 250, seed: 73);
+        take.Noise(start: 0, length: 0.3, level: 1.2, rise: 0.001, fade: 0.09, below: 3000, above: 400, seed: 59);
+        take.Tone(start: 0, length: 1.0, from: 150, to: 45, level: 0.5, rise: 0.005, fade: 0.28, [1.0, 0.5, 0.25]);
+        take.Noise(start: 0.18, length: 0.07, level: 0.5, rise: 0.001, fade: 0.018, below: 1800, above: 300, seed: 61);
+        take.Noise(start: 0.33, length: 0.07, level: 0.42, rise: 0.001, fade: 0.018, below: 1800, above: 300, seed: 67);
+        take.Noise(start: 0.52, length: 0.07, level: 0.32, rise: 0.001, fade: 0.018, below: 1800, above: 300, seed: 71);
         return take;
     }
 
@@ -185,12 +188,13 @@ public static class SoundRecipes
         return take;
     }
 
-    // Two low hollow notes, the second lower: no.
+    // Two hollow notes, the second lower: no. They are the G and the D above middle C, low
+    // beside the click of an order taken and still high enough for a small speaker to play.
     private static Take OrderRefused()
     {
         var take = new Take(0.26);
-        take.Tone(start: 0, length: 0.1, from: 196.0, to: 196.0, level: 1.0, rise: 0.004, fade: 0.2, Hollow);
-        take.Tone(start: 0.13, length: 0.13, from: 146.83, to: 146.83, level: 1.0, rise: 0.004, fade: 0.2, Hollow);
+        take.Tone(start: 0, length: 0.1, from: 392.0, to: 392.0, level: 1.0, rise: 0.004, fade: 0.2, Hollow);
+        take.Tone(start: 0.13, length: 0.13, from: 293.66, to: 293.66, level: 1.0, rise: 0.004, fade: 0.2, Hollow);
         return take;
     }
 

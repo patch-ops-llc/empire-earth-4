@@ -4,7 +4,7 @@ using Godot;
 namespace Game;
 
 /// <summary>
-/// What the Sound panel of the top bar shows: the volume, the switch that turns all sound off,
+/// What the Sound panel of the top bar shows: the volume, the button that turns all sound off,
 /// and a button for each sound of a match, to hear it by itself.
 /// </summary>
 /// <remarks>
@@ -22,28 +22,33 @@ public static class SoundPanel
         var column = UiStyle.Column(12);
         column.Name = "SoundPanel";
         column.AddChild(VolumeRow(sound));
-        column.AddChild(MuteBox());
+        column.AddChild(MuteButton());
         column.AddChild(UiStyle.Text("Both are kept for the next match and the next time the game starts."));
         column.AddChild(new HSeparator());
         column.AddChild(UiStyle.Text("Every sound of a match, to hear by itself. The sound when:"));
 
-        var list = new GridContainer { Name = "Sounds", Columns = 2 };
-        list.AddThemeConstantOverride("h_separation", 16);
-        list.AddThemeConstantOverride("v_separation", 6);
+        // Three across, so that the page fits a small window with all nine on it.
+        var list = new GridContainer { Name = "Sounds", Columns = 3 };
+        list.AddThemeConstantOverride("h_separation", 10);
+        list.AddThemeConstantOverride("v_separation", 8);
+        var waiting = false;
         foreach (var cue in SoundCues.All)
         {
-            var button = UiStyle.FrameButton(SoundCues.Name(cue));
+            var waits = sound.Kinds.IsWaiting(cue);
+            waiting |= waits;
+            var button = UiStyle.FrameButton(waits ? SoundCues.Name(cue) + " *" : SoundCues.Name(cue));
             button.Name = $"Hear{cue}";
             button.Alignment = HorizontalAlignment.Left;
             button.Pressed += () => sound.Audition(cue);
             list.AddChild(button);
-            list.AddChild(new Label
-            {
-                Text = sound.Kinds.IsWaiting(cue) ? "No match of this build can make it yet: what it answers is not built in." : string.Empty,
-            });
         }
 
         column.AddChild(list);
+        if (waiting)
+        {
+            column.AddChild(UiStyle.Text("* No match of this build can make it yet: the part of the game it answers is not built in."));
+        }
+
         return column;
     }
 
@@ -77,18 +82,25 @@ public static class SoundPanel
         return row;
     }
 
-    private static CheckBox MuteBox()
+    // A button that says what it does, and not a box to tick: the box of the engine's own look
+    // is dark on this dark page and hard to find.
+    private static Button MuteButton()
     {
-        var box = new CheckBox
+        var button = UiStyle.FrameButton(MuteWords(SoundSettings.Muted));
+        button.Name = "Mute";
+        button.ToggleMode = true;
+        button.ButtonPressed = SoundSettings.Muted;
+        button.SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
+        button.Toggled += muted =>
         {
-            Name = "Mute",
-            Text = "Mute: no sound at all",
-            ButtonPressed = SoundSettings.Muted,
-            FocusMode = Control.FocusModeEnum.None,
+            SoundSettings.SetMuted(muted);
+            button.Text = MuteWords(muted);
         };
-        box.Toggled += SoundSettings.SetMuted;
-        return box;
+        return button;
     }
+
+    private static string MuteWords(bool muted) =>
+        muted ? "The sound is off. Click to turn it on" : "The sound is on. Click to turn it off";
 
     private static string Percent(float volume) =>
         string.Create(CultureInfo.InvariantCulture, $"{Math.Round(volume * 100.0)}%");

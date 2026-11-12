@@ -21,6 +21,8 @@ public sealed class SoundMix
     private const float MostTogether = 1.4f;
 
     private readonly double[] _lastStart = new double[SoundCues.All.Count];
+    private readonly double[] _gap = new double[SoundCues.All.Count];
+    private readonly int[] _starts = new int[SoundCues.All.Count];
     private readonly float[] _loudest = new float[SoundCues.All.Count];
     private readonly int[] _count = new int[SoundCues.All.Count];
 
@@ -113,18 +115,42 @@ public sealed class SoundMix
     }
 
     /// <summary>
-    /// Asks to start a cue now. False when it last started less than <see cref="SoundCues.Gap"/>
-    /// ago: the sound is then left out.
+    /// How long a cue stays silent after a start of it, in seconds. For a notice it is
+    /// <see cref="SoundCues.Gap"/>. For a sound of the world it is between that and twice that,
+    /// different after every start, so that a long fight is not a drumbeat: with one gap its
+    /// hits would come at one even pace for as long as it lasts. Like <see cref="Pitch"/>, it
+    /// depends only on which start it is.
+    /// </summary>
+    /// <param name="start">The number of the start the gap follows, counted from 0.</param>
+    public static double GapAfter(SoundCue cue, int start)
+    {
+        var gap = SoundCues.Gap(cue);
+        if (!SoundCues.IsOfTheWorld(cue))
+        {
+            return gap;
+        }
+
+        var mixed = unchecked((((uint)start + 1u) * 2246822519u) ^ (((uint)cue + 1u) * 3266489917u));
+        mixed ^= mixed >> 13;
+        return gap * (1.0 + ((mixed & 0xFFFF) / 65536.0));
+    }
+
+    /// <summary>
+    /// Asks to start a cue now. False when it last started less than its gap ago
+    /// (<see cref="GapAfter"/>): the sound is then left out.
     /// </summary>
     /// <param name="now">The time, in seconds, on any clock that never runs backward.</param>
     public bool TryStart(SoundCue cue, double now)
     {
-        if (now - _lastStart[(int)cue] < SoundCues.Gap(cue))
+        var index = (int)cue;
+        if (now - _lastStart[index] < _gap[index])
         {
             return false;
         }
 
-        _lastStart[(int)cue] = now;
+        _lastStart[index] = now;
+        _gap[index] = GapAfter(cue, _starts[index]);
+        _starts[index] = unchecked(_starts[index] + 1);
         return true;
     }
 }

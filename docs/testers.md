@@ -152,7 +152,7 @@ A match has sound: a few short sounds, all of them made by the game itself as it
 
 A fight far from where your camera looks is fainter, and never silent. A large fight does not get louder with every unit in it: many hits at one moment are one sound.
 
-The Sound button in the bar across the top opens a page with a volume slider and a box that mutes everything. Both are remembered the next time you start the game. The page also has a button for each sound, to hear it on its own.
+The Sound button in the bar across the top opens a page with a volume slider and a button that turns all sound off. Both are remembered the next time you start the game. The page also has a button for each sound, to hear it on its own.
 
 ## Reporting a problem
 

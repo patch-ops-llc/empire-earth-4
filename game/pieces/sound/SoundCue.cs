@@ -79,7 +79,7 @@ public static class SoundCues
         SoundCue.ResearchFinished => 0.7f,
         SoundCue.EpochReached => 0.85f,
         SoundCue.OrderGiven => 0.45f,
-        SoundCue.OrderRefused => 0.6f,
+        SoundCue.OrderRefused => 0.45f,
         _ => 0.5f,
     };
 

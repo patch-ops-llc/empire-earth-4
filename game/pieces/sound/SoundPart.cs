@@ -215,6 +215,11 @@ public partial class SoundPart : InterfacePart
         player.PitchScale = pitch;
         player.Play();
         _voiceStarted[voice] = _clock;
+
+        if (OS.IsStdOutVerbose())
+        {
+            GD.Print($"Sound: {cue} at {gain:0.00} of full, {_clock:0.00} seconds into the match.");
+        }
     }
 
     private float Nearness(SoundRequest request)

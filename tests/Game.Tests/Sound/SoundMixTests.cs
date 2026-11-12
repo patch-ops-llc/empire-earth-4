@@ -93,14 +93,57 @@ public class SoundMixTests
     public void ACueThatHasJustStartedIsNotStartedAgainUntilItsGapHasPassed()
     {
         var mix = new SoundMix();
-        var gap = SoundCues.Gap(SoundCue.MeleeHit);
+        var gap = SoundCues.Gap(SoundCue.OrderGiven);
 
-        Assert.True(mix.TryStart(SoundCue.MeleeHit, 0.0));
-        Assert.False(mix.TryStart(SoundCue.MeleeHit, 0.0));
-        Assert.False(mix.TryStart(SoundCue.MeleeHit, gap * 0.9));
-        Assert.True(mix.TryStart(SoundCue.MeleeHit, gap));
-        Assert.False(mix.TryStart(SoundCue.MeleeHit, gap * 1.5));
-        Assert.True(mix.TryStart(SoundCue.MeleeHit, gap * 2.5));
+        Assert.True(mix.TryStart(SoundCue.OrderGiven, 0.0));
+        Assert.False(mix.TryStart(SoundCue.OrderGiven, 0.0));
+        Assert.False(mix.TryStart(SoundCue.OrderGiven, gap * 0.9));
+        Assert.True(mix.TryStart(SoundCue.OrderGiven, gap));
+        Assert.False(mix.TryStart(SoundCue.OrderGiven, gap * 1.5));
+        Assert.True(mix.TryStart(SoundCue.OrderGiven, gap * 2.5));
+    }
+
+    [Fact]
+    public void ASoundOfTheWorldKeepsTheGapThatFollowsEachOfItsStarts()
+    {
+        var mix = new SoundMix();
+        var now = 0.0;
+        for (var start = 0; start < 50; start++)
+        {
+            Assert.True(mix.TryStart(SoundCue.MeleeHit, now));
+
+            var gap = SoundMix.GapAfter(SoundCue.MeleeHit, start);
+            Assert.False(mix.TryStart(SoundCue.MeleeHit, now + (gap * 0.5)));
+            Assert.False(mix.TryStart(SoundCue.MeleeHit, now + (gap * 0.98)));
+            now += gap * 1.01;
+        }
+    }
+
+    [Fact]
+    public void TheGapOfANoticeIsAlwaysTheSameAndTheGapOfASoundOfTheWorldIsNot()
+    {
+        foreach (var cue in SoundCues.All)
+        {
+            var least = SoundCues.Gap(cue);
+            var gaps = Enumerable.Range(0, 200).Select(start => SoundMix.GapAfter(cue, start)).ToArray();
+
+            Assert.All(gaps, gap => Assert.InRange(gap, least, least * 2.0));
+            if (SoundCues.IsOfTheWorld(cue))
+            {
+                // No even pace: the gaps are spread over the whole range, and no two in a row are equal.
+                Assert.True(gaps.Distinct().Count() > 100);
+                Assert.Contains(gaps, gap => gap < least * 1.25);
+                Assert.Contains(gaps, gap => gap > least * 1.75);
+                Assert.InRange(gaps.Average(), least * 1.35, least * 1.65);
+                Assert.All(Enumerable.Range(1, gaps.Length - 1), i => Assert.NotEqual(gaps[i - 1], gaps[i]));
+            }
+            else
+            {
+                Assert.All(gaps, gap => Assert.Equal(least, gap));
+            }
+        }
+
+        Assert.Equal(SoundMix.GapAfter(SoundCue.ShotHit, 31), SoundMix.GapAfter(SoundCue.ShotHit, 31));
     }
 
     [Fact]
@@ -127,11 +170,11 @@ public class SoundMixTests
     }
 
     [Fact]
-    public void ALongFightWithHitsInEveryTickStartsAboutTenSoundsOfAHitASecond()
+    public void ALongFightWithHitsInEveryTickStartsAFewSoundsOfAHitASecond()
     {
         var mix = new SoundMix();
         var started = 0;
-        const int Seconds = 10;
+        const int Seconds = 20;
         for (var tick = 0; tick < Seconds * 20; tick++)
         {
             var plays = Merge(mix, _ => 1f, [.. Enumerable.Repeat(At(SoundCue.MeleeHit), 25)]);
@@ -141,8 +184,9 @@ public class SoundMixTests
             }
         }
 
-        // 5,000 hits were called for. A hit is 0.16 seconds long, so at most two overlap.
-        Assert.InRange(started, Seconds * 5, (int)(Seconds / SoundCues.Gap(SoundCue.MeleeHit)) + 1);
+        // 10,000 hits were called for. The gap is a tenth to a fifth of a second, and a start
+        // waits for the next tick, so between four and ten a second start.
+        Assert.InRange(started, Seconds * 4, Seconds * 10);
     }
 
     [Fact]
