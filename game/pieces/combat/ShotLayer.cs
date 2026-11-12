@@ -14,8 +14,10 @@ namespace Game;
 /// <remarks>
 /// A shot that lands is gone from the match in the tick it lands, so the simulation's event is
 /// what says where it ended: the streak flies its last stretch to the place of the hit and is
-/// taken away after it. A shot that is lost stops where it was. A shot that lands where the
-/// player does not see ends where it was last drawn, since the player is not told of the hit.
+/// taken away after it. A shell does the same to the middle of its blast, which the simulation
+/// reports before the hits of the units it reached. A shot that is lost stops where it was. A
+/// shot that lands where the player does not see ends where it was last drawn, since the
+/// player is not told of the hit.
 /// </remarks>
 public partial class ShotLayer : WorldLayer
 {
@@ -89,7 +91,13 @@ public partial class ShotLayer : WorldLayer
         // A shot that landed in this tick flies on to where it landed, and is gone after the next.
         foreach (var happened in match.Simulation.Events)
         {
-            if (happened.Kind == SimEventKind.ShotHit && View.Sight.Knows(happened) && _shots.TryGetValue(happened.Other, out var landed) && !landed.Landed)
+            var shot = happened.Kind switch
+            {
+                SimEventKind.Blast => happened.Entity,
+                SimEventKind.ShotHit => happened.Other,
+                _ => EntityId.None,
+            };
+            if (shot != EntityId.None && View.Sight.Knows(happened) && _shots.TryGetValue(shot, out var landed) && !landed.Landed)
             {
                 landed.Previous = landed.Position;
                 landed.Position = Lifted(WorldView.ToWorld(happened.Position));
@@ -145,8 +153,8 @@ public partial class ShotLayer : WorldLayer
 
     private static Vector3 Flat(Vector3 vector) => new(vector.X, 0f, vector.Z);
 
-    // A shell is the shot of a line whose hits are blasts.
-    private bool IsShell(in Shot shot) => View.Match.Data.LineOf(shot.Line) is { Attack.BlastRadius: not null };
+    // A shell is a shot that lands as a blast.
+    private static bool IsShell(in Shot shot) => shot.Blast > Sim.Numerics.Fixed.Zero;
 
     private sealed class ShotView
     {
