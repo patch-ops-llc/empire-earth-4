@@ -52,20 +52,26 @@ public class GoldenReplayIndexTests
                     living.Add(match.Bodies.EntityAt(i));
                 }
 
-                Assert.True(
-                    living.Count == match.SpatialIndex.Count,
-                    $"{name}: after tick {tick} the index counts {match.SpatialIndex.Count} entities and the match has {living.Count} bodies.");
+                // The messages are made only when something is wrong: this runs for every tick of every replay.
+                if (living.Count != match.SpatialIndex.Count)
+                {
+                    Assert.Fail($"{name}: after tick {tick} the index counts {match.SpatialIndex.Count} entities and the match has {living.Count} bodies.");
+                }
+
                 match.SpatialIndex.QueryBox(new FixedVector2(-Fixed.One, -Fixed.One), everywhere, found);
-                Assert.True(
-                    living.SequenceEqual(found),
-                    $"{name}: after tick {tick} the index lists [{string.Join(", ", found)}] and the match has the bodies [{string.Join(", ", living)}].");
+                if (!living.SequenceEqual(found))
+                {
+                    Assert.Fail($"{name}: after tick {tick} the index lists [{string.Join(", ", found)}] and the match has the bodies [{string.Join(", ", living)}].");
+                }
+
                 foreach (var entity in living)
                 {
                     var position = match.Bodies.Get(entity).Position;
                     match.SpatialIndex.QueryBox(position, position, found);
-                    Assert.True(
-                        found.Contains(entity),
-                        $"{name}: after tick {tick} the index does not have {entity} at {position}, where it stands.");
+                    if (!found.Contains(entity))
+                    {
+                        Assert.Fail($"{name}: after tick {tick} the index does not have {entity} at {position}, where it stands.");
+                    }
                 }
             }
         }
