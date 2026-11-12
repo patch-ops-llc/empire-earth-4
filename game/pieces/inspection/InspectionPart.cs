@@ -91,7 +91,7 @@ public partial class InspectionPart : InterfacePart
 
     /// <summary>
     /// Shows a unit of another player, as a click on it does. It is shown while nothing of the
-    /// player's own is selected and until it dies.
+    /// player's own is selected, until it dies or the player no longer sees it (design 5.3).
     /// </summary>
     public void Inspect(EntityId unit)
     {
@@ -143,7 +143,7 @@ public partial class InspectionPart : InterfacePart
                 _ => InspectionMode.Mixed,
             };
         }
-        else if (UnitFacts.TryRead(match, _enemy, out var enemy) && enemy.Owner != View.Player)
+        else if (View.Sight.ShowsUnit(_enemy) && UnitFacts.TryRead(match, _enemy, out var enemy) && enemy.Owner != View.Player)
         {
             _groups = [new UnitGroup(enemy, 1, enemy.HitPoints, enemy.Maximum, enemy.HitPoints < enemy.Maximum ? 1 : 0)];
             Mode = InspectionMode.Enemy;

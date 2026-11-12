@@ -36,6 +36,13 @@ namespace Game;
 /// of how far it has by then.</item>
 /// <item>All the while the territory of the other seat's Capitol must be drawn exactly when the
 /// local player knows of that Capitol.</item>
+/// <item>A structure that is not finished must be drawn as far built as the player knows it to
+/// be: as it stands while they see it, and as they last saw it once it is a memory.</item>
+/// <item>All the while a deposit must be drawn exactly when the player has explored a tile
+/// under it, or the development switch is on.</item>
+/// <item>The placement checks of the build menu must not give the structure away: while the
+/// player has never seen it, no tile under it that they have explored is marked as in the way,
+/// with the development switch on as well, and once they have seen it every tile is.</item>
 /// </list>
 /// <para>
 /// The part holds whatever ran before it. It needs a worker of the other seat's, a structure
@@ -51,6 +58,9 @@ public sealed class StructuresInFogSmoke : SmokePart
 
     private readonly List<SeenStructure> _listed = [];
     private StructureDef? _structure;
+    private StructureDef? _freeStanding;
+    private int _unmarked;
+    private int _mostHiddenDeposits;
     private SeenStructure _capitol;
     private SeenStructure _built;
     private SeenStructure _lastSeen;
@@ -84,6 +94,7 @@ public sealed class StructuresInFogSmoke : SmokePart
         if (tick > 0)
         {
             TerritoryMustFollowTheCapitol(orders);
+            DepositsMustFollowTheSight(orders);
             if (orders.Failed)
             {
                 return;
@@ -132,6 +143,11 @@ public sealed class StructuresInFogSmoke : SmokePart
             return;
         }
 
+        // A structure that needs no territory, which the placement checks judge by the ground
+        // and what stands on it alone.
+        _freeStanding = match.Data.Structures.FirstOrDefault(
+            candidate => match.Construction.Buildable(candidate.Index) is not null && !ConstructionRules.NeedsTerritory(candidate));
+
         // The first structure of the roster that the other seat may order now and that holds no
         // territory of its own, so that the territory drawn stays that of the Capitol.
         foreach (var candidate in match.Data.Structures)
@@ -151,7 +167,10 @@ public sealed class StructuresInFogSmoke : SmokePart
             return;
         }
 
-        if (!TryFindSite(orders, theirs, _structure, match.Bodies.Get(workers[0]).Position))
+        // On ground the local player has explored, if there is such a site: there the placement
+        // checks could give the structure away, and the part tests that they do not.
+        var from = match.Bodies.Get(workers[0]).Position;
+        if (!TryFindSite(orders, theirs, _structure, from, explored: true) && !TryFindSite(orders, theirs, _structure, from, explored: false))
         {
             orders.Fail($"the other seat has no site for a {_structure.Id} in its territory that is {OutOfSight} tiles from every unit of the local player.");
             return;
@@ -164,7 +183,7 @@ public sealed class StructuresInFogSmoke : SmokePart
     // The site the other seat accepts that is nearest to its worker, among those out of the sight
     // of every unit of the local player. The first found wins a tie, so the choice is the same on
     // every machine.
-    private bool TryFindSite(SmokeOrders orders, PlayerView theirs, StructureDef structure, FixedVector2 worker)
+    private bool TryFindSite(SmokeOrders orders, PlayerView theirs, StructureDef structure, FixedVector2 worker, bool explored)
     {
         var match = orders.Match;
         var own = orders.OwnUnits();
@@ -174,7 +193,9 @@ public sealed class StructuresInFogSmoke : SmokePart
         {
             for (var x = _capitol.X - reach; x <= _capitol.X + reach; x++)
             {
-                if (theirs.CheckSite(structure, x, y) != BuildProblem.None || IsNearAny(match, own, x, y, structure.Footprint))
+                if (theirs.CheckSite(structure, x, y) != BuildProblem.None
+                    || IsNearAny(match, own, x, y, structure.Footprint)
+                    || (explored && !match.Vision.Grid.AreAllExplored(orders.Player, new TileSquare(x, y, structure.Footprint))))
                 {
                     continue;
                 }
@@ -326,6 +347,84 @@ public sealed class StructuresInFogSmoke : SmokePart
         {
             orders.Fail($"the pointer finds a structure of the other seat's that the local player has never seen, {when}.");
         }
+        else
+        {
+            PlacementMustNotKnow(orders, when);
+        }
+    }
+
+    // The build menu's checks, for a structure that needs no territory, on the tiles under the
+    // other seat's structure. On a tile the player has not explored they refuse such a structure
+    // whatever is there, so only the explored tiles can give the structure away.
+    private void PlacementMustNotKnow(SmokeOrders orders, string when)
+    {
+        if (_freeStanding is null)
+        {
+            return;
+        }
+
+        var view = orders.View;
+        var checks = BuildChecks.For(view);
+        for (var y = _built.Y; y < _built.Y + _built.Size; y++)
+        {
+            for (var x = _built.X; x < _built.X + _built.Size; x++)
+            {
+                if (view.Sight.Seen.FogAt(x, y) == FogState.Unexplored)
+                {
+                    continue;
+                }
+
+                if (!checks.Tile(_freeStanding, x, y))
+                {
+                    orders.Fail($"the placement checks mark tile {x}, {y} under a structure of the other seat's that the local player has never seen, {when}.");
+                    return;
+                }
+
+                _unmarked++;
+            }
+        }
+    }
+
+    private void PlacementMustKnow(SmokeOrders orders, string when)
+    {
+        if (_freeStanding is null)
+        {
+            return;
+        }
+
+        var checks = BuildChecks.For(orders.View);
+        for (var y = _built.Y; y < _built.Y + _built.Size; y++)
+        {
+            for (var x = _built.X; x < _built.X + _built.Size; x++)
+            {
+                if (checks.Tile(_freeStanding, x, y))
+                {
+                    orders.Fail($"the placement checks leave tile {x}, {y} free under a structure of the other seat's that the local player knows of, {when}.");
+                    return;
+                }
+            }
+        }
+
+        if (checks.Site(_freeStanding, _built.X, _built.Y) != BuildProblem.SiteNotFree)
+        {
+            orders.Fail($"the placement checks answer {checks.Site(_freeStanding, _built.X, _built.Y)} for a site on a structure of the other seat's that the local player knows of, {when}.");
+        }
+    }
+
+    // The layer must draw the structure as far built as this says, and finished when it is.
+    private void MustBeBuiltAs(SmokeOrders orders, StructureLayer structures, in SeenStructure known, string when)
+    {
+        var drawn = structures.DrawnBuilt(_built.Entity);
+        var ticks = Math.Max(_structure!.BuildTicks, 1);
+        float? wanted = known.IsFinished ? null : Math.Clamp(known.Built, 0, ticks) / (float)ticks;
+        if (drawn.HasValue != wanted.HasValue || (drawn is { } has && wanted is { } wants && Mathf.Abs(has - wants) > 0.0001f))
+        {
+            orders.Fail(
+                $"the view draws the other seat's structure {Words(drawn)} and the player knows it as {Words(wanted)}, {when}.");
+        }
+
+        static string Words(float? built) =>
+            built is { } share ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{share * 100f:0.0}% built") : "finished";
     }
 
     private void MustStand(SmokeOrders orders, string when, bool underPointer)
@@ -347,6 +446,20 @@ public sealed class StructuresInFogSmoke : SmokePart
         else if (underPointer && !IsUnderPointer(view))
         {
             orders.Fail($"the pointer does not find the other seat's structure, {when}.");
+        }
+        else if (view.Sight.TryGetStructure(_built.Entity, out var shown))
+        {
+            MustBeBuiltAs(orders, structures, in shown, when);
+        }
+
+        // The checks follow what the player knows and not what the switch shows.
+        if (!orders.Failed && view.Sight.Seen.KnowsStructure(_built.Entity))
+        {
+            PlacementMustKnow(orders, when);
+        }
+        else if (!orders.Failed)
+        {
+            PlacementMustNotKnow(orders, when);
         }
     }
 
@@ -370,6 +483,48 @@ public sealed class StructuresInFogSmoke : SmokePart
         {
             orders.Fail($"the pointer does not find the memory of the other seat's structure, {when}.");
         }
+        else
+        {
+            MustBeBuiltAs(orders, structures, in _lastSeen, when);
+            if (!orders.Failed)
+            {
+                PlacementMustKnow(orders, when);
+            }
+        }
+    }
+
+    // A deposit is drawn exactly when the player has explored a tile under it, or the switch is on.
+    private void DepositsMustFollowTheSight(SmokeOrders orders)
+    {
+        var view = orders.View;
+        if (orders.Failed || view.World.GetNodeOrNull<DepositLayer>(nameof(DepositLayer)) is not { } deposits)
+        {
+            return;
+        }
+
+        var sites = orders.Match.WorkSites;
+        var hidden = 0;
+        for (var i = 0; i < sites.Count; i++)
+        {
+            var entity = sites.EntityAt(i);
+            var site = sites.ValueAt(i);
+            if (site.Kind != Sim.Economy.WorkSiteKind.Deposit || !orders.Match.World.Entities.IsAlive(entity))
+            {
+                continue;
+            }
+
+            var known = view.Sight.ShowsDeposit(site);
+            hidden += known ? 0 : 1;
+            if (deposits.Draws(entity) != known)
+            {
+                orders.Fail(known
+                    ? $"the local player knows of the deposit at {site.X}, {site.Y}, and the view does not draw it."
+                    : $"the view draws the deposit at {site.X}, {site.Y}, which the local player has not explored.");
+                return;
+            }
+        }
+
+        _mostHiddenDeposits = Math.Max(_mostHiddenDeposits, hidden);
     }
 
     private void TerritoryMustFollowTheCapitol(SmokeOrders orders)
@@ -394,7 +549,9 @@ public sealed class StructuresInFogSmoke : SmokePart
     {
         GD.Print(
             $"Smoke test, structures in the fog: the other seat's {_structure?.Id} was laid at tick {_laidAt} of the part, " +
-            $"the local player saw it at tick {_seenAt} and remembered it from tick {_rememberedAt}, built for {_lastSeen.Built} ticks.");
+            $"the local player saw it at tick {_seenAt} and remembered it from tick {_rememberedAt}, built for {_lastSeen.Built} ticks" +
+            $"{(_lastSeen.IsFinished ? " and finished" : string.Empty)}. Unseen, it left {_unmarked} explored tiles free for the placement checks. " +
+            $"Up to {_mostHiddenDeposits} deposits were unexplored and not drawn.");
 
         if (_laidAt < 0)
         {

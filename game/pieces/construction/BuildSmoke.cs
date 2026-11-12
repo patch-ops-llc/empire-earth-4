@@ -152,7 +152,7 @@ public sealed class BuildSmoke : SmokePart
             return;
         }
 
-        var checks = new BuildChecks(match, orders.Player);
+        var checks = BuildChecks.For(orders.View);
         StructureDef? quickest = null;
         var listed = 0;
         foreach (var structure in match.Data.Structures)
@@ -218,7 +218,7 @@ public sealed class BuildSmoke : SmokePart
     private bool CheckPreview(SmokeOrders orders, Parts parts)
     {
         var match = orders.Match;
-        var checks = new BuildChecks(match, orders.Player);
+        var checks = BuildChecks.For(orders.View);
         var good = Placement.Of(checks, _structure, _firstSite.X, _firstSite.Y);
         parts.Preview.Show(_structure, good);
         parts.Preview.EveryFrame(0.0);

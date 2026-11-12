@@ -190,7 +190,19 @@ public sealed class InspectionSmoke : SmokePart
             var other = OtherPlayersUnit(orders);
             if (other != EntityId.None)
             {
+                // Under the fog of war the panel says nothing of a unit the player does not see
+                // (design 5.3). The part then looks at it as a tester alone does, with the fog
+                // lifted by the development switch.
+                var fogWasOff = view.Sight.FogOff;
+                if (!view.Sight.ShowsUnit(other))
+                {
+                    panel.Inspect(other);
+                    Expect(orders, panel, InspectionMode.Nothing, rows: 0);
+                    view.Sight.FogOff = true;
+                }
+
                 panel.Inspect(other);
+                view.Sight.FogOff = fogWasOff;
                 UnitFacts.TryRead(match, other, out var theirs);
                 Expect(orders, panel, InspectionMode.Enemy, rows: 1, InspectionWords.Name(theirs), InspectionWords.Owner(theirs.Owner));
 

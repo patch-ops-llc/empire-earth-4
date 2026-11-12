@@ -76,6 +76,7 @@ public static class BuildWords
         BuildProblem.None => null,
         BuildProblem.SiteNotFree => "the ground there is not free",
         BuildProblem.OutsideTerritory => "it is outside your territory",
+        BuildProblem.NotExplored => "you have not seen all of the ground there",
         BuildProblem.TooCloseToEnemyTerritory => "its territory would overlap an enemy's",
         BuildProblem.EnemyOnSite => "an enemy stands on the site",
         BuildProblem.CannotReach => "the worker cannot reach the site",

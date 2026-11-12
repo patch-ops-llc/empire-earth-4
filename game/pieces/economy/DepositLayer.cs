@@ -5,13 +5,21 @@ using Sim.Economy;
 namespace Game;
 
 /// <summary>
-/// Draws the deposits where the match has them: a block of ore on the tiles each one covers, on
+/// Draws the deposits the local player knows of: a block of ore on the tiles each one covers, on
 /// which nobody can stand. It also shows the mark of a work order, a ring that closes round the
 /// deposit the workers were sent to.
 /// </summary>
 /// <remarks>
+/// <para>
+/// Under the fog of war (design 5.3) a deposit is known once the player has explored a tile
+/// under it, which is what <see cref="PlayerSight.ShowsDeposit"/> answers and what the minimap
+/// draws by. Until then it is not drawn. A deposit none of whose tiles the player sees now is
+/// drawn dimmed, as the ground round it is.
+/// </para>
+/// <para>
 /// The shape is a stand-in until there is art. It is as wide as the deposit's tiles, since the
 /// places where workers stand are the tiles beside them.
+/// </para>
 /// </remarks>
 public partial class DepositLayer : WorldLayer
 {
@@ -31,6 +39,7 @@ public partial class DepositLayer : WorldLayer
     private readonly List<EntityId> _gone = [];
     private Mesh _mesh = null!;
     private Material _material = null!;
+    private Material _dimmed = null!;
     private MeshInstance3D _mark = null!;
     private StandardMaterial3D _markMaterial = null!;
     private double _markLeft;
@@ -41,6 +50,7 @@ public partial class DepositLayer : WorldLayer
     {
         _mesh = OreBlock();
         _material = PlaceholderMeshes.Flat(OreColor);
+        _dimmed = PlaceholderMeshes.Flat(OreColor.Lerp(FogPicture.Unknown, FogPicture.ExploredShade));
 
         // The ring has a radius of one, and is sized to the deposit it is shown round.
         var ring = PlaceholderMeshes.Ring(1f, Colors.White);
@@ -58,7 +68,7 @@ public partial class DepositLayer : WorldLayer
         {
             var entity = sites.EntityAt(i);
             var site = sites.ValueAt(i);
-            if (site.Kind != WorkSiteKind.Deposit || !entities.IsAlive(entity))
+            if (site.Kind != WorkSiteKind.Deposit || !entities.IsAlive(entity) || !View.Sight.ShowsDeposit(site))
             {
                 continue;
             }
@@ -69,6 +79,7 @@ public partial class DepositLayer : WorldLayer
                 _deposits.Add(entity, deposit);
             }
 
+            deposit.Node.MaterialOverride = IsSeenNow(site) ? _material : _dimmed;
             deposit.Pass = _pass;
         }
 
@@ -104,6 +115,28 @@ public partial class DepositLayer : WorldLayer
         }
 
         Shrink();
+    }
+
+    /// <summary>The number of deposits drawn.</summary>
+    public int Count => _deposits.Count;
+
+    /// <summary>True when this deposit is drawn.</summary>
+    public bool Draws(EntityId deposit) => _deposits.ContainsKey(deposit);
+
+    private bool IsSeenNow(in WorkSite site)
+    {
+        for (var y = site.Y; y < site.Y + site.Size; y++)
+        {
+            for (var x = site.X; x < site.X + site.Size; x++)
+            {
+                if (View.Sight.FogAt(x, y) == Sim.Vision.FogState.Visible)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /// <summary>The middle of a work site on the ground.</summary>

@@ -5,9 +5,9 @@ using Sim.Economy;
 namespace Game;
 
 /// <summary>
-/// Finds the deposit under the pointer. A deposit is found where it is drawn: on the block that
-/// stands on its tiles, and so also on the side of the block the camera faces, which hides the
-/// ground behind it.
+/// Finds the deposit under the pointer, among those the player knows of. A deposit is found
+/// where it is drawn: on the block that stands on its tiles, and so also on the side of the
+/// block the camera faces, which hides the ground behind it.
 /// </summary>
 public sealed class DepositPicker : PointerPicker
 {
@@ -30,7 +30,8 @@ public sealed class DepositPicker : PointerPicker
         {
             var entity = sites.EntityAt(i);
             var site = sites.ValueAt(i);
-            if (site.Kind != WorkSiteKind.Deposit || !entities.IsAlive(entity))
+            // A deposit the player has not explored is not drawn, and a click there finds the ground.
+            if (site.Kind != WorkSiteKind.Deposit || !entities.IsAlive(entity) || !probe.View.Sight.ShowsDeposit(site))
             {
                 continue;
             }
