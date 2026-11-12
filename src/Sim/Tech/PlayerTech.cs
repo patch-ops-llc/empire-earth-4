@@ -17,7 +17,9 @@ public sealed class PlayerTech
         int supplyCap,
         Fraction incomeMultiplier,
         IReadOnlyList<ResearchOffer> research,
-        IReadOnlyList<ChassisBlueprint> blueprints)
+        IReadOnlyList<ChassisBlueprint> blueprints,
+        IReadOnlyList<StructureBlueprint> structures,
+        StructureBlueprint? gate)
     {
         Tiers = tiers;
         Epoch = epoch;
@@ -26,6 +28,8 @@ public sealed class PlayerTech
         IncomeMultiplier = incomeMultiplier;
         Research = research;
         Blueprints = blueprints;
+        Structures = structures;
+        Gate = gate;
     }
 
     /// <summary>The tiers this was resolved from, one per track.</summary>
@@ -49,4 +53,34 @@ public sealed class PlayerTech
     /// <see cref="GameData.Chassis"/>: the blueprint of a chassis is at its <see cref="ChassisDef.Index"/>.
     /// </summary>
     public IReadOnlyList<ChassisBlueprint> Blueprints { get; }
+
+    /// <summary>
+    /// One blueprint for every structure that has a data file, unlocked or not, in the order of
+    /// <see cref="GameData.Structures"/>.
+    /// </summary>
+    public IReadOnlyList<StructureBlueprint> Structures { get; }
+
+    /// <summary>
+    /// The blueprint of the gate, <see cref="GameData.Gate"/>, or null when the data has no wall.
+    /// It is the wall's with the gate's price and build time, and no entry of <see cref="Structures"/>.
+    /// </summary>
+    public StructureBlueprint? Gate { get; }
+
+    /// <summary>
+    /// The blueprint of the structure with this roster index, as in <see cref="StructureDef.Index"/>,
+    /// or null for a structure of the roster that has no data file yet. The number after the
+    /// roster's last is the <see cref="Gate"/>'s.
+    /// </summary>
+    public StructureBlueprint? StructureOf(int structure)
+    {
+        foreach (var blueprint in Structures)
+        {
+            if (blueprint.Structure.Index == structure)
+            {
+                return blueprint;
+            }
+        }
+
+        return Gate is { } gate && gate.Structure.Index == structure ? gate : null;
+    }
 }

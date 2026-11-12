@@ -35,6 +35,12 @@ public static class TechResolver
             blueprints[chassis] = BlueprintResolver.Resolve(data, ownTiers, data.Chassis[chassis]);
         }
 
+        var structures = new StructureBlueprint[data.Structures.Count];
+        for (var structure = 0; structure < structures.Length; structure++)
+        {
+            structures[structure] = StructureBlueprintResolver.Resolve(data, ownTiers, data.Structures[structure]);
+        }
+
         return new PlayerTech(
             ownTiers,
             TechRules.Epoch(data, ownTiers),
@@ -42,7 +48,9 @@ public static class TechResolver
             TechRules.SupplyCap(data, ownTiers),
             TechRules.IncomeMultiplier(data, ownTiers),
             research,
-            blueprints);
+            blueprints,
+            structures,
+            data.Gate is { } gate ? StructureBlueprintResolver.Resolve(data, ownTiers, gate) : null);
     }
 
     /// <summary>
