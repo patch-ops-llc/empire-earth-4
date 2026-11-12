@@ -52,12 +52,13 @@ public sealed class SmokeTest
     private readonly SmokeOrders _orders;
     private readonly int _firstTick;
 
-    public SmokeTest(Match match, LocalSession session)
+    public SmokeTest(Match match, LocalSession session, MatchView view)
     {
         _match = match;
         _session = session;
         _orders = new SmokeOrders(match, session.Client);
         _firstTick = match.World.Tick;
+        _orders.View = view;
     }
 
     /// <summary>The number of ticks the smoke test's match runs for: those of every part of the script.</summary>
@@ -82,6 +83,10 @@ public sealed class SmokeTest
         // 14v. Research: one research.
 
         // 15v. Construction and production.
+        new StructuresSmoke(),
+
+        // 15v, second half. Production: a worker trained to a rally point.
+        new ProductionSmoke(),
 
         // 17v. Fog of war.
 

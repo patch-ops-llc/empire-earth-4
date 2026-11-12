@@ -171,7 +171,7 @@ public partial class Main : Node3D
         if (setup.HasStart)
         {
             var start = map.Starts[setup.Start];
-            var footprint = match.Data.Rules.Map.StartFootprint;
+            var footprint = match.Data.StartStructure.Footprint;
             _camera.CenterOn(new Vector2(start.X + (footprint / 2f), start.Y + (footprint / 2f)));
         }
 
@@ -214,7 +214,7 @@ public partial class Main : Node3D
         // The smoke test plays its own script, so it takes no input.
         _camera.ProcessMode = ProcessModeEnum.Disabled;
         _units.ProcessMode = ProcessModeEnum.Disabled;
-        _smokeTest = new SmokeTest(_smokeRun.Match, _smokeRun.Session);
+        _smokeTest = new SmokeTest(_smokeRun.Match, _smokeRun.Session, _view!);
     }
 
     private void RunSmokeTest(SmokeLog log)
