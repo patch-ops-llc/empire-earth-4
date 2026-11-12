@@ -11,16 +11,37 @@ namespace Sim.Map;
 /// </summary>
 /// <remarks>
 /// Tile (x, y) covers the points from (x, y) up to but not including (x + 1, y + 1), with (0, 0) at
-/// the top-left corner of the map and y growing downward. The terrain never changes during a match,
-/// so the grid is not part of the state hash.
+/// the top-left corner of the map and y growing downward.
+/// <para>
+/// The ground, which is the terrain and the deposits, never changes during a match. The tiles
+/// under structures do: they are worked out from the <c>structures</c> store by
+/// <see cref="Structures.StructureTiles"/>, which calls <see cref="BlockOnly"/> whenever a
+/// structure is placed or removed and when the match's derived state is renewed. So the grid is
+/// not part of the state hash: the same state always gives the same grid.
+/// </para>
+/// <para>
+/// A finished gate is a wall tile to everyone but its owner (design 2.5), so the tiles are kept
+/// for each player: <see cref="For"/> gives the grid as one player's units walk it. This grid is
+/// the one that everyone shares, on which every structure blocks its tiles; a player with no gate
+/// to walk through has no other. Everything that walks asks the grid of its owner, and what is
+/// asked of this grid is whether a tile is free of every structure. The grids of the players
+/// share this one's ground and size. Each numbers its own regions: a region number means
+/// something only on the grid that gave it.
+/// </para>
 /// </remarks>
 public sealed class MapGrid
 {
     /// <summary>The most tiles a map can have on one side. Squared distances across it stay far inside 64 bits.</summary>
     public const int MaxSize = 4096;
 
+    private readonly bool[] _ground;
     private readonly bool[] _passable;
     private readonly int[] _regions;
+    private readonly int[] _pending;
+    private readonly MapGrid? _shared;
+    private MapGrid?[] _own = [];
+    private bool[] _ownChanged = [];
+    private bool _sharedChanged;
 
     /// <summary>The grid of a map without deposits, as tests and the battle harness make them.</summary>
     public MapGrid(MapDef map)
@@ -56,10 +77,10 @@ public sealed class MapGrid
 
         Width = map.Width;
         Height = map.Height;
-        _passable = new bool[Width * Height];
-        for (var i = 0; i < _passable.Length; i++)
+        _ground = new bool[Width * Height];
+        for (var i = 0; i < _ground.Length; i++)
         {
-            _passable[i] = map.Tiles[i] == TerrainKind.Open;
+            _ground[i] = map.Tiles[i] == TerrainKind.Open;
         }
 
         foreach (var deposit in map.Deposits)
@@ -70,14 +91,29 @@ public sealed class MapGrid
                 {
                     if (Contains(x, y))
                     {
-                        _passable[(y * Width) + x] = false;
+                        _ground[(y * Width) + x] = false;
                     }
                 }
             }
         }
 
+        _passable = (bool[])_ground.Clone();
         _regions = new int[_passable.Length];
+        _pending = new int[_passable.Length];
         RegionCount = LabelRegions();
+    }
+
+    /// <summary>The grid of one player. Its tiles are set right after.</summary>
+    private MapGrid(MapGrid shared, int player)
+    {
+        Width = shared.Width;
+        Height = shared.Height;
+        View = player + 1;
+        _shared = shared;
+        _ground = shared._ground;
+        _passable = (bool[])shared._passable.Clone();
+        _regions = new int[_passable.Length];
+        _pending = shared._pending;
     }
 
     /// <summary>The number of tiles along x.</summary>
@@ -86,8 +122,19 @@ public sealed class MapGrid
     /// <summary>The number of tiles along y.</summary>
     public int Height { get; }
 
-    /// <summary>The number of regions. Regions are numbered from 1.</summary>
-    public int RegionCount { get; }
+    /// <summary>
+    /// The number of regions. Regions are numbered from 1. Both the count and the numbers change
+    /// when a structure is placed or removed, so nothing keeps a region number from one tick to
+    /// the next.
+    /// </summary>
+    public int RegionCount { get; private set; }
+
+    /// <summary>
+    /// Which grid this is, among those that share its ground: 0 for the grid everyone shares, and
+    /// the player's number plus one for the grid of a player with a gate to walk through. A route
+    /// is kept under this number with its two ends.
+    /// </summary>
+    public int View { get; }
 
     /// <summary>The center of a tile, where a unit standing on it is placed.</summary>
     public static FixedVector2 TileCenter(int x, int y) =>
@@ -104,6 +151,127 @@ public sealed class MapGrid
 
     /// <summary>True when units can stand on the tile that holds the point.</summary>
     public bool IsPassable(FixedVector2 point) => IsPassable(point.X.FloorToInt(), point.Y.FloorToInt());
+
+    /// <summary>
+    /// True when the ground of the tile is open: units could stand on it if no structure stood
+    /// there. False for forest, cliff, the tiles of a deposit and every tile outside the map.
+    /// </summary>
+    public bool IsOpenGround(int x, int y) => Contains(x, y) && _ground[(y * Width) + x];
+
+    /// <summary>
+    /// The grid as the units of one player walk it: this grid with the player's own finished
+    /// gates open. It is the shared grid itself for a player with no such gate, and for a number
+    /// that is no player's.
+    /// </summary>
+    /// <remarks>
+    /// Ask again whenever it is needed and keep nothing: the next change of a structure may give
+    /// the player another grid.
+    /// </remarks>
+    public MapGrid For(int player)
+    {
+        var shared = _shared ?? this;
+        return player >= 0 && player < shared._own.Length && shared._own[player] is { } own ? own : shared;
+    }
+
+    /// <summary>
+    /// Makes the given squares of tiles, and nothing else besides the ground, impassable, and
+    /// numbers the regions again. The squares are the footprints of the structures standing now.
+    /// No player has a gate to walk through afterwards.
+    /// </summary>
+    /// <remarks>
+    /// The result depends only on the ground and on which tiles the squares cover, not on their
+    /// order. Whoever calls this also empties the route cache, whose routes were found on the old
+    /// tiles.
+    /// </remarks>
+    /// <returns>True when a tile changed for anyone.</returns>
+    public bool BlockOnly(ReadOnlySpan<TileSquare> squares) => BlockOnly(squares, []);
+
+    /// <summary>
+    /// <see cref="BlockOnly(ReadOnlySpan{TileSquare})"/> with gates: each square is impassable to
+    /// everyone but the player it is open to, who walks over it as over the ground under it.
+    /// </summary>
+    /// <param name="squares">The footprints of the structures standing now.</param>
+    /// <param name="openTo">
+    /// For each square, in the same order, the number of the player whose units walk through it,
+    /// or a negative number for a square that blocks everyone. Squares past the end of this list
+    /// block everyone.
+    /// </param>
+    /// <returns>True when a tile changed for anyone.</returns>
+    public bool BlockOnly(ReadOnlySpan<TileSquare> squares, ReadOnlySpan<int> openTo)
+    {
+        if (_shared is not null)
+        {
+            throw new InvalidOperationException("The structures are set on the grid that everyone shares, which works out the grid of each player.");
+        }
+
+        if (openTo.Length > squares.Length)
+        {
+            throw new ArgumentException($"There are {squares.Length} squares and {openTo.Length} entries that say whom they are open to.", nameof(openTo));
+        }
+
+        _sharedChanged = SetTiles(squares, openTo, player: -1, isNew: false);
+        var changed = _sharedChanged;
+
+        var players = 0;
+        foreach (var player in openTo)
+        {
+            players = Math.Max(players, player + 1);
+        }
+
+        if (players > _own.Length)
+        {
+            Array.Resize(ref _own, players);
+            Array.Resize(ref _ownChanged, players);
+        }
+
+        Span<bool> has = stackalloc bool[_own.Length];
+        foreach (var player in openTo)
+        {
+            if (player >= 0)
+            {
+                has[player] = true;
+            }
+        }
+
+        for (var player = 0; player < _own.Length; player++)
+        {
+            if (!has[player])
+            {
+                // Its last gate has gone: the player walks the shared grid again.
+                _ownChanged[player] = _own[player] is not null;
+                _own[player] = null;
+            }
+            else if (_own[player] is { } own)
+            {
+                _ownChanged[player] = own.SetTiles(squares, openTo, player, isNew: false);
+            }
+            else
+            {
+                // Its first gate.
+                own = new MapGrid(this, player);
+                _own[player] = own;
+                own.SetTiles(squares, openTo, player, isNew: true);
+                _ownChanged[player] = true;
+            }
+
+            changed |= _ownChanged[player];
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// True when the last <see cref="BlockOnly(ReadOnlySpan{TileSquare}, ReadOnlySpan{int})"/>
+    /// changed a tile of the grid the player's units walk. A gate that is finished changes its
+    /// owner's grid and no other, so nobody else's units have to look for another way.
+    /// </summary>
+    public bool ChangedFor(int player)
+    {
+        var shared = _shared ?? this;
+        return player >= 0 && player < shared._ownChanged.Length && (shared._own[player] is not null || shared._ownChanged[player])
+            ? shared._ownChanged[player]
+            : shared._sharedChanged;
+    }
 
     /// <summary>
     /// The region of a tile: a number from 1 that two passable tiles share exactly when a unit can
@@ -128,7 +296,20 @@ public sealed class MapGrid
     /// needs all four to be passable, so it never slips between two blocked tiles that touch at a
     /// corner.
     /// </remarks>
-    public bool IsSegmentClear(FixedVector2 from, FixedVector2 to)
+    public bool IsSegmentClear(FixedVector2 from, FixedVector2 to) => IsSegmentClear(from, to, countEnds: true);
+
+    /// <summary>
+    /// True when a straight line from one place to the other crosses only passable tiles, not
+    /// counting the two tiles its ends are in: the line of a melee hit between two units, each of
+    /// which may stand where the other cannot (design section 3, row 4).
+    /// </summary>
+    /// <remarks>
+    /// As <see cref="IsSegmentClear(FixedVector2, FixedVector2)"/> in everything else: a line
+    /// through the corner where four tiles meet needs the two it passes between as well.
+    /// </remarks>
+    public bool IsSegmentClearBetween(FixedVector2 from, FixedVector2 to) => IsSegmentClear(from, to, countEnds: false);
+
+    private bool IsSegmentClear(FixedVector2 from, FixedVector2 to, bool countEnds)
     {
         long fromX = from.X.Raw;
         long fromY = from.Y.Raw;
@@ -136,7 +317,7 @@ public sealed class MapGrid
         var tileY = from.Y.FloorToInt();
         var endX = to.X.FloorToInt();
         var endY = to.Y.FloorToInt();
-        if (!IsPassable(tileX, tileY))
+        if (countEnds && !IsPassable(tileX, tileY))
         {
             return false;
         }
@@ -176,7 +357,7 @@ public sealed class MapGrid
                 tileY += stepY;
             }
 
-            if (!IsPassable(tileX, tileY))
+            if (!IsPassable(tileX, tileY) && (countEnds || tileX != endX || tileY != endY))
             {
                 return false;
             }
@@ -305,6 +486,35 @@ public sealed class MapGrid
     /// </summary>
     public bool TryFindNearestTile(FixedVector2 point, int region, FixedVector2 preferNear, out int tileX, out int tileY)
     {
+        if (region > RegionCount && Contains(point))
+        {
+            tileX = -1;
+            tileY = -1;
+            return false;
+        }
+
+        return TryFindNearestTile(_regions, point, region, preferNear, out tileX, out tileY);
+    }
+
+    /// <summary>
+    /// <see cref="TryFindNearestTile(FixedVector2, int, FixedVector2, out int, out int)"/> for
+    /// another way of numbering the tiles than the regions: finds the tile with a given label
+    /// whose center is nearest a point, by the same rules.
+    /// </summary>
+    /// <param name="labels">One number for each tile of this grid, as <c>y * width + x</c>.</param>
+    /// <param name="point">The point, which must be on the map.</param>
+    /// <param name="label">The label to look for, from 1.</param>
+    /// <param name="preferNear">Among tiles equally near the point, the one nearest this point wins.</param>
+    /// <param name="tileX">The x of the tile found.</param>
+    /// <param name="tileY">The y of the tile found.</param>
+    public bool TryFindNearestTile(
+        ReadOnlySpan<int> labels, FixedVector2 point, int label, FixedVector2 preferNear, out int tileX, out int tileY)
+    {
+        if (labels.Length != _passable.Length)
+        {
+            throw new ArgumentException($"The labels are for {labels.Length} tiles and the grid has {_passable.Length}.", nameof(labels));
+        }
+
         tileX = -1;
         tileY = -1;
         var centerX = point.X.FloorToInt();
@@ -314,7 +524,7 @@ public sealed class MapGrid
             throw new ArgumentException($"The point {point} is not on the map.", nameof(point));
         }
 
-        if (region < 1 || region > RegionCount)
+        if (label < 1)
         {
             return false;
         }
@@ -336,7 +546,7 @@ public sealed class MapGrid
                 var onEdgeRow = y == centerY - ring || y == centerY + ring;
                 for (var x = centerX - ring; x <= centerX + ring; x += onEdgeRow ? 1 : Math.Max(2 * ring, 1))
                 {
-                    if (RegionOf(x, y) != region)
+                    if (!Contains(x, y) || labels[(y * Width) + x] != label)
                     {
                         continue;
                     }
@@ -362,6 +572,56 @@ public sealed class MapGrid
         return tileX >= 0;
     }
 
+    /// <summary>
+    /// Sets which tiles are passable on this grid, for the player it belongs to or for everyone,
+    /// and numbers the regions again when a tile changed or the grid is new. Returns whether a
+    /// tile changed.
+    /// </summary>
+    private bool SetTiles(ReadOnlySpan<TileSquare> squares, ReadOnlySpan<int> openTo, int player, bool isNew)
+    {
+        var before = _pending;
+        for (var i = 0; i < _passable.Length; i++)
+        {
+            // The scratch of the region flood holds the old tiles for the comparison below.
+            before[i] = _passable[i] ? 1 : 0;
+            _passable[i] = _ground[i];
+        }
+
+        for (var i = 0; i < squares.Length; i++)
+        {
+            if (player >= 0 && i < openTo.Length && openTo[i] == player)
+            {
+                continue;
+            }
+
+            var square = squares[i];
+            for (var y = square.Y; y < square.Y + square.Size; y++)
+            {
+                for (var x = square.X; x < square.X + square.Size; x++)
+                {
+                    if (Contains(x, y))
+                    {
+                        _passable[(y * Width) + x] = false;
+                    }
+                }
+            }
+        }
+
+        var changed = false;
+        for (var i = 0; i < _passable.Length && !changed; i++)
+        {
+            changed = _passable[i] != (before[i] == 1);
+        }
+
+        if (changed || isNew)
+        {
+            Array.Clear(_regions);
+            RegionCount = LabelRegions();
+        }
+
+        return changed;
+    }
+
     /// <summary>Divides by a positive number and rounds to the nearest whole number, with a tie going away from zero.</summary>
     private static long DivideRounded(long numerator, long denominator)
     {
@@ -371,12 +631,12 @@ public sealed class MapGrid
 
     /// <summary>
     /// Numbers the regions by flooding from each passable tile not yet numbered, row by row, so the
-    /// numbers depend only on the terrain. Returns how many there are.
+    /// numbers depend only on which tiles are passable. Returns how many there are.
     /// </summary>
     private int LabelRegions()
     {
         var count = 0;
-        var pending = new int[_passable.Length];
+        var pending = _pending;
         for (var first = 0; first < _passable.Length; first++)
         {
             if (!_passable[first] || _regions[first] != 0)
