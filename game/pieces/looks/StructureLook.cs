@@ -1,7 +1,7 @@
 using Godot;
 using Sim.Core;
 using Sim.Data;
-using Sim.Research;
+using Sim.Vision;
 
 namespace Game;
 
@@ -53,68 +53,27 @@ public readonly record struct StructureLook(
 /// The layers that draw them ask here and nowhere else.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Today it reads the match itself, so every structure of every player is listed as it is now.
-/// That is right only while structures are not under the fog of war.
-/// </para>
-/// <para>
-/// With fog for structures (17b) the list comes from the local player's sight instead, as the
-/// structure layer's does: its <c>CollectStructures</c> gives the player's own structures,
-/// those of others seen now and those remembered, and each <c>SeenStructure</c> carries
-/// <c>LookTier</c>, <c>Banner</c> and <c>IsFinished</c> worked out by the same rules as here,
-/// as they were when the player last saw it. <see cref="Collect"/> then copies those fields
-/// and nothing else in this piece changes. Until it does, the looks of a structure the player
-/// has not seen would be drawn over the dark.
-/// </para>
+/// The list comes from the local player's sight (17b), as the structure layer's does: its
+/// <c>CollectStructures</c> gives the player's own structures, those of others seen now and
+/// those remembered, and each <c>SeenStructure</c> carries <c>LookTier</c>, <c>Banner</c> and
+/// <c>IsFinished</c> as they were when the player last saw it. A structure the player has
+/// never seen is not listed, so nothing of it is drawn over the dark.
 /// </remarks>
 public static class StructureLooks
 {
-    /// <summary>Fills a list with every structure the local player is shown, in the order of the match's store.</summary>
+    private static readonly List<SeenStructure> Known = [];
+
+    /// <summary>Fills a list with every structure the local player is shown, in ascending ID order.</summary>
     public static void Collect(MatchView view, List<StructureLook> looks)
     {
         looks.Clear();
-        var match = view.Match;
-        var structures = match.Structures;
-        var research = match.Research.State;
-        for (var i = 0; i < structures.Count; i++)
+        view.Sight.CollectStructures(Known);
+        foreach (var seen in Known)
         {
-            var entity = structures.EntityAt(i);
-            var placed = structures.ValueAt(i);
-            if (!match.World.Entities.IsAlive(entity)
-                || !match.Bodies.TryGet(entity, out var body)
-                || match.Data.StructureOf(placed.Type) is not { } def)
+            if (view.Match.Data.StructureOf(seen.Type) is { } def)
             {
-                continue;
-            }
-
-            looks.Add(new StructureLook(
-                entity,
-                body.Owner,
-                def,
-                placed.X,
-                placed.Y,
-                placed.Size,
-
-                // A structure is unfinished while the match holds a foundation for it. Under
-                // the fog this is the IsFinished of the structure as the player last saw it.
-                IsFinished: !match.Foundations.Contains(entity),
-                LookTier: def.Track is { } track ? research.Tier(body.Owner, track) : 0,
-                Banner: BannerOf(research, body.Owner, entity)));
-        }
-    }
-
-    // The track in research in the slot a structure gives its owner.
-    private static int BannerOf(ResearchState research, int owner, EntityId entity)
-    {
-        for (var i = 0; i < ResearchState.SlotsPerPlayer; i++)
-        {
-            ref readonly var slot = ref research.Slot(owner, i);
-            if (slot.IsOpen && slot.IsBusy && slot.Holder == entity)
-            {
-                return slot.Track;
+                looks.Add(new StructureLook(seen.Entity, seen.Owner, def, seen.X, seen.Y, seen.Size, seen.IsFinished, seen.LookTier, seen.Banner));
             }
         }
-
-        return StructureLook.NoTrack;
     }
 }
