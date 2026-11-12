@@ -10,7 +10,8 @@ namespace Sim.Structures;
 /// <summary>
 /// Puts structures on the map. A structure comes in two steps (design 2.5): it is laid, from
 /// which moment it blocks its tiles and has its full hit points, and it is finished, from which
-/// moment it gives what its file says: a territory, a research slot, a Generator's places.
+/// moment it gives what its file says: a territory, a research slot, a Generator's places, a
+/// Tower's attack.
 /// Construction lays a structure when its worker arrives and finishes it when it has built
 /// itself; the match setup and fixtures do both at once, through <see cref="StructureSetup"/>.
 /// </summary>
@@ -126,7 +127,8 @@ public sealed class StructureFactory
 
     /// <summary>
     /// Gives a laid structure what comes with completion (design 2.5): the territory of a Capitol
-    /// or an Outpost, a research slot, the work site of a Generator. Call it once for a structure.
+    /// or an Outpost, a research slot, the work site of a Generator, the attack of a Tower. Call it
+    /// once for a structure.
     /// </summary>
     /// <exception cref="ArgumentException">The entity is no living structure.</exception>
     /// <exception cref="InvalidOperationException">

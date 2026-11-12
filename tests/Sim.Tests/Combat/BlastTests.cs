@@ -208,6 +208,9 @@ public class BlastTests
         var whereItWas = match.SpawnWorker(1, "12.5", "2.5");
         var whereItGoes = match.SpawnWorker(1, "11.5", "6.5");
         var start = match.PositionOf(target);
+
+        // The Ballista reaches further than it sees: a worker of its side keeps the target in sight.
+        match.SpawnWorker(0, "8.5", "5.5");
         match.OrderAttack(0, target, ballista);
         match.Run(1);
         Assert.Equal(1, match.Shots.Count);

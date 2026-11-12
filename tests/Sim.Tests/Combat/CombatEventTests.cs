@@ -184,7 +184,7 @@ public class CombatEventTests
     {
         var match = Field();
         var hoplite = match.Spawn(0, Hoplite, "5.5", "5.5");
-        var worker = match.SpawnWorker(1, "20.5", "5.5");
+        var worker = match.SpawnWorker(1, "12.5", "5.5");
         match.OrderAttack(0, worker, hoplite);
         match.OrderAttackMove(0, TestMatches.Point("8.5", "5.5"), hoplite);
         match.OrderMove(0, TestMatches.Point("9.5", "5.5"), hoplite);

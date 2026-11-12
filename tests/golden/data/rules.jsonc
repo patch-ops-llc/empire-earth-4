@@ -82,6 +82,10 @@
     "open_field_min_width": 20
   },
 
+  // Fog of war (design 5.3). What each player sees is worked out again in every tick whose number
+  // is a multiple of refresh_ticks: every 4 ticks, so it may be up to 3 ticks old.
+  "vision": { "refresh_ticks": 4 },
+
   // Switches for development. They are not in the design.
   "debug": {
     // Whether a match carries out the development spawn, a command that makes units of any chassis

@@ -31,7 +31,9 @@ public struct Combatant : IStateValue
     /// <summary>
     /// The point its order ties it to. While <see cref="UnitOrder.Idle"/>: its post, where it became
     /// idle and where it returns when nothing is left to fight. On <see cref="UnitOrder.AttackMove"/>:
-    /// where the order ends, as the move order placed it. Not used by the other orders.
+    /// where the order ends, as the move order placed it. On <see cref="UnitOrder.Attack"/>: where
+    /// the target stood when the unit's owner last saw it, which is where the unit walks when the
+    /// target is lost from sight (design 5.3). Not used by a move order.
     /// </summary>
     public FixedVector2 Anchor { get; set; }
 

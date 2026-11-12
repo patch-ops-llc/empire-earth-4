@@ -7,6 +7,7 @@ using Sim.Map;
 using Sim.Movement;
 using Sim.Research;
 using Sim.Structures;
+using Sim.Vision;
 using Sim.Walls;
 
 namespace Sim.Setup;
@@ -48,11 +49,13 @@ public static class MatchSetup
         var health = world.AddStore(new ComponentStore<Health>(Health.StoreName));
         var movers = world.AddStore(new ComponentStore<Mover>(Mover.StoreName));
         var researchState = world.AddStore(new ResearchState(players.Count, data.Tracks.Count, data.TierCount, data.Rules.Match.StartEpoch));
+        var structureMemory = world.AddStore(new StructureMemory(players.Count, map.Width, map.Height));
         var shots = world.AddStore(new ComponentStore<Shot>(Shot.StoreName));
         var stockpiles = world.AddStore(new Stockpiles(players.Count));
         var structures = world.AddStore(new ComponentStore<PlacedStructure>(PlacedStructure.StoreName));
         var territories = world.AddStore(new ComponentStore<Territory>(Territory.StoreName));
         var turrets = world.AddStore(new ComponentStore<Turret>(Turret.StoreName));
+        var visionGrid = world.AddStore(new VisionGrid(players.Count, map.Width, map.Height));
         var wallPlans = world.AddStore(new ComponentStore<WallPlan>(WallPlan.StoreName));
         var workers = world.AddStore(new ComponentStore<Worker>(Worker.StoreName));
         var workSites = world.AddStore(new ComponentStore<WorkSite>(WorkSite.StoreName));
@@ -65,9 +68,15 @@ public static class MatchSetup
         var supply = new SupplyAccount(data, research, world.Entities, bodies, workers);
         supply.AddUser(new CombatSupply(research, world.Entities, bodies, combatants));
 
+        // What each player sees and remembers. The grid and the memories are state; this works
+        // them out and answers who sees whom.
+        var vision = new MatchVision(
+            data, world, grid, visionGrid, structureMemory, bodies, combatants, foundations, health, structures, workers,
+            researchState, research.Tech);
+
         // The combat numbers are worked out from the data and from each player's tech as research has it.
         var combat = new CombatRules(data, players.Count, research.Tech);
-        var targeting = new Targeting(grid, bodies, combatants, health, spatialIndex, combat) { Structures = structures };
+        var targeting = new Targeting(grid, bodies, combatants, health, spatialIndex, combat, vision) { Structures = structures };
         var approach = new Approach(grid);
         var fighters = new Fighters(data, combat, combatants, bodies, movers, spatialIndex);
         var placeHolders = new PlaceHolders(workers);
@@ -98,10 +107,14 @@ public static class MatchSetup
         // more. An attack order is not, because a worker never takes one. A wall order is a
         // worker's order in place of a build order, and ends as one does.
         var structureFactory = new StructureFactory(
-            data, world, bodies, health, structures, territories, turrets, workSites, structureTiles, research, simulation.Events, players.Count);
+            data, world, bodies, health, structures, territories, turrets, workSites, structureTiles, research, simulation.Events,
+            players.Count);
         var construction = new ConstructionRules(
             data, world, grid, bodies, buildOrders, combatants, foundations, movers, structures, territories, workers,
-            stockpiles, research, work, structureFactory, spatialIndex, move, simulation.Events, players.Count);
+            stockpiles, research, work, structureFactory, spatialIndex, move, simulation.Events, players.Count)
+        {
+            Vision = vision,
+        };
         var walls = new WallOrders(data, construction, wallPlans);
         construction.WallOrders = walls;
         simulation.SetCommandHandler(CommandType.Attack, orders);
@@ -125,6 +138,8 @@ public static class MatchSetup
         // walk left them, except a worker that holds a place and a unit that is fighting, which
         // stay where they are. The spatial index is rebuilt after both, so that every system after it
         // sees where things stand now. A system that moves bodies goes before it.
+        // Vision comes after movement and the spatial index and before combat: what a player sees
+        // is worked out from where things stand in this tick, before any unit picks a target.
         // Combat comes after movement, so that it sees where everything stands in this tick and
         // which units have moved in it: a unit attacks only in a tick in which it does not move.
         // Shots land before the attacks, so a shot fired in one tick flies from the next. Towers
@@ -150,6 +165,7 @@ public static class MatchSetup
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
         simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, placeHolders, fighters));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
+        simulation.AddSystem(new VisionSystem(vision));
         simulation.AddSystem(new ShotSystem(bodies, shots, targeting, simulation.Events));
         simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, places, simulation.Events, wallRule));
         simulation.AddSystem(new TurretSystem(bodies, structures, turrets, shots, targeting, simulation.Events));
@@ -188,6 +204,7 @@ public static class MatchSetup
             Supply = supply,
             Territories = territories,
             Turrets = turrets,
+            Vision = vision,
             WallMap = wallMap,
             WallPlans = wallPlans,
             Walls = walls,
@@ -227,6 +244,9 @@ public static class MatchSetup
         }
 
         EconomySetup.PlaceDeposits(match);
+
+        // Design 5.3: at the start everything is unexplored except what the players' own see.
+        vision.Refresh();
 
         match.RefreshDerivedState();
         return match;

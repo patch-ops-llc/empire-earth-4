@@ -337,6 +337,9 @@ public class StructureTargetTests
     {
         var match = WithCapitol(out var capitol);
         var hoplite = match.Spawn(0, Hoplite, x, y);
+
+        // The order may name the Capitol because its player sees it: a worker stands near it, out of the Hoplite's way.
+        match.SpawnWorker(0, "16.5", "16.5");
         match.OrderAttack(0, capitol, hoplite);
 
         match.Run(1);

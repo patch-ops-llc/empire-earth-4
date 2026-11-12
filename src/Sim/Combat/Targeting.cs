@@ -3,6 +3,7 @@ using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
 using Sim.Structures;
+using Sim.Vision;
 
 namespace Sim.Combat;
 
@@ -31,6 +32,7 @@ public sealed class Targeting
     private readonly ComponentStore<Health> _health;
     private readonly SpatialIndex _spatialIndex;
     private readonly CombatRules _rules;
+    private readonly MatchVision _vision;
 
     // Scratch for one search, emptied at its start. Not state.
     private readonly List<EntityId> _found = [];
@@ -41,7 +43,8 @@ public sealed class Targeting
         ComponentStore<Combatant> combatants,
         ComponentStore<Health> health,
         SpatialIndex spatialIndex,
-        CombatRules rules)
+        CombatRules rules,
+        MatchVision vision)
     {
         ArgumentNullException.ThrowIfNull(grid);
         ArgumentNullException.ThrowIfNull(bodies);
@@ -49,12 +52,14 @@ public sealed class Targeting
         ArgumentNullException.ThrowIfNull(health);
         ArgumentNullException.ThrowIfNull(spatialIndex);
         ArgumentNullException.ThrowIfNull(rules);
+        ArgumentNullException.ThrowIfNull(vision);
         _grid = grid;
         _bodies = bodies;
         _combatants = combatants;
         _health = health;
         _spatialIndex = spatialIndex;
         _rules = rules;
+        _vision = vision;
     }
 
     public CombatRules Rules => _rules;
@@ -66,14 +71,24 @@ public sealed class Targeting
     public ComponentStore<PlacedStructure>? Structures { get; init; }
 
     /// <summary>
-    /// True when the entity can be attacked by a player: it is alive, on the map, has hit points, and
-    /// belongs to someone else. There is no friendly fire. A unit and a structure both can.
+    /// True when the entity can be attacked by a player: it is alive, on the map, has hit points,
+    /// belongs to someone else, and the player sees it (design 5.3). There is no friendly fire. A
+    /// unit and a structure both can; a structure is seen by any tile of its footprint.
     /// </summary>
     /// <remarks>
-    /// Fog of war adds its test here and in <see cref="Pick"/>: until it exists, a player sees
-    /// every enemy.
+    /// Units and Towers pick only targets their owner sees. <see cref="Pick"/> and
+    /// <see cref="PickForTurret"/> ask here, so both follow. What an attack order may name is
+    /// <see cref="IsKnownEnemy"/>.
     /// </remarks>
-    public bool IsEnemy(World world, int player, EntityId entity, out Body body)
+    public bool IsEnemy(World world, int player, EntityId entity, out Body body) =>
+        IsEnemyThere(world, player, entity, out body) && Sees(player, entity, in body);
+
+    /// <summary>
+    /// <see cref="IsEnemy"/> without the fog: true also for an enemy the player does not see. Only
+    /// for telling a target that is lost from sight from one that is gone, which end an attack
+    /// order differently.
+    /// </summary>
+    public bool IsEnemyThere(World world, int player, EntityId entity, out Body body)
     {
         ArgumentNullException.ThrowIfNull(world);
         body = default;
@@ -82,6 +97,44 @@ public sealed class Targeting
             && body.Owner != player
             && _health.Contains(entity);
     }
+
+    /// <summary>
+    /// True when an attack order of a player may name the entity (design 5.3): an enemy unit the
+    /// player sees, or an enemy structure it sees or remembers.
+    /// </summary>
+    public bool IsKnownEnemy(World world, int player, EntityId entity, out Body body) =>
+        IsEnemyThere(world, player, entity, out body)
+        && (IsStructure(entity) ? _vision.KnowsStructure(player, entity) : _vision.Sees(player, in body));
+
+    /// <summary>
+    /// True when the entity is gone and was a structure of another player that the player
+    /// remembers and has not seen gone (design 5.3). The player cannot know it is gone, so its
+    /// orders treat it as standing. <paramref name="tiles"/> is where it is remembered.
+    /// </summary>
+    public bool IsRememberedGone(World world, int player, EntityId entity, out TileSquare tiles)
+    {
+        ArgumentNullException.ThrowIfNull(world);
+        tiles = default;
+        if (world.Entities.IsAlive(entity) || !_vision.Remembers(player, entity, out var seen))
+        {
+            return false;
+        }
+
+        tiles = seen.Tiles;
+        return true;
+    }
+
+    /// <summary>
+    /// True when a player sees the entity whose body this is: its own always, an enemy unit on a
+    /// tile the player sees, an enemy structure while any tile of its footprint is seen.
+    /// </summary>
+    public bool Sees(int player, EntityId entity, in Body body) =>
+        Structures is { } structures && structures.TryGet(entity, out var structure)
+            ? _vision.SeesStructure(player, body.Owner, structure.Tiles)
+            : _vision.Sees(player, in body);
+
+    /// <summary>True when the entity is a structure.</summary>
+    public bool IsStructure(EntityId entity) => Structures is { } structures && structures.Contains(entity);
 
     /// <summary>The roster index of an entity's line, or <see cref="CombatRules.NoLine"/> when it is not a unit of a chassis.</summary>
     public int LineOf(EntityId entity) =>
@@ -434,25 +487,39 @@ public sealed class Targeting
     }
 
     /// <summary>
+    /// Lists what the splash of a hit reaches (design 2.3): what a blast of that radius round the
+    /// target's center would, as <see cref="ReachedByBlast"/> says, without the target itself.
+    /// </summary>
+    public void ReachedBySplash(
+        World world, int owner, int attackerLine, EntityId target, FixedVector2 center, Fixed radius, List<EntityId> reached)
+    {
+        ReachedByBlast(world, owner, attackerLine, center, radius, reached);
+        reached.Remove(target);
+    }
+
+    /// <summary>
     /// Lands a hit: takes the damage off the target's hit points, with the target's side multiplied
     /// in and the result rounded once. Hit points stop at zero, and the target stays until the end
     /// of the tick even there.
     /// </summary>
     /// <remarks>
-    /// The target's side of a unit is the counter multiplier of the two lines. That of a structure
-    /// is the attacking line's multiplier against structures and the fortification rule, under
-    /// the Protection tier its owner has at this moment (design 2.5). A foundation is a structure
-    /// like any other here.
+    /// The target's side of a unit is the counter multiplier of the two lines and what its
+    /// accents take off: Hardened I off area damage, plating off a hit from below its Protection
+    /// (design 2.3). A worker has no line and no accents. That of a structure is the attacking
+    /// line's multiplier against structures and the fortification rule, under the Protection
+    /// tier its owner has at this moment (design 2.5). A foundation is a structure like any
+    /// other here.
     /// </remarks>
     /// <param name="target">What is hit.</param>
     /// <param name="attackerSide">The attacker's damage of one hit, fixed when it attacked.</param>
     /// <param name="attackerLine">The attacker's line, or <see cref="CombatRules.NoLine"/> for a Tower.</param>
     /// <param name="attackerFirepower">The attacker's effective Firepower, fixed when it attacked.</param>
+    /// <param name="area">True for area damage: the blast of a shell, and the splash of a hit on what stands round its target.</param>
     /// <returns>
     /// The damage of the hit in thousandths of a hit point, which may be more than the target had
     /// left. Zero for a target that cannot be damaged.
     /// </returns>
-    public long Hit(EntityId target, Fraction attackerSide, int attackerLine, int attackerFirepower)
+    public long Hit(EntityId target, Fraction attackerSide, int attackerLine, int attackerFirepower, bool area = false)
     {
         var index = _health.IndexOf(target);
         if (index < 0)
@@ -461,9 +528,24 @@ public sealed class Targeting
         }
 
         ref var health = ref _health.ValueAt(index);
-        var damage = Structures is { } structures && structures.Contains(target) && _bodies.TryGet(target, out var body)
-            ? _rules.DamageToStructure(attackerSide, attackerLine, attackerFirepower, body.Owner)
-            : _rules.DamageOf(attackerSide, attackerLine, LineOf(target));
+        long damage;
+        if (!_bodies.TryGet(target, out var body))
+        {
+            damage = _rules.DamageOf(attackerSide, attackerLine, CombatRules.NoLine);
+        }
+        else if (IsStructure(target))
+        {
+            damage = _rules.DamageToStructure(attackerSide, attackerLine, attackerFirepower, body.Owner);
+        }
+        else if (_combatants.TryGet(target, out var unit))
+        {
+            damage = _rules.DamageToUnit(attackerSide, attackerLine, attackerFirepower, body.Owner, unit.Chassis, area);
+        }
+        else
+        {
+            damage = _rules.DamageOf(attackerSide, attackerLine, CombatRules.NoLine);
+        }
+
         health.HitPoints = Math.Max(0, checked(health.HitPoints - damage));
         return damage;
     }

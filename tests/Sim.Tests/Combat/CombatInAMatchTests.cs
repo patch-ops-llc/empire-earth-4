@@ -192,6 +192,7 @@ public class CombatInAMatchTests
         var position = match.PositionOf(worker);
         var hoplite = match.SpawnChassis(1 - owner, Chassis(Hoplite), new(position.X, position.Y - Fixed.One));
         match.RefreshDerivedState();
+        match.Vision.Refresh();
 
         match.OrderAttack(1 - owner, worker, hoplite);
         match.Run(1);
@@ -233,7 +234,9 @@ public class CombatInAMatchTests
         var match = EconomyMatches.WithOneDeposit(out var deposit, CombatMatches.Data);
         var worker = match.WorkerAt(0, 4, 10);
         var hoplite = match.Spawn(0, Hoplite, "4.5", "4.5");
-        var enemy = match.SpawnWorker(1, "20.5", "20.5");
+
+        // In sight of the worker at the deposit, so that the order can name it, and out of the Guard's.
+        var enemy = match.SpawnWorker(1, "12.5", "14.5");
         match.RefreshDerivedState();
         match.OrderGather(0, deposit, worker);
         match.RunUntilWorking(worker);

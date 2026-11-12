@@ -20,7 +20,8 @@ public sealed record RuleSet(
     StartRules Start,
     MapRules Map,
     CombatConstants Combat,
-    DebugRules Debug);
+    DebugRules Debug,
+    VisionRules Vision);
 
 /// <summary>Design 1.4: the epoch is the tier that <see cref="TracksNeeded"/> tracks have reached.</summary>
 public sealed record EpochRules(int TracksNeeded, int Reach);
@@ -72,6 +73,13 @@ public sealed record CombatConstants(
 /// way. With it off each is dropped like any command without a handler.
 /// </param>
 public sealed record DebugRules(bool Spawn);
+
+/// <summary>Design 5.3: the fog of war.</summary>
+/// <param name="RefreshTicks">
+/// What each player sees is worked out again in every tick whose number is a multiple of this, so
+/// it may be up to one tick less than this old.
+/// </param>
+public sealed record VisionRules(int RefreshTicks);
 
 /// <summary>
 /// Design 5.3 and 5.4: what every map must satisfy. The footprint and territory radius of a start

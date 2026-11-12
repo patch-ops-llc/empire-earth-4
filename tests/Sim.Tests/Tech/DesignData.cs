@@ -75,6 +75,7 @@ internal static class DesignData
             "open_field_min_width": 6
           },
           "combat": { "look_interval_ticks": 4, "unit_reach_margin": "0.25", "structure_reach": "0.75", "fortification": "0.5" },
+          "vision": { "refresh_ticks": 4 },
           "debug": { "spawn": true }
         }
         """;

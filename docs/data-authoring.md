@@ -103,6 +103,7 @@ The values the design says to tune first. Each block carries a comment naming it
 | `combat.look_interval_ticks` | A unit or a Tower without a target looks for one every this many ticks. | 2.4 |
 | `combat.unit_reach_margin`, `structure_reach` | Melee reach in tiles: against a unit, the spacing between the two units plus the margin; against a structure, the reach to the nearest edge of its footprint. | 2.4 |
 | `combat.fortification` | What multiplies the damage a structure takes from an attacker whose effective Firepower is below the Protection tier of the structure's owner. Above 0 and at most 1. | 2.5 |
+| `vision.refresh_ticks` | Every how many ticks the game works out again which tiles each player sees, from 1 to 1,000; there are 20 ticks in a second. In between, a player sees what the last time found. The design says 4. A unit's sight is in its line file, a worker's in `resources.jsonc`, a structure's in its own file. | 5.3, 8.4 |
 | `debug.spawn` | `true` or `false`: whether a match carries out the development spawn, a command that makes units of any chassis from nothing for the player who sends it, and the development placement, which lays a finished structure the same way. Neither is in the design. It is on in `game/data/` until units can be trained and structures built in a match, and stays on in `tests/golden/data/`, whose replays with a fight and with Towers need it. Both players of a match have the same data, so they have the same switch. | |
 
 The footprint and the territory radius of a start are not here: they are the `footprint` and `territory_radius` of `structures/capitol.jsonc`, which every data folder must have. The map checks read them from that file, and a match places that structure, finished, at each player's start.
@@ -136,10 +137,10 @@ A kind of perk is a rule in the code with numbers from this file. Which accent g
 | --- | --- | --- | --- |
 | `range_bonus` | `multiplier`, 1 or more | Multiplies attack range. | Ranged attacks |
 | `attack_rate_bonus` | `multiplier`, 1 or more | Multiplies attacks per second. | Melee attacks |
-| `splash` | `share`, `radius` | Each hit also deals `share` of its damage to every other enemy within `radius` tiles of the target. | Attacks without a blast radius |
+| `splash` | `share`, `radius` | Each hit also deals `share` of its damage, taken before anything a target applies, to every other enemy whose center is within `radius` tiles of the target's center when the hit lands. It reaches only what the attacker's line can hit, and a shot that is lost splashes nobody. | Attacks without a blast radius |
 | `blast_radius_bonus` | `multiplier`, 1 or more | Multiplies the blast radius. | Attacks with a blast radius |
-| `area_damage_reduction` | `multiplier`, above 0 to 1 | Multiplies area damage taken. | Every unit |
-| `plating` | `multiplier`, above 0 to 1 | Multiplies damage taken from an attacker whose effective Firepower is below this unit's effective Protection. | Every unit |
+| `area_damage_reduction` | `multiplier`, above 0 to 1 | Multiplies area damage taken: the blast of a shell, for everyone in it, and a splash, for everyone but the target of the hit. | Every unit |
+| `plating` | `multiplier`, above 0 to 1 | Multiplies damage taken from an attacker whose effective Firepower is below this unit's effective Protection. The attacker's is fixed when it attacks and a Tower's is its owner's tier; the unit's is read when the hit lands. | Every unit |
 | `sight_bonus` | `tiles`, whole | Adds to sight. | Every unit |
 | `charge` | `distance`, `multiplier` 1 or more | The first hit after moving at least `distance` tiles deals `multiplier` times the damage. | Units with an attack |
 | `batch` | `time_multiplier` | Each queue slot produces two units in `time_multiplier` times the build time of one. | Every unit |
@@ -204,7 +205,7 @@ Game design 2.5. One file for each structure that is built so far: the eight of 
 | `hp` | Hit points at Protection tier 1. Each Protection tier of the owner multiplies them by `per_tier.hp`. |
 | `cost.materials`, `energy` | The price, in whole resources. For the wall, of one tile. |
 | `build_seconds` | The time the structure builds itself in once its foundation is laid. No track changes it. |
-| `sight` | Sight in tiles when finished, measured from the center. No track changes it. |
+| `sight` | Sight in tiles when finished, measured from the center of the footprint: a tile is seen when its center is within that distance, the distance itself included. No track changes it. While the structure is building itself it sees only the tiles under it. |
 | `territory_radius` | Optional. The radius in tiles of the territory it gives when finished. |
 | `research_slots` | Optional. Research slots it gives when finished. |
 | `max_per_player` | Optional. The most a player may have, counting those under way. |
