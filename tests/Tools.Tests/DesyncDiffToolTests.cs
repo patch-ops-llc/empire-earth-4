@@ -76,19 +76,31 @@ public class DesyncDiffToolTests
         Assert.Matches($"^The recorded state hashes are the same after {parted} ticks and differ after {parted + 1}: [0-9a-f]{{16}} \\| [0-9a-f]{{16}}\\.$", lines[2]);
         Assert.Matches("^Run here, A's replay gives the states A recorded, all [0-9]+ of them\\.$", lines[3]);
         Assert.Equal($"Run here, B's replay gives another state than B recorded, first after {parted + 1} ticks.", lines[4]);
-        Assert.Equal("7 differences between the snapshots, A | B:", lines[5]);
+        var differences = lines[6..].Select(line => System.Text.RegularExpressions.Regex.Replace(line, " {2,}", "  ")).ToArray();
+        Assert.Equal($"{differences.Length} differences between the snapshots, A | B:", lines[5]);
+
+        // In the registry, the bodies and the movers the difference is the one unit and nothing
+        // else. The numbers are the host's own, so they hold whatever else the match holds.
         var id = extra.Value;
+        var entities = host.Local.Match.World.Entities.Count;
+        var bodies = host.Local.Match.Bodies.Count;
+        var movers = host.Local.Match.Movers.Count;
         Assert.Equal(
             [
                 $"  world  _nextId: {id} | {id + 1}",
-                $"  world  _count: {id - 1} | {id}",
+                $"  world  _count: {entities} | {entities + 1}",
                 $"  world entity {id}  only in B",
-                $"  bodies  _count: {id - 1} | {id}",
+                $"  bodies  _count: {bodies} | {bodies + 1}",
                 $"  bodies entity {id}  only in B",
-                $"  movers  _count: {id - 1} | {id}",
+                $"  movers  _count: {movers} | {movers + 1}",
                 $"  movers entity {id}  only in B",
             ],
-            lines[6..].Select(line => System.Text.RegularExpressions.Regex.Replace(line, " {2,}", "  ")));
+            differences.Where(line => SectionOf(line) is "world" or "bodies" or "movers"));
+
+        // Another store may hold something for the unit, or count it. No other entity differs anywhere.
+        Assert.All(
+            differences.Where(line => line.Contains(" entity ", StringComparison.Ordinal)),
+            line => Assert.Contains($" entity {id}  ", line, StringComparison.Ordinal));
 
         // The lines are set in columns.
         Assert.Single(lines[6..].Select(line => line.IndexOf("only in B", StringComparison.Ordinal)).Where(column => column >= 0).Distinct());
@@ -104,7 +116,7 @@ public class DesyncDiffToolTests
         {
             if (tick == 12)
             {
-                // A unit that is somewhere else on one machine, and one that walks at another speed.
+                // A unit that is somewhere else on one machine.
                 unit = UnitsOf(match, 1)[2];
                 ref var body = ref match.Bodies.Get(unit);
                 body.Position = new FixedVector2(body.Position.X + Fixed.Half, body.Position.Y);
@@ -117,9 +129,15 @@ public class DesyncDiffToolTests
         Assert.Equal(ExitCodes.Failed, exitCode);
         var lines = Lines(output);
         Assert.StartsWith("The recorded state hashes are the same after 12 ticks and differ after 13: ", lines[2]);
-        Assert.Equal("1 difference between the snapshots, A | B:", lines[5]);
-        Assert.Matches($"^  bodies entity {unit.Value}  Position\\.X: [0-9.]+ \\(raw [0-9]+\\) \\| [0-9.]+ \\(raw [0-9]+\\)$", lines[6]);
-        Assert.Equal(7, lines.Length);
+
+        // The field that was changed is there, under its store and its entity, as a number and as
+        // its raw value. What else differs by the end is up to the game: a rule that reacts to
+        // where a unit stands moves it, or its neighbors, differently on the two machines.
+        var differences = lines[6..];
+        Assert.Equal(differences.Length == 1 ? "1 difference between the snapshots, A | B:" : $"{differences.Length} differences between the snapshots, A | B:", lines[5]);
+        Assert.Contains(differences, line => System.Text.RegularExpressions.Regex.IsMatch(
+            line, $"^  bodies entity {unit.Value} +Position\\.X: [0-9.]+ \\(raw [0-9]+\\) \\| [0-9.]+ \\(raw [0-9]+\\)$"));
+        Assert.All(differences, line => Assert.Matches("^  [a-z]+ entity [0-9]+ +\\S+: .+ \\| .+$", line));
     }
 
     [Fact]
@@ -258,11 +276,29 @@ public class DesyncDiffToolTests
         var fields = StateListing.Of(match.World);
 
         Assert.Equal(new StateField("world", "", "Tick", "5"), fields[0]);
-        Assert.Equal(["world", "bodies", "movers"], fields.Select(field => field.Section).Distinct());
-        Assert.Equal(12, fields.Count(field => field.Section == "bodies" && field.Name == "Owner"));
-        Assert.Equal(12, fields.Where(field => field.Section == "movers" && field.Name == "Speed").Select(field => field.Item).Distinct().Count());
-        Assert.All(fields.Where(field => field.Name is "Owner" or "Speed"), field => Assert.StartsWith("entity ", field.Item));
-        Assert.All(fields.Where(field => field.Name is "_count" or "_nextId" or "Tick"), field => Assert.Equal("", field.Item));
+
+        // The world's own fields, then every store the match has, each in one piece and in the
+        // world's order. Which stores those are is the match's business.
+        var sections = new List<string>();
+        foreach (var field in fields)
+        {
+            if (sections.Count == 0 || sections[^1] != field.Section)
+            {
+                sections.Add(field.Section);
+            }
+        }
+
+        Assert.Equal(["world", .. match.World.Stores.Select(store => store.Name)], sections);
+        Assert.Contains("bodies", sections);
+        Assert.Contains("movers", sections);
+
+        // Every unit is there once in each of the two stores, under its entity.
+        Assert.NotEqual(0, match.Bodies.Count);
+        Assert.Equal(match.Bodies.Count, fields.Count(field => field.Section == "bodies" && field.Name == "Owner"));
+        Assert.Equal(match.Movers.Count, fields.Where(field => field.Section == "movers" && field.Name == "Speed").Select(field => field.Item).Distinct().Count());
+        var known = fields.Where(field => field.Section is "world" or "bodies" or "movers").ToArray();
+        Assert.All(known.Where(field => field.Name is "Owner" or "Speed"), field => Assert.StartsWith("entity ", field.Item));
+        Assert.All(known.Where(field => field.Name is "_count" or "_nextId" or "Tick"), field => Assert.Equal("", field.Item));
     }
 
     private static MatchDescription Description(ulong seed = 77) =>
@@ -325,6 +361,9 @@ public class DesyncDiffToolTests
         Snapshot.Write(match.World, writer);
         File.WriteAllBytes(Path.Combine(folder.Path, name + ".snapshot"), writer.ToArray());
     }
+
+    // The store a line of differences is about: its first word.
+    private static string SectionOf(string line) => line.TrimStart().Split(' ')[0];
 
     private static string[] Lines(string text) => text.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.TrimEnd('\r')).ToArray();
 
