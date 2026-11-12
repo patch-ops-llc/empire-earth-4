@@ -31,8 +31,9 @@ namespace Game;
 /// asks the <see cref="OrderTable"/>, and a command for the selection, as Stop, are answered
 /// with <see cref="SoundCue.OrderGiven"/>. A click that no row of the table had an order for is
 /// answered with <see cref="SoundCue.OrderRefused"/>, as is an order the match refuses a tick or
-/// more later. A panel that sends its orders itself, as the build menu, the production panel
-/// and the research panel do, says so with <see cref="Acknowledge"/>.
+/// more later. A panel that sends its orders itself, past the table and the frame, says so
+/// with <see cref="Acknowledge"/>: the build menu, the production panel and the research
+/// panel do.
 /// </para>
 /// </remarks>
 public partial class SoundPart : InterfacePart
