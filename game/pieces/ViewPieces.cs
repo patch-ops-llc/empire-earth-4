@@ -26,6 +26,7 @@ public static class ViewPieces
         new EconomyPiece(),
 
         // 14v. Research: the grid.
+        new ResearchPiece(),
 
         // 15v. Construction and production: structures, the build menu, the production panel.
 

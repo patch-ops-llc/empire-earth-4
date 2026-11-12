@@ -81,6 +81,7 @@ public sealed class SmokeTest
         new GatherOrdersSmoke(),
 
         // 14v. Research: one research.
+        new ResearchSmoke(),
 
         // 15v. Construction and production.
 

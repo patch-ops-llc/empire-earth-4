@@ -83,6 +83,9 @@ If joining fails, the menu says why in orange:
 | Clear the selection | Click the ground |
 | Send the selected workers to work at a deposit | Right-click the deposit |
 | Send the selected units somewhere | Right-click the ground. On a trackpad that is a click with two fingers, unless you have set it otherwise |
+| Open or close the research panel | R, or the Research button in the bar at the top. Escape closes it too |
+| Start a research | In the research panel, click a bright cell |
+| Cancel a research | In the research panel, click Cancel beside its progress bar |
 | Show or hide the readout in the corner | F3 |
 | Quit | Close the window |
 
@@ -109,6 +112,19 @@ The brown blocks on the map are deposits. Select workers and right-click a depos
 - In a shared match, both players see the same workers in the same places. An order takes a moment longer to start than it does alone, because it travels to the host first.
 - If the other player leaves or closes the game, the bar at the top says so and your match goes on without them. If the host leaves, the match ends for both.
 - There is no Capitol and nothing to build.
+
+## Research
+
+Press R, or click Research in the bar at the top. The panel shows your six tracks as rows and their nine tiers as columns. The match goes on behind it.
+
+- A filled cell is a tier you have. The bright cell after it is the next tier, with its price: M is Materials and E is Energy. Click it to start the research.
+- Point at a row and the right side says what its next tier costs, how long it takes, which units it unlocks and which accents it gives or takes from the units you can build.
+- A cell that cannot be started says why: too expensive, with what you lack in orange; slot busy; or out of reach, because no track may be more than two tiers above your epoch.
+- While a research runs, its cell fills up, and the top of the panel shows a progress bar with the time left and a Cancel button. Cancelling gives the whole price back. The bar at the top of the window shows the same progress when the panel is closed.
+- When a research finishes, a line under the top bar says so and the track's row has one more filled cell.
+- You have one research slot, so one research runs at a time.
+- You start with 400 Materials and 100 Energy and nothing earns more yet, so a match has room for one research: a tier 2 costs 100 of each. After it, every next tier shows as too expensive.
+- Tiers 5 to 9 are closed. A match stops at epoch 4 for now.
 
 ## What to know about multiplayer
 
