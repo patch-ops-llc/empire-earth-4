@@ -70,6 +70,7 @@ public sealed class MatchView
     /// Builds the view of a match: the world, the frame of the interface and the unit control are
     /// given the match, and then every piece of <see cref="ViewPieces.All"/> adds what it draws
     /// and does. Call it once, before the match's first tick. The frame must be in the tree.
+    /// A piece that throws while it adds itself is logged as an error and left out.
     /// </summary>
     public static MatchView Open(MatchRun run, Match match, WorldView world, RtsCamera camera, UnitControl units, InterfaceFrame frame, Action? leave)
     {
@@ -80,7 +81,19 @@ public sealed class MatchView
 
         foreach (var piece in ViewPieces.All)
         {
-            piece.AddTo(view);
+            try
+            {
+                piece.AddTo(view);
+            }
+            catch (Exception failed)
+            {
+                // A piece that fails does not take the view of the match with it: the pieces
+                // after it are still added, and the match is shown without this one. It is
+                // logged as an error, which fails the smoke test.
+                GD.PushError($"View piece '{piece.Name}' failed while it was added. {failed}");
+                continue;
+            }
+
             if (OS.IsStdOutVerbose())
             {
                 GD.Print($"View piece added: {piece.Name}.");

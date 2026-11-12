@@ -20,10 +20,14 @@ namespace Game;
 /// </item>
 /// <item>
 /// <b>The full-screen panel</b>: one of the panels added with <see cref="AddPanel"/> at a time,
-/// over the world and under the top bar. While one is open the pointer and the keys are its own:
-/// the camera, selection and orders rest.
+/// over the world and the bottom panel, and under the top bar and the message line. While one
+/// is open the pointer and the keys are its own: the camera, selection and orders rest.
 /// </item>
-/// <item><b>The message line</b>, under the top bar: <see cref="Say"/> shows a sentence to the player for a while.</item>
+/// <item>
+/// <b>The message line</b>, under the top bar: <see cref="Say"/> shows a sentence to the player
+/// for a while. Nothing of the frame lies under it: a full-screen panel begins below it, with
+/// room kept for one message, so that the panel moves only when two are shown at once.
+/// </item>
 /// </list>
 /// </remarks>
 public partial class InterfaceFrame : CanvasLayer
@@ -33,6 +37,15 @@ public partial class InterfaceFrame : CanvasLayer
 
     // The height of the top bar, which the message line and the full-screen panel start under.
     private const float BarHeight = 44f;
+
+    // The room above the message line, measured from BarHeight, of which a top bar with a button
+    // in it covers a little; the room between the message line and a full-screen panel; the room
+    // between a full-screen panel and the other edges of the window; and the room inside the
+    // panel's edge. They are small, so that the line kept for a message costs the panel no height.
+    private const int MessageTop = 8;
+    private const int MessageBottom = 4;
+    private const int PanelMargin = 12;
+    private const float PanelPadding = 12f;
 
     private const int MessageLimit = 5;
     private const double MessageFadeSeconds = 1.0;
@@ -47,6 +60,8 @@ public partial class InterfaceFrame : CanvasLayer
     private HBoxContainer _commandArea = null!;
     private HBoxContainer _panelButtons = null!;
     private VBoxContainer _messageLines = null!;
+    private Label _messageRoom = null!;
+    private Control _panelShade = null!;
     private Control _panelPlace = null!;
     private Label _panelTitle = null!;
     private Control _panelContent = null!;
@@ -132,7 +147,9 @@ public partial class InterfaceFrame : CanvasLayer
         {
             panel.Content.Visible = false;
             OpenPanel = null;
+            _panelShade.Visible = false;
             _panelPlace.Visible = false;
+            KeepMessageRoom();
             GivePartsTheKeys(true);
         }
     }
@@ -144,20 +161,14 @@ public partial class InterfaceFrame : CanvasLayer
     {
         if (_messages.Count >= MessageLimit)
         {
-            _messages[0].Label.QueueFree();
+            Drop(_messages[0].Label);
             _messages.RemoveAt(0);
         }
 
-        var label = new Label
-        {
-            Text = message,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            MouseFilter = Control.MouseFilterEnum.Ignore,
-        };
-        label.AddThemeStyleboxOverride("normal", UiStyle.PanelStyle(6f));
-        label.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+        var label = MessageLabel(message);
         _messageLines.AddChild(label);
         _messages.Add((label, seconds));
+        KeepMessageRoom();
 
         if (OS.IsStdOutVerbose())
         {
@@ -196,7 +207,8 @@ public partial class InterfaceFrame : CanvasLayer
             }
         }
 
-        _bottom.Visible = HasVisibleChild(SelectionArea) || HasVisibleChild(_commandArea);
+        // A full-screen panel covers the bottom panel, which is not shown round its edge.
+        _bottom.Visible = !IsPanelOpen && (HasVisibleChild(SelectionArea) || HasVisibleChild(_commandArea));
         FadeMessages(delta);
     }
 
@@ -251,7 +263,9 @@ public partial class InterfaceFrame : CanvasLayer
         _panelTitle.Text = panel.Title;
         panel.RaiseOpened();
         panel.Content.Visible = true;
+        _panelShade.Visible = true;
         _panelPlace.Visible = true;
+        KeepMessageRoom();
         GivePartsTheKeys(false);
     }
 
@@ -283,8 +297,9 @@ public partial class InterfaceFrame : CanvasLayer
             left -= delta;
             if (left <= 0.0)
             {
-                label.QueueFree();
+                Drop(label);
                 _messages.RemoveAt(i);
+                KeepMessageRoom();
                 continue;
             }
 
@@ -292,6 +307,31 @@ public partial class InterfaceFrame : CanvasLayer
             _messages[i] = (label, left);
         }
     }
+
+    private static Label MessageLabel(string message)
+    {
+        var label = new Label
+        {
+            Text = message,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter,
+        };
+        label.AddThemeStyleboxOverride("normal", UiStyle.PanelStyle(6f));
+        return label;
+    }
+
+    // Takes a message out of the line at once, and not at the end of the frame, so that the
+    // line never holds a message more than it shows.
+    private void Drop(Label label)
+    {
+        _messageLines.RemoveChild(label);
+        label.QueueFree();
+    }
+
+    // While a full-screen panel is open and no message is shown, an unseen line keeps the room
+    // of one message, so that the first message to come does not move the panel.
+    private void KeepMessageRoom() => _messageRoom.Visible = IsPanelOpen && _messages.Count == 0;
 
     // The key an action is given with, as the player knows it, or null when it has none.
     private static string? KeyOf(StringName action)
@@ -333,15 +373,15 @@ public partial class InterfaceFrame : CanvasLayer
         root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(root);
 
-        BuildPanelPlace(root);
+        // Each is drawn over those before it: the bottom panel, then what stands under the top
+        // bar, a full-screen panel among it, then the top bar.
+        BuildBottomPanel(root);
+        BuildUnderBar(root);
+        BuildTopBar(root);
+    }
 
-        _messageLines = UiStyle.Column(4);
-        _messageLines.Name = "Messages";
-        _messageLines.MouseFilter = Control.MouseFilterEnum.Ignore;
-        root.AddChild(_messageLines);
-        _messageLines.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopWide);
-        _messageLines.OffsetTop = BarHeight + 8f;
-
+    private void BuildTopBar(Control root)
+    {
         var bar = new PanelContainer { Name = "TopBar", CustomMinimumSize = new Vector2(0f, BarHeight) };
         bar.AddThemeStyleboxOverride("panel", UiStyle.PanelStyle(5f, cornerRadius: 0));
         root.AddChild(bar);
@@ -359,7 +399,10 @@ public partial class InterfaceFrame : CanvasLayer
         TopRight = UiStyle.Row(12);
         TopRight.Name = "TopRight";
         barRow.AddChild(TopRight);
+    }
 
+    private void BuildBottomPanel(Control root)
+    {
         _bottom = new PanelContainer { Name = "BottomPanel", Visible = false };
         _bottom.AddThemeStyleboxOverride("panel", UiStyle.PanelStyle(10f));
         root.AddChild(_bottom);
@@ -378,27 +421,58 @@ public partial class InterfaceFrame : CanvasLayer
         bottomRow.AddChild(_commandArea);
     }
 
-    private void BuildPanelPlace(Control root)
+    // Under the top bar the message line and the full-screen panel stand in one column, the
+    // messages first, so that neither is drawn over the other: the panel begins where they end.
+    private void BuildUnderBar(Control root)
     {
-        // The shade takes every click, so that nothing behind the panel can be selected or ordered.
-        var shade = new ColorRect { Name = "PanelPlace", Color = new Color(0f, 0f, 0f, 0.55f), Visible = false };
-        root.AddChild(shade);
-        shade.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        shade.OffsetTop = BarHeight;
-        _panelPlace = shade;
+        // The shade and the panel's place take every click, so that nothing behind the panel
+        // can be selected or ordered.
+        _panelShade = new ColorRect { Name = "PanelShade", Color = new Color(0f, 0f, 0f, 0.55f), Visible = false };
+        root.AddChild(_panelShade);
+        _panelShade.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _panelShade.OffsetTop = BarHeight;
 
-        var margin = new MarginContainer();
-        margin.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-        foreach (var side in new[] { "margin_left", "margin_top", "margin_right", "margin_bottom" })
+        var column = UiStyle.Column(0);
+        column.Name = "UnderBar";
+        column.MouseFilter = Control.MouseFilterEnum.Ignore;
+        root.AddChild(column);
+        column.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        column.OffsetTop = BarHeight;
+
+        var messagePlace = new MarginContainer { Name = "MessagePlace", MouseFilter = Control.MouseFilterEnum.Ignore };
+        messagePlace.AddThemeConstantOverride("margin_top", MessageTop);
+        column.AddChild(messagePlace);
+        _messageLines = UiStyle.Column(4);
+        _messageLines.Name = "Messages";
+        _messageLines.MouseFilter = Control.MouseFilterEnum.Ignore;
+        messagePlace.AddChild(_messageLines);
+
+        // As tall as a message, whatever the font, and never seen.
+        _messageRoom = MessageLabel(" ");
+        _messageRoom.Name = "MessageRoom";
+        _messageRoom.Modulate = Colors.Transparent;
+        _messageRoom.Visible = false;
+        _messageLines.AddChild(_messageRoom);
+
+        var place = new MarginContainer
         {
-            margin.AddThemeConstantOverride(side, 24);
+            Name = "PanelPlace",
+            Visible = false,
+            MouseFilter = Control.MouseFilterEnum.Stop,
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+        };
+        place.AddThemeConstantOverride("margin_top", MessageBottom);
+        foreach (var side in new[] { "margin_left", "margin_right", "margin_bottom" })
+        {
+            place.AddThemeConstantOverride(side, PanelMargin);
         }
 
-        shade.AddChild(margin);
+        column.AddChild(place);
+        _panelPlace = place;
 
         var box = new PanelContainer();
-        box.AddThemeStyleboxOverride("panel", UiStyle.PanelStyle(18f));
-        margin.AddChild(box);
+        box.AddThemeStyleboxOverride("panel", UiStyle.PanelStyle(PanelPadding));
+        place.AddChild(box);
 
         var stack = UiStyle.Column(12);
         box.AddChild(stack);
