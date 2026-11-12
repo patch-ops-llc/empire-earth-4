@@ -1,0 +1,15 @@
+// Academy: one more research slot (game design 2.5 and 1.3).
+{
+  "$schema": "../../../../schemas/structure.schema.json",
+  "id": "academy",
+
+  // No "track": an Academy flies the banner of the track it is researching.
+  "footprint": 2,
+  "hp": 800,
+  "cost": { "materials": 200, "energy": 100 },
+  "build_seconds": 45,
+  "sight": 6,
+
+  "research_slots": 1,
+  "max_per_player": 2
+}

@@ -11,16 +11,24 @@ namespace Sim.Map;
 /// </summary>
 /// <remarks>
 /// Tile (x, y) covers the points from (x, y) up to but not including (x + 1, y + 1), with (0, 0) at
-/// the top-left corner of the map and y growing downward. The terrain never changes during a match,
-/// so the grid is not part of the state hash.
+/// the top-left corner of the map and y growing downward.
+/// <para>
+/// The ground, which is the terrain and the deposits, never changes during a match. The tiles
+/// under structures do: they are worked out from the <c>structures</c> store by
+/// <see cref="Structures.StructureTiles"/>, which calls <see cref="BlockOnly"/> whenever a
+/// structure is placed or removed and when the match's derived state is renewed. So the grid is
+/// not part of the state hash: the same state always gives the same grid.
+/// </para>
 /// </remarks>
 public sealed class MapGrid
 {
     /// <summary>The most tiles a map can have on one side. Squared distances across it stay far inside 64 bits.</summary>
     public const int MaxSize = 4096;
 
+    private readonly bool[] _ground;
     private readonly bool[] _passable;
     private readonly int[] _regions;
+    private readonly int[] _pending;
 
     /// <summary>The grid of a map without deposits, as tests and the battle harness make them.</summary>
     public MapGrid(MapDef map)
@@ -56,10 +64,10 @@ public sealed class MapGrid
 
         Width = map.Width;
         Height = map.Height;
-        _passable = new bool[Width * Height];
-        for (var i = 0; i < _passable.Length; i++)
+        _ground = new bool[Width * Height];
+        for (var i = 0; i < _ground.Length; i++)
         {
-            _passable[i] = map.Tiles[i] == TerrainKind.Open;
+            _ground[i] = map.Tiles[i] == TerrainKind.Open;
         }
 
         foreach (var deposit in map.Deposits)
@@ -70,13 +78,15 @@ public sealed class MapGrid
                 {
                     if (Contains(x, y))
                     {
-                        _passable[(y * Width) + x] = false;
+                        _ground[(y * Width) + x] = false;
                     }
                 }
             }
         }
 
+        _passable = (bool[])_ground.Clone();
         _regions = new int[_passable.Length];
+        _pending = new int[_passable.Length];
         RegionCount = LabelRegions();
     }
 
@@ -86,8 +96,12 @@ public sealed class MapGrid
     /// <summary>The number of tiles along y.</summary>
     public int Height { get; }
 
-    /// <summary>The number of regions. Regions are numbered from 1.</summary>
-    public int RegionCount { get; }
+    /// <summary>
+    /// The number of regions. Regions are numbered from 1. Both the count and the numbers change
+    /// when a structure is placed or removed, so nothing keeps a region number from one tick to
+    /// the next.
+    /// </summary>
+    public int RegionCount { get; private set; }
 
     /// <summary>The center of a tile, where a unit standing on it is placed.</summary>
     public static FixedVector2 TileCenter(int x, int y) =>
@@ -104,6 +118,61 @@ public sealed class MapGrid
 
     /// <summary>True when units can stand on the tile that holds the point.</summary>
     public bool IsPassable(FixedVector2 point) => IsPassable(point.X.FloorToInt(), point.Y.FloorToInt());
+
+    /// <summary>
+    /// True when the ground of the tile is open: units could stand on it if no structure stood
+    /// there. False for forest, cliff, the tiles of a deposit and every tile outside the map.
+    /// </summary>
+    public bool IsOpenGround(int x, int y) => Contains(x, y) && _ground[(y * Width) + x];
+
+    /// <summary>
+    /// Makes the given squares of tiles, and nothing else besides the ground, impassable, and
+    /// numbers the regions again. The squares are the footprints of the structures standing now.
+    /// </summary>
+    /// <remarks>
+    /// The result depends only on the ground and on which tiles the squares cover, not on their
+    /// order. Whoever calls this also empties the route cache, whose routes were found on the old
+    /// tiles.
+    /// </remarks>
+    /// <returns>True when a tile changed.</returns>
+    public bool BlockOnly(ReadOnlySpan<TileSquare> squares)
+    {
+        var before = _pending;
+        for (var i = 0; i < _passable.Length; i++)
+        {
+            // The scratch of the region flood holds the old tiles for the comparison below.
+            before[i] = _passable[i] ? 1 : 0;
+            _passable[i] = _ground[i];
+        }
+
+        foreach (var square in squares)
+        {
+            for (var y = square.Y; y < square.Y + square.Size; y++)
+            {
+                for (var x = square.X; x < square.X + square.Size; x++)
+                {
+                    if (Contains(x, y))
+                    {
+                        _passable[(y * Width) + x] = false;
+                    }
+                }
+            }
+        }
+
+        var changed = false;
+        for (var i = 0; i < _passable.Length && !changed; i++)
+        {
+            changed = _passable[i] != (before[i] == 1);
+        }
+
+        if (changed)
+        {
+            Array.Clear(_regions);
+            RegionCount = LabelRegions();
+        }
+
+        return changed;
+    }
 
     /// <summary>
     /// The region of a tile: a number from 1 that two passable tiles share exactly when a unit can
@@ -305,6 +374,35 @@ public sealed class MapGrid
     /// </summary>
     public bool TryFindNearestTile(FixedVector2 point, int region, FixedVector2 preferNear, out int tileX, out int tileY)
     {
+        if (region > RegionCount && Contains(point))
+        {
+            tileX = -1;
+            tileY = -1;
+            return false;
+        }
+
+        return TryFindNearestTile(_regions, point, region, preferNear, out tileX, out tileY);
+    }
+
+    /// <summary>
+    /// <see cref="TryFindNearestTile(FixedVector2, int, FixedVector2, out int, out int)"/> for
+    /// another way of numbering the tiles than the regions: finds the tile with a given label
+    /// whose center is nearest a point, by the same rules.
+    /// </summary>
+    /// <param name="labels">One number for each tile of this grid, as <c>y * width + x</c>.</param>
+    /// <param name="point">The point, which must be on the map.</param>
+    /// <param name="label">The label to look for, from 1.</param>
+    /// <param name="preferNear">Among tiles equally near the point, the one nearest this point wins.</param>
+    /// <param name="tileX">The x of the tile found.</param>
+    /// <param name="tileY">The y of the tile found.</param>
+    public bool TryFindNearestTile(
+        ReadOnlySpan<int> labels, FixedVector2 point, int label, FixedVector2 preferNear, out int tileX, out int tileY)
+    {
+        if (labels.Length != _passable.Length)
+        {
+            throw new ArgumentException($"The labels are for {labels.Length} tiles and the grid has {_passable.Length}.", nameof(labels));
+        }
+
         tileX = -1;
         tileY = -1;
         var centerX = point.X.FloorToInt();
@@ -314,7 +412,7 @@ public sealed class MapGrid
             throw new ArgumentException($"The point {point} is not on the map.", nameof(point));
         }
 
-        if (region < 1 || region > RegionCount)
+        if (label < 1)
         {
             return false;
         }
@@ -336,7 +434,7 @@ public sealed class MapGrid
                 var onEdgeRow = y == centerY - ring || y == centerY + ring;
                 for (var x = centerX - ring; x <= centerX + ring; x += onEdgeRow ? 1 : Math.Max(2 * ring, 1))
                 {
-                    if (RegionOf(x, y) != region)
+                    if (!Contains(x, y) || labels[(y * Width) + x] != label)
                     {
                         continue;
                     }
@@ -371,12 +469,12 @@ public sealed class MapGrid
 
     /// <summary>
     /// Numbers the regions by flooding from each passable tile not yet numbered, row by row, so the
-    /// numbers depend only on the terrain. Returns how many there are.
+    /// numbers depend only on which tiles are passable. Returns how many there are.
     /// </summary>
     private int LabelRegions()
     {
         var count = 0;
-        var pending = new int[_passable.Length];
+        var pending = _pending;
         for (var first = 0; first < _passable.Length; first++)
         {
             if (!_passable[first] || _regions[first] != 0)
