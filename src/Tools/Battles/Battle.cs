@@ -180,7 +180,7 @@ public static class Battle
             throw new ArgumentException($"Battle {battle.Number} cannot be fought: {problem}.", nameof(battle));
         }
 
-        var map = Arena.Create(battle.Arena);
+        var map = Arena.Create(battle.Arena, battle.BlockWidth);
         var match = MatchSetup.Create(data, map, seed: 1, [PlayerSetup.WithoutStart, PlayerSetup.WithoutStart]);
         var players = new int[2];
         players[(int)Side.Mass] = massWest ? 0 : 1;
