@@ -52,12 +52,13 @@ public sealed class SmokeTest
     private readonly SmokeOrders _orders;
     private readonly int _firstTick;
 
-    public SmokeTest(Match match, LocalSession session)
+    public SmokeTest(Match match, LocalSession session, MatchView view)
     {
         _match = match;
         _session = session;
-        _orders = new SmokeOrders(match, session.Client);
+        _orders = new SmokeOrders(match, session.Client, session.Host);
         _firstTick = match.World.Tick;
+        _orders.View = view;
     }
 
     /// <summary>The number of ticks the smoke test's match runs for: those of every part of the script.</summary>
@@ -76,16 +77,41 @@ public sealed class SmokeTest
         new MoveOrdersSmoke(),
 
         // 11v. Combat: a short fight.
+        new FightSmoke(),
 
         // 13v. Economy: a work order.
+        new GatherOrdersSmoke(),
+
+        // Sound of the research panel: an order given in it is answered. 2 seconds of play. It
+        // runs before the research below, which spends the Energy a match starts with, and
+        // leaves that Energy as it found it.
+        new ResearchSoundSmoke(),
 
         // 14v. Research: one research.
+        new ResearchSmoke(),
 
         // 15v. Construction and production.
+        new StructuresSmoke(),
+        new BuildSmoke(),
+
+        // 15v, second half. Production: a worker trained to a rally point.
+        new ProductionSmoke(),
 
         // 17v. Fog of war.
 
+        // Inspection: what the panel shows for a selection.
+        new InspectionSmoke(),
+
         // Later pieces.
+
+        // Sound, for the panels that send their orders themselves: an order placed in the build
+        // menu and in the production panel is answered. 2 seconds of play each.
+        new BuildMenuSoundSmoke(),
+        new ProductionSoundSmoke(),
+
+        // Sound: what the match so far has played, and an order answered. 1 second of play.
+        // It stops the sounds as it ends, so it stays the last part that makes one.
+        new SoundSmoke(),
     ];
 
     /// <summary>

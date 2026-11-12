@@ -27,8 +27,11 @@ public sealed class OrderRow
     /// </summary>
     public StringName? Modifier { get; init; }
 
-    /// <summary>The color of the mark the order leaves on the ground.</summary>
-    public Color Mark { get; init; } = new(1f, 0.95f, 0.4f);
+    /// <summary>
+    /// The color of the mark the order leaves on the ground at the point under the pointer, or
+    /// null for a row that shows its order in a way of its own, as round the thing it is about.
+    /// </summary>
+    public Color? Mark { get; init; } = new(1f, 0.95f, 0.4f);
 
     /// <summary>
     /// Gives the order: sends one or more commands through <c>View.Client</c>. Returns false when
@@ -60,6 +63,13 @@ public sealed class OrderTable
 
     /// <summary>The rows, in the order they were added.</summary>
     public IReadOnlyList<OrderRow> Rows => _rows;
+
+    /// <summary>
+    /// Raised at once when the table was asked for an order and the selection was not empty:
+    /// with the row that gave the order, or with null when no row had one. It is for what
+    /// answers the player before the order runs, a tick or more later: a sound.
+    /// </summary>
+    public event Action<OrderRow?>? Answered;
 
     /// <summary>
     /// The kinds of target some row names, beside the ground. The pointer is asked for these on
@@ -103,11 +113,13 @@ public sealed class OrderTable
             {
                 if (RoundOf(row) == round && row.Give(request))
                 {
+                    Answered?.Invoke(row);
                     return row;
                 }
             }
         }
 
+        Answered?.Invoke(null);
         return null;
 
         int RoundOf(OrderRow row)

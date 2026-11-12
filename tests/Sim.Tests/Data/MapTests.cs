@@ -244,7 +244,7 @@ public class MapTests
             map.Deposits[3] = """{ "kind": "natural", "x": 27, "y": 12 }""";
             map.Deposits[5] = """{ "kind": "contested", "x": 24, "y": 2 }""";
         });
-        files.Edit(SampleData.RulesPath, "\"footprint\": 2", "\"footprint\": 1");
+        files.Edit(SampleData.CapitolPath, "\"footprint\": 2", "\"footprint\": 1");
         files.Edit(SampleData.RulesPath, "\"deposit_size\": 2", "\"deposit_size\": 1");
 
         if (inside)

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="4.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The game's own assembly, for what in it decides something and needs no engine to do
+         so. No engine runs under these tests, so a test touches no class that draws, plays or
+         reads input: those are tested by the smoke test, in the engine. -->
+    <ProjectReference Include="../../game/Game.csproj" />
+    <ProjectReference Include="../../src/Sim/Sim.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>
