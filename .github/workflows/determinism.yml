@@ -109,6 +109,35 @@ jobs:
           overwrite: true
           retention-days: 14
 
+      # Times the simulation on its costliest cases: 200 units through a pass 6 tiles wide, 500
+      # units on the move, 500 separate orders in one tick, a search across a whole map. The
+      # times go into the summary of the run, as a record to compare over time: a time over the
+      # budget fails nothing, because these machines are not the ones the budget is for. What a
+      # scenario shows is the same on every machine, and the step fails when a scenario does not
+      # do it: units that never arrive, or enemies closer than their spacing. Release only: the
+      # times of a build that is not optimized mean nothing.
+      - name: Run the benchmark
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && matrix.configuration == 'Release' }}
+        shell: bash
+        run: |
+          dotnet run --no-build --configuration Release --project src/Tools -- benchmark | tee "$RUNNER_TEMP/benchmark.txt"
+          {
+            echo "### Benchmark on ${{ matrix.system.name }}"
+            echo '```'
+            cat "$RUNNER_TEMP/benchmark.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the benchmark
+        if: ${{ !cancelled() && matrix.configuration == 'Release' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: benchmark-${{ matrix.system.id }}
+          path: ${{ runner.temp }}/benchmark.txt
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 90
+
   # Each job above has compared its own run with the hashes in the replay files. This one compares
   # the jobs with each other: every system and configuration must have written the same report,
   # so the same replays with the same final hashes. It fails when a job above failed, because then

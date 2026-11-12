@@ -74,8 +74,11 @@ Nothing reads a clock. The caller decides when a tick runs; there are `SimInfo.T
 | # | System | What it does | Why it is here |
 | --- | --- | --- | --- |
 | 1 | `RoutePlanningSystem` | Finds the routes that movers are waiting for, oldest mover first, until the searches of this tick have expanded `ExpansionsPerTick` (4,096) tiles. The rest wait for the next tick. | Before anyone moves, so that a unit ordered in this tick takes its first step in this tick. |
-| 2 | `MovementSystem` | Moves every mover one step. | |
-| 3 | `SpatialIndexSystem` | Rebuilds the spatial index from the positions as they are now. | Right after movement, so that every system after it sees where things stand. A system that moves bodies goes before it. |
+| 2 | `MovementSystem` | Moves every mover one step, in the order of the unit IDs. A step that would bring a unit closer to an enemy unit than their spacing is not taken: the unit steers round the enemy or waits. | |
+| 3 | `SeparationSystem` | Steps units of one player apart: standing units to their spacing, walking units to half of it. Every step is worked out from where the units stood when the system began and then taken in the order of the unit IDs, unless an enemy unit is in its way. | After movement, so that a unit that has just arrived is given room in the same tick. Before the spatial index, because it moves bodies. |
+| 4 | `SpatialIndexSystem` | Rebuilds the spatial index from the positions as they are now. | Right after everything that moves bodies, so that every system after it sees where things stand. A system that moves bodies goes before it. |
+
+The two systems that move units cannot use the spatial index, which is rebuilt only after them. Each files the units in a grid of its own when it begins (`EnemyBlocking` in `src/Sim/Movement/`). That grid is scratch data of one run of one system: it is built from the state, read in the order of the unit IDs, and thrown away, so it is in neither the state hash nor a snapshot.
 
 The order is a rule of the game: moving a system changes results, on every machine alike, and so changes every recorded hash. A pull request that adds a system adds a row here, says where the system goes and why, and updates the golden replays.
 
