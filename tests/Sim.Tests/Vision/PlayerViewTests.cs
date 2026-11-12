@@ -591,7 +591,13 @@ public class PlayerViewTests
             SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost,
             SimEventKind.StructurePlaced, SimEventKind.StructureFinished, SimEventKind.StructureRemoved,
         ];
-        SimEventKind[] knownToItsPlayerAlone = [SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded];
+        // A queue, what comes out of it and its rally point are their owner's alone.
+        SimEventKind[] knownToItsPlayerAlone =
+        [
+            SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded,
+            SimEventKind.RallyPointSet, SimEventKind.TrainOrdered, SimEventKind.TrainCancelled, SimEventKind.TrainRefunded,
+            SimEventKind.TrainRefused, SimEventKind.UnitTrained,
+        ];
 
         foreach (var kind in Enum.GetValues<SimEventKind>())
         {
