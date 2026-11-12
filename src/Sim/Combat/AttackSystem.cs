@@ -18,9 +18,25 @@ namespace Sim.Combat;
 /// while walking is stopped, and so attacks in the next tick at the earliest. Turning takes no
 /// time, and a unit may walk again in the tick after an attack. A melee hit is reported as a
 /// <see cref="SimEventKind.MeleeHit"/> and a shot as a <see cref="SimEventKind.ShotFired"/>. A melee
-/// unit that stands closer than their spacing to a unit of its own side that is fighting has no
-/// room in the rank and does not attack (<see cref="Fighters.HasNoRoom"/>): only the front rank
-/// of a melee block fights.
+/// unit that stands closer than their spacing to a melee unit of its own side that is fighting,
+/// or that stands on its place, has no room in the rank and does not attack
+/// (<see cref="Fighters.HasNoRoom"/>): only the front rank of a melee block fights.
+/// </para>
+/// <para>
+/// <b>Places.</b> A melee unit that its own side leaves no room looks for a free place by its
+/// target and walks there (<see cref="MeleePlaces"/>). It looks when it stands in reach with no
+/// room in the rank, when its own side has stepped it out of reach, and, on its way to a target
+/// that stands still, when it is within its reach, its spacing and one step of it: then it walks
+/// onto its place, the point that faces it or the nearest free one, and not in among the units
+/// that are there. A unit on its way to its place walks on while the target is in reach. A melee
+/// unit that stands in reach with room takes where it stands as its place. A unit on its place
+/// holds its ground like one that is fighting. The place is given up when the target moves, when
+/// the unit gets another target or order, when it is no longer on the place or on its way there,
+/// when enemy units stop it on its way (on its turn to look; the next place it looks for must
+/// be one it can walk straight to), and when it has no room on it after all. A unit that finds
+/// no place because its own side has them all stops where it is and looks again on each turn to
+/// look. A structure has places like a unit: they lie round its footprint, at the unit's reach
+/// from its nearest edge.
 /// </para>
 /// <para>
 /// <b>Charge</b> (design 2.3). "The distance is what the unit has actually moved since its last
@@ -36,9 +52,9 @@ namespace Sim.Combat;
 /// which no attack changes, and never from hit points; deaths wait for <see cref="DeathSystem"/>.
 /// So a unit brought to zero earlier in the loop still attacks, a unit still attacks a target that
 /// another has just brought to zero, and the lower ID gets no first strike. Among one side the
-/// order of the store decides one thing: of two melee units that stand closer than their spacing
-/// and would both make their first attack from there in the same tick, the one asked first
-/// makes it, and the other then has no room.
+/// order of the store decides who gets a place: units look in that order, a place taken is in
+/// the state at once, and of two melee units that stand closer than their spacing and could both
+/// take where they stand, the one asked first does, and the other then has no room.
 /// </para>
 /// <para>
 /// <b>Picking.</b> Idle units and units on an attack-move pick their own target: the nearest enemy
@@ -56,7 +72,8 @@ namespace Sim.Combat;
 /// while it has such a structure it looks again on each of its turns to look: it turns on a unit
 /// or a Tower as soon as one can be picked, and otherwise keeps the structure it has. A wall or a
 /// gate is attacked only on an attack order. A unit sent at a structure walks up to the tile
-/// beside its footprint that is nearest to itself. Towers themselves attack in
+/// beside its footprint that is nearest to itself, and a melee unit takes its place by the
+/// footprint when it is nearly there. Towers themselves attack in
 /// <see cref="TurretSystem"/>.
 /// </para>
 /// <para>
@@ -92,6 +109,7 @@ public sealed class AttackSystem : ISystem
     private readonly Targeting _targeting;
     private readonly Approach _approach;
     private readonly Fighters _fighters;
+    private readonly MeleePlaces _places;
     private readonly PerkCounters _counters;
     private readonly SimEventList _events;
 
@@ -106,6 +124,7 @@ public sealed class AttackSystem : ISystem
         Targeting targeting,
         Approach approach,
         Fighters fighters,
+        MeleePlaces places,
         PerkCounters counters,
         SimEventList events)
     {
@@ -116,6 +135,7 @@ public sealed class AttackSystem : ISystem
         ArgumentNullException.ThrowIfNull(targeting);
         ArgumentNullException.ThrowIfNull(approach);
         ArgumentNullException.ThrowIfNull(fighters);
+        ArgumentNullException.ThrowIfNull(places);
         ArgumentNullException.ThrowIfNull(counters);
         ArgumentNullException.ThrowIfNull(events);
         _bodies = bodies;
@@ -125,6 +145,7 @@ public sealed class AttackSystem : ISystem
         _targeting = targeting;
         _approach = approach;
         _fighters = fighters;
+        _places = places;
         _counters = counters;
         _events = events;
     }
@@ -162,6 +183,12 @@ public sealed class AttackSystem : ISystem
             if (!attacked && unit.Wait < Fraction.Zero)
             {
                 unit.Wait = Fraction.Zero;
+            }
+
+            // A place is by one target. Whatever took the target away took the place with it.
+            if (!unit.HasPlace)
+            {
+                unit.PlaceFor = EntityId.None;
             }
         }
     }
@@ -372,8 +399,8 @@ public sealed class AttackSystem : ISystem
     }
 
     /// <summary>
-    /// Attacks the unit's target if it can, and otherwise stops within reach of it or walks after
-    /// it. True when it attacked.
+    /// Attacks the unit's target if it can, and otherwise stops within reach of it, walks after
+    /// it, or goes to a free place by it. True when it attacked.
     /// </summary>
     private bool Fight(ref Combatant unit, in Turn turn, in Body target, bool retargeted)
     {
@@ -383,22 +410,73 @@ public sealed class AttackSystem : ISystem
         var nearest = mark.NearestTo(position);
         var reaches = _targeting.Reaches(profile, position, in mark);
 
+        // Enemy units have stopped it on its way: a place it looks for now must be one it can
+        // walk straight to.
+        var blocked = turn.Mover >= 0 && _movers.ValueAt(turn.Mover).Waiting;
+
+        if (unit.PlaceFor != EntityId.None)
+        {
+            if (!KeepsPlace(in unit, in turn, in target, retargeted))
+            {
+                unit.PlaceFor = EntityId.None;
+            }
+            else if (position != unit.Place)
+            {
+                // On its way to its place. It walks on even where the target is already in
+                // reach: it has no room to attack from before it gets there.
+                return false;
+            }
+        }
+
         // A unit does not step back from a target inside its minimum range. It stands and waits.
         if (reaches || Targeting.IsTooClose(profile, position, nearest))
         {
             unit.Engaged = true;
             unit.AimedAt = target.Position;
+            var stopped = false;
             if (turn.Mover >= 0)
             {
-                _movers.ValueAt(turn.Mover).Stop();
+                ref var walker = ref _movers.ValueAt(turn.Mover);
+                stopped = walker.State != MoveState.Idle;
+                walker.Stop();
             }
 
-            if (!reaches || turn.Moved || unit.Wait > Fraction.Zero)
+            if (!reaches)
             {
                 return false;
             }
 
-            if (profile.Melee && _fighters.HasNoRoom(turn.Entity, turn.Body))
+            // A melee unit looks at its own side when it has just stopped, when it is ready to
+            // attack, and on its turn to look; one that is fighting from where it stands has its
+            // room. With no room in the rank it does not attack, and looks for a free place by
+            // its target. With room, where it stands becomes its place, so that the units behind
+            // it leave it there.
+            var ready = !turn.Moved && unit.Wait <= Fraction.Zero;
+            if (profile.Melee
+                && turn.Mover >= 0
+                && (ready || stopped || turn.TurnToLook)
+                && !(unit.Wait > Fraction.Zero && unit.Fought == position))
+            {
+                if (_fighters.HasNoRoom(turn.Entity, turn.Body))
+                {
+                    unit.PlaceFor = EntityId.None;
+                    if (stopped || turn.TurnToLook)
+                    {
+                        TakePlace(ref unit, in turn, in target, blocked, out _);
+                    }
+
+                    return false;
+                }
+
+                if (unit.PlaceFor == EntityId.None
+                    && _places.IsFreeWhereItStands(turn.Entity, turn.Body, profile, unit.Target, target.Position))
+                {
+                    unit.PlaceFor = unit.Target;
+                    unit.Place = position;
+                }
+            }
+
+            if (!ready)
             {
                 return false;
             }
@@ -461,14 +539,49 @@ public sealed class AttackSystem : ISystem
             return false;
         }
 
-        // The walk is planned when the unit takes up the target, and again when the target has
-        // moved on: at once if the unit has nowhere left to go, else on its turn to look. An idle
-        // unit that has come to the end of its walk without the target in reach thinks again too.
-        // So does any other unit that stands out of reach, on its turn to look: its own side has
-        // stepped it away from a target it had reached (design 2.4, units that stop settle), and
-        // it walks up again, a little further round the target each time, until it has a place.
         ref var mover = ref _movers.ValueAt(turn.Mover);
         var arrived = mover.State == MoveState.Idle;
+
+        // A melee unit that has come to a stop by a target that has not moved since, and stands
+        // out of reach of it: its own side has stepped it away from a target it had reached
+        // (design 2.4, units that stop settle). On its turn to look it looks for a free place by
+        // the target. When there is none because its own side has them all, it waits where it
+        // stands: walking up again would only get it stepped away again.
+        var settled = profile.Melee && !retargeted && unit.Engaged && unit.AimedAt == target.Position;
+        if (settled && arrived)
+        {
+            if (!turn.TurnToLook)
+            {
+                return false;
+            }
+
+            if (TakePlace(ref unit, in turn, in target, blocked, out var crowded) || crowded)
+            {
+                return false;
+            }
+        }
+        else if (settled && IsNear(in turn, in mover, in mark))
+        {
+            // On its way to a target that stands still, and nearly there. It looks for its place
+            // now and walks onto it: the point that faces it, where it would have stopped anyway,
+            // or the nearest free one when its own side is in the way there. When its own side
+            // has every place it stops here, behind them, and does not walk in among them.
+            if (TakePlace(ref unit, in turn, in target, blocked, out var crowded))
+            {
+                return false;
+            }
+
+            if (crowded)
+            {
+                mover.Stop();
+                return false;
+            }
+        }
+
+        // The walk is planned when the unit takes up the target, and again when the target has
+        // moved on: at once if the unit has nowhere left to go, else on its turn to look. An idle
+        // unit that has come to the end of its walk without the target in reach thinks again too,
+        // and so does any other unit that stands out of reach, on its turn to look.
         var replan = retargeted
             || !unit.Engaged
             || (arrived && (unit.Order == UnitOrder.Idle || turn.TurnToLook))
@@ -500,6 +613,80 @@ public sealed class AttackSystem : ISystem
         unit.Engaged = true;
         unit.AimedAt = target.Position;
         return false;
+    }
+
+    /// <summary>
+    /// True when a walking unit is near enough to its target to look for its place: within its
+    /// reach, its own spacing and one step. A unit that finds no place stops there, and from
+    /// further out than its spacing behind the units that have the places.
+    /// </summary>
+    private bool IsNear(in Turn turn, in Mover mover, in Mark mark)
+    {
+        var reach = mark.IsStructure ? _targeting.Rules.StructureReach : _targeting.Rules.Reach(turn.Profile.Line, mark.Line);
+        return mark.DistanceSquaredRawTo(turn.Body.Position) <= FixedVector2.SquareRaw(reach + mover.Spacing + mover.Speed);
+    }
+
+    /// <summary>
+    /// True while the place a unit has is still its place: the target stands where it stood, and
+    /// the unit stands on the place or is on its way there. A unit that enemy units have stopped
+    /// on the way gives the place up on its turn to look.
+    /// </summary>
+    private bool KeepsPlace(in Combatant unit, in Turn turn, in Body target, bool retargeted)
+    {
+        if (retargeted || !unit.HasPlace || unit.AimedAt != target.Position || turn.Mover < 0)
+        {
+            return false;
+        }
+
+        ref var mover = ref _movers.ValueAt(turn.Mover);
+        if (mover.State == MoveState.Idle)
+        {
+            return turn.Body.Position == unit.Place;
+        }
+
+        return mover.Destination == unit.Place && !(mover.Waiting && turn.TurnToLook);
+    }
+
+    /// <summary>
+    /// Finds a free place by the unit's target and sends the unit there. False when there is
+    /// none; <paramref name="crowded"/> then says whether its own side has taken the room.
+    /// </summary>
+    private bool TakePlace(ref Combatant unit, in Turn turn, in Body target, bool blocked, out bool crowded)
+    {
+        var position = turn.Body.Position;
+        crowded = false;
+
+        // A unit that cannot walk stands where it is and waits for room there.
+        if (_movers.ValueAt(turn.Mover).Speed <= Fixed.Zero)
+        {
+            return false;
+        }
+
+        if (!_places.TryFind(
+            turn.Entity, turn.Body, turn.Profile, unit.Order, unit.Anchor, unit.Target, target.Position, blocked, out var place, out crowded))
+        {
+            return false;
+        }
+
+        unit.PlaceFor = unit.Target;
+        unit.Place = place;
+        unit.Engaged = true;
+        unit.AimedAt = target.Position;
+        ref var mover = ref _movers.ValueAt(turn.Mover);
+        if (place == position)
+        {
+            mover.Stop();
+        }
+        else if (unit.Order == UnitOrder.Idle)
+        {
+            mover.WalkStraightTo(place);
+        }
+        else
+        {
+            _approach.WalkTo(ref mover, position, place);
+        }
+
+        return true;
     }
 
     private bool IsWalking(int mover) => mover >= 0 && _movers.ValueAt(mover).State != MoveState.Idle;

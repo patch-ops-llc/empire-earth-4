@@ -88,6 +88,8 @@ public static class MatchSetup
         };
         var approach = new Approach(grid);
         var fighters = new Fighters(data, combat, combatants, bodies, movers, spatialIndex);
+        var placeHolders = new PlaceHolders(workers);
+        var places = new MeleePlaces(grid, bodies, movers, combatants, spatialIndex, targeting, fighters, placeHolders);
 
         // What a research that finishes brings up to date in the state of what stands on the map,
         // in this order: the hit points and the speed of the player's units and workers.
@@ -184,11 +186,11 @@ public static class MatchSetup
         simulation.AddSystem(producing);
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes) { WalkCounter = perkCounters });
-        simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, new PlaceHolders(workers), fighters));
+        simulation.AddSystem(new SeparationSystem(grid, bodies, movers, routes, placeHolders, fighters));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
         simulation.AddSystem(new VisionSystem(vision));
         simulation.AddSystem(new ShotSystem(bodies, shots, targeting, simulation.Events));
-        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, perkCounters, simulation.Events));
+        simulation.AddSystem(new AttackSystem(bodies, movers, combatants, shots, targeting, approach, fighters, places, perkCounters, simulation.Events));
         simulation.AddSystem(new TurretSystem(bodies, structures, turrets, shots, targeting, simulation.Events));
         simulation.AddSystem(new DeathSystem(bodies, health, simulation.Events));
         simulation.AddSystem(new UpkeepSystem(research, bodies, combatants, health, perkCounts, stockpiles, simulation.Events));

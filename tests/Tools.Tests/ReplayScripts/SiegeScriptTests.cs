@@ -1,5 +1,6 @@
 using Sim.Combat;
 using Sim.Core;
+using Sim.Movement;
 using Sim.Numerics;
 using Sim.Setup;
 
@@ -11,7 +12,13 @@ namespace Tools.Tests.ReplayScripts;
 /// </summary>
 public class SiegeScriptTests
 {
-    private const string GoldenReplay = "switchback-siege.replay";
+    /// <summary>
+    /// The match recorded for the script with the live refresh, which brings the units on the map
+    /// up to date when a research finishes. The first, <c>switchback-siege.replay</c>, was
+    /// recorded without that: it is kept and reproduces, but its fights go another way with it,
+    /// and it does not reach every rule below.
+    /// </summary>
+    private const string GoldenReplay = "switchback-siege-live-refresh.replay";
 
     private static readonly string[] EveryKindOfOrder =
     [
@@ -99,6 +106,11 @@ public class SiegeScriptTests
             "a Tower destroyed",
             "a unit that picked a Tower by itself",
             "a unit on an attack-move that picked a structure that does not attack",
+            "a melee unit walking to its place by a structure",
+            "a melee unit that attacks a structure from its place",
+            "a melee unit with a place by a wall",
+            "three melee units on their places by one structure",
+            "a melee unit that stands out of reach of a structure while another is on its place by it",
         ];
         var missing = string.Join("; ", expected.Except(seen).Order(StringComparer.Ordinal));
         var unexpected = string.Join("; ", seen.Except(expected).Order(StringComparer.Ordinal));
@@ -284,6 +296,72 @@ public class SiegeScriptTests
                 Assert.Equal(UnitOrder.AttackMove, unit.Order);
                 seen.Add("a unit on an attack-move that picked a structure that does not attack");
             }
+        }
+
+        seen.UnionWith(PlacesByStructures(match));
+        return seen;
+    }
+
+    /// <summary>
+    /// What the melee units have of the places round structures after the tick that has just
+    /// run, in the words of the list of <see cref="ItsGoldenReplayReachesTheRulesItGuards"/>.
+    /// </summary>
+    private static HashSet<string> PlacesByStructures(Match match)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var onPlaces = new Dictionary<EntityId, int>();
+        var waiting = new HashSet<EntityId>();
+        for (var i = 0; i < match.Combatants.Count; i++)
+        {
+            var entity = match.Combatants.EntityAt(i);
+            var unit = match.Combatants.ValueAt(i);
+            var body = match.Bodies.Get(entity);
+            if (!match.Combat.ProfileOf(body.Owner, unit.Chassis).Melee || !match.Structures.TryGet(unit.Target, out var structure))
+            {
+                continue;
+            }
+
+            if (!unit.HasPlace)
+            {
+                if (unit.Engaged
+                    && match.Movers.Get(entity).State == MoveState.Idle
+                    && structure.Tiles.DistanceSquaredRawTo(body.Position) > match.Combat.StructureReachSquared)
+                {
+                    waiting.Add(unit.Target);
+                }
+
+                continue;
+            }
+
+            Assert.True(
+                structure.Tiles.DistanceSquaredRawTo(unit.Place) <= match.Combat.StructureReachSquared,
+                "A place by a structure is out of reach of it.");
+            if (IsWall(match, structure.Type))
+            {
+                seen.Add("a melee unit with a place by a wall");
+            }
+
+            if (body.Position != unit.Place)
+            {
+                seen.Add("a melee unit walking to its place by a structure");
+                continue;
+            }
+
+            onPlaces[unit.Target] = onPlaces.GetValueOrDefault(unit.Target) + 1;
+            if (unit.Wait > Fraction.Zero && unit.Fought == unit.Place)
+            {
+                seen.Add("a melee unit that attacks a structure from its place");
+            }
+        }
+
+        if (onPlaces.Values.Any(count => count >= 3))
+        {
+            seen.Add("three melee units on their places by one structure");
+        }
+
+        if (waiting.Any(onPlaces.ContainsKey))
+        {
+            seen.Add("a melee unit that stands out of reach of a structure while another is on its place by it");
         }
 
         return seen;
