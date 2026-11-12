@@ -13,7 +13,14 @@ namespace Tools.Tests.ReplayScripts;
 /// </summary>
 public class CombatPerkScriptTests
 {
-    private const string GoldenReplay = "switchback-combat-perks.replay";
+    /// <summary>
+    /// The match recorded for the script when a finished research brings the units on the map up
+    /// to date (live refresh). The first, <c>switchback-combat-perks.replay</c>, was recorded
+    /// before that: it is kept and reproduces, but its fights go another way now, some of its
+    /// attack orders name what their player does not see, and it no longer reaches five of the
+    /// rules below.
+    /// </summary>
+    private const string GoldenReplay = "switchback-combat-perks-live-refresh.replay";
 
     private static readonly string[] EveryKindOfOrder =
     [

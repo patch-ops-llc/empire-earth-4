@@ -637,7 +637,12 @@ public class PlayerViewTests
             SimEventKind.Death, SimEventKind.MeleeHit, SimEventKind.ShotFired, SimEventKind.ShotHit, SimEventKind.ShotLost,
             SimEventKind.StructurePlaced, SimEventKind.StructureFinished, SimEventKind.StructureRemoved,
         ];
-        SimEventKind[] knownToItsPlayerAlone = [SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded];
+        SimEventKind[] knownToItsPlayerAlone =
+        [
+            SimEventKind.OrderRefused, SimEventKind.BuildRefused, SimEventKind.BuildOrderEnded,
+            SimEventKind.EpochChanged, SimEventKind.ResearchCancelled, SimEventKind.ResearchFinished, SimEventKind.ResearchLost,
+            SimEventKind.ResearchStarted,
+        ];
 
         foreach (var kind in Enum.GetValues<SimEventKind>())
         {

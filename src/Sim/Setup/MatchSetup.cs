@@ -58,8 +58,10 @@ public static class MatchSetup
         var workers = world.AddStore(new ComponentStore<Worker>(Worker.StoreName));
         var workSites = world.AddStore(new ComponentStore<WorkSite>(WorkSite.StoreName));
 
+        var simulation = new Simulation(world);
+
         // Worked out from the state and not state itself. Match.RefreshDerivedState renews it.
-        var research = new MatchResearch(data, world, researchState, stockpiles, data.Rules.Match.EpochCap);
+        var research = new MatchResearch(data, world, researchState, stockpiles, data.Rules.Match.EpochCap, simulation.Events);
         var routes = new RouteCache(grid);
         var spatialIndex = new SpatialIndex(grid, world.Entities, bodies);
 
@@ -78,7 +80,17 @@ public static class MatchSetup
         var approach = new Approach(grid);
         var fighters = new Fighters(data, combat, combatants, bodies, movers, spatialIndex);
 
-        var simulation = new Simulation(world);
+        // What a research that finishes brings up to date in the state of what stands on the map,
+        // in this order: the hit points and the speed of the player's units and workers.
+        research.AddTechChangeHandler(new UnitRefresh(combat, bodies, combatants, health, movers, workers));
+
+        // The development tier raises a track the way a research that finishes does, so it is
+        // research's to carry out. Only while the rules switch it on, like the development spawn
+        // further down: otherwise the command has no handler and is dropped.
+        if (data.Rules.Debug.Spawn)
+        {
+            simulation.SetCommandHandler(CommandType.DebugSetTier, new DebugSetTierHandler(research, simulation.Events));
+        }
 
         // Command handlers, in alphabetical order of their types. The order here changes nothing.
         // The four orders of a unit share one handler, which walks a move through the move order's

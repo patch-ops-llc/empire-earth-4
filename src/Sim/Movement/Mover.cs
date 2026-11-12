@@ -48,7 +48,12 @@ public struct Mover : IStateValue
     /// </summary>
     public static Fixed DefaultSpacing => Fixed.One;
 
-    /// <summary>The distance covered in one tick, in tiles. Zero for a mover that cannot move now.</summary>
+    /// <summary>
+    /// The distance covered in one tick, in tiles. Zero for a mover that cannot move now. Whoever
+    /// places the mover sets it, and movement only reads it. For a unit of a chassis it is the
+    /// speed of its owner's blueprint, and <see cref="Research.UnitRefresh"/> sets it again when a
+    /// research of the owner finishes; an order under way goes on at the new speed.
+    /// </summary>
     public Fixed Speed { get; set; }
 
     /// <summary>

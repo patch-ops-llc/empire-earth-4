@@ -47,18 +47,24 @@ public class ResearchScriptTests
         var replay = ReplayRuns.ReadGolden(GoldenReplay);
         var match = ReplayRuns.Start(replay);
         var seen = KindsOfOrders(replay, match);
-        match.Research.Reported += reported => seen.Add(reported.Kind switch
-        {
-            ResearchEventKind.Started => "a research started and paid for",
-            ResearchEventKind.Cancelled => "a research cancelled and refunded",
-            ResearchEventKind.Finished => "a research finished and the tier raised",
-            _ => $"research event {reported.Kind}",
-        });
         var due = replay.Commands.ToLookup(entry => entry.Tick, entry => entry.Command);
         for (var tick = 0; tick < replay.TickCount; tick++)
         {
             seen.UnionWith(OrdersRefused(match, due[tick]));
             match.Simulation.Tick();
+            foreach (var reported in match.Simulation.Events)
+            {
+                if (ResearchEvent.IsResearch(reported.Kind))
+                {
+                    seen.Add(reported.Kind switch
+                    {
+                        SimEventKind.ResearchStarted => "a research started and paid for",
+                        SimEventKind.ResearchCancelled => "a research cancelled and refunded",
+                        SimEventKind.ResearchFinished => "a research finished and the tier raised",
+                        _ => $"research event {reported.Kind}",
+                    });
+                }
+            }
         }
 
         string[] expected =
