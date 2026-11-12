@@ -16,20 +16,28 @@ namespace Sim.Combat;
 /// in the tick it is made; a ranged attack fires a <see cref="Shot"/>. A unit that comes into reach
 /// while walking is stopped, and so attacks in the next tick at the earliest. Turning takes no
 /// time, and a unit may walk again in the tick after an attack. A melee hit is reported as a
-/// <see cref="SimEventKind.MeleeHit"/> and a shot as a <see cref="SimEventKind.ShotFired"/>.
+/// <see cref="SimEventKind.MeleeHit"/> and a shot as a <see cref="SimEventKind.ShotFired"/>. A melee
+/// unit that stands closer than their spacing to a unit of its own side that is fighting has no
+/// room in the rank and does not attack (<see cref="Fighters.HasNoRoom"/>): only the front rank
+/// of a melee block fights.
 /// </para>
 /// <para>
-/// <b>Nothing here depends on the order of the units.</b> A unit decides from positions, which no
-/// attack changes, and never from hit points; deaths wait for <see cref="DeathSystem"/>. So a unit
-/// brought to zero earlier in the loop still attacks, a unit still attacks a target that another
-/// has just brought to zero, and the lower ID gets no first strike.
+/// <b>Nothing between enemies depends on the order of the units.</b> A unit decides from positions,
+/// which no attack changes, and never from hit points; deaths wait for <see cref="DeathSystem"/>.
+/// So a unit brought to zero earlier in the loop still attacks, a unit still attacks a target that
+/// another has just brought to zero, and the lower ID gets no first strike. Among one side the
+/// order of the store decides one thing: of two melee units that stand closer than their spacing
+/// and would both make their first attack from there in the same tick, the one asked first
+/// makes it, and the other then has no room.
 /// </para>
 /// <para>
 /// <b>Picking.</b> Idle units and units on an attack-move pick their own target: the nearest enemy
 /// in acquisition range that they can hit. A unit without a target looks every
 /// <see cref="CombatRules.LookInterval"/> ticks, taking turns by ID. A unit whose wait is over and
-/// whose picked target is not in reach picks again in that tick. A unit on a move order never
-/// picks, and the target of an attack order is never swapped.
+/// whose picked target is not in reach picks again in that tick. A unit that enemy units have
+/// stopped on its way (<see cref="Mover.Waiting"/>) picks the nearest enemy it can hit from where
+/// it stands, if there is one: the units in its way are in reach, so it fights them. A unit on a
+/// move order never picks, and the target of an attack order is never swapped.
 /// </para>
 /// <para>
 /// <b>How far a unit goes.</b> An idle unit walks straight toward its target, and never further
@@ -47,6 +55,7 @@ public sealed class AttackSystem : ISystem
     private readonly ComponentStore<Shot> _shots;
     private readonly Targeting _targeting;
     private readonly Approach _approach;
+    private readonly Fighters _fighters;
     private readonly SimEventList _events;
 
     public AttackSystem(
@@ -56,6 +65,7 @@ public sealed class AttackSystem : ISystem
         ComponentStore<Shot> shots,
         Targeting targeting,
         Approach approach,
+        Fighters fighters,
         SimEventList events)
     {
         ArgumentNullException.ThrowIfNull(bodies);
@@ -64,6 +74,7 @@ public sealed class AttackSystem : ISystem
         ArgumentNullException.ThrowIfNull(shots);
         ArgumentNullException.ThrowIfNull(targeting);
         ArgumentNullException.ThrowIfNull(approach);
+        ArgumentNullException.ThrowIfNull(fighters);
         ArgumentNullException.ThrowIfNull(events);
         _bodies = bodies;
         _movers = movers;
@@ -71,6 +82,7 @@ public sealed class AttackSystem : ISystem
         _shots = shots;
         _targeting = targeting;
         _approach = approach;
+        _fighters = fighters;
         _events = events;
     }
 
@@ -195,6 +207,18 @@ public sealed class AttackSystem : ISystem
     private bool Look(ref Combatant unit, in Turn turn)
     {
         var picked = _targeting.Pick(turn.World, turn.Entity, turn.Body, turn.Profile, unit.Order, unit.Anchor);
+
+        // Enemy units have stopped it on its way. The nearest enemy may be one it cannot get to,
+        // so it takes the nearest it can hit from where it stands, if there is one.
+        if (turn.Mover >= 0 && _movers.ValueAt(turn.Mover).Waiting)
+        {
+            var inReach = _targeting.PickInReach(turn.World, turn.Entity, turn.Body, turn.Profile);
+            if (inReach != EntityId.None)
+            {
+                picked = inReach;
+            }
+        }
+
         var changed = picked != unit.Target;
         unit.Target = picked;
         if (picked == EntityId.None)
@@ -259,6 +283,11 @@ public sealed class AttackSystem : ISystem
                 return false;
             }
 
+            if (profile.Melee && _fighters.HasNoRoom(turn.Entity, turn.Body))
+            {
+                return false;
+            }
+
             if (turn.Mover >= 0 && target.Position != position)
             {
                 _movers.ValueAt(turn.Mover).Facing = (target.Position - position).ToAngle();
@@ -286,6 +315,7 @@ public sealed class AttackSystem : ISystem
             }
 
             unit.Wait += profile.IntervalTicks;
+            unit.Fought = position;
             return true;
         }
 
@@ -298,11 +328,14 @@ public sealed class AttackSystem : ISystem
         // The walk is planned when the unit takes up the target, and again when the target has
         // moved on: at once if the unit has nowhere left to go, else on its turn to look. An idle
         // unit that has come to the end of its walk without the target in reach thinks again too.
+        // So does any other unit that stands out of reach, on its turn to look: its own side has
+        // stepped it away from a target it had reached (design 2.4, units that stop settle), and
+        // it walks up again, a little further round the target each time, until it has a place.
         ref var mover = ref _movers.ValueAt(turn.Mover);
         var arrived = mover.State == MoveState.Idle;
         var replan = retargeted
             || !unit.Engaged
-            || (arrived && unit.Order == UnitOrder.Idle)
+            || (arrived && (unit.Order == UnitOrder.Idle || turn.TurnToLook))
             || (unit.AimedAt != target.Position && (turn.TurnToLook || arrived));
         if (!replan)
         {
