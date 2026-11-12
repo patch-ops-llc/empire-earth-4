@@ -77,6 +77,9 @@ public sealed class SmokeTest
         // Units: move orders. 30 seconds of play.
         new MoveOrdersSmoke(),
 
+        // Control groups: an order to a group. 6 seconds of play.
+        new ControlGroupsSmoke(),
+
         // 11v. Combat: a short fight.
         new FightSmoke(),
 

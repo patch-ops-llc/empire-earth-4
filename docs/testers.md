@@ -83,6 +83,13 @@ If joining fails, the menu says why in orange:
 | Select one of your structures | Click it |
 | Select several | Hold the left button and drag a box round them |
 | Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is already in |
+| Select every unit of one kind on screen | Double-click one of them. With Shift held they are added to the selection |
+| Make the selection a numbered group | Ctrl and a digit, 1 to 9 or 0. On a Mac, Command and the digit does the same |
+| Add the selection to a group | Ctrl, Shift and the group's digit |
+| Select a group | Its digit. With Shift held the group is added to the selection |
+| Look at a group | Its digit twice, quickly |
+| Select the next idle worker and look at it | The period key (.). With Shift held the worker is added to the selection |
+| Look at the selection | Space |
 | Clear the selection | Click the ground |
 | See what another player's unit is | Click it. A pale ring marks it and the panel at the bottom describes it. It cannot be given orders |
 | Send the selected workers to work at a deposit | Right-click the deposit |
@@ -125,6 +132,10 @@ The brown blocks on the map are deposits. Select workers and right-click a depos
 - You see the map through your own units, in the world and on the small map alike: see The fog of war below.
 - Units find their own way round the cliffs and the forest. A unit that needs a way round stands still for a moment while it works one out.
 - Nobody can stand on cliffs or among trees. If you send units there, they go to the nearest place they can reach. The yellow ring stays where you clicked.
+- Under the bar at the top, on the left, a row of small buttons shows your groups, each as its digit and the number of units in it, and after them how many of your workers are idle. A group that is exactly what you have selected has a green edge. Clicking a button does what its key does.
+- A group holds units, wherever they go. A unit can be in several groups. Ctrl and a digit with nothing selected changes nothing, and so does the digit of a group that is empty. The groups are yours alone: the other player never learns of them.
+- A worker is idle when it stands still and has neither an order nor work to do. The period key goes through your idle workers one after another, and a line under the top bar says so when there is none.
+- Every unit is a worker for now, so a double-click on one selects all your workers on screen.
 - Units sent to the same place end up standing inside each other, on one point. They do not make room for each other yet.
 - When you play alone, the other player's workers never move. Nothing controls them.
 - In a shared match, both players see the same workers in the same places. An order takes a moment longer to start than it does alone, because it travels to the host first.

@@ -106,6 +106,13 @@ Its orders in the smoke test are a `SmokePart`, a stretch of ticks of its own th
 | Select a structure of your own | Left click on it. Structures and units are not selected together |
 | Select several | Drag a box round them with the left button |
 | Add to the selection | Hold Shift and drag a box. Shift and a click adds a unit, or takes it out if it is in |
+| Select every unit of one kind on screen | Double click on one of them. With Shift held they are added to the selection |
+| Make the selection a numbered group | Ctrl and a digit, `1` to `9` or `0`. Command and the digit does the same on a Mac |
+| Add the selection to a group | Ctrl, Shift and the group's digit |
+| Select a group | Its digit. With Shift held the group is added to the selection |
+| Look at a group | Its digit twice within half a second |
+| Select the next idle worker and look at it | `.` With Shift held it is added to the selection |
+| Look at the selection | Space |
 | Clear the selection | Left click on the ground |
 | Send the selected workers to work at a deposit | Right click on the deposit |
 | Send the selected units somewhere | Right click on the ground |
