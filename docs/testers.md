@@ -179,7 +179,11 @@ Select units and the panel at the bottom of the window says what they are.
 - **Several units** are summed up, one row for each kind: how many, their hit points together, the Firepower (FP), Protection (PR) and Mobility (MO) tiers they fight with, and their accents. Point at an accent to read what it does.
 - **A worker** shows its hit points, what it is doing, its speed and sight. A worker has no tiers and no accents.
 - **Another player's unit**, when you click it, shows its hit points, its Firepower, Protection and Mobility tiers and its accents. Its price and supply are the owner's to know. The panel lets the unit go when it walks out of your sight.
-- Units with accents carry small square badges over their heads, in the color of the track, with one white mark for level I and two for level II. Every player's units show them. They sit just over the place of a unit's hit point bar.
+- Units with accents carry small square badges over their heads, in the color of the track, with one white mark for level I and two for level II. A unit shows two at most, the stronger on the left. They sit just over the place of a unit's hit point bar.
+- The colors are those of the research grid: red for Firepower, blue for Protection, green for Mobility, orange for Manufacturing, purple for Logistics.
+- Zoomed far out there is no room for the marks, and the badges become small boxes that you count: one box for level I, two boxes stacked for level II. So a red stack of two beside one blue box is Firepower II and Protection I.
+- Your own units always show their badges. Another player's units show theirs while you see the unit, and that is all the badges tell you about the other player's research: scout to read them.
+- When a research finishes, the badges of the units you already have change at once. On an older unit a new accent can push out one it carried, and its badge goes with it.
 - When a player's epoch rises, a banner under the top bar says which epoch they reached. Your own is larger and says how high your tracks may now go.
 - Only workers start a match. Fighting units, which have the cards, tiers, accents and badges, come from the development aid for now: see Trying a fight.
 - A unit made before a Protection or Mobility research keeps the hit points and speed it was made with for now, though its card already shows the new tier. Damage, range and accents follow the research at once.

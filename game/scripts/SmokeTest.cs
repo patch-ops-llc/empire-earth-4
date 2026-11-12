@@ -100,6 +100,9 @@ public sealed class SmokeTest
         // Inspection: what the panel shows for a selection.
         new InspectionSmoke(),
 
+        // M20. Accent badges: a research that finishes, a unit of the other seat seen and lost from sight.
+        new BadgesSmoke(),
+
         // Later pieces.
     ];
 
