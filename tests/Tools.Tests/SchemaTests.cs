@@ -11,7 +11,7 @@ public class SchemaTests
 {
     private static readonly JsonDocumentOptions Jsonc = new() { CommentHandling = JsonCommentHandling.Skip };
 
-    private static readonly string[] OneFileOfEachKind = ["tracks.jsonc", "rules.jsonc", "research.jsonc", "accents.jsonc", "lines/x.jsonc", "maps/x.jsonc"];
+    private static readonly string[] OneFileOfEachKind = ["tracks.jsonc", "rules.jsonc", "research.jsonc", "resources.jsonc", "accents.jsonc", "lines/x.jsonc", "maps/x.jsonc"];
 
     public static TheoryData<string> DataFiles() =>
         [.. new DiskDataFiles(Repository.DataFolder).ListFiles()];
@@ -43,6 +43,11 @@ public class SchemaTests
     [InlineData("research.jsonc", "\"tier\": 2", "\"tier\": 1", "$.tiers[0].tier: is below 2")]
     [InlineData("research.jsonc", "\"materials\": 100,", "\"material\": 100,", "$.tiers[0].cost: has an unknown key material")]
     [InlineData("research.jsonc", "\"energy\": 2800", "\"energy\": -2800", "$.tiers[7].cost.energy: is below 0")]
+    [InlineData("resources.jsonc", "\"depleted_rate\": \"0.5\"", "\"depleted_rate\": 0.5", "$.materials.depleted_rate: matches none of the allowed forms")]
+    [InlineData("resources.jsonc", "\"workers_per_deposit\": 8", "\"workers_per_deposit\": 0", "$.materials.workers_per_deposit: is below 1")]
+    [InlineData("resources.jsonc", "\"workers_per_generator\": 4", "\"generator_slots\": 4", "$.energy: has an unknown key generator_slots")]
+    [InlineData("resources.jsonc", "\"sight\": 6,", "", "$.worker: has no sight")]
+    [InlineData("resources.jsonc", "\"energy\": 0 }", "\"energy\": -1 }", "$.worker.cost.energy: is below 0")]
     [InlineData("accents.jsonc", "\"firepower\": {", "\"Firepower\": {", "$.accents.Firepower (key): does not match")]
     [InlineData("accents.jsonc", "\"name\": \"Rapid\",", "", "$.accents.mobility: has no name")]
     [InlineData("accents.jsonc", "\"splash\": {", "\"spalsh\": {", "$.accents.firepower.level_2: has an unknown key spalsh")]
@@ -103,6 +108,7 @@ public class SchemaTests
             "tracks.jsonc" => "tracks.schema.json",
             "rules.jsonc" => "rules.schema.json",
             "research.jsonc" => "research.schema.json",
+            "resources.jsonc" => "resources.schema.json",
             "accents.jsonc" => "accents.schema.json",
             _ when file.StartsWith("lines/", StringComparison.Ordinal) => "line.schema.json",
             _ when file.StartsWith("maps/", StringComparison.Ordinal) => "map.schema.json",

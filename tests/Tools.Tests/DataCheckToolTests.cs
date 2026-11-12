@@ -14,6 +14,8 @@ public class DataCheckToolTests
         Assert.Equal("", errors);
         Assert.Equal(ExitCodes.Ok, exitCode);
         Assert.Contains("is valid.", output, StringComparison.Ordinal);
+        Assert.Contains("  research:     8 tiers, from 2 to 9\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("  accents:      5\n", output.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         Assert.Matches("content hash: sha256:[0-9a-f]{64}", output);
     }
 
@@ -41,6 +43,10 @@ public class DataCheckToolTests
     [InlineData("research.jsonc", "\"tier\": 5,", "\"tier\": 6,", "research.jsonc: $.tiers[3].tier: list every tier from 2 to 9 in order; expected tier 5 here, found 6")]
     [InlineData("research.jsonc", "\"seconds\": 150 }", "\"seconds\": 150 },\n    { \"tier\": 10, \"cost\": { \"materials\": 1, \"energy\": 1 }, \"seconds\": 1 }", "research.jsonc: $.tiers[8].tier: tracks have tiers 1 to 9, so the last entry is tier 9; found tier 10")]
     [InlineData("research.jsonc", "\"materials\": 225,", "\"materials\": \"225\",", "research.jsonc: $.tiers[2].cost.materials: expected a whole number, found text")]
+    [InlineData("resources.jsonc", "\"per_worker_per_minute\": 45", "\"per_worker_per_minute\": 0", "resources.jsonc: $.materials.per_worker_per_minute: must be above 0 and at most 100000, found 0")]
+    [InlineData("resources.jsonc", "\"depleted_rate\": \"0.5\"", "\"depleted_rate\": 0.5", "resources.jsonc: $.materials.depleted_rate: write 0.5 as text")]
+    [InlineData("resources.jsonc", "\"workers_per_generator\": 4", "\"generator_slots\": 4", "resources.jsonc: $.energy: missing key \"workers_per_generator\"")]
+    [InlineData("resources.jsonc", "\"build_seconds\": 12", "\"build_seconds\": \"12.01\"", "resources.jsonc: $.worker.build_seconds: 12.01 s is not a whole number of ticks")]
     [InlineData("accents.jsonc", "\"mobility\": {", "\"speed\": {", "accents.jsonc: $.accents.speed: unknown track 'speed'")]
     [InlineData("accents.jsonc", "\"plating\":", "\"armor\":", "accents.jsonc: $.accents.protection.level_2.armor: unknown key \"armor\"")]
     [InlineData("accents.jsonc", "\"share\": \"0.25\"", "\"share\": \"25\"", "accents.jsonc: $.accents.manufacturing.level_2.death_refund.share: must be above 0 and at most 1, found 25")]
@@ -110,8 +116,9 @@ public class DataCheckToolTests
 
     [Theory]
     [InlineData("research.jsonc")]
+    [InlineData("resources.jsonc")]
     [InlineData("accents.jsonc")]
-    public void AMissingResearchOrAccentsFileFails(string file)
+    public void AMissingResearchResourcesOrAccentsFileFails(string file)
     {
         using var data = Repository.CopyOfData();
         File.Delete(Path.Combine(data.Path, file));

@@ -3,7 +3,6 @@ using Sim.Data;
 using Sim.Economy;
 using Sim.Map;
 using Sim.Movement;
-using Sim.Numerics;
 using Sim.Research;
 
 namespace Sim.Setup;
@@ -16,13 +15,6 @@ public static class MatchSetup
 {
     /// <summary>The most players a match can have.</summary>
     public const int MaxPlayers = 8;
-
-    /// <summary>
-    /// The speed of a starting worker, as the distance per tick. The design gives workers no speed
-    /// yet, so this stands in until it does and the data carries it: 3 tiles per second, the speed
-    /// of Line infantry.
-    /// </summary>
-    public static Fixed StartingWorkerSpeed { get; } = Mover.SpeedPerTick(3);
 
     /// <summary>
     /// Builds the world and the tick loop for a match, ready for its first tick. The same arguments
@@ -40,7 +32,7 @@ public static class MatchSetup
         CheckPlayers(map, players);
 
         var world = new World(seed);
-        var grid = new MapGrid(map);
+        var grid = new MapGrid(map, map.Deposits.Count == 0 ? 0 : data.Rules.Map.DepositSize);
 
         // Stores, in alphabetical order of their names. The world sorts them by name, so the order
         // here changes nothing. A name is never changed once it has merged: it places the store in
@@ -49,17 +41,26 @@ public static class MatchSetup
         var movers = world.AddStore(new ComponentStore<Mover>(Mover.StoreName));
         var researchState = world.AddStore(new ResearchState(players.Count, data.Tracks.Count, data.TierCount, data.Rules.Match.StartEpoch));
         var stockpiles = world.AddStore(new Stockpiles(players.Count));
+        var territories = world.AddStore(new ComponentStore<Territory>(Territory.StoreName));
+        var workers = world.AddStore(new ComponentStore<Worker>(Worker.StoreName));
+        var workSites = world.AddStore(new ComponentStore<WorkSite>(WorkSite.StoreName));
 
         // Worked out from the state and not state itself. Match.RefreshDerivedState renews it.
         var research = new MatchResearch(data, world, researchState, stockpiles, data.Rules.Match.EpochCap);
         var routes = new RouteCache(grid);
         var spatialIndex = new SpatialIndex(grid, world.Entities, bodies);
 
+        var supply = new SupplyAccount(data, research, world.Entities, bodies, workers);
+
         var simulation = new Simulation(world);
 
         // Command handlers, in alphabetical order of their types. The order here changes nothing.
+        // A worker walks to its work by the move order, and a move order takes it off its work.
+        var move = new MoveCommandHandler(grid, bodies, movers, players.Count);
+        var work = new WorkAssignments(data.Resources, grid, bodies, workers, workSites, move);
         simulation.SetCommandHandler(CommandType.CancelResearch, new CancelResearchHandler(research));
-        simulation.SetCommandHandler(CommandType.Move, new MoveCommandHandler(grid, bodies, movers, players.Count));
+        simulation.SetCommandHandler(CommandType.Gather, new GatherCommandHandler(bodies, workSites, work, players.Count));
+        simulation.SetCommandHandler(CommandType.Move, new LeaveWorkHandler(move, bodies, work));
         simulation.SetCommandHandler(CommandType.StartResearch, new StartResearchHandler(research));
 
         // Systems. Their order is a rule of the game: a pull request that adds one says where it
@@ -68,11 +69,15 @@ public static class MatchSetup
         // Routes are found before anyone moves, so that a unit ordered in this tick can take its
         // first step in this tick. The spatial index is rebuilt right after movement, so that every
         // system after it sees where things stand now. A system that moves bodies goes before it.
+        // Income comes after movement, so that a worker that reaches its place in this tick has
+        // arrived in this tick, and before research, so that a tier raised in this tick pays from
+        // the next. It moves nobody.
         // Research goes last: after everything that can destroy the holder of a research slot, so
         // that a research cannot finish in the tick in which its building falls.
         simulation.AddSystem(new RoutePlanningSystem(movers, routes));
         simulation.AddSystem(new MovementSystem(grid, bodies, movers, routes));
         simulation.AddSystem(new SpatialIndexSystem(spatialIndex));
+        simulation.AddSystem(new IncomeSystem(data, grid, bodies, movers, workers, workSites, territories, stockpiles, work, research));
         simulation.AddSystem(new ResearchSystem(research));
 
         var match = new Match
@@ -89,6 +94,11 @@ public static class MatchSetup
             Routes = routes,
             SpatialIndex = spatialIndex,
             Stockpiles = stockpiles,
+            Supply = supply,
+            Territories = territories,
+            Work = work,
+            Workers = workers,
+            WorkSites = workSites,
         };
 
         for (var player = 0; player < players.Count; player++)
@@ -102,6 +112,8 @@ public static class MatchSetup
                 PlaceStartingWorkers(match, player, map.Starts[players[player].Start]);
             }
         }
+
+        EconomySetup.PlaceStart(match);
 
         match.RefreshDerivedState();
         return match;
@@ -197,7 +209,7 @@ public static class MatchSetup
                 return 0;
             }
 
-            match.SpawnUnit(player, MapGrid.TileCenter(tileX, tileY), StartingWorkerSpeed);
+            match.SpawnWorker(player, MapGrid.TileCenter(tileX, tileY));
             return 1;
         }
     }

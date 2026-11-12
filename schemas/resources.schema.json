@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "resources.jsonc",
+  "description": "What a worker earns at a deposit or a Generator, how many workers one of them takes, and the worker itself (game design 4.1). Whole numbers are bare; a number with a fraction is text, such as \"0.5\".",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["materials", "energy", "worker"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "materials": {
+      "description": "Materials, earned by workers at deposits.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["per_worker_per_minute", "workers_per_deposit", "full_rate_amount", "depleted_rate"],
+      "properties": {
+        "per_worker_per_minute": { "description": "What one worker earns in a minute, before the Extraction multiplier.", "$ref": "#/definitions/number" },
+        "workers_per_deposit": { "description": "The worker places of one deposit.", "type": "integer", "minimum": 1, "maximum": 64 },
+        "full_rate_amount": { "description": "The Materials a deposit delivers at the whole rate, Extraction bonus included.", "type": "integer", "minimum": 1, "maximum": 100000000 },
+        "depleted_rate": { "description": "The share of the rate a deposit pays after that: above 0 and at most 1.", "$ref": "#/definitions/number" }
+      }
+    },
+    "energy": {
+      "description": "Energy, earned by workers at Generators.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["per_worker_per_minute", "workers_per_generator"],
+      "properties": {
+        "per_worker_per_minute": { "description": "What one worker earns in a minute, before the Extraction multiplier.", "$ref": "#/definitions/number" },
+        "workers_per_generator": { "description": "The worker places of one Generator.", "type": "integer", "minimum": 1, "maximum": 64 }
+      }
+    },
+    "worker": {
+      "description": "The one worker type. Its speed, sight, supply and price are the same at every tier.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hp", "speed", "sight", "supply", "spacing", "cost", "build_seconds"],
+      "properties": {
+        "hp": { "description": "Hit points at Protection 1.", "$ref": "#/definitions/number" },
+        "speed": { "description": "Tiles per second.", "$ref": "#/definitions/number" },
+        "sight": { "description": "Sight range in tiles.", "type": "integer", "minimum": 1, "maximum": 64 },
+        "supply": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "spacing": { "description": "Least distance between unit centers at rest, in tiles.", "$ref": "#/definitions/number" },
+        "cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["materials", "energy"],
+          "properties": {
+            "materials": { "$ref": "#/definitions/price" },
+            "energy": { "$ref": "#/definitions/price" }
+          }
+        },
+        "build_seconds": { "description": "Build time in seconds. It must be a whole number of ticks.", "$ref": "#/definitions/number" }
+      }
+    }
+  },
+  "definitions": {
+    "number": {
+      "description": "A whole number, or text in plain decimal notation such as \"2.6\". A bare number with a fraction is not accepted, so that every value is read exactly.",
+      "anyOf": [
+        { "type": "integer" },
+        { "type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]{1,9})?$" }
+      ]
+    },
+    "price": { "type": "integer", "minimum": 0, "maximum": 1000000 }
+  }
+}

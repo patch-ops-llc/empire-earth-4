@@ -12,6 +12,7 @@ public sealed record GameData(
     TrackRoles TrackRoles,
     RuleSet Rules,
     IReadOnlyList<ResearchTier> Research,
+    ResourceRules Resources,
     IReadOnlyList<AccentDef> Accents,
     IReadOnlyList<LineDef> Lines,
     IReadOnlyList<ChassisDef> Chassis,
