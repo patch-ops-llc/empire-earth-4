@@ -5,7 +5,8 @@ namespace Sim.Data;
 /// item's dense integer ID: tracks keep the order of <c>tracks.jsonc</c>, which the design's
 /// tie-breaks rely on, research goes by tier, accents by track, and lines, chassis and maps are
 /// sorted by ID. <see cref="Lines"/> and <see cref="Structures"/> hold only those of the roster
-/// that have a data file, in the order of the roster.
+/// that have a data file, in the order of the roster. <see cref="Personalities"/> are those of
+/// the computer player, sorted by ID; a data folder may have none.
 /// </summary>
 public sealed record GameData(
     IReadOnlyList<string> EpochNames,
@@ -19,6 +20,7 @@ public sealed record GameData(
     IReadOnlyList<ChassisDef> Chassis,
     IReadOnlyList<StructureDef> Structures,
     IReadOnlyList<MapDef> Maps,
+    IReadOnlyList<AiPersonalityDef> Personalities,
     string ContentHash)
 {
     /// <summary>Tiers per track, which is also the number of epochs.</summary>
@@ -84,6 +86,20 @@ public sealed record GameData(
         }
 
         throw new ArgumentException($"The data has no structure '{id}'.", nameof(id));
+    }
+
+    /// <summary>The personality of the computer player with this ID, or null when the data has no file for it.</summary>
+    public AiPersonalityDef? PersonalityOf(string id)
+    {
+        foreach (var candidate in Personalities)
+        {
+            if (candidate.Id == id)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>The accent a track gives, or null for a track that gives none.</summary>

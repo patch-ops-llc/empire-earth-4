@@ -30,7 +30,7 @@ public sealed class DataLoadResult
 /// </summary>
 public static class DataLoader
 {
-    private const string Layout = "tracks.jsonc, rules.jsonc, research.jsonc, resources.jsonc, accents.jsonc, lines/<id>.jsonc, structures/<id>.jsonc and maps/<id>.jsonc";
+    private const string Layout = "tracks.jsonc, rules.jsonc, research.jsonc, resources.jsonc, accents.jsonc, lines/<id>.jsonc, structures/<id>.jsonc, maps/<id>.jsonc and ai/<id>.jsonc";
 
     private static readonly string[] RequiredFiles =
         [DataRules.TracksFile, DataRules.RulesFile, DataRules.ResearchFile, DataRules.ResourcesFile, DataRules.AccentsFile];
@@ -57,9 +57,10 @@ public static class DataLoader
             var linePaths = new List<string>();
             var structurePaths = new List<string>();
             var mapPaths = new List<string>();
+            var aiPaths = new List<string>();
             foreach (var path in paths)
             {
-                if (!Classify(path, linePaths, structurePaths, mapPaths, errors))
+                if (!Classify(path, linePaths, structurePaths, mapPaths, aiPaths, errors))
                 {
                     continue;
                 }
@@ -72,7 +73,7 @@ public static class DataLoader
             }
 
             ReportMissing(paths, linePaths, structurePaths, mapPaths, errors);
-            var data = Read(roots, linePaths, structurePaths, mapPaths, errors);
+            var data = Read(roots, linePaths, structurePaths, mapPaths, aiPaths, errors);
             if (data is not null && errors.Count == 0)
             {
                 Tech.FormulaCheck.Check(data, errors);
@@ -97,14 +98,20 @@ public static class DataLoader
         }
     }
 
-    private static bool Classify(string path, List<string> linePaths, List<string> structurePaths, List<string> mapPaths, ErrorList errors)
+    private static bool Classify(
+        string path,
+        List<string> linePaths,
+        List<string> structurePaths,
+        List<string> mapPaths,
+        List<string> aiPaths,
+        ErrorList errors)
     {
         if (Array.IndexOf(RequiredFiles, path) >= 0)
         {
             return true;
         }
 
-        foreach (var (folder, found) in new[] { (DataRules.LinesFolder, linePaths), (DataRules.StructuresFolder, structurePaths), (DataRules.MapsFolder, mapPaths) })
+        foreach (var (folder, found) in new[] { (DataRules.LinesFolder, linePaths), (DataRules.StructuresFolder, structurePaths), (DataRules.MapsFolder, mapPaths), (DataRules.AiFolder, aiPaths) })
         {
             if (path.StartsWith(folder, StringComparison.Ordinal)
                 && path.EndsWith(DataRules.FileExtension, StringComparison.Ordinal)
@@ -191,6 +198,7 @@ public static class DataLoader
         List<string> linePaths,
         List<string> structurePaths,
         List<string> mapPaths,
+        List<string> aiPaths,
         ErrorList errors)
     {
         JsonValue? Root(string path) => roots.TryGetValue(path, out var root) ? new JsonValue(root, path, "$", errors) : null;
@@ -317,8 +325,23 @@ public static class DataLoader
             maps.Sort((left, right) => string.CompareOrdinal(left.Id, right.Id));
         }
 
+        // The personalities of the computer player. No file is required: a data folder may have none.
+        var personalities = new List<AiPersonalityDef>();
+        if (tracksAreValid && rules is not null)
+        {
+            foreach (var path in aiPaths)
+            {
+                if (Root(path) is { } aiRoot)
+                {
+                    personalities.Add(AiReader.Read(aiRoot, IdOf(path, DataRules.AiFolder), tracks, epochNames.Count, rules));
+                }
+            }
+
+            personalities.Sort((left, right) => string.CompareOrdinal(left.Id, right.Id));
+        }
+
         return tracksAreValid && roles is not null && rules is not null && resources is not null
-            ? new GameData(epochNames, tracks, roles, rules, research, resources, accents, lines, chassis, structures, maps, ContentHash: "")
+            ? new GameData(epochNames, tracks, roles, rules, research, resources, accents, lines, chassis, structures, maps, personalities, ContentHash: "")
             : null;
     }
 }
