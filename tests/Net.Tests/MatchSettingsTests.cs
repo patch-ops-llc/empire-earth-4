@@ -138,6 +138,6 @@ public class MatchSettingsTests
     // The data with one personality, "swarm". The data of the tests has none.
     private static GameData WithSwarm() => TestData.Data with
     {
-        Personalities = [new AiPersonalityDef("swarm", "Swarm", [new AiWorkerTarget(1, 6)], 600, [.. TestData.Data.Tracks.Select(_ => 1)], [])],
+        Personalities = [new AiPersonalityDef("swarm", "Swarm", [new AiWorkerTarget(1, 6)], 600, [.. TestData.Data.Tracks.Select(_ => 1)], [], null!)],
     };
 }
