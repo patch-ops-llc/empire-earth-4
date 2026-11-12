@@ -9,11 +9,13 @@ namespace Tools.Tests.ReplayScripts;
 
 /// <summary>
 /// The script <c>combat-perks</c> of <c>replay record</c> and the golden replay recorded for it:
-/// what the script must give, and what that replay must reach.
+/// what the script must give, and the rules it must reach.
 /// </summary>
 public class CombatPerkScriptTests
 {
     private const string GoldenReplay = "switchback-combat-perks.replay";
+
+    private const string ManyHits = "more than 500 hits on units worked out";
 
     private static readonly string[] EveryKindOfOrder =
     [
@@ -32,8 +34,8 @@ public class CombatPerkScriptTests
     ];
 
     /// <summary>
-    /// What the golden replay must reach of the accents of combat (design 2.3). Every hit on a unit
-    /// in it is worked out again here from the blueprints of the two sides, apart from the
+    /// What the script must reach of the accents of combat (design 2.3). Every hit on a unit in
+    /// its match is worked out again here from the blueprints of the two sides, apart from the
     /// simulation's own sum, so each line stands for hits whose damage was checked.
     /// </summary>
     /// <remarks>
@@ -77,9 +79,43 @@ public class CombatPerkScriptTests
         // Rapid I.
         "a unit that picked a target beyond the sight of its line",
 
-        // The fog of war, which the replay of the script fog no longer reaches (see FogScriptTests).
+        // The fog of war.
         "a unit whose attack order ends where it stands because its target died",
+
+        // The researches the parts are for are done by the end, and the plain player has none.
+        "the gunner at Firepower 3 and Mobility 2 by the end",
+        "the armored player at Protection 3 and Mobility 2 by the end",
+        "the plain player at tier 1 of every track by the end",
+        ManyHits,
     ];
+
+    /// <summary>
+    /// The rules are asked of four matches between them: the golden replay's own line and the
+    /// same with the next three pairs of numbers, 100 apart. Which unit is hit by what, and at
+    /// which tiers, turns on how the fights go, so one match can miss a rule: of 30 other pairs
+    /// 15 reach every rule alone, a splash that reaches a structure is missing from 8 and a
+    /// splash on a Hardened unit from 6. Of the sets of four that can be made of those 30, 997 in
+    /// 1000 reach every rule between them. Matches twice as long miss only the splash on a
+    /// Hardened unit, which has to fall before Protection 3 is done; three of those do no better
+    /// than four of these and take longer, so the matches keep their length and there are four.
+    /// The second set, the next four pairs, is there for a change that moves all of the first.
+    /// None of the numbers was chosen for what it reaches.
+    /// </summary>
+    private static readonly ScriptReach Reach = new(
+        [.. EveryKindOfOrder, .. EveryRuleReached],
+        Reached,
+        [
+            "--map switchback --starts 0,1,- --seed 19 --orders 5 --ticks 6000 --script combat-perks",
+            "--map switchback --starts 0,1,- --seed 119 --orders 105 --ticks 6000 --script combat-perks",
+            "--map switchback --starts 0,1,- --seed 219 --orders 205 --ticks 6000 --script combat-perks",
+            "--map switchback --starts 0,1,- --seed 319 --orders 305 --ticks 6000 --script combat-perks",
+        ],
+        [
+            "--map switchback --starts 0,1,- --seed 419 --orders 405 --ticks 6000 --script combat-perks",
+            "--map switchback --starts 0,1,- --seed 519 --orders 505 --ticks 6000 --script combat-perks",
+            "--map switchback --starts 0,1,- --seed 619 --orders 605 --ticks 6000 --script combat-perks",
+            "--map switchback --starts 0,1,- --seed 719 --orders 705 --ticks 6000 --script combat-perks",
+        ]);
 
     /// <summary>
     /// The script gives every kind of order it is meant to: here in one match on each map, long
@@ -107,14 +143,21 @@ public class CombatPerkScriptTests
     }
 
     /// <summary>
-    /// What this recorded match is for: it must reach the rule of every accent of combat that a
-    /// change could break. It has three players: a gunner and an armored player with bases, who
-    /// research, and a plain player without a base, whose units and Tower stay at Firepower 1.
+    /// What the script is for: a match recorded with it must reach the rule of every accent of
+    /// combat that a change could break. It has three players: a gunner and an armored player
+    /// with bases, who research, and a plain player without a base, whose units and Tower stay
+    /// at Firepower 1.
     /// </summary>
     [Fact]
-    public void ItsGoldenReplayReachesTheRulesItGuards()
+    public void TheScriptReachesTheRulesItGuards() => Reach.MustHoldOnARecordingMadeNow();
+
+    /// <summary>Says, without failing, what the stored replay no longer reaches of them.</summary>
+    [Fact]
+    public void ItsGoldenReplayStillReachesThem() => Reach.SayWhatTheGoldenReplaysNoLongerReach(GoldenReplay);
+
+    /// <summary>What the match of a replay reaches, in the words of <see cref="EveryKindOfOrder"/> and <see cref="EveryRuleReached"/>.</summary>
+    private static HashSet<string> Reached(Sim.Serialization.Replay replay)
     {
-        var replay = ReplayRuns.ReadGolden(GoldenReplay);
         var match = ReplayRuns.Start(replay);
         var due = replay.Commands.ToLookup(entry => entry.Tick, entry => entry.Command);
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -128,17 +171,29 @@ public class CombatPerkScriptTests
             seen.UnionWith(watch.WhatTheTickDid());
         }
 
-        string[] expected = [.. EveryKindOfOrder, .. EveryRuleReached];
-        var missing = string.Join("; ", expected.Except(seen).Order(StringComparer.Ordinal));
-        var unexpected = string.Join("; ", seen.Except(expected).Order(StringComparer.Ordinal));
-        Assert.True(missing.Length == 0 && unexpected.Length == 0, $"Not reached: {missing}. Reached and not on the list: {unexpected}.");
-
-        // The researches the parts are for are done by the end, and the plain player has none.
         var roles = match.Data.TrackRoles;
-        Assert.Equal((3, 2), (match.Research.State.Tier(0, roles.Firepower), match.Research.State.Tier(0, roles.Mobility)));
-        Assert.Equal((3, 2), (match.Research.State.Tier(1, roles.Protection), match.Research.State.Tier(1, roles.Mobility)));
-        Assert.All(Enumerable.Range(0, match.Data.Tracks.Count), track => Assert.Equal(1, match.Research.State.Tier(2, track)));
-        Assert.True(watch.HitsWorkedOut > 500, $"Only {watch.HitsWorkedOut} hits on units were worked out.");
+        var research = match.Research.State;
+        if ((research.Tier(0, roles.Firepower), research.Tier(0, roles.Mobility)) == (3, 2))
+        {
+            seen.Add("the gunner at Firepower 3 and Mobility 2 by the end");
+        }
+
+        if ((research.Tier(1, roles.Protection), research.Tier(1, roles.Mobility)) == (3, 2))
+        {
+            seen.Add("the armored player at Protection 3 and Mobility 2 by the end");
+        }
+
+        if (Enumerable.Range(0, match.Data.Tracks.Count).All(track => research.Tier(2, track) == 1))
+        {
+            seen.Add("the plain player at tier 1 of every track by the end");
+        }
+
+        if (watch.HitsWorkedOut > 500)
+        {
+            seen.Add(ManyHits);
+        }
+
+        return seen;
     }
 
     private static bool IsOfThisScript(Command command) =>
@@ -213,6 +268,7 @@ public class CombatPerkScriptTests
         private readonly HashSet<EntityId> _attacked = [];
         private readonly PlayerTech[] _tech = new PlayerTech[match.Players.Count];
         private readonly HashSet<string> _seen = new(StringComparer.Ordinal);
+        private bool _unitsAreMade;
 
         /// <summary>How many hits on units have been worked out again so far.</summary>
         public int HitsWorkedOut { get; private set; }
@@ -254,9 +310,11 @@ public class CombatPerkScriptTests
                 _tech[player] = match.Research.Tech(player);
             }
 
+            _unitsAreMade = false;
             foreach (var command in commands)
             {
                 _ordered.UnionWith(command.Entities.ToArray());
+                _unitsAreMade |= command.Type == CommandType.DebugSpawn;
             }
         }
 
@@ -327,6 +385,22 @@ public class CombatPerkScriptTests
         }
 
         /// <summary>
+        /// The unit that attacked. The one attacker the watch cannot find is a unit that was
+        /// made in this tick, attacked in it and died in it: it was not there before the tick
+        /// and is not there after it. What it did is then not worked out.
+        /// </summary>
+        private bool TryFindAttacker(EntityId entity, out int owner, out ChassisBlueprint blueprint)
+        {
+            if (TryFindUnit(entity, out owner, out blueprint))
+            {
+                return true;
+            }
+
+            Assert.True(_unitsAreMade, "An attacker that was not there before the tick, in a tick in which no unit was made.");
+            return false;
+        }
+
+        /// <summary>
         /// The damage of a hit on a unit by design 2.3 and 2.4, from the target's blueprint: the
         /// attacker's side, times the counter multiplier, times the area reduction for area
         /// damage, times plating for an attacker below the target's Protection, rounded once.
@@ -352,7 +426,11 @@ public class CombatPerkScriptTests
 
         private void MeleeHit(in SimEvent hit)
         {
-            Assert.True(TryFindUnit(hit.Other, out var owner, out var attacker));
+            if (!TryFindAttacker(hit.Other, out var owner, out var attacker))
+            {
+                return;
+            }
+
             _attacked.Add(hit.Other);
             var firepower = attacker.EffectiveTiers[match.Data.TrackRoles.Firepower];
             if (attacker.Perks.AttackRateBonus is not null)
@@ -408,7 +486,11 @@ public class CombatPerkScriptTests
                 return;
             }
 
-            Assert.True(TryFindUnit(fired.Other, out _, out var attacker));
+            if (!TryFindAttacker(fired.Other, out _, out var attacker))
+            {
+                return;
+            }
+
             _attacked.Add(fired.Other);
             var splash = attacker.Perks.Splash;
             Assert.Equal(splash is null ? Fraction.Zero : splash.Share.ToFraction(), shot.SplashShare);
@@ -510,7 +592,11 @@ public class CombatPerkScriptTests
             }
             else
             {
-                Assert.True(TryFindUnit(splash.Entity, out _, out var attacker));
+                if (!TryFindAttacker(splash.Entity, out _, out var attacker))
+                {
+                    return;
+                }
+
                 var perk = attacker.Perks.Splash;
                 Assert.NotNull(perk);
                 (side, line, firepower) = (
