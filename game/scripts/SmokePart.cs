@@ -35,20 +35,32 @@ public abstract class SmokePart
 }
 
 /// <summary>
-/// What a <see cref="SmokePart"/> works with: the match to read, and the session to give orders
-/// through, the way a player's orders go.
+/// What a <see cref="SmokePart"/> works with: the match to read, the session to give orders
+/// through, the way a player's orders go, and the view the match is shown through.
 /// </summary>
 public sealed class SmokeOrders
 {
     private readonly ClientSession _client;
+    private readonly HostSession _host;
 
-    internal SmokeOrders(Match match, ClientSession client)
+    internal SmokeOrders(Match match, MatchView view, ClientSession client, HostSession host)
     {
         Match = match;
+        View = view;
         _client = client;
+        _host = host;
     }
 
     public Match Match { get; }
+
+    /// <summary>
+    /// The view of the match, as the main scene shows it. It has read every tick that has run,
+    /// so a part can test what the player is shown: which units are drawn, and what the local
+    /// player's <see cref="PlayerSight"/> answers. A part can also select units as a player does
+    /// and ask a piece's part of the interface what it then shows. Selecting gives no order and
+    /// changes nothing in the match.
+    /// </summary>
+    public MatchView View { get; }
 
     /// <summary>The local player's number.</summary>
     public int Player => _client.Player;
@@ -86,6 +98,27 @@ public sealed class SmokeOrders
         else
         {
             Fail($"the session refused a {command.Type} order at tick {Match.World.Tick}.");
+        }
+    }
+
+    /// <summary>
+    /// Gives an order for any seat. The local player's goes as <see cref="Submit"/> sends it.
+    /// Nobody sits at the other seats of the smoke test's match, so the host gives theirs, the
+    /// way it gives an AI player's. The test fails when the session refuses the order.
+    /// </summary>
+    public void SubmitFor(in Command command)
+    {
+        if (command.Player == Player)
+        {
+            Submit(command);
+        }
+        else if (_host.Submit(command))
+        {
+            Count++;
+        }
+        else
+        {
+            Fail($"the host refused a {command.Type} order for player {command.Player} at tick {Match.World.Tick}.");
         }
     }
 

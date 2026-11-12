@@ -3,20 +3,25 @@ using Godot;
 namespace Game;
 
 /// <summary>
-/// The frame of the interface round a match. It has four places, and it puts nothing of its own
-/// into them: every readout, button and panel belongs to an <see cref="InterfacePart"/>.
+/// The frame of the interface round a match. It has four places for the game and one for the
+/// aids of development, and it puts nothing of its own into them: every readout, button and
+/// panel belongs to an <see cref="InterfacePart"/>.
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
 /// <item>
 /// <b>The top bar</b>, across the top of the window: <see cref="TopLeft"/> for what the player
 /// has, as resources and supply, and <see cref="TopRight"/> for the match itself. Between them
-/// stand the buttons of the full-screen panels.
+/// stand the buttons of the full-screen panels. The interface is scaled with the window, so
+/// the bar is 1,152 units wide in a window of 16 to 9 or narrower, whatever its size, and
+/// wider only in a wider one. Everything in the bar has to fit in that: a readout is a word
+/// and a number, and what can say less when the bar is full asks <see cref="TopBarRoomFor"/>.
 /// </item>
 /// <item>
 /// <b>The bottom panel</b>, for the selection and its commands: <see cref="SelectionArea"/> for
-/// what is selected, and beside it a button for every <see cref="SelectionCommand"/> that applies.
-/// It is shown while there is something in it.
+/// what is selected, <see cref="SelectionDetail"/> for the one part that describes it in full,
+/// and beside them a button for every <see cref="SelectionCommand"/> that applies. It is shown
+/// while there is something in it.
 /// </item>
 /// <item>
 /// <b>The full-screen panel</b>: one of the panels added with <see cref="AddPanel"/> at a time,
@@ -27,6 +32,11 @@ namespace Game;
 /// <b>The message line</b>, under the top bar: <see cref="Say"/> shows a sentence to the player
 /// for a while. Nothing of the frame lies under it: a full-screen panel begins below it, with
 /// room kept for one message, so that the panel moves only when two are shown at once.
+/// </item>
+/// <item>
+/// <b>The development aids</b>, at the left edge, half way down: <see cref="DevelopmentAids"/>
+/// for what a tester needs and the game does not have, each in a box of its own that says so.
+/// They stand one under another, clear of the message line and of the corners.
 /// </item>
 /// </list>
 /// </remarks>
@@ -47,6 +57,8 @@ public partial class InterfaceFrame : CanvasLayer
     private const int PanelMargin = 12;
     private const float PanelPadding = 12f;
 
+    private const float AidsLeft = 8f;
+
     private const int MessageLimit = 5;
     private const double MessageFadeSeconds = 1.0;
 
@@ -57,7 +69,9 @@ public partial class InterfaceFrame : CanvasLayer
 
     private MatchView? _view;
     private PanelContainer _bottom = null!;
+    private Control? _corner;
     private HBoxContainer _commandArea = null!;
+    private PanelContainer _topBar = null!;
     private HBoxContainer _panelButtons = null!;
     private VBoxContainer _messageLines = null!;
     private Label _messageRoom = null!;
@@ -75,6 +89,20 @@ public partial class InterfaceFrame : CanvasLayer
 
     /// <summary>The left of the bottom panel: what is selected. A part adds a control of its own and shows it while it has something to say.</summary>
     public VBoxContainer SelectionArea { get; private set; } = null!;
+
+    /// <summary>
+    /// The column of the development aids, which are not part of the game: a part adds a box of
+    /// its own, marked as an aid. It is not shown while a full-screen panel is open.
+    /// </summary>
+    public VBoxContainer DevelopmentAids { get; private set; } = null!;
+
+    /// <summary>
+    /// The place of the part that describes the selection in full. While it shows something, the
+    /// short lines of <see cref="SelectionArea"/> are not shown, because it says what they say:
+    /// a piece that knows only its own line about the selection keeps adding it there, and it is
+    /// seen where nothing says more.
+    /// </summary>
+    public VBoxContainer SelectionDetail { get; private set; } = null!;
 
     /// <summary>The full-screen panel that is open, or null.</summary>
     public FramePanel? OpenPanel { get; private set; }
@@ -154,6 +182,48 @@ public partial class InterfaceFrame : CanvasLayer
         }
     }
 
+    /// <summary>
+    /// The width a control in the top bar can have before the bar is wider than the window, with
+    /// everything else in the bar at the least width it needs. A part whose control can give
+    /// way, as one that can say less, fits what it shows to this, so that the bar's buttons
+    /// stay in the window when many parts fill it.
+    /// </summary>
+    public float TopBarRoomFor(Control control)
+    {
+        // The bar itself is never narrower than what is in it, so the window is what is measured.
+        var others = _topBar.GetCombinedMinimumSize().X - control.GetCombinedMinimumSize().X;
+        return Mathf.Max(0f, _topBar.GetViewportRect().Size.X - others);
+    }
+
+    /// <summary>
+    /// How far down the window the message line reaches now, in the interface's units: the top
+    /// bar's lower edge when it says nothing. Something a part shows under the bar, over the
+    /// world, begins here so that it does not cover a message.
+    /// </summary>
+    public float MessagesEnd => _messageLines.GetGlobalRect().End.Y;
+
+    /// <summary>
+    /// Where the bottom panel begins now, in the interface's units: the lower edge of the window
+    /// while the panel is not shown. Something a part shows over the world above the bottom panel
+    /// ends here, so that neither covers the other.
+    /// </summary>
+    public float BottomPanelStart => _bottom.Visible ? _bottom.GetGlobalRect().Position.Y : _bottom.GetViewportRect().Size.Y;
+
+    /// <summary>
+    /// The width of the window that is free above the bottom panel, from the left edge: all of
+    /// it, or as far as the part in the bottom right corner begins while that is shown.
+    /// Something a part shows over the world above the bottom panel stays inside this width, so
+    /// that the corner part does not cover it.
+    /// </summary>
+    public float FreeWidthAboveBottomPanel =>
+        _corner is not null && _corner.IsVisibleInTree() ? _corner.GetGlobalRect().Position.X : _bottom.GetViewportRect().Size.X;
+
+    /// <summary>
+    /// Names the control that stands in the bottom right corner of the window, over the world
+    /// and taller than the bottom panel, as the minimap does: see <see cref="FreeWidthAboveBottomPanel"/>.
+    /// </summary>
+    public void TakeBottomRightCorner(Control corner) => _corner = corner;
+
     /// <summary>Shows a sentence to the player in the message line. It goes away by itself.</summary>
     /// <param name="message">The sentence.</param>
     /// <param name="seconds">How long it stays.</param>
@@ -208,7 +278,11 @@ public partial class InterfaceFrame : CanvasLayer
         }
 
         // A full-screen panel covers the bottom panel, which is not shown round its edge.
-        _bottom.Visible = !IsPanelOpen && (HasVisibleChild(SelectionArea) || HasVisibleChild(_commandArea));
+        var detailed = HasVisibleChild(SelectionDetail);
+        SelectionDetail.Visible = detailed;
+        SelectionArea.Visible = !detailed;
+        _bottom.Visible = !IsPanelOpen && (detailed || HasVisibleChild(SelectionArea) || HasVisibleChild(_commandArea));
+        DevelopmentAids.Visible = !IsPanelOpen;
         FadeMessages(delta);
     }
 
@@ -333,8 +407,8 @@ public partial class InterfaceFrame : CanvasLayer
     // of one message, so that the first message to come does not move the panel.
     private void KeepMessageRoom() => _messageRoom.Visible = IsPanelOpen && _messages.Count == 0;
 
-    // The key an action is given with, as the player knows it, or null when it has none.
-    private static string? KeyOf(StringName action)
+    /// <summary>The key an action is given with, as the player knows it, or null when it has none.</summary>
+    public static string? KeyOf(StringName action)
     {
         if (!InputMap.HasAction(action))
         {
@@ -373,22 +447,23 @@ public partial class InterfaceFrame : CanvasLayer
         root.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         AddChild(root);
 
-        // Each is drawn over those before it: the bottom panel, then what stands under the top
-        // bar, a full-screen panel among it, then the top bar.
+        // Each is drawn over those before it: the bottom panel, the development aids, then what
+        // stands under the top bar, a full-screen panel among it, then the top bar.
         BuildBottomPanel(root);
+        BuildDevelopmentAids(root);
         BuildUnderBar(root);
         BuildTopBar(root);
     }
 
     private void BuildTopBar(Control root)
     {
-        var bar = new PanelContainer { Name = "TopBar", CustomMinimumSize = new Vector2(0f, BarHeight) };
-        bar.AddThemeStyleboxOverride("panel", UiStyle.PanelStyle(5f, cornerRadius: 0));
-        root.AddChild(bar);
-        bar.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopWide);
+        _topBar = new PanelContainer { Name = "TopBar", CustomMinimumSize = new Vector2(0f, BarHeight) };
+        _topBar.AddThemeStyleboxOverride("panel", UiStyle.PanelStyle(5f, cornerRadius: 0));
+        root.AddChild(_topBar);
+        _topBar.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopWide);
 
         var barRow = UiStyle.Row(16);
-        bar.AddChild(barRow);
+        _topBar.AddChild(barRow);
         TopLeft = UiStyle.Row(16);
         TopLeft.Name = "TopLeft";
         barRow.AddChild(TopLeft);
@@ -416,9 +491,30 @@ public partial class InterfaceFrame : CanvasLayer
         SelectionArea.Name = "SelectionArea";
         SelectionArea.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
         bottomRow.AddChild(SelectionArea);
+        SelectionDetail = UiStyle.Column(4);
+        SelectionDetail.Name = "SelectionDetail";
+        SelectionDetail.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        SelectionDetail.Visible = false;
+        bottomRow.AddChild(SelectionDetail);
         _commandArea = UiStyle.Row(8);
         _commandArea.Name = "Commands";
         bottomRow.AddChild(_commandArea);
+    }
+
+    // The column grows up and down from the middle of the left edge as boxes are added. Only
+    // the boxes take clicks: between and beside them a click is the world's.
+    private void BuildDevelopmentAids(Control root)
+    {
+        DevelopmentAids = UiStyle.Column(8);
+        DevelopmentAids.Name = "DevelopmentAids";
+        DevelopmentAids.MouseFilter = Control.MouseFilterEnum.Ignore;
+        root.AddChild(DevelopmentAids);
+        DevelopmentAids.SetAnchorsPreset(Control.LayoutPreset.CenterLeft);
+        DevelopmentAids.GrowVertical = Control.GrowDirection.Both;
+        DevelopmentAids.OffsetLeft = AidsLeft;
+        DevelopmentAids.OffsetRight = AidsLeft;
+        DevelopmentAids.OffsetTop = 0f;
+        DevelopmentAids.OffsetBottom = 0f;
     }
 
     // Under the top bar the message line and the full-screen panel stand in one column, the
