@@ -358,6 +358,17 @@ internal sealed class AiSight
         return false;
     }
 
+    /// <summary>True for a living worker of the player's own. Read from the match as it is now, not from the last reading.</summary>
+    public bool IsOwnWorker(EntityId entity) => _view.TryGetOwnWork(entity, out _);
+
+    /// <summary>
+    /// True when a worker of the player's own is assigned to the site, or has an order to build,
+    /// which takes it from a site in the tick it is given. Read from the match as it is now.
+    /// </summary>
+    public bool HasBeenSentTo(EntityId worker, EntityId site)
+        => _view.TryGetOwnWork(worker, out var work)
+            && ((work.State != WorkerState.Idle && work.Site == site) || _view.TryGetOwnBuildOrder(worker, out _));
+
     /// <summary>Whether the player may order the structure at all, wherever it goes.</summary>
     public BuildProblem CheckStructure(int structure) => _view.CheckStructure(structure);
 

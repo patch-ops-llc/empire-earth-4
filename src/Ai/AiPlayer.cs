@@ -17,14 +17,16 @@ namespace Ai;
 /// <b>How a match uses it.</b> Whoever runs the match makes one of these for every seat a
 /// computer plays, and after every tick calls <see cref="Think"/> with a list. The commands it
 /// adds are that seat's orders, and go where a person's orders go: to the host's session, which
-/// schedules them and sends them to every peer. It runs on the host only. The other peers get
-/// its commands and need neither this class nor its personality.
+/// schedules them and sends them to every peer. In the game it runs on the host only. The other
+/// peers get its commands and need neither this class nor its personality.
 /// </para>
 /// <para>
 /// <b>When it thinks.</b> <see cref="Think"/> may be called as often as wished. It does something
 /// once every <see cref="ThinkInterval"/> ticks and nothing in between, which is longer than the
-/// longest command delay, so the orders of one round have been carried out before the next round
-/// reads the match.
+/// command delay a host chooses, so the orders of one round have been carried out before the next
+/// round reads the match. Where its orders take longer, as from a machine that is not the host,
+/// it finds that out from the first worker it sends to work and thinks as much later
+/// (<see cref="AiPace"/>).
 /// </para>
 /// <para>
 /// <b>Determinism.</b> What it orders depends only on the state of the match in the tick it
@@ -61,6 +63,7 @@ public sealed class AiPlayer
     private readonly List<EntityId> _withoutRallyPoint = [];
     private readonly List<int> _deposits = [];
     private readonly List<Command> _gathers = [];
+    private readonly AiPace _pace;
     private int _nextThink;
 
     /// <param name="match">The match, as the host runs it.</param>
@@ -83,7 +86,8 @@ public sealed class AiPlayer
         _research = new AiResearch(_sight, personality, _responses);
         _economy = new AiEconomy(_sight, personality);
         _construction = new AiConstruction(_sight);
-        _army = new AiArmy(_sight, personality, _responses);
+        _pace = new AiPace(_sight);
+        _army = new AiArmy(_sight, personality, _responses, _pace);
         _search = new AiSearch(_sight);
         _explorer = new AiExplorer(_sight, _search);
         _fight = new AiFight(_sight, _search, personality.Fight, _intel, _responses);
@@ -127,6 +131,9 @@ public sealed class AiPlayer
     /// <summary>What it remembers of the enemy, for the same.</summary>
     internal AiIntel Intel => _intel;
 
+    /// <summary>How long its orders take, for the same.</summary>
+    internal AiPace Pace => _pace;
+
     /// <summary>The rows of its response table, for the same.</summary>
     internal AiResponses Responses => _responses;
 
@@ -140,12 +147,13 @@ public sealed class AiPlayer
 
         // What it saw happen is read after every tick: the events of a tick are gone after the next.
         _intel.Watch();
-        if (_sight.Tick < _nextThink)
+        _pace.Watch();
+        if (_sight.Tick < _nextThink || _pace.IsWaiting)
         {
             return;
         }
 
-        _nextThink = _sight.Tick + ThinkInterval;
+        _nextThink = _sight.Tick + _pace.Interval;
         _sight.Refresh();
         _search.Update();
         _intel.Update();
@@ -183,6 +191,7 @@ public sealed class AiPlayer
         _gathers.Clear();
         _economy.AssignWorkers(_budget, _gathers);
         commands.InsertRange(first, _gathers);
+        _pace.Note(_gathers);
     }
 
     /// <summary>The middle of its Capitol, or of the first structure that gives it territory, and that territory's radius.</summary>
