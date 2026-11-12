@@ -78,19 +78,41 @@ To see what an edit does to the battles, run it before and after and compare the
 dotnet run -c Release --project src/Tools -- ai-match
 ```
 
-`ai-match` plays a whole match between computer players with nobody watching, as fast as the machine allows, and prints how it ended, how long it took, and what each player had by the end: its epoch and when it reached each, its tiers, supply, workers, fighting units by chassis and their price, structures, losses and stockpile. It plays the match twice, the second time with the personalities in each other's seats and starts. The same seed gives the same match on every machine, which the state hash in the report shows; only the times differ. Run it with `-c Release` for times that mean something.
+`ai-match` plays a whole match between computer players with nobody watching, as fast as the machine allows, and prints how it ended, how long it took, when the first hit landed, and for each player: its epoch and when it reached each, its tiers, what it paid for research on each track, when it first ordered an attack, how long it stood at and above its supply cap, and what it had by the end (supply, workers, fighting units by chassis and their price, structures, losses and stockpile). It plays the match twice, the second time with the personalities in each other's seats and starts. The same arguments give the same match on every machine, which the state hash in the report shows; only the times differ. Run it with `-c Release` for times that mean something.
 
 | Option | Meaning |
 | --- | --- |
 | `--players <list>` | The personality of each player, by its ID in `ai/`, separated by commas, in the order of the seats. The default is the first two personalities. |
 | `--map <id>` | The map. The default is `ridge`. |
 | `--minutes <number>` | The longest a match may take, in minutes of game time. The default is 20. |
-| `--seed <number>` | The seed of the match. The default is 1. |
+| `--delay <ticks>` | The ticks between a computer player's thinking and its commands taking effect, 1 to 20. The default is 2. |
+| `--seed <number>` | The seed of the match. The default is 1. Nothing in a match is random, so it changes the state hash and nothing else. |
 | `--data <folder>` | Read another data folder. The default is `game/data`. |
 
-A match ends at the time limit, or when only one player has a worker, a fighting unit or a structure left. The computer player does not attack yet, so for now every match runs to the time limit without a winner, and the report shows how each personality builds up.
+A match ends at the time limit, or by conquest (design 5.1): a player with no Capitol and no Outpost left, finished or still building itself, is out, and the last player in has won. The computer player does not attack yet, so for now every match runs to the time limit without a winner, and the report shows how each personality builds up.
 
-CI runs both tools every night and with every pull request that changes the data or the simulation, and puts what they print in the summary of the `Determinism` run, under "Balance report".
+```sh
+dotnet run -c Release --project src/Tools -- ai-series --delays 1,2,3,4,5,6,7,8 --csv series.csv
+```
+
+`ai-series` plays many such matches and adds them up against the things the design sets targets for: how the matches ended and how long they were, who won from which seat and which start, when each personality reached each epoch and had every track at the epoch cap, when it first ordered an attack, what it paid for research on which track, how long it stood at and above its supply cap, and how long a match went on after the loser had fallen behind for good. It plays every personality against every one, itself too, from both seats, with the starts both ways round, on every map, at every command delay named.
+
+Seeds are not varied, because nothing in a match is random: two matches that differ in their seed alone are the same match. The command delay is what makes one match of a pairing differ from the next, by moving every order of both players a twentieth of a second per tick. The matches of a series are the same match disturbed a little, so a share of wins from them says how stable a result is, not how likely.
+
+| Option | Meaning |
+| --- | --- |
+| `--maps <list>` | The maps, by their IDs, separated by commas. The default is every map. |
+| `--personalities <list>` | The personalities, by their IDs in `ai/`, separated by commas. The default is every personality. |
+| `--delays <list>` | The command delays, in ticks, each 1 to 20, separated by commas. The default is 2. |
+| `--minutes <number>` | The longest a match may take, in minutes of game time. The default is 30. |
+| `--csv <file>` | Write one line per seat of every match to this file, as comma-separated values, for a spreadsheet. |
+| `--samples <file>` | Write what each seat had every ten seconds (workers, fighting units, army value, supply, stockpile) to this file. |
+| `--jobs <number>` | The matches to play side by side. The default is one per processor. What a match comes to does not depend on it. |
+| `--data <folder>` | Read another data folder. The default is `game/data`. |
+
+To see what an edit to the numbers does to whole matches, copy `game/data` to another folder, edit the copy, and run the series on both with `--data`.
+
+CI runs `battles` and `ai-match` every night and with every pull request that changes the data or the simulation, and puts what they print in the summary of the `Determinism` run, under "Balance report".
 
 ## Files
 
