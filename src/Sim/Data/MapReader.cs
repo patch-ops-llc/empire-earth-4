@@ -6,7 +6,7 @@ internal static class MapReader
     public const char ForestTile = 'F';
     public const char CliffTile = '#';
 
-    public static MapDef Read(JsonValue root, string expectedId, MapRules rules)
+    public static MapDef Read(JsonValue root, string expectedId, MapRules rules, MapStartRules capitol)
     {
         var errorsBefore = root.ErrorCount;
         var file = root.Object();
@@ -62,7 +62,7 @@ internal static class MapReader
         var map = new MapDef(id, width, height, symmetry, tiles, starts, deposits, markers);
         if (root.ErrorCount == errorsBefore)
         {
-            MapChecker.Check(map, rules, (location, message) => root.ErrorAt(location, message));
+            MapChecker.Check(map, rules, capitol, (location, message) => root.ErrorAt(location, message));
         }
 
         return map;

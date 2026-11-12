@@ -46,7 +46,7 @@ public class DataLoaderTests
         Assert.Equal(20, rules.WallCrossingCost);
         Assert.Equal(new MatchRules(1, 4), rules.Match);
         Assert.Equal(new StartRules(6, 400, 100), rules.Start);
-        Assert.Equal(new MapRules(2, 6, 2, 1, 1, 2, 2, 4, 6), rules.Map);
+        Assert.Equal(new MapRules(2, 1, 1, 2, 2, 4, 6), rules.Map);
     }
 
     [Fact]

@@ -59,9 +59,8 @@
 
   // What every map must satisfy (design 5.3 and 5.4). datacheck enforces these on maps/*.jsonc.
   "map": {
-    // The starting Capitol's footprint (4 by 4) and territory radius (design 2.5). They are repeated
-    // here because structures have no data files yet; they must agree with the Capitol once it has one.
-    "start_territory": { "footprint": 4, "radius": 16 },
+    // A start is measured with the footprint and the territory radius of the starting Capitol,
+    // which are in structures/capitol.jsonc.
     // A deposit covers 2 by 2 tiles.
     "deposit_size": 2,
     // Two in each main base, one at each natural expansion, four contested: ten in total.

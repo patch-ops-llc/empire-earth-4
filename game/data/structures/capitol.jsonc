@@ -13,7 +13,7 @@
   "build_seconds": 90,
   "sight": 10,
 
-  // rules.jsonc repeats the footprint and this radius under map.start_territory; they must agree.
+  // The map checks measure every start with the footprint above and this radius.
   "territory_radius": 16,
   "research_slots": 1,
   "trains": ["worker"]

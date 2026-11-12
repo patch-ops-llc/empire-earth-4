@@ -34,38 +34,12 @@ internal static class StructureChecker
                 }
             }
 
-            if (structure.Id == DataRules.StartStructure)
+            // The match setup places one for every player and the map checks measure every
+            // start with its footprint and its territory.
+            if (structure.Id == DataRules.StartStructure && structure.TerritoryRadius is null)
             {
-                CheckStartTerritory(structure, rules.Map, errors);
+                errors.Add(file, "$", "every player starts with this structure, so it needs \"territory_radius\"");
             }
-        }
-    }
-
-    /// <summary>
-    /// <c>rules.jsonc</c> repeats the starting structure's footprint and territory radius, because
-    /// the map checks need them. They must be the values of its own file.
-    /// </summary>
-    private static void CheckStartTerritory(StructureDef structure, MapRules map, ErrorList errors)
-    {
-        const string Location = "$.map.start_territory";
-        if (structure.Footprint != map.StartFootprint)
-        {
-            errors.Add(
-                DataRules.RulesFile,
-                $"{Location}.footprint",
-                $"must be the footprint in {FileOf(structure)}, which is {structure.Footprint}, found {map.StartFootprint}");
-        }
-
-        if (structure.TerritoryRadius is not { } radius)
-        {
-            errors.Add(FileOf(structure), "$", "every player starts with this structure, so it needs \"territory_radius\"");
-        }
-        else if (radius != map.StartTerritoryRadius)
-        {
-            errors.Add(
-                DataRules.RulesFile,
-                $"{Location}.radius",
-                $"must be the territory radius in {FileOf(structure)}, which is {radius}, found {map.StartTerritoryRadius}");
         }
     }
 

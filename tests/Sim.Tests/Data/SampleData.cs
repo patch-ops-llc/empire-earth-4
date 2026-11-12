@@ -16,6 +16,7 @@ internal static class SampleData
     public const string ResourcesPath = "resources.jsonc";
     public const string AccentsPath = "accents.jsonc";
     public const string GuardPath = "lines/guard.jsonc";
+    public const string CapitolPath = "structures/capitol.jsonc";
     public const string MapPath = "maps/arena.jsonc";
 
     public const string Tracks = """
@@ -109,7 +110,6 @@ internal static class SampleData
           "match": { "start_epoch": 1, "epoch_cap": 4 },
           "start": { "workers": 6, "materials": 400, "energy": 100 },
           "map": {
-            "start_territory": { "footprint": 2, "radius": 6 },
             "deposit_size": 2,
             "deposits": { "main_per_player": 1, "natural_per_player": 1, "contested": 2 },
             "chokepoint_width": { "min": 2, "max": 4 },
@@ -141,6 +141,26 @@ internal static class SampleData
         }
         """;
 
+    /// <summary>
+    /// The structure every player starts with, the one structure file a data set must have. The
+    /// sample map's starts are measured with its footprint and its territory radius.
+    /// </summary>
+    public const string Capitol = """
+        {
+          "id": "capitol",
+          "track": "logistics",
+          "footprint": 2,
+          "hp": 2000,
+          "cost": { "materials": 400, "energy": 0 },
+          "build_seconds": 90,
+          "sight": 10,
+          "territory_radius": 6,
+          "research_slots": 1,
+          "max_per_player": 3,
+          "trains": ["worker"]
+        }
+        """;
+
     public static InMemoryDataFiles Files() => new InMemoryDataFiles()
         .Set(TracksPath, Tracks)
         .Set(RulesPath, Rules)
@@ -148,6 +168,7 @@ internal static class SampleData
         .Set(ResourcesPath, Resources)
         .Set(AccentsPath, Accents)
         .Set(GuardPath, Guard)
+        .Set(CapitolPath, Capitol)
         .Set(MapPath, new MapBuilder().ToJson());
 
     /// <summary>The sample data with one piece of text in one file replaced.</summary>

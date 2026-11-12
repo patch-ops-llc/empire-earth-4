@@ -171,7 +171,7 @@ public class GameDataStructureTests
     {
         var capitol = Structure("capitol");
 
-        Assert.Equal((Data.Rules.Map.StartFootprint, (int?)Data.Rules.Map.StartTerritoryRadius), (capitol.Footprint, capitol.TerritoryRadius));
+        Assert.Same(capitol, Data.StartStructure);
     }
 
     [Fact]

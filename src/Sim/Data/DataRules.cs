@@ -29,8 +29,8 @@ internal static class DataRules
     public const string EnergyWorkSite = "energy";
 
     /// <summary>
-    /// The structure every player starts with (design 5.2). While <c>rules.jsonc</c> repeats its
-    /// footprint and territory radius for the map checks, the two must agree.
+    /// The structure every player starts with (design 5.2). Its file is required: the match setup
+    /// places one for every player, and the map checks read its footprint and territory radius.
     /// </summary>
     public const string StartStructure = "capitol";
 

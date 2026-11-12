@@ -8,27 +8,12 @@ namespace Sim.Tests.Data;
 /// </summary>
 internal static class SampleStructures
 {
-    public const string CapitolPath = "structures/capitol.jsonc";
+    public const string CapitolPath = SampleData.CapitolPath;
     public const string BarracksPath = "structures/barracks.jsonc";
     public const string TowerPath = "structures/tower.jsonc";
     public const string WallPath = "structures/wall.jsonc";
 
-    /// <summary>Its footprint and territory radius are those of the sample rules.</summary>
-    public const string Capitol = """
-        {
-          "id": "capitol",
-          "track": "logistics",
-          "footprint": 2,
-          "hp": 2000,
-          "cost": { "materials": 400, "energy": 0 },
-          "build_seconds": 90,
-          "sight": 10,
-          "territory_radius": 6,
-          "research_slots": 1,
-          "max_per_player": 3,
-          "trains": ["worker"]
-        }
-        """;
+    public const string Capitol = SampleData.Capitol;
 
     public const string Barracks = """
         {
@@ -75,7 +60,6 @@ internal static class SampleStructures
     /// <summary>The sample data with a Tower and a Wall in its roster and the four structure files.</summary>
     public static InMemoryDataFiles Files() => SampleData
         .With(SampleData.RulesPath, "\"structures\": [\"capitol\", \"barracks\"]", "\"structures\": [\"capitol\", \"barracks\", \"tower\", \"wall\"]")
-        .Set(CapitolPath, Capitol)
         .Set(BarracksPath, Barracks)
         .Set(TowerPath, Tower)
         .Set(WallPath, Wall);
@@ -90,14 +74,22 @@ public class StructureTests
     private const int Manufacturing = 3;
     private const int Logistics = 4;
 
+    /// <summary>Every player starts with a Capitol, so that one file a data set must have.</summary>
     [Fact]
-    public void ADataSetWithoutStructureFilesIsValid()
+    public void ADataSetNeedsNoStructureFileButTheCapitols()
     {
         var data = DataAssert.Valid(SampleData.Files());
 
-        Assert.Empty(data.Structures);
-        Assert.Null(data.StructureOf(0));
         Assert.Equal(["barracks", "capitol"], data.Rules.Structures);
+        Assert.Equal(["capitol"], data.Structures.Select(structure => structure.Id));
+        Assert.Same(data.Structures[0], data.StartStructure);
+        Assert.Same(data.Structures[0], data.StructureOf("capitol"));
+        Assert.Null(data.StructureOf(0));
+        Assert.Throws<ArgumentException>(() => data.StructureOf("barracks"));
+
+        var files = SampleData.Files();
+        files.Remove(SampleData.CapitolPath);
+        DataAssert.RejectedOnce(files, SampleData.CapitolPath, "", "this file is required and is missing");
     }
 
     [Fact]
@@ -105,11 +97,11 @@ public class StructureTests
     {
         var files = SampleStructures.Files();
         files.Remove(SampleStructures.TowerPath);
-        files.Remove(SampleStructures.CapitolPath);
+        files.Remove(SampleStructures.BarracksPath);
 
         var data = DataAssert.Valid(files);
 
-        Assert.Equal(["barracks", "wall"], data.Structures.Select(structure => structure.Id));
+        Assert.Equal(["capitol", "wall"], data.Structures.Select(structure => structure.Id));
         Assert.Null(data.StructureOf(data.Rules.Structures.ToList().IndexOf("tower")));
     }
 
@@ -286,14 +278,27 @@ public class StructureTests
         Assert.Equal(["guard", "air"], barracks.Trains.Select(line => DataAssert.Valid(files).Rules.Lines[line]));
     }
 
+    /// <summary>
+    /// The sample map fits a Capitol of 2 by 2 tiles with a territory of 6. With another Capitol
+    /// its starts and deposits are measured anew, and no longer fit.
+    /// </summary>
     [Theory]
-    [InlineData("\"footprint\": 2", "\"footprint\": 3", "$.map.start_territory.footprint", "must be the footprint in structures/capitol.jsonc, which is 3, found 2")]
-    [InlineData("\"territory_radius\": 6", "\"territory_radius\": 7", "$.map.start_territory.radius", "must be the territory radius in structures/capitol.jsonc, which is 7, found 6")]
-    public void TheStartingTerritoryOfTheRulesMustAgreeWithTheCapitol(string oldText, string newText, string location, string message)
+    [InlineData("\"footprint\": 2", "\"footprint\": 4", "$.starts[1]", "must mirror start 0 under mirror_x")]
+    [InlineData("\"territory_radius\": 6", "\"territory_radius\": 20", "$.starts", "the starting Capitols are too close: their centers must be at least 40 tiles apart")]
+    [InlineData("\"territory_radius\": 6", "\"territory_radius\": 3", "$.deposits[0]", "a main deposit must lie wholly inside a starting territory (every tile center within 3 tiles")]
+    public void AMapIsCheckedWithTheFootprintAndTheTerritoryOfTheCapitolsFile(string oldText, string newText, string location, string message)
     {
         var files = SampleStructures.With(SampleStructures.CapitolPath, oldText, newText);
 
-        DataAssert.RejectedOnce(files, SampleData.RulesPath, location, message);
+        DataAssert.Rejected(files, SampleData.MapPath, location, message);
+    }
+
+    [Fact]
+    public void TheRulesNoLongerRepeatTheCapitolsFootprintAndTerritory()
+    {
+        var files = SampleData.With(SampleData.RulesPath, "\"deposit_size\": 2,", "\"deposit_size\": 2, \"start_territory\": { \"footprint\": 2, \"radius\": 6 },");
+
+        DataAssert.RejectedOnce(files, SampleData.RulesPath, "$.map.start_territory", "unknown key \"start_territory\"");
     }
 
     [Fact]

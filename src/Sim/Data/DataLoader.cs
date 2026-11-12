@@ -35,6 +35,8 @@ public static class DataLoader
     private static readonly string[] RequiredFiles =
         [DataRules.TracksFile, DataRules.RulesFile, DataRules.ResearchFile, DataRules.ResourcesFile, DataRules.AccentsFile];
 
+    private const string StartStructureFile = DataRules.StructuresFolder + DataRules.StartStructure + DataRules.FileExtension;
+
     private static readonly JsonDocumentOptions JsonOptions = new()
     {
         CommentHandling = JsonCommentHandling.Skip,
@@ -69,7 +71,7 @@ public static class DataLoader
                 }
             }
 
-            ReportMissing(paths, linePaths, mapPaths, errors);
+            ReportMissing(paths, linePaths, structurePaths, mapPaths, errors);
             var data = Read(roots, linePaths, structurePaths, mapPaths, errors);
             if (data is not null && errors.Count == 0)
             {
@@ -154,7 +156,7 @@ public static class DataLoader
         }
     }
 
-    private static void ReportMissing(SortedSet<string> paths, List<string> linePaths, List<string> mapPaths, ErrorList errors)
+    private static void ReportMissing(SortedSet<string> paths, List<string> linePaths, List<string> structurePaths, List<string> mapPaths, ErrorList errors)
     {
         foreach (var required in RequiredFiles)
         {
@@ -167,6 +169,11 @@ public static class DataLoader
         if (linePaths.Count == 0)
         {
             errors.Add(DataRules.LinesFolder, "", "needs at least one line file");
+        }
+
+        if (!structurePaths.Contains(StartStructureFile))
+        {
+            errors.Add(StartStructureFile, "", "this file is required and is missing: every player starts with this structure");
         }
 
         if (mapPaths.Count == 0)
@@ -269,7 +276,7 @@ public static class DataLoader
             }
         }
 
-        // A data set need not have structure files: the folder may be missing or empty.
+        // Of the structures only the one every player starts with must have a file.
         var structures = new List<StructureDef>();
         if (tracksAreValid && rules is not null)
         {
@@ -292,14 +299,18 @@ public static class DataLoader
             StructureChecker.Check(structures, lines, rules, errors);
         }
 
+        // A map's starts are measured with the starting structure's footprint and territory, so
+        // the maps are read only when that file was valid.
         var maps = new List<MapDef>();
-        if (rules is not null)
+        if (rules is not null
+            && structures.Find(structure => structure.Id == DataRules.StartStructure) is { TerritoryRadius: { } startRadius } start)
         {
+            var capitol = new MapStartRules(start.Footprint, startRadius);
             foreach (var path in mapPaths)
             {
                 if (Root(path) is { } mapRoot)
                 {
-                    maps.Add(MapReader.Read(mapRoot, IdOf(path, DataRules.MapsFolder), rules.Map));
+                    maps.Add(MapReader.Read(mapRoot, IdOf(path, DataRules.MapsFolder), rules.Map, capitol));
                 }
             }
 

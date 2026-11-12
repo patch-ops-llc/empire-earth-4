@@ -41,7 +41,9 @@ public class StructureBlueprintTests
 
         Assert.Equal(3, tech.Structures.Count);
         Assert.Null(tech.StructureOf(data.Rules.Structures.ToList().IndexOf("tower")));
-        Assert.Empty(TechResolver.Resolve(DataAssert.Valid(SampleData.Files()), [1, 1, 1, 1, 1, 1]).Structures);
+        Assert.Equal(
+            ["capitol"],
+            TechResolver.Resolve(DataAssert.Valid(SampleData.Files()), [1, 1, 1, 1, 1, 1]).Structures.Select(blueprint => blueprint.Structure.Id));
     }
 
     /// <summary>"All building hit points scale by 1.25 per Protection tier", in thousandths.</summary>

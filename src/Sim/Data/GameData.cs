@@ -66,6 +66,26 @@ public sealed record GameData(
         return null;
     }
 
+    /// <summary>
+    /// The structure every player starts with (design 5.2): the Capitol. The loader requires its
+    /// file, with a territory radius, so the map checks and the match setup can rely on it.
+    /// </summary>
+    public StructureDef StartStructure => StructureOf(DataRules.StartStructure);
+
+    /// <summary>The structure with this ID. Throws when the data has no file for it.</summary>
+    public StructureDef StructureOf(string id)
+    {
+        foreach (var candidate in Structures)
+        {
+            if (candidate.Id == id)
+            {
+                return candidate;
+            }
+        }
+
+        throw new ArgumentException($"The data has no structure '{id}'.", nameof(id));
+    }
+
     /// <summary>The accent a track gives, or null for a track that gives none.</summary>
     public AccentDef? AccentOf(int track)
     {

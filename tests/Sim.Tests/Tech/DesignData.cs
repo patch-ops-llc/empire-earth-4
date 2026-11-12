@@ -69,7 +69,6 @@ internal static class DesignData
           "match": { "start_epoch": 1, "epoch_cap": 9 },
           "start": { "workers": 6, "materials": 400, "energy": 100 },
           "map": {
-            "start_territory": { "footprint": 2, "radius": 6 },
             "deposit_size": 2,
             "deposits": { "main_per_player": 1, "natural_per_player": 1, "contested": 2 },
             "chokepoint_width": { "min": 2, "max": 4 },
@@ -249,6 +248,7 @@ internal static class DesignData
         .Set(CavalryArmorPath, CavalryArmor)
         .Set(ArtilleryPath, Artillery)
         .Set(AirPath, Air)
+        .Set(SampleData.CapitolPath, SampleData.Capitol)
         .Set(SampleData.MapPath, new MapBuilder().ToJson());
 
     /// <summary>The chassis with this ID.</summary>
