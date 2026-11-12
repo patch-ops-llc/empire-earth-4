@@ -1,0 +1,25 @@
+// Tower: a fixed defense that shoots at enemies in range (game design 2.5).
+{
+  "$schema": "../../../../schemas/structure.schema.json",
+  "id": "tower",
+
+  "track": "protection",
+
+  "footprint": 2,
+  "hp": 600,
+  "cost": { "materials": 120, "energy": 30 },
+  "build_seconds": 30,
+  "sight": 10,
+
+  // Damage per second at Firepower 1; each Firepower tier of the owner multiplies it. Range is in
+  // tiles from the nearest edge of the footprint, shot speed in tiles per second.
+  "attack": {
+    "dps": 10,
+    "interval_seconds": 1,
+    "range": 7,
+    "projectile_speed": 20,
+    // A Tower cannot hit Air until its owner has Protection 5.
+    "cannot_hit": ["air"],
+    "can_hit_all_from_protection": 5
+  }
+}

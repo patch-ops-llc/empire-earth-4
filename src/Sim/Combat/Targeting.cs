@@ -2,6 +2,7 @@ using Sim.Core;
 using Sim.Map;
 using Sim.Movement;
 using Sim.Numerics;
+using Sim.Structures;
 
 namespace Sim.Combat;
 
@@ -58,6 +59,13 @@ public sealed class Targeting
     public CombatRules Rules => _rules;
 
     /// <summary>
+    /// The structures of the match, when it has any. Until units can attack structures, with the
+    /// rules design 2.5 gives for that, nothing in this store is an enemy to anyone: no unit picks
+    /// a structure, and an order to attack one is refused.
+    /// </summary>
+    public ComponentStore<PlacedStructure>? Structures { get; init; }
+
+    /// <summary>
     /// True when the entity can be attacked by a player: it is alive, on the map, has hit points, and
     /// belongs to someone else. There is no friendly fire.
     /// </summary>
@@ -72,7 +80,8 @@ public sealed class Targeting
         return world.Entities.IsAlive(entity)
             && _bodies.TryGet(entity, out body)
             && body.Owner != player
-            && _health.Contains(entity);
+            && _health.Contains(entity)
+            && !(Structures?.Contains(entity) ?? false);
     }
 
     /// <summary>The roster index of an entity's line, or <see cref="CombatRules.NoLine"/> when it is not a unit of a chassis.</summary>
@@ -164,7 +173,24 @@ public sealed class Targeting
     /// positions and nothing that an attack of this tick changes, so the order in which units pick
     /// does not matter.
     /// </remarks>
-    public EntityId Pick(World world, EntityId self, in Body body, AttackProfile profile, UnitOrder order, FixedVector2 post)
+    public EntityId Pick(World world, EntityId self, in Body body, AttackProfile profile, UnitOrder order, FixedVector2 post) =>
+        Nearest(world, self, in body, profile, order, post, inReachOnly: false);
+
+    /// <summary>
+    /// The target of a unit that enemy units have stopped on its way (design 2.4, "a blocked unit
+    /// keeps its order"): the nearest enemy it can hit from where it stands, the lowest ID among
+    /// equally near ones, or <see cref="EntityId.None"/> when none is in reach.
+    /// </summary>
+    /// <remarks>
+    /// The nearest enemy is not always one the unit can get to: the spacing of a unit beside it
+    /// may hold the attacker a hair outside its reach. The unit in its way is within reach, so a
+    /// stopped unit fights that one and does not stand idle before it.
+    /// </remarks>
+    public EntityId PickInReach(World world, EntityId self, in Body body, AttackProfile profile) =>
+        Nearest(world, self, in body, profile, UnitOrder.Idle, body.Position, inReachOnly: true);
+
+    private EntityId Nearest(
+        World world, EntityId self, in Body body, AttackProfile profile, UnitOrder order, FixedVector2 post, bool inReachOnly)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(profile);
@@ -195,9 +221,9 @@ public sealed class Targeting
                 continue;
             }
 
-            if (order == UnitOrder.Idle
+            if ((inReachOnly || order == UnitOrder.Idle)
                 && !Reaches(profile, position, other.Position, line)
-                && !TryFindStand(profile, position, post, other.Position, line, out _))
+                && (inReachOnly || !TryFindStand(profile, position, post, other.Position, line, out _)))
             {
                 continue;
             }

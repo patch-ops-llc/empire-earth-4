@@ -35,8 +35,8 @@ public abstract class SmokePart
 }
 
 /// <summary>
-/// What a <see cref="SmokePart"/> works with: the match to read, and the session to give orders
-/// through, the way a player's orders go.
+/// What a <see cref="SmokePart"/> works with: the match to read, the session to give orders
+/// through, the way a player's orders go, and the view the match is shown through.
 /// </summary>
 public sealed class SmokeOrders
 {
@@ -51,6 +51,13 @@ public sealed class SmokeOrders
     }
 
     public Match Match { get; }
+
+    /// <summary>
+    /// The view of the match, for a part that tests what a piece shows: it can select units as a
+    /// player does and ask the piece's part of the interface what it then shows. Selecting gives
+    /// no order and changes nothing in the match.
+    /// </summary>
+    public MatchView View { get; internal set; } = null!;
 
     /// <summary>The local player's number.</summary>
     public int Player => _client.Player;

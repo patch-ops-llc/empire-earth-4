@@ -17,7 +17,8 @@ public sealed class PlayerTech
         int supplyCap,
         Fraction incomeMultiplier,
         IReadOnlyList<ResearchOffer> research,
-        IReadOnlyList<ChassisBlueprint> blueprints)
+        IReadOnlyList<ChassisBlueprint> blueprints,
+        IReadOnlyList<StructureBlueprint> structures)
     {
         Tiers = tiers;
         Epoch = epoch;
@@ -26,6 +27,7 @@ public sealed class PlayerTech
         IncomeMultiplier = incomeMultiplier;
         Research = research;
         Blueprints = blueprints;
+        Structures = structures;
     }
 
     /// <summary>The tiers this was resolved from, one per track.</summary>
@@ -49,4 +51,27 @@ public sealed class PlayerTech
     /// <see cref="GameData.Chassis"/>: the blueprint of a chassis is at its <see cref="ChassisDef.Index"/>.
     /// </summary>
     public IReadOnlyList<ChassisBlueprint> Blueprints { get; }
+
+    /// <summary>
+    /// One blueprint for every structure that has a data file, unlocked or not, in the order of
+    /// <see cref="GameData.Structures"/>.
+    /// </summary>
+    public IReadOnlyList<StructureBlueprint> Structures { get; }
+
+    /// <summary>
+    /// The blueprint of the structure with this roster index, as in <see cref="StructureDef.Index"/>,
+    /// or null for a structure of the roster that has no data file yet.
+    /// </summary>
+    public StructureBlueprint? StructureOf(int structure)
+    {
+        foreach (var blueprint in Structures)
+        {
+            if (blueprint.Structure.Index == structure)
+            {
+                return blueprint;
+            }
+        }
+
+        return null;
+    }
 }

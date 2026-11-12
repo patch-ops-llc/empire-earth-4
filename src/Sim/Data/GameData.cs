@@ -4,7 +4,8 @@ namespace Sim.Data;
 /// Everything loaded from the data files, already checked. A position in one of these lists is that
 /// item's dense integer ID: tracks keep the order of <c>tracks.jsonc</c>, which the design's
 /// tie-breaks rely on, research goes by tier, accents by track, and lines, chassis and maps are
-/// sorted by ID.
+/// sorted by ID. <see cref="Lines"/> and <see cref="Structures"/> hold only those of the roster
+/// that have a data file, in the order of the roster.
 /// </summary>
 public sealed record GameData(
     IReadOnlyList<string> EpochNames,
@@ -16,6 +17,7 @@ public sealed record GameData(
     IReadOnlyList<AccentDef> Accents,
     IReadOnlyList<LineDef> Lines,
     IReadOnlyList<ChassisDef> Chassis,
+    IReadOnlyList<StructureDef> Structures,
     IReadOnlyList<MapDef> Maps,
     string ContentHash)
 {
@@ -45,6 +47,43 @@ public sealed record GameData(
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The structure with this roster index, as in <see cref="StructureDef.Index"/> and
+    /// <see cref="LineDef.BuiltAt"/>, or null for a structure of the roster that has no data file yet.
+    /// </summary>
+    public StructureDef? StructureOf(int structure)
+    {
+        foreach (var candidate in Structures)
+        {
+            if (candidate.Index == structure)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The structure every player starts with (design 5.2): the Capitol. The loader requires its
+    /// file, with a territory radius, so the map checks and the match setup can rely on it.
+    /// </summary>
+    public StructureDef StartStructure => StructureOf(DataRules.StartStructure);
+
+    /// <summary>The structure with this ID. Throws when the data has no file for it.</summary>
+    public StructureDef StructureOf(string id)
+    {
+        foreach (var candidate in Structures)
+        {
+            if (candidate.Id == id)
+            {
+                return candidate;
+            }
+        }
+
+        throw new ArgumentException($"The data has no structure '{id}'.", nameof(id));
     }
 
     /// <summary>The accent a track gives, or null for a track that gives none.</summary>

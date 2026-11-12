@@ -24,12 +24,19 @@ public static class ViewPieces
         new CombatPiece(),
 
         // 13v. Economy: resources and supply, deposits, the work order.
+        new EconomyPiece(),
 
         // 14v. Research: the grid.
+        new ResearchPiece(),
 
         // 15v. Construction and production: structures, the build menu, the production panel.
+        new StructuresPiece(),
+        new BuildPiece(),
 
         // 17v. Fog of war.
+
+        // Inspection: what the selected units are, accent badges, the epoch announcement.
+        new InspectionPiece(),
 
         // Later pieces.
 

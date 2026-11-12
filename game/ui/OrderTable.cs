@@ -27,8 +27,11 @@ public sealed class OrderRow
     /// </summary>
     public StringName? Modifier { get; init; }
 
-    /// <summary>The color of the mark the order leaves on the ground.</summary>
-    public Color Mark { get; init; } = new(1f, 0.95f, 0.4f);
+    /// <summary>
+    /// The color of the mark the order leaves on the ground at the point under the pointer, or
+    /// null for a row that shows its order in a way of its own, as round the thing it is about.
+    /// </summary>
+    public Color? Mark { get; init; } = new(1f, 0.95f, 0.4f);
 
     /// <summary>
     /// Gives the order: sends one or more commands through <c>View.Client</c>. Returns false when
