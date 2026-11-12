@@ -89,7 +89,7 @@ Nothing reads a clock. The caller decides when a tick runs; there are `SimInfo.T
 | 13 | `ConstructionSystem` | Counts every structure that is building itself one tick further and finishes those that have reached their build time. Then, oldest worker first, ends the build order of a worker that died, with its price back, and lays the foundation of a worker that has come within 3/4 of a tile of its site, after every rule of placement has been judged again: the owner's units on the site are moved off it, and the structure blocks its tiles from this tick. | After movement, so that a worker lays its foundation in the tick in which it arrives. After the deaths, so that the order of a worker killed in a tick ends in that tick, while its values are still in the stores. After the structure system, so that a site is judged on the tiles as they are once the structures destroyed in this tick are gone. Before income and research, so that what a structure finished in this tick gives is there for both. It moves units after the spatial index was made, so it rebuilds the index when it has laid a foundation. The plan had it before route planning; there a worker would lay its foundation one tick after it arrived, and a worker's death would be seen a tick late. |
 | 14 | `ProductionRefundSystem` | Gives back, in full, every order in the queue of a structure that was destroyed in this tick. | After the deaths and after construction, which is when every structure that fell in this tick is known, so it cannot be part of the system that runs first. Before income and research, so that the refund is in the stockpile when the tick ends. The supply the orders held is free without it: only the queues of structures that stand are counted. |
 | 15 | `IncomeSystem` | Notes which workers have reached their places, counts each working worker's ticks and pays those that are due, oldest worker first, and then gives free places to waiting workers in the order they began to wait. | After movement, so that a worker that reaches its place in this tick has arrived in this tick. It moves nobody, and it reads tiers and territories as they are when it runs. A system that destroys units goes before it, so that a place freed by a death is given out in the same tick; one that changes tiers goes after it, so that a new tier pays from the next tick on. |
-| 16 | `ResearchSystem` | Closes every research slot whose holder is no longer alive, with a refund, and takes every other research one tick further. A research that reaches its last tick raises its track. | Last, after everything that can destroy an entity, so that a research cannot finish in the tick its building falls. A system that destroys entities goes before it. A new tier is therefore in effect from the next tick on. |
+| 16 | `ResearchSystem` | Closes every research slot whose holder is no longer alive, with a refund, and takes every other research one tick further. A research that reaches its last tick raises its track, and the units and workers of its player are brought up to date in the same tick: each keeps its fraction of hit points under its new maximum, and a unit of a chassis gets its blueprint's new speed (`UnitRefresh`, registered on `ITechChangeHandler`). | Last, after everything that can destroy an entity, so that a research cannot finish in the tick its building falls. A system that destroys entities goes before it. A new tier is therefore in effect from the next tick on: the first step at a new speed and the first blow against the new hit points are the next tick's. |
 
 The two systems that move units cannot use the spatial index, which is rebuilt only after them. Each files the units in a grid of its own when it begins (`EnemyBlocking` in `src/Sim/Movement/`). That grid is scratch data of one run of one system: it is built from the state, read in the order of the unit IDs, and thrown away, so it is in neither the state hash nor a snapshot.
 
@@ -123,7 +123,7 @@ A `Command` is the only way anything outside the simulation changes it. It is im
 
 ## Events
 
-Commands go in; events come out. `Simulation.Events` is the list of what happened in the last tick that the state alone does not show afterwards: a hit, a shot fired, a death. The view, sound and tools read it after every tick.
+Commands go in; events come out. `Simulation.Events` is the list of what happened in the last tick that the state alone does not show afterwards: a hit, a shot fired, a death, a research finished. The view, sound and tools read it after every tick.
 
 - A `SimEvent` is immutable data: a kind (`SimEventKind`), the tick, a player, up to two entities, a point and a number. Which of those a kind fills is written at the kind. An event carries the place it happened at, because an entity it names may be gone when it is read: destroyed entities leave the stores at the end of the tick.
 - A command handler or a system is handed the list when the match is set up (`simulation.Events`) and calls `Add`, which stamps the tick. The events of a tick stand in the order they were added: those of the commands, then those of each system.
@@ -137,6 +137,7 @@ Commands go in; events come out. `Simulation.Events` is the list of what happene
 - Who may know of an event is `PlayerView.Knows`. A player knows of every event that names it. `ChargedAttack` and `Regenerated` are also known to whoever sees the tile they happen on, like a hit or a death: they are what a seen unit does or shows. The events of production and `ReservesRefunded` are about a queue, a rally point or a stockpile, and are known to their player alone.
 - Construction reports `BuildRefused` for a build order that was refused when it was given, `BuildOrderEnded` for one that ended before its foundation was laid, and `StructureFinished` for a structure that has built itself. The first two are for the owner alone and carry the reason in their number, as a `BuildProblem`. A foundation is a `StructurePlaced` when it is laid. One that its owner cancels is a `StructureRemoved` without a `Death`. An order to cancel that cancels nothing is an `OrderRefused`.
 - A piece that reports something adds its kinds to `SimEventKind`, in alphabetical order and without numbers. The number of a kind is recorded nowhere, unlike that of a command type, so it may change from one build to the next and nothing may store one.
+- An event has one number. A piece that has more to say packs it and gives the reader a way to take it apart: research puts track, tier and epoch in the number, and `ResearchEvent.TryRead` gives them back.
 
 ## The state hash
 
@@ -363,6 +364,10 @@ dotnet run --project src/Tools -- replay verify tests/golden/replays --data test
 
   Movement and research are the one pair of scripts that share a clock and a generator (`SharedTurns`): research was added by widening movement's draw, before kinds of order had clocks of their own, and replays were recorded with what that gives. Research's kinds are in the draw only when the script `research` is used.
 
+  `switchback-refresh.replay` was recorded before there was a `--script`, like the five above it in the list below, and has a Protection research that finishes and raises the hit points of its player's workers (`RefreshReplayTests`).
+
+  `switchback-combat-perks-live-refresh.replay` is the second recording of the script `combat-perks`, made with the live refresh, which brings the units on the map up to date when a research finishes, and it is the one `CombatPerkScriptTests` asks the rules of. The first, `switchback-combat-perks.replay`, was recorded without the live refresh. It is kept and reproduces, but its fights go another way with it and it does not reach every one of those rules.
+
   The replays there now were recorded with:
 
   ```sh
@@ -371,6 +376,7 @@ dotnet run --project src/Tools -- replay verify tests/golden/replays --data test
   replay record tests/golden/replays/switchback-three-players.replay --data tests/golden/data --map switchback --starts 0,-,1 --seed 3 --orders 5 --ticks 2410 --script movement
   replay record tests/golden/replays/switchback-research.replay --data tests/golden/data --map switchback --starts 1,-,0 --seed 4 --orders 8 --ticks 4800 --script movement,research
   replay record tests/golden/replays/switchback-workers.replay --data tests/golden/data --map switchback --starts 0,1 --seed 5 --orders 13 --ticks 4800 --script gather,movement
+  replay record tests/golden/replays/switchback-refresh.replay --data tests/golden/data --map switchback --starts 0,1 --seed 9 --orders 9 --ticks 4800 --script gather,movement,research
   replay record tests/golden/replays/ridge-fight.replay --data tests/golden/data --map ridge --starts 0,1 --seed 6 --orders 27 --ticks 4800 --script fight,gather,movement,research
   replay record tests/golden/replays/switchback-fog.replay --data tests/golden/data --map switchback --starts 0,1,- --seed 7 --orders 43 --ticks 6000 --script fog,gather,research
   replay record tests/golden/replays/ridge-capitols.replay --data tests/golden/data --map ridge --starts 0,1 --seed 6 --orders 21 --ticks 3600 --script capitol
@@ -379,6 +385,7 @@ dotnet run --project src/Tools -- replay verify tests/golden/replays --data test
   replay record tests/golden/replays/ridge-builders.replay --data tests/golden/data --map ridge --starts 0,1 --seed 7 --orders 70 --ticks 3600 --script build
   replay record tests/golden/replays/ridge-settlers.replay --data tests/golden/data --map ridge --starts 0,1 --seed 7 --orders 53 --ticks 6000 --script settle
   replay record tests/golden/replays/switchback-combat-perks.replay --data tests/golden/data --map switchback --starts 0,1,- --seed 19 --orders 5 --ticks 6000 --script combat-perks
+  replay record tests/golden/replays/switchback-combat-perks-live-refresh.replay --data tests/golden/data --map switchback --starts 0,1,- --seed 19 --orders 6 --ticks 6000 --script combat-perks
   replay record tests/golden/replays/switchback-training.replay --data tests/golden/data --map switchback --starts 0,1 --seed 7 --orders 40 --ticks 9000 --script gather,production
   replay record tests/golden/replays/switchback-pairs.replay --data tests/golden/data --map switchback --starts 0,1 --seed 8 --orders 32 --ticks 9000 --script gather,production,research
   replay record tests/golden/replays/ridge-perks.replay --data tests/golden/data --map ridge --starts 0,1 --seed 9 --orders 19 --ticks 9000 --script perks

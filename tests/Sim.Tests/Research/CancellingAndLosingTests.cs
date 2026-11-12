@@ -22,7 +22,7 @@ public class CancellingAndLosingTests
         Assert.Equal((Plenty, Plenty), match.Stock(0));
         AssertFree(match.Slot(0));
         Assert.Equal(1, match.Research.State.Tier(0, Firepower));
-        Assert.Equal([new ResearchEvent(ResearchEventKind.Cancelled, 400, 0, Firepower, 2, 1)], events);
+        Assert.Equal([new ResearchEvent(SimEventKind.ResearchCancelled, 400, 0, Firepower, 2, 1)], events);
 
         // The time already spent is lost: the research starts again from the beginning.
         match.OrderResearch(0, Firepower);
@@ -88,7 +88,7 @@ public class CancellingAndLosingTests
 
         Assert.Equal(default, match.Slot(0, 1));
         Assert.Equal((Plenty - 100, Plenty - 100), match.Stock(0));
-        Assert.Equal([new ResearchEvent(ResearchEventKind.Lost, 300, 0, Protection, 2, 1)], events);
+        Assert.Equal([new ResearchEvent(SimEventKind.ResearchLost, 300, 0, Protection, 2, 1, academy)], events);
         Assert.False(match.Research.State.IsHolder(academy));
 
         match.Simulation.Run(TicksToTier2 - 301);
@@ -137,13 +137,12 @@ public class CancellingAndLosingTests
         var match = Create();
         match.OrderResearch(0, Firepower);
         match.Simulation.Run(10);
-        var events = match.Events();
 
         match.Research.ClosePlayerSlot(0);
 
         Assert.Equal(default, match.Slot(0));
         Assert.Equal((Plenty, Plenty), match.Stock(0));
-        Assert.Equal([new ResearchEvent(ResearchEventKind.Lost, 10, 0, Firepower, 2, 1)], events);
+        Assert.Equal([new ResearchEvent(SimEventKind.ResearchLost, 10, 0, Firepower, 2, 1)], match.EventsOnTheList());
         Assert.Equal(ResearchStartCheck.NoFreeSlot, match.Research.CheckStart(0, Firepower));
 
         // Closing a closed slot and opening an open one change nothing.
@@ -151,7 +150,7 @@ public class CancellingAndLosingTests
         match.Research.OpenPlayerSlot(0);
         match.Research.OpenPlayerSlot(0);
         AssertFree(match.Slot(0));
-        Assert.Single(events);
+        Assert.Single(match.EventsOnTheList());
         Assert.Equal(ResearchStartCheck.Allowed, match.Research.CheckStart(0, Firepower));
     }
 
