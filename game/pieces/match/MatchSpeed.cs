@@ -12,13 +12,13 @@ public static class MatchSpeed
     /// <summary>The time between two ticks at normal speed: 20 ticks a second.</summary>
     public static readonly TimeSpan Normal = TimeSpan.FromTicks(TimeSpan.TicksPerSecond / SimInfo.TicksPerSecond);
 
-    /// <summary>The speeds on offer, slowest first: how many times normal speed, and its name on a button.</summary>
+    /// <summary>The speeds on offer, slowest first: how many times normal speed, and its name in a sentence.</summary>
     public static IReadOnlyList<(double Factor, string Name)> All { get; } =
     [
-        (0.5, "Half"),
-        (1.0, "Normal"),
-        (2.0, "Double"),
-        (4.0, "Four times"),
+        (0.5, "half speed"),
+        (1.0, "normal speed"),
+        (2.0, "double speed"),
+        (4.0, "four times normal speed"),
     ];
 
     /// <summary>The time between two ticks at a number of times normal speed.</summary>
@@ -36,11 +36,17 @@ public static class MatchSpeed
     /// <summary>A speed as a sentence names it: "normal speed", "double speed", or the number when it is none on offer.</summary>
     public static string NameOf(TimeSpan interval)
     {
+        // A match that has not started has no pace yet, and starts at the normal one.
+        if (interval <= TimeSpan.Zero)
+        {
+            interval = Normal;
+        }
+
         foreach (var (factor, name) in All)
         {
             if (Is(interval, factor))
             {
-                return $"{name.ToLowerInvariant()} speed";
+                return name;
             }
         }
 

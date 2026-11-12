@@ -96,6 +96,9 @@ public partial class EndScreen : InterfacePart
         var standings = View.Match.Standings;
         _before = [.. Enumerable.Range(0, standings.PlayerCount).Select(standings.Of)];
         View.Client.PlayerLeft += (player, reason) => _left[player] = reason;
+
+        // Once the session has stopped the menu says how the match ended, on its own page.
+        View.Client.Stopped += _ => Close();
         Build();
     }
 

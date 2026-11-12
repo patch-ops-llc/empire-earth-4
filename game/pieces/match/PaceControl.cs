@@ -78,6 +78,13 @@ public partial class PaceControl : InterfacePart
         _interval = View.Client.TickInterval;
         _paused = View.Client.IsPaused;
         View.Client.PaceChanged += OnPaceChanged;
+
+        // A guest is shown the match before it starts, and learns the pace when it does.
+        View.Client.Started += () =>
+        {
+            _interval = View.Client.TickInterval;
+            Refresh();
+        };
         Refresh();
     }
 
@@ -182,7 +189,7 @@ public partial class PaceControl : InterfacePart
         }
 
         // A guest is shown the speed while it is not the normal one, and has no buttons.
-        var normal = MatchSpeed.Is(client.TickInterval, 1.0);
+        var normal = client.TickInterval <= TimeSpan.Zero || MatchSpeed.Is(client.TickInterval, 1.0);
         _speed.Text = host ? "Speed" : char.ToUpperInvariant(SpeedText[0]) + SpeedText[1..];
         _box.Visible = host || !normal;
         _box.ResetSize();
@@ -214,7 +221,7 @@ public partial class PaceControl : InterfacePart
         foreach (var (factor, name) in MatchSpeed.All)
         {
             var button = UiStyle.FrameButton(MatchSpeed.Mark(factor));
-            button.TooltipText = $"{name} speed";
+            button.TooltipText = char.ToUpperInvariant(name[0]) + name[1..];
             button.Visible = host;
             button.Pressed += () => SetSpeed(factor);
             _speeds.Add(button);
