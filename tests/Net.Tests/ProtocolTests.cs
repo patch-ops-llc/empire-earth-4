@@ -58,7 +58,7 @@ public class ProtocolTests
         _ = new ClientSession(link.ClientEnd);
 
         Assert.Equal([new JoinRequest(ProtocolInfo.Version, CommandEncoding.Version)], link.HostEnd.ReceiveMessages());
-        Assert.Equal(2, ProtocolInfo.Version);
+        Assert.Equal(3, ProtocolInfo.Version);
     }
 
     [Fact]
@@ -81,6 +81,7 @@ public class ProtocolTests
         "command before the start", "ready before joining", "ready twice", "join twice", "a host's message",
         "hash for the wrong tick", "hash twice", "hash for a tick not issued", "bytes that are no message",
         "a message with bytes left over", "a message cut short", "a command that is too large", "a message that is too large",
+        "a pause", "a speed",
     ];
 
     [Theory]
@@ -154,6 +155,13 @@ public class ProtocolTests
             case "a message that is too large":
                 raw.Send(new byte[ProtocolInfo.MaxMessageSize + 1]);
                 break;
+            case "a pause":
+                // The pace of the match is the host's alone.
+                raw.SendMessage(new PauseNotice(true));
+                break;
+            case "a speed":
+                raw.SendMessage(new SpeedNotice(TimeSpan.FromMilliseconds(1)));
+                break;
             default:
                 Assert.Fail(violation);
                 break;
@@ -184,6 +192,7 @@ public class ProtocolTests
         "bundle out of order", "bundle before the start", "start before ready", "start at another tick", "start with no delay",
         "start with too long a delay", "start with no hash interval", "start with no tick interval", "accept twice",
         "a client's message", "end at a tick not reached", "end without a reason", "bytes that are no message",
+        "pause before the start", "speed before the start", "a speed of no time", "a speed below no time", "a pause that is neither",
     ];
 
     [Theory]
@@ -195,7 +204,8 @@ public class ProtocolTests
         var game = new ToyGame();
         var client = new ClientSession(link.ClientEnd);
         var goodStart = new MatchStart(0, 2, 1, TestMatch.TickInterval);
-        var afterTheStart = fault is "bundle out of order" or "a client's message" or "end at a tick not reached" or "bytes that are no message";
+        var afterTheStart = fault is "bundle out of order" or "a client's message" or "end at a tick not reached" or "bytes that are no message"
+            or "a speed of no time" or "a speed below no time" or "a pause that is neither";
 
         if (fault != "start before ready")
         {
@@ -256,6 +266,21 @@ public class ProtocolTests
                 break;
             case "bytes that are no message":
                 host.Send([0]);
+                break;
+            case "pause before the start":
+                host.SendMessage(new PauseNotice(true));
+                break;
+            case "speed before the start":
+                host.SendMessage(new SpeedNotice(TestMatch.TickInterval));
+                break;
+            case "a speed of no time":
+                host.SendMessage(new SpeedNotice(TimeSpan.Zero));
+                break;
+            case "a speed below no time":
+                host.SendMessage(new SpeedNotice(TimeSpan.FromTicks(-1)));
+                break;
+            case "a pause that is neither":
+                host.Send([14, 2]);
                 break;
             default:
                 Assert.Fail(fault);

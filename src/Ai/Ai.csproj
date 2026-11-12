@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The computer player (game design 5.5). It reads a match as its player knows it and gives
+    orders as commands, as a person does. It references Sim and must never reference Godot.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="../Sim/Sim.csproj" />
+  </ItemGroup>
+
+</Project>

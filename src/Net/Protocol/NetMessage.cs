@@ -12,8 +12,8 @@ namespace Net;
 /// The protocol has two sides. A client sends <see cref="JoinRequest"/>, <see cref="ReadyNotice"/>,
 /// <see cref="CommandRequest"/>, <see cref="HashReport"/>, <see cref="Pong"/> and
 /// <see cref="LeaveNotice"/>. The host sends <see cref="JoinAccept"/>, <see cref="MatchNotice"/>,
-/// <see cref="Ping"/>, <see cref="MatchStart"/>, <see cref="TickBundle"/>, <see cref="PeerLeft"/>
-/// and <see cref="SessionEnd"/>. A message that arrives from the wrong side,
+/// <see cref="Ping"/>, <see cref="MatchStart"/>, <see cref="TickBundle"/>, <see cref="PeerLeft"/>,
+/// <see cref="PauseNotice"/>, <see cref="SpeedNotice"/> and <see cref="SessionEnd"/>. A message that arrives from the wrong side,
 /// or at a point where it makes no sense, ends the sender's part in the session.
 /// </remarks>
 public abstract record NetMessage;
@@ -88,3 +88,19 @@ public sealed record MatchNotice(MatchDescription Description) : NetMessage;
 /// </summary>
 /// <param name="Reason"><see cref="SessionEndReason.Left"/> or <see cref="SessionEndReason.SetupMismatch"/>.</param>
 public sealed record LeaveNotice(SessionEndReason Reason) : NetMessage;
+
+/// <summary>
+/// Host to every client, while the match runs: the host paused the match, or lets it go on. It
+/// follows the last bundle the host issued before the pause, so a client that holds it has every
+/// bundle there will be until the match goes on. A client needs it only to say why no tick comes:
+/// it waits for the next bundle either way.
+/// </summary>
+public sealed record PauseNotice(bool Paused) : NetMessage;
+
+/// <summary>
+/// Host to every client, while the match runs: from now on the host issues a bundle every
+/// <paramref name="TickInterval"/>, and a client runs its ticks at that pace. The speed of a match
+/// is this alone; a tick is the same tick at any speed.
+/// </summary>
+/// <param name="TickInterval">The new time between two ticks, more than zero.</param>
+public sealed record SpeedNotice(TimeSpan TickInterval) : NetMessage;

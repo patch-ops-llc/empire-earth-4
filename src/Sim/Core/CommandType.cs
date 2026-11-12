@@ -20,6 +20,7 @@ public enum CommandType
     CancelBuild = 10,
     CancelResearch = 2,
     CancelTrain = 12,
+    Concede = 15,
     DebugSpawn = 8,
     Gather = 7,
     Move = 1,

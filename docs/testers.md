@@ -39,13 +39,14 @@ If the button does not appear, open Terminal instead. Type `xattr -dr com.apple.
 
 ## Starting a match
 
-The game opens on a menu with three choices.
+The game opens on a menu with four choices.
 
 - **Play alone** starts a match at once, on your machine only. Nothing is opened to the network, so the system asks no question about connections, and no second copy of the game or second player is needed. The other player's workers are there, and nothing controls them.
-- **Host a match** opens the match for one other player and waits. See the next section.
+- **Play against the computer** starts a match at once against a computer opponent, on your machine only. The list beside the button chooses its personality. See Playing against the computer.
+- **Host a match** shows the settings of the match first, then opens it for one other player and waits. See the next section.
 - **Join** joins a match someone else hosts. Type their address into the box first.
 
-During a match, the bar across the top of the window shows on its left what you have: Materials, Energy and supply, then your epoch and what is in research. On its right it says which player you are, and its button, Leave, takes you back to the menu. In a wide window it also says how the match is played: alone, hosted or joined. While units are selected, a panel at the bottom of the window says how many.
+During a match, the bar across the top of the window shows on its left what you have: Materials, Energy and supply, then your epoch and what is in research. On its right it says which player you are, and its button, Leave, is the way out: it asks first, because leaving concedes the match. See How a match ends. In a wide window it also says how the match is played: alone, hosted or joined. While units are selected, a panel at the bottom of the window says how many.
 
 ## Playing with someone else
 
@@ -54,9 +55,10 @@ Both players need the same build. The name of the zip file carries the version, 
 One player hosts:
 
 1. Click Host a match. The port can stay as it is.
-2. The first time, the system may ask whether the game may accept connections from the network. On Windows the question comes from Windows Defender Firewall: tick private networks and click Allow access. On macOS it asks whether the application may accept incoming network connections: click Allow. If you refuse, nobody can join.
-3. The game shows this machine's address on its network, something like `192.168.1.20`. Tell the other player. If it shows two, the one that starts like the other player's own address is the right one.
-4. When the other player has joined, the page says Player 2: ready. Click Start the match.
+2. The page of the match's settings has a row for each player. Under Start, each player gets a start of the map by name, or Drawn, which is how it stands unless you change it: a drawn start is one of those no player is set to, each as likely as the next. Two players cannot have the same start, and the page says so. Under Played by, Player 2 is a player who joins. Set it to Nobody and the match is played on your machine only, as Play alone does, with the starts you chose. Set it to Computer, with a personality, and you play the computer on your machine only, with the starts you chose. Click Open the match, or Start the match when nobody joins.
+3. The first time, the system may ask whether the game may accept connections from the network. On Windows the question comes from Windows Defender Firewall: tick private networks and click Allow access. On macOS it asks whether the application may accept incoming network connections: click Allow. If you refuse, nobody can join.
+4. The game shows this machine's address on its network, something like `192.168.1.20`. Tell the other player. If it shows two, the one that starts like the other player's own address is the right one.
+5. When the other player has joined, the page says Player 2: ready. Click Start the match.
 
 The other player joins:
 
@@ -99,6 +101,9 @@ If joining fails, the menu says why in orange:
 | Open or close the research panel | R, or the Research button in the bar at the top. Escape closes it too |
 | Start a research | In the research panel, click a bright cell |
 | Cancel a research | In the research panel, click Cancel beside its progress bar |
+| Pause the match and let it go on, as the host or alone | P, or the Pause button under the bar at the top |
+| Set the speed of the match, as the host or alone | The 0.5x, 1x, 2x and 4x buttons under the bar at the top, or ] for faster and [ for slower |
+| Concede or leave the match | The Leave button in the bar at the top, or F10. It asks first |
 | Show or hide the readout in the corner | F3 |
 | Attack a unit of the other player | Right-click it |
 | Go somewhere and fight whatever is met on the way | Hold Ctrl and right-click the place |
@@ -121,7 +126,7 @@ The brown blocks on the map are deposits. Select workers and right-click a depos
 
 ## What you will see
 
-- The host's workers are blue and the other player's are red. Alone, yours are blue. Which side of the map each player starts on is chosen at random each time.
+- The host's workers are blue and the other player's are red. Alone, yours are blue. Which side of the map each player starts on is chosen at random each time, unless the host set it on the page of the match's settings.
 - Selected units have a green ring under them. A right-click leaves a yellow ring that closes on the place you clicked.
 - The small map in the bottom right corner shows what you know of the whole map: forest in dark green, cliffs in grey, deposits as orange squares, every structure you know of as a larger square in its player's color, and every unit you can see as a dot in that color. The white outline is the part of the map on your screen. Your selected units have a white rim.
 - Click the small map and the view jumps there; hold the button and drag, and the view follows. A right-click on it sends the selected units to that place, and a yellow ring closes on the place for a moment. The mouse wheel still zooms while the pointer is on it.
@@ -131,7 +136,7 @@ The brown blocks on the map are deposits. Select workers and right-click a depos
 - Units sent to the same place end up standing inside each other, on one point. They do not make room for each other yet.
 - When you play alone, the other player's workers never move. Nothing controls them.
 - In a shared match, both players see the same workers in the same places. An order takes a moment longer to start than it does alone, because it travels to the host first.
-- If the other player leaves or closes the game, a line under the top bar says why, the bar says from then on that they are out, and your match goes on without them. If the host leaves, the match ends for both.
+- If the other player leaves or closes the game, a line under the top bar says why, and they have conceded: you win. If the host leaves, the match ends for both, and the host has conceded. See How a match ends.
 - Each player has a Capitol where they start, on the square their workers stand around: a stone hall with a keep and a pointed roof in the player's color. Nobody can stand on it, and units walk round it.
 - The ground a player holds is tinted in the player's color, with a line along its edge. It reaches 16 tiles from the middle of the Capitol. The line follows the sides of the tiles, so it has steps: a tile is either held or it is not. A deposit pays only when all of it is inside, and every structure but a Capitol and an Outpost has to stand inside.
 - Click your Capitol to select it. A green line runs round it, and the panel at the bottom of the window names it and its hit points. Nothing can damage a structure yet, so they stay full.
@@ -159,6 +164,40 @@ You are shown only what your own units see. Each unit sees a circle round itself
 - In a shared match each player has their own picture. What you see is not what the other player sees.
 
 **The development switch.** A tester alone has to see the other player's units, so this build has a second development aid, in an orange panel under the first: "Development aid: fog of war". Its button, or the F key, lifts the fog from your screen: the whole map and every unit, structure and territory on it are shown, as they are now. Press it again to lay the fog back. It is not part of the game, and it changes only what is drawn. Your units still see only what they see: they do not shoot at a unit outside their sight, and a right-click on such a unit sends them walking there, with a line of text that says so. The build menu also goes by what you know and not by what the switch shows. In a shared match the switch is not offered, and the panel says so. Like the aid that makes units, it goes away once units can be trained.
+
+## Playing against the computer
+
+Click Play against the computer on the menu. The computer takes Player 2, in red, on the other side of the map. Nothing is opened to the network.
+
+- **This is the first part of the computer opponent. It builds up its base, researches and trains an army. It does not attack yet**, so nothing comes for you, and the match ends when you concede or leave.
+- It has two personalities, chosen in the list beside the button. Swarm keeps more workers, researches Manufacturing and Logistics first and trains line infantry with some cavalry. Elite keeps a few workers fewer, researches Firepower and Protection first and trains guards with some artillery.
+- To watch it, move the camera across the map to its base: nothing hides it yet. You will see its workers go to the deposits, more workers come out of its Capitol, Generators and then a Barracks or a Works go up, and units gather beside them. A banner says when it reaches a new epoch. The speed buttons under the bar at the top make the wait shorter.
+- It plays by the rules you play by: it pays for everything, its orders are commands like yours, and they are in the replay.
+- To set the starts as well, click Host a match and set Player 2 to Computer on the page of the settings.
+- The end screen names it: Player 2, red (computer, swarm).
+
+## How a match ends
+
+A player is out of the match when they have no Capitol and no Outpost left, or when they concede. The last player in the match wins.
+
+- **Conceding.** Click Leave in the bar at the top, or press F10. The game asks first. Concede and watch takes you out of the match and lets you go on watching it. Concede and leave takes you back to the menu. Stay in the match closes the question, and so does Escape.
+- **Leaving is conceding.** A player who leaves, closes the game or loses the connection has conceded. When the host leaves, the match ends for everyone, and the host has conceded it.
+- **The end screen** comes up by itself when you have won or are out: Victory or Defeat, why, how each player stands and how long the match lasted. Keep watching closes it, and the match goes on for as long as the host keeps it. Leave brings the screen back.
+- A player who is out gives no more orders. Their units and structures stay where they are and still defend themselves. The bar at the top says that you are out.
+- A Capitol or an Outpost that is still being built counts: you are in the match while one stands, finished or not.
+- If the last two players lose their last Capitol at the same moment, the match has no winner.
+- Nothing can damage a structure yet, so for now a match ends by conceding or leaving only.
+- When the host has ended the match, the page that follows says Victory or Defeat as well, and where the replay is.
+
+## Pause and speed
+
+The host sets the pace of a match, and so does a player who plays alone. The buttons are under the bar at the top, at the right.
+
+- **Pause**, or P, stops the match for everyone. A banner under the bar says so on every machine: on a guest's, that the host has paused the match. Pause again, or P, lets it go on.
+- While the match is paused you can still look round, select and give orders. The orders are carried out when the match goes on.
+- **0.5x, 1x, 2x and 4x** set the speed, and so do ] and [. The button of the speed the match has is dark. A line under the bar tells every player when the speed changes, and a guest sees the speed at the right while it is not the normal one.
+- A speed changes how fast time passes and nothing else. At 4x a slow machine may not keep up, and the match then runs as fast as the slowest machine can.
+- A guest cannot pause or set the speed. P says so.
 
 ## Building
 

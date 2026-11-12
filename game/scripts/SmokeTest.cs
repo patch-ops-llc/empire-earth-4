@@ -74,6 +74,9 @@ public sealed class SmokeTest
     // plays the script in every exported build.
     private static SmokePart[] Script() =>
     [
+        // The match itself: its pause and speed, and what the end screen says. No orders.
+        new MatchFlowSmoke(),
+
         // Units: move orders. 30 seconds of play.
         new MoveOrdersSmoke(),
 

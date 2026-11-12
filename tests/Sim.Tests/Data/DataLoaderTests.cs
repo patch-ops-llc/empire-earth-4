@@ -267,7 +267,7 @@ public class DataLoaderTests
                 "lines/guard.jsonc: $.base.hp: must be above 0 and at most 1000000, found 0",
                 "lines/guard.jsonc: $.base.sight: must be between 1 and 64, found 0",
                 "maps/arena.jsonc: $.symmetry: unknown symmetry 'rotate'; use mirror_x or mirror_y",
-                "notes.txt: unexpected file; the loader reads tracks.jsonc, rules.jsonc, research.jsonc, resources.jsonc, accents.jsonc, lines/<id>.jsonc, structures/<id>.jsonc and maps/<id>.jsonc",
+                "notes.txt: unexpected file; the loader reads tracks.jsonc, rules.jsonc, research.jsonc, resources.jsonc, accents.jsonc, lines/<id>.jsonc, structures/<id>.jsonc, maps/<id>.jsonc and ai/<id>.jsonc",
             ],
             result.Errors.Select(error => error.ToString()));
     }
