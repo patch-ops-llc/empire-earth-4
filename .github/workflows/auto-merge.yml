@@ -17,15 +17,16 @@ name: Auto-merge
 # Without the line of point 2 nothing is merged, so a pull request that still carries the work of
 # another open one stays out until its author adds the line.
 #
-# Why this is safe in a public repository. The triggers below run with a token that can write,
-# also when a pull request from a fork sets them off. That is only dangerous for a workflow that
-# runs or trusts something the pull request brought. This one does not:
+# Why this is safe in a public repository. The triggers below are the kind that give a workflow
+# a token that can write, whoever set it off. That is dangerous for a workflow that runs or
+# trusts something a pull request brought. This one does not:
 #
 #   - It checks out nothing and uses no artifact, so no file of any pull request ever runs. The
 #     only code is the script below.
 #   - For workflow_run and pull_request_target GitHub takes this file from main, so a pull
 #     request cannot change what runs before it has merged.
-#   - The job is skipped when a fork set it off: no step runs, and no token is handed out.
+#   - The job is skipped when a pull request from a fork set it off: no step runs, and no
+#     token is handed out.
 #   - Nothing from the event reaches the script. It asks GitHub for the open pull requests and
 #     for the facts of each, and leaves every pull request from a fork alone (point 1).
 #   - Point 3 is there because anyone can open a pull request between two branches of a public
@@ -33,7 +34,7 @@ name: Auto-merge
 #   - The merge names the commit that was checked. If the branch moved meanwhile, GitHub
 #     refuses it.
 on:
-  # A workflow finished on some commit: its pull request may have become ready.
+  # A workflow finished on some commit: a pull request may have become ready.
   workflow_run:
     workflows:
       - CI
@@ -48,13 +49,6 @@ on:
       - ready_for_review
   # By hand from the Actions tab, to look again. With the box ticked it merges nothing and only
   # says, in the summary of the run, what it would do with each open pull request.
-  # TEMPORARY, removed before this pull request is done: a dry run with a token that can only
-  # read, so that the script runs once on GitHub before it is on main.
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - edited
   workflow_dispatch:
     inputs:
       dry_run:
@@ -64,36 +58,41 @@ on:
 
 permissions: {}
 
-# One at a time. A run that waits behind another is replaced by a newer one, which is right:
-# every run looks at every open pull request.
+# One at a time. A run that waits behind another is replaced by a newer one, which is right,
+# because every run looks at every open pull request. A run that a fork set off does nothing,
+# so it gets a group of its own and cannot take the place of a run that waits. The condition is
+# the one of the job below.
 concurrency:
-  group: auto-merge
+  group: >-
+    auto-merge-${{
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.workflow_run.head_repository.full_name == github.repository ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+      && 'in-turn' || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   merge:
     name: Merge the pull requests that are ready
+    # Not for a fork: the workflow that finished, or the pull request that was edited, must be
+    # of a branch in this repository. Every other run looks at every open pull request, also
+    # after a workflow failed or ran on main, which costs a few seconds and misses nothing.
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'pull_request_target' &&
-       github.event.pull_request.head.repo.full_name == github.repository) ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.event == 'pull_request' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_repository.full_name == github.repository)
+      github.event.workflow_run.head_repository.full_name == github.repository ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       # To merge.
-      contents: read
-      pull-requests: read
+      contents: write
+      pull-requests: write
       # To start the workflows of START_ON_MAIN after a merge, and to read the runs of a commit.
-      actions: read
+      actions: write
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      MARKER: "Auto-merge: dry run on GitHub"
+      MARKER: "Auto-merge: yes"
       # The workflow that must have passed on the head commit, and this one, which is not counted.
       REQUIRED: .github/workflows/ci.yml
       THIS: .github/workflows/auto-merge.yml
@@ -101,7 +100,7 @@ jobs:
       # So the workflows that do are started here, after each merge. Each needs a
       # workflow_dispatch trigger. A workflow that gains a push trigger for main belongs here.
       START_ON_MAIN: determinism.yml
-      DRY_RUN: yes
+      DRY_RUN: ${{ inputs.dry_run && 'yes' || '' }}
     steps:
       - name: Merge every pull request that is ready
         shell: bash
